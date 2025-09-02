@@ -11,6 +11,9 @@ Local, open-source experiment tracking and visualization. 100% local. A lightwei
 - Viewer: read-only, serves metrics/logs/media from local storage
 - GPU telemetry: optional panel (reads nvidia-smi if available)
  
+![](https://github.com/Skydoge-zjm/Runicorn/docs/picture/p1.png)
+![](https://github.com/Skydoge-zjm/Runicorn/docs/picture/p2.png)
+
 Features
 --------
 - 100% local, self-hosted. No external services. Data stays under `./.runicorn/` by default.
