@@ -18,9 +18,21 @@ Features
 - Prebuilt web UI bundled in wheel; offline-friendly after install.
 - Metrics tables for epochs and steps; live logs via WebSocket.
 - Optional GPU telemetry panel if `nvidia-smi` is available.
+
+
+Installation
+------------
+Requires Windows, Python 3.8+.
  
-Quick start (SDK)
+```bash
+pip install -U runicorn
+# Optional image helpers (Pillow, NumPy, Matplotlib)
+pip install -U "runicorn[images]"
+```
+
+Quick start
 -----------------
+
 ```python
 import runicorn as rn
 
@@ -32,35 +44,9 @@ for epoch in range(3):
 rn.summary(update={"best_val_acc_top1": 77.3})
 rn.finish()
 ```
+
  
-Launch viewer
--------------
-```
-runicorn viewer --storage ./.runicorn --host 127.0.0.1 --port 8000
-```
-Open http://127.0.0.1:8000
- 
-Frontend (dev)
---------------
-For local frontend development with live-reload and API proxy:
-```
-./run_dev.ps1 -PythonExe "python"
-```
-Then open http://127.0.0.1:5173. The frontend proxies `/api/*` to `http://127.0.0.1:8000`.
- 
-See `web/README.md` for manual steps.
- 
-Installation
-------------
-Requires Python 3.8+.
- 
-```bash
-pip install -U runicorn
-# Optional image helpers (Pillow, NumPy, Matplotlib)
-pip install -U "runicorn[images]"
-```
- 
-CLI (Viewer)
+Viewer
 ------------
 Start the local, read-only viewer and open the UI:
  
@@ -69,24 +55,11 @@ runicorn viewer --storage ./.runicorn --host 127.0.0.1 --port 8000
 # Then open http://127.0.0.1:8000
 ```
  
-Generate a demo run (no server required)
-----------------------------------------
-```bash
-python examples/create_test_run.py --epochs 5 --steps 20 --sleep 0.05
-```
-This writes a run under `./.runicorn/runs/<run_id>/` which the viewer can display.
- 
 Configuration
 -------------
 - Environment variable `RUNICORN_DIR` overrides the default storage root (`./.runicorn`).
 - Or pass `--storage` to the CLI or `storage=` to `runicorn.init()`.
 - Live logs are tailed from `logs.txt` via WebSocket at `/api/runs/{run_id}/logs/ws`.
- 
-Troubleshooting
----------------
-- UI not loading when running from source: ensure the prebuilt frontend exists at `src/runicorn/webui/` (installed wheels already bundle it). Use `./run_dev.ps1` for dev, or run the publish script to build the frontend before packaging.
-- GPU panel not visible: `nvidia-smi` must be available in PATH (Windows paths are auto-detected if installed).
-- Empty runs list: first create data with the demo script above or instrument your training with the SDK.
  
 Privacy & Offline
 ------------------
