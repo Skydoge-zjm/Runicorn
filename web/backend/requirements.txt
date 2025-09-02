@@ -1,0 +1,5 @@
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.23,<0.31
+pydantic>=2,<3
+aiofiles>=23,<24
+python-multipart>=0.0.9,<0.0.10

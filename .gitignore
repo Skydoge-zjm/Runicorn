@@ -1,0 +1,56 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+*.pyd
+*.dll
+*.dylib
+.build/
+build/
+dist/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.cache/
+.coverage*
+*.log
+*.tmp
+*.bak
+
+# virtual env
+.venv/
+venv/
+env/
+.conda/
+
+# --- Data & Training Artifacts ---
+runs/
+temp_eval/
+data/
+*.pth
+*.pt
+*.ckpt
+*.tar.gz
+*.zip
+
+# --- Frontend ---
+web/frontend/node_modules/
+web/frontend/dist/
+web/frontend/.eslintcache
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.cursor/
+.DS_Store
+Thumbs.db
+
+# --- Env / Secrets ---
+.env
+*.env
+
+# Optional: ignore npmrc if it may contain tokens
+web/frontend/.npmrc

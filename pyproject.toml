@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "runicorn"
+version = "0.1.0"
+description = "Local, open-source experiment tracking and visualization (a simple, self-hosted alternative to W&B)"
+readme = "README.md"
+authors = [{ name = "Runicorn Authors" }]
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = [
+  "experiment-tracking", "mlops", "training", "visualization", "fastapi", "wandb-alternative", "self-hosted",
+]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Framework :: FastAPI",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Quality Assurance",
+  "Environment :: Web Environment",
+  "Operating System :: OS Independent",
+]
+requires-python = ">=3.8"
+dependencies = [
+  "fastapi>=0.110,<1.0",
+  "uvicorn[standard]>=0.23,<0.31",
+  "pydantic>=2,<3",
+  "aiofiles>=23,<24",
+  "filelock>=3.12",
+]
+
+[project.optional-dependencies]
+images = [
+  "pillow>=9",
+  "numpy>=1.22",
+  "matplotlib>=3.6",
+]
+
+[project.scripts]
+runicorn = "runicorn.cli:main"
+
+[project.urls]
+Homepage = "https://pypi.org/project/runicorn/"
+Changelog = "https://pypi.org/project/runicorn/#history"
+# TODO: After creating GitHub repo, add:
+# Source = "https://github.com/<user>/runicorn"
+# Issues = "https://github.com/<user>/runicorn/issues"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["runicorn*"]
+
+[tool.setuptools.package-data]
+# Include prebuilt frontend if present
+runicorn = [
+  "webui/**",
+]
+
+[tool.ruff]
+line-length = 100
+select = ["E","F","W","I"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+
+
