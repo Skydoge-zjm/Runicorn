@@ -68,9 +68,9 @@ export default function RunConfigForm({ onSubmit, submitting }: { onSubmit: (v: 
         <Col span={8}>
           <Form.Item name="epochs" label={
             <span>
-              Epochs <Tooltip title="Total training epochs"><span style={{ color: '#999' }}>ⓘ</span></Tooltip>
+              Train Epochs <Tooltip title="Training config only. Viewer metrics use step/time with stage separators."><span style={{ color: '#999' }}>ⓘ</span></Tooltip>
             </span>
-          } rules={[{ required: true, message: 'Epochs is required' }]}
+          } rules={[{ required: true, message: 'Train epochs is required' }]}
           >
             <InputNumber min={1} step={1} style={{ width: '100%' }} />
           </Form.Item>
@@ -110,7 +110,11 @@ export default function RunConfigForm({ onSubmit, submitting }: { onSubmit: (v: 
           </Form.Item>
         </Col>
         <Col span={8}>
-          <Form.Item name="saveEachEpoch" label="Save Each Epoch" valuePropName="checked">
+          <Form.Item name="saveEachEpoch" label={
+            <span>
+              Save Each Epoch <Tooltip title="Training checkpointing option; does not affect viewer metrics"><span style={{ color: '#999' }}>ⓘ</span></Tooltip>
+            </span>
+          } valuePropName="checked">
             <Switch />
           </Form.Item>
         </Col>

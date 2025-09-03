@@ -19,7 +19,7 @@ Features
 - 100% local, self-hosted. No external services. Data stays under `./.runicorn/` by default.
 - Read-only viewer built on FastAPI; zero impact on your training loop.
 - Prebuilt web UI bundled in wheel; offline-friendly after install.
-- Metrics tables for epochs and steps; live logs via WebSocket.
+- Step/time metrics with stage separators; live logs via WebSocket.
 - Optional GPU telemetry panel if `nvidia-smi` is available.
 
 
@@ -38,11 +38,17 @@ Quick start
 
 ```python
 import runicorn as rn
+import math, random
 
 run = rn.init(project="demo")
-for epoch in range(3):
-    rn.log({"epoch": epoch, "train_loss": 1.0/(epoch+1)})
-# Or rn.log(key=value, epoch=epoch)
+
+stages = ["warmup", "train"]
+total_steps = 100
+seg = max(1, total_steps // len(stages))
+for i in range(1, total_steps + 1):
+    stage = stages[min((i - 1) // seg, len(stages) - 1)]
+    loss = max(0.02, 2.0 * math.exp(-0.02 * i) + random.uniform(-0.02, 0.02))
+    rn.log({"loss": round(loss, 4)}, stage=stage)
 
 rn.summary(update={"best_val_acc_top1": 77.3})
 rn.finish()
@@ -54,6 +60,8 @@ Viewer
 Start the local, read-only viewer and open the UI:
  
 ```bash
+runicorn viewer
+# or
 runicorn viewer --storage ./.runicorn --host 127.0.0.1 --port 8000
 # Then open http://127.0.0.1:8000
 ```

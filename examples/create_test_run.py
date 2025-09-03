@@ -3,13 +3,13 @@
 """
 Generate a dummy Runicorn run locally for testing the read-only viewer.
 
-- Writes events.jsonl with epoch metrics and optional step metrics (global_step)
+- Writes events.jsonl with step/time metrics and optional stage labels
 - Appends human-readable logs to logs.txt (viewable via WS in the UI)
 - Updates summary.json with best_val_acc_top1
 - Finalizes status.json as finished
 
 Usage:
-  python examples/create_test_run.py --epochs 5 --steps 20 --sleep 0.05
+  python examples/create_test_run.py --total-steps 100 --sleep 0.05 --stages warmup,train,eval
 
 Notes:
 - No server is required to generate data; this writes to ./.runicorn by default.
@@ -37,8 +37,8 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--storage", default=os.environ.get("RUNICORN_DIR") or str(ROOT / ".runicorn"), help="Storage root (default: ./.runicorn)")
     ap.add_argument("--project", default="demo", help="Project name")
     ap.add_argument("--name", default="dummy-run", help="Run name")
-    ap.add_argument("--epochs", type=int, default=5, help="Number of epochs")
-    ap.add_argument("--steps", type=int, default=20, help="Steps per epoch for step metrics (0 to disable)")
+    ap.add_argument("--total-steps", dest="total_steps", type=int, default=60, help="Total number of steps to log")
+    ap.add_argument("--stages", type=str, default="warmup,train,eval", help="Comma-separated stage labels; stage switches evenly across total steps")
     ap.add_argument("--sleep", type=float, default=0.05, help="Sleep seconds between steps to simulate time")
     return ap.parse_args()
 
@@ -51,40 +51,31 @@ def main() -> int:
     r.log_text(f"[info] Starting dummy run '{args.name}' (project={args.project})")
 
     best = None
-    global_step = 0
-
-    # simple synthetic curves
+    # simple synthetic curves over steps with stage separators
     start_loss = 2.0
-    for epoch in range(1, args.epochs + 1):
-        # step metrics (optional)
-        if args.steps > 0:
-            for s in range(args.steps):
-                global_step += 1
-                # loss decays with noise
-                step_loss = max(0.05, start_loss * math.exp(-0.08 * (epoch - 1)) + random.uniform(-0.02, 0.02))
-                rn.log({"global_step": global_step, "train_loss": round(step_loss, 4)})
-                if args.sleep > 0:
-                    time.sleep(args.sleep)
-                if s % max(1, args.steps // 5) == 0:
-                    r.log_text(f"epoch {epoch:02d} | step {s+1:03d}/{args.steps:03d} | loss {step_loss:.4f} | it/s ~{(1.0/max(args.sleep,1e-3)):.1f}")
-
-        # epoch metrics
-        train_loss = max(0.05, start_loss * math.exp(-0.5 * (epoch - 1)) + random.uniform(-0.03, 0.03))
-        val_loss = max(0.05, start_loss * math.exp(-0.55 * (epoch - 1)) + random.uniform(-0.04, 0.04))
-        train_acc = min(100.0, 60 + (epoch - 1) * 6 + random.uniform(-1.5, 1.5))
-        val_acc = min(100.0, 55 + (epoch - 1) * 6.5 + random.uniform(-2.0, 2.0))
-        best = val_acc if best is None else max(best, val_acc)
-
+    stages = [s.strip() for s in str(getattr(args, "stages", "")).split(",") if s.strip()] or ["train"]
+    total_steps = max(1, int(getattr(args, "total_steps", 60)))
+    seg_len = max(1, total_steps // len(stages))
+    for i in range(1, total_steps + 1):
+        stage = stages[min((i - 1) // seg_len, len(stages) - 1)]
+        # loss decays with noise
+        step_loss = max(0.02, start_loss * math.exp(-0.02 * i) + random.uniform(-0.02, 0.02))
+        lr = max(1e-5, 5e-4 * math.exp(-0.001 * i))
         rn.log({
-            "epoch": epoch,
-            "train_loss": round(train_loss, 4),
-            "val_loss": round(val_loss, 4),
-            "train_acc_top1": round(train_acc, 2),
-            "val_acc_top1": round(val_acc, 2),
-            "best_val_acc_top1": round(best, 2),
-        })
-        r.summary({"best_val_acc_top1": round(best, 2)})
-        r.log_text(f"[epoch {epoch:02d}] train_loss={train_loss:.4f} val_loss={val_loss:.4f} val_acc={val_acc:.2f}% best={best:.2f}%")
+            "train_loss": round(step_loss, 4),
+            "lr": round(lr, 6),
+        }, stage=stage)
+        if args.sleep > 0:
+            time.sleep(args.sleep)
+        if i % max(1, total_steps // 8) == 0:
+            r.log_text(f"step {i:04d}/{total_steps:04d} | stage={stage} | loss {step_loss:.4f}")
+
+        # periodically log a validation metric and update summary
+        if (i % seg_len == 0) or (i == total_steps):
+            val_acc = min(100.0, 60 + (i / total_steps) * 35 + random.uniform(-1.5, 1.5))
+            best = val_acc if best is None else max(best, val_acc)
+            rn.log({"val_acc_top1": round(val_acc, 2), "best_val_acc_top1": round(best, 2)}, stage=stage)
+            r.summary({"best_val_acc_top1": round(best, 2)})
 
     r.finish("finished")
     r.log_text("[info] Run finished.")

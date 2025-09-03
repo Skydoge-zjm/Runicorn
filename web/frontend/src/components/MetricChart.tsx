@@ -6,7 +6,7 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height = 360,
   const [useLog, setUseLog] = useState(false)
   const [dynamicScale, setDynamicScale] = useState(true)
   const [smoothing, setSmoothing] = useState(0) // EMA alpha in [0, 0.95]
-  const xCandidatesPref = ['epoch', 'iter', 'step', 'batch', 'global_step']
+  const xCandidatesPref = ['iter', 'step', 'batch', 'global_step', 'time']
   const presentCols = metrics?.columns || []
   const xCandidates = useMemo(() => xCandidatesPref.filter(k => presentCols.includes(k)), [presentCols])
   const [xAxisKey, setXAxisKey] = useState<string>(xKey)
@@ -69,46 +69,32 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height = 360,
 
   const option = useMemo(() => {
     const xKeyUsed = presentCols.includes(xAxisKey) ? xAxisKey : xKey
-    const x = metrics.rows.map((r: any) => {
+    // Build raw x-axis values
+    const xRaw: Array<number | null> = metrics.rows.map((r: any) => {
       const v = r[xKeyUsed]
       const n = v === '' || v == null ? null : Number(v)
       return n == null || Number.isNaN(n) ? null : n
     })
-    // step-epoch decorations: vertical lines and alternating shading
-    const canDecorateStep = xKeyUsed === 'global_step' && presentCols.includes('epoch')
-    const markLines: any[] = []
-    const markAreas: any[] = []
-    if (canDecorateStep) {
-      let prevEpoch: any = null
-      let currStartIdx = 0
+    // Normalize time axis to start from 0 for readability
+    let x = xRaw
+    if (xKeyUsed === 'time') {
+      const base = xRaw.find(v => v != null) ?? 0
+      x = xRaw.map(v => (v == null ? null : v - base))
+    }
+    // stage separators: draw dashed lines on stage changes when stage column exists
+    const canDecorateStage = presentCols.includes('stage') && (xKeyUsed === 'global_step' || xKeyUsed === 'time')
+    const stageLines: any[] = []
+    if (canDecorateStage) {
       const rows = metrics.rows as any[]
-      for (let i = 0; i < rows.length; i++) {
-        const e = rows[i]?.epoch
-        if (i === 0) prevEpoch = e
-        if (e !== prevEpoch) {
-          // boundary at i
+      // Forward-fill stage so missing values don't cause false toggles
+      let prevStage: any = rows.length ? (rows[0]?.stage ?? null) : null
+      for (let i = 1; i < rows.length; i++) {
+        const raw = rows[i]?.stage
+        const st = (raw === undefined || raw === null || raw === '') ? prevStage : raw
+        if (st !== prevStage) {
           const pos = x[i]
-          if (pos != null) markLines.push({ xAxis: pos })
-          // finish previous epoch region [currStartIdx, i-1]
-          const startPos = x[currStartIdx]
-          const endPos = x[Math.max(i - 1, currStartIdx)]
-          if (startPos != null && endPos != null) {
-            const epochIndex = Number(prevEpoch)
-            if (!Number.isNaN(epochIndex) && epochIndex % 2 === 1) { // shade odd epochs
-              markAreas.push([{ xAxis: startPos }, { xAxis: endPos }])
-            }
-          }
-          currStartIdx = i
-          prevEpoch = e
-        }
-      }
-      // last epoch region
-      if (rows.length) {
-        const startPos = x[currStartIdx]
-        const endPos = x[rows.length - 1]
-        const epochIndex = Number(prevEpoch)
-        if (startPos != null && endPos != null && !Number.isNaN(epochIndex) && epochIndex % 2 === 1) {
-          markAreas.push([{ xAxis: startPos }, { xAxis: endPos }])
+          if (pos != null) stageLines.push({ xAxis: pos })
+          prevStage = st
         }
       }
     }
@@ -120,20 +106,24 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height = 360,
         return n
       })
       const dataVals = ema(rawVals, Math.min(0.95, Math.max(0, smoothing)))
+      const nnz = dataVals.filter((v) => v != null).length
+      const isSparse = nnz <= 12 || nnz <= Math.ceil(((metrics?.rows?.length || 0) as number) * 0.2)
       const bp = bestTypeFor(k)
       const s: any = {
         name: k,
         type: 'line',
         smooth: true,
-        showSymbol: false,
+        showSymbol: isSparse,
+        symbolSize: isSparse ? 6 : 4,
+        connectNulls: true,
         sampling: 'lttb',
         large: true,
         data: dataVals,
         markPoint: bp ? { data: [{ type: bp, name: bp === 'max' ? 'Best (max)' : 'Best (min)' }], symbolSize: 60 } : undefined,
       }
-      if (canDecorateStep && k === yKeys[0]) {
-        s.markLine = markLines.length ? { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: '#bbb' }, data: markLines } : undefined
-        s.markArea = markAreas.length ? { silent: true, itemStyle: { color: 'rgba(0,0,0,0.04)' }, data: markAreas } : undefined
+      if (k === yKeys[0]) {
+        const allLines = stageLines
+        if (allLines.length) s.markLine = { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: '#bbb' }, data: allLines }
       }
       return s
     })

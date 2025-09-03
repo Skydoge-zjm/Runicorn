@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runicorn"
-version = "0.1.0"
+version = "0.1.7"
 description = "Local, open-source experiment tracking and visualization (a simple, self-hosted alternative to W&B)"
 readme = "README.md"
 authors = [{ name = "Runicorn Authors" }]
@@ -14,7 +14,6 @@ keywords = [
   "experiment-tracking", "mlops", "training", "visualization", "fastapi", "wandb-alternative", "self-hosted",
 ]
 classifiers = [
-  "License :: OSI Approved :: MIT License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",

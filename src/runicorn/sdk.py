@@ -99,6 +99,10 @@ class Run:
         self._status_lock = FileLock(str(self._status_path) + ".lock")
         self._logs_lock = FileLock(str(self._logs_txt_path) + ".lock")
 
+        # Global step counter for metrics logging
+        # Starts from 0; first auto step will be 1
+        self._global_step: int = 0
+
         meta = RunMeta(
             id=self.id,
             project=self.project,
@@ -114,13 +118,51 @@ class Run:
         self._write_json(self._status_path, {"status": "running", "started_at": _now_ts()})
 
     # ---------------- public API -----------------
-    def log(self, data: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
-        payload = {}
+    def log(self, data: Optional[Dict[str, Any]] = None, *, step: Optional[int] = None, stage: Optional[Any] = None, **kwargs: Any) -> None:
+        """Log arbitrary scalar metrics.
+
+        Usage:
+            rn.log({"loss": 0.1, "acc": 98.1}, step=10, stage="train")
+
+        Behavior:
+        - Maintains a global step counter. If 'step' is provided in a call,
+          the counter is set to that value for this record; otherwise it auto-increments.
+        - Always records 'global_step' and 'time' into the event data.
+        - If 'stage' is provided (or present in data), records it for UI separators.
+        """
+        ts = _now_ts()
+        payload: Dict[str, Any] = {}
         if data:
             payload.update(data)
         if kwargs:
             payload.update(kwargs)
-        evt = {"ts": _now_ts(), "type": "metrics", "data": payload}
+
+        # Normalize and prioritize explicit params over payload
+        # Remove any user-provided 'step' keys to avoid ambiguity; we always store 'global_step'
+        payload.pop("global_step", None)
+        payload.pop("step", None)
+
+        # Determine step value
+        if step is not None:
+            try:
+                self._global_step = int(step)
+            except Exception:
+                # If unparsable, ignore and just auto-increment
+                self._global_step += 1
+        else:
+            self._global_step += 1
+
+        # Determine stage value (explicit arg has priority)
+        stage_in_payload = payload.pop("stage", None)
+        stage_val = stage if stage is not None else stage_in_payload
+
+        # Inject normalized tracking fields
+        payload["global_step"] = self._global_step
+        payload["time"] = ts
+        if stage_val is not None:
+            payload["stage"] = stage_val
+
+        evt = {"ts": ts, "type": "metrics", "data": payload}
         self._append_jsonl(self._events_path, evt, self._events_lock)
 
     def log_text(self, text: str) -> None:
@@ -229,7 +271,11 @@ def _require_run() -> Run:
 
 
 def log(data: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
-    _require_run().log(data, **kwargs)
+    # Support rn.log({...}, step=..., stage=..., key=value...)
+    # Pull out recognized kwargs to keep type hints simple at module level
+    step = kwargs.pop("step", None)
+    stage = kwargs.pop("stage", None)
+    _require_run().log(data, step=step, stage=stage, **kwargs)
 
 
 def log_image(key: str, image: Any, step: Optional[int] = None, caption: Optional[str] = None, format: str = "png", quality: int = 90) -> str:

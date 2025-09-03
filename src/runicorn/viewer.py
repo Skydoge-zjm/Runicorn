@@ -78,49 +78,15 @@ def _iter_events(events_path: Path) -> Iterator[Dict[str, Any]]:
     except Exception:
         return
 
-
-def _aggregate_epoch_metrics(events_path: Path) -> Tuple[List[str], List[Dict[str, Any]]]:
-    # Aggregate by epoch: keep last value per key within same epoch
-    by_epoch: Dict[int, Dict[str, Any]] = {}
-    keys: set[str] = set(["epoch"])  # always include epoch
-    for evt in _iter_events(events_path):
-        if not isinstance(evt, dict) or evt.get("type") != "metrics":
-            continue
-        data = evt.get("data") or {}
-        if not isinstance(data, dict):
-            continue
-        epoch_val = data.get("epoch")
-        if epoch_val is None:
-            continue
-        try:
-            ep = int(epoch_val)
-        except Exception:
-            continue
-        row = by_epoch.get(ep) or {"epoch": ep}
-        for k, v in data.items():
-            if k == "epoch":
-                continue
-            # Only accept JSON-serializable primitives
-            if isinstance(v, (int, float, str)) or v is None:
-                row[k] = v
-                keys.add(k)
-        by_epoch[ep] = row
-    if not by_epoch:
-        return [], []
-    cols = ["epoch"] + sorted([k for k in keys if k != "epoch"])  # epoch first
-    rows = [by_epoch[e] for e in sorted(by_epoch.keys())]
-    # Ensure all rows have all columns
-    for r in rows:
-        for c in cols:
-            r.setdefault(c, None)
-    return cols, rows
+# Epoch-based aggregation removed: metrics are tracked only by step/time.
 
 
 def _aggregate_step_metrics(events_path: Path) -> Tuple[List[str], List[Dict[str, Any]]]:
-    # Use 'global_step' if present; otherwise fall back to 'step'
-    rows: List[Dict[str, Any]] = []
+    # Use 'global_step' if present; otherwise fall back to 'step'.
+    # Merge multiple events at the same step into a single row to avoid duplicate x-axis
+    # categories (which can cause apparent "jumps" for dense series when sparse series are interleaved).
+    step_rows: Dict[int, Dict[str, Any]] = {}
     keys: set[str] = set()
-    step_key = None
     for evt in _iter_events(events_path):
         if not isinstance(evt, dict) or evt.get("type") != "metrics":
             continue
@@ -130,23 +96,23 @@ def _aggregate_step_metrics(events_path: Path) -> Tuple[List[str], List[Dict[str
         k = "global_step" if "global_step" in data else ("step" if "step" in data else None)
         if k is None:
             continue
-        if step_key is None:
-            step_key = k
         try:
             step_val = int(data[k])
         except Exception:
             continue
-        row: Dict[str, Any] = {"global_step": step_val}  # normalize to global_step
+        row = step_rows.get(step_val)
+        if row is None:
+            row = {"global_step": step_val}
+            step_rows[step_val] = row
         for kk, vv in data.items():
-            if kk in ("global_step", "step"):
+            if kk in ("global_step", "step", "epoch"):
                 continue
             if isinstance(vv, (int, float, str)) or vv is None:
-                row[kk] = vv
+                row[kk] = vv  # last write wins for the same key at the same step
                 keys.add(kk)
-        rows.append(row)
-    if not rows:
+    if not step_rows:
         return [], []
-    rows.sort(key=lambda r: int(r.get("global_step") or 0))
+    rows = [step_rows[s] for s in sorted(step_rows.keys())]
     cols = ["global_step"] + sorted(list(keys))
     for r in rows:
         for c in cols:
@@ -297,7 +263,8 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     async def get_metrics(run_id: str):
         d = root / "runs" / run_id
         events = d / "events.jsonl"
-        cols, rows = _aggregate_epoch_metrics(events)
+        # Return step/time metrics for compatibility; epoch view is deprecated
+        cols, rows = _aggregate_step_metrics(events)
         return {"columns": cols, "rows": rows}
 
     @app.get("/api/runs/{run_id}/metrics_step")

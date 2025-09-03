@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Descriptions, Space, Progress, Alert, Typography, Collapse, Popover, Tag } from 'antd'
+import { Card, Descriptions, Space, Alert, Popover, Tag, Switch, Select } from 'antd'
 import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined } from '@ant-design/icons'
-import { getRunDetail, getMetrics, getStepMetrics, getProgress, getGpuTelemetry } from '../api'
+import { getRunDetail, getStepMetrics, getGpuTelemetry } from '../api'
 import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
 import GpuTelemetry from '../components/GpuTelemetry'
@@ -10,110 +10,37 @@ import GpuTelemetry from '../components/GpuTelemetry'
 export default function RunDetailPage() {
   const { id = '' } = useParams()
   const [detail, setDetail] = useState<any>(null)
-  const [metrics, setMetrics] = useState<{ columns: string[]; rows: any[] }>({ columns: [], rows: [] })
   const [stepMetrics, setStepMetrics] = useState<{ columns: string[]; rows: any[] }>({ columns: [], rows: [] })
-  const [prog, setProg] = useState<any>(null)
+  const [stepXAxis, setStepXAxis] = useState<'global_step' | 'time'>(() => {
+    try { return (localStorage.getItem(`run:${id}:step:xAxis`) as any) || 'global_step' } catch { return 'global_step' }
+  })
+  const [twoCol, setTwoCol] = useState<boolean>(() => {
+    try { return localStorage.getItem(`run:${id}:layout:twoCol`) === '1' } catch { return true }
+  })
   const [gpu, setGpu] = useState<{ util: number; mem: number; power: number; temp: number; gpus?: any[] } | null>(null)
   const gpuHistRef = useRef<Array<{ t: number; util: number; mem: number; power: number; temp: number }>>([])
-  const prevEpochRef = useRef<{ t: number; percent: number } | null>(null)
-  const prevIterRef = useRef<{ t: number; step: number } | null>(null)
-  const [etaEpochSec, setEtaEpochSec] = useState<number | null>(null)
-  const [etaIterSec, setEtaIterSec] = useState<number | null>(null)
 
   const loadDetail = async () => setDetail(await getRunDetail(id))
-  const loadMetrics = async () => setMetrics(await getMetrics(id))
   const loadStepMetrics = async () => setStepMetrics(await getStepMetrics(id))
 
   useEffect(() => {
     loadDetail()
-    loadMetrics()
     loadStepMetrics()
-    const loadProg = async () => {
-      try { setProg(await getProgress(id)) } catch {}
-    }
-    loadProg()
     const t = setInterval(() => {
       loadDetail();
-      loadMetrics();
       loadStepMetrics();
-      loadProg();
     }, 3000)
     return () => clearInterval(t)
   }, [id])
 
-  // progress estimation using last epoch and saved total epochs
-  const totalEpochs = useMemo(() => {
-    try {
-      const raw = localStorage.getItem(`run_meta_${id}`)
-      if (!raw) return undefined
-      const meta = JSON.parse(raw)
-      return Number(meta?.epochs) || undefined
-    } catch { return undefined }
-  }, [id])
-  const lastEpoch = useMemo(() => {
-    const n = metrics.rows.length
-    if (!n) return 0
-    const v = Number(metrics.rows[n - 1]?.epoch)
-    return Number.isFinite(v) ? v : 0
-  }, [metrics])
-  const percent = useMemo(() => {
-    if (!totalEpochs || totalEpochs <= 0) return undefined
-    const p = Math.max(0, Math.min(100, Math.round((lastEpoch / totalEpochs) * 100)))
-    return p
-  }, [lastEpoch, totalEpochs])
-
-  const iterPercent = useMemo(() => {
-    if (!prog || !prog.available) return undefined
-    if (prog?.percent != null) return Math.max(0, Math.min(100, Number(prog.percent)))
-    const step = Number(prog?.step)
-    const total = Number(prog?.total)
-    if (!Number.isFinite(step) || !Number.isFinite(total) || total <= 0) return undefined
-    return Math.max(0, Math.min(100, Math.round((step / total) * 100)))
-  }, [prog])
-
-  // ETA calculations
   useEffect(() => {
-    const now = Date.now() / 1000
-    // Epoch ETA based on percent speed
-    if (percent != null) {
-      const prev = prevEpochRef.current
-      if (prev && percent > prev.percent) {
-        const dp = percent - prev.percent
-        const dt = now - prev.t
-        if (dt > 0) {
-          const speed = dp / dt // percent per second
-          if (speed > 1e-6) setEtaEpochSec(Math.max(0, Math.round((100 - percent) / speed)))
-        }
-      }
-      prevEpochRef.current = { t: now, percent }
-    }
-    // Iter ETA based on steps/sec
-    const step = Number(prog?.step)
-    const total = Number(prog?.total)
-    if (Number.isFinite(step) && Number.isFinite(total) && total > 0) {
-      const prev = prevIterRef.current
-      if (prev && step > prev.step) {
-        const ds = step - prev.step
-        const dt = now - prev.t
-        if (dt > 0) {
-          const sps = ds / dt
-          if (sps > 1e-6) setEtaIterSec(Math.max(0, Math.round((total - step) / sps)))
-        }
-      }
-      prevIterRef.current = { t: now, step }
-    }
-  }, [percent, prog])
+    try { localStorage.setItem(`run:${id}:step:xAxis`, stepXAxis) } catch {}
+  }, [id, stepXAxis])
+  useEffect(() => {
+    try { localStorage.setItem(`run:${id}:layout:twoCol`, twoCol ? '1' : '0') } catch {}
+  }, [id, twoCol])
 
-  const formatETA = (secs: number | null) => {
-    if (secs == null) return '-'
-    const s = Math.max(0, Math.round(secs))
-    const h = Math.floor(s / 3600)
-    const m = Math.floor((s % 3600) / 60)
-    const ss = s % 60
-    if (h > 0) return `${h}h ${m}m ${ss}s`
-    if (m > 0) return `${m}m ${ss}s`
-    return `${ss}s`
-  }
+  // (Epoch-based progress and ETA removed)
 
   const trendIcon = (key: 'util' | 'mem' | 'power' | 'temp') => {
     const hist = gpuHistRef.current
@@ -165,6 +92,26 @@ export default function RunDetailPage() {
   }, [id, wsProto])
 
 
+  // derive dynamic metric keys
+  const isNumericColumn = (m: { columns: string[]; rows: any[] }, key: string) => {
+    if (!m?.rows?.length) return false
+    for (const r of m.rows) {
+      const v = r[key]
+      if (v == null || v === '') continue
+      const n = Number(v)
+      if (!Number.isNaN(n)) return true
+    }
+    return false
+  }
+  const skipCols = new Set(['epoch', 'global_step', 'iter', 'step', 'batch', 'time', 'stage'])
+  const stepMetricKeys = useMemo(() => (stepMetrics.columns || []).filter(k => !skipCols.has(k) && isNumericColumn(stepMetrics, k)), [stepMetrics])
+
+  const gridStyle: React.CSSProperties = useMemo(() => ({
+    display: 'grid',
+    gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr',
+    gap: 16,
+  }), [twoCol])
+
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
       <Card title={`Run ${id}`}>
@@ -206,52 +153,27 @@ export default function RunDetailPage() {
             )}
           </Space>
         </div>
-        {percent != null ? (
-          <div>
-            <Typography.Text strong>Overall progress (epochs)</Typography.Text>
-            <Progress percent={percent} status={detail?.status === 'running' ? 'active' : 'normal'} />
-            <div style={{ fontSize: 12, color: '#888' }}>ETA: {formatETA(etaEpochSec)}</div>
-          </div>
-        ) : (
-          <Alert type="info" showIcon message="Overall progress will appear after first epoch. To enable %, keep this tab open when starting the run so we can store the total epochs." />
-        )}
-        {iterPercent != null && (
-          <div>
-            <div style={{ height: 8 }} />
-            <Typography.Text strong>Current epoch progress (iter)</Typography.Text>
-            <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>
-              Phase: {prog?.phase || '-'} · Step: {prog?.step ?? '-'} / {prog?.total ?? '-'}
-            </div>
-            <Progress percent={iterPercent} status={detail?.status === 'running' ? 'active' : 'normal'} strokeColor="#52c41a" />
-            <div style={{ fontSize: 12, color: '#888' }}>ETA: {formatETA(etaIterSec)}</div>
-          </div>
-        )}
       </Card>
 
-      <Card title="Training Curves">
-        <Collapse
-          defaultActiveKey={["loss", "acc"]}
-          items={[
-            { key: 'loss', label: 'Loss', children: (
-                <MetricChart metrics={metrics} xKey="epoch" yKeys={["train_loss", "val_loss"]} title="Loss" height={360}
-                  group={`epoch-group-${id}`} persistKey={`run:${id}:epoch:loss`} />
-            ) },
-            { key: 'acc', label: 'Accuracy', children: (
-                <MetricChart metrics={metrics} xKey="epoch" yKeys={["train_acc_top1", "val_acc_top1", "best_val_acc_top1"]} title="Accuracy" height={360}
-                  group={`epoch-group-${id}`} persistKey={`run:${id}:epoch:acc`} />
-            ) },
-            ...(stepMetrics.columns.length ? [
-              { key: 'step_loss', label: 'Step Loss', children: (
-                  <MetricChart metrics={stepMetrics} xKey="global_step" yKeys={["train_loss"]} title="Step Loss" height={360}
-                    group={`step-group-${id}`} persistKey={`run:${id}:step:loss`} />
-              ) },
-              { key: 'step_acc', label: 'Step Accuracy', children: (
-                  <MetricChart metrics={stepMetrics} xKey="global_step" yKeys={["train_acc_top1"]} title="Step Accuracy (Top1)" height={360}
-                    group={`step-group-${id}`} persistKey={`run:${id}:step:acc`} />
-              ) },
-            ] : [])
-          ]}
-        />
+      <Card title="Metrics" extra={(
+        <Space>
+          <span>Two Columns <Switch checked={twoCol} onChange={setTwoCol} /></span>
+          <span>Step X: <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
+            { value: 'global_step', label: 'global_step' },
+            { value: 'time', label: 'time' },
+          ]} /></span>
+        </Space>
+      )}>
+        {stepMetricKeys.length === 0 ? (
+          <Alert type="info" showIcon message="No step metrics yet." />
+        ) : (
+          <div style={gridStyle}>
+            {stepMetricKeys.map((k) => (
+              <MetricChart key={k} metrics={stepMetrics} xKey={stepXAxis} yKeys={[k]} title={k} height={300}
+                group={`step-group-${id}`} persistKey={`run:${id}:step:${k}`} />
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card title="GPU Telemetry">
