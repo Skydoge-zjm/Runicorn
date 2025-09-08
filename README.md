@@ -145,3 +145,8 @@ Notes
 -----
 - GPU telemetry is shown if `nvidia-smi` is available.
 - Windows compatible.
+
+
+AI 
+----
+This project is mainly developed by OpenAI's GPT-5.
