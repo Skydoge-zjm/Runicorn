@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runicorn"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local, open-source experiment tracking and visualization (a simple, self-hosted alternative to W&B)"
 readme = "README.md"
 authors = [{ name = "Runicorn Authors" }]

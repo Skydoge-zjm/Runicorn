@@ -1,0 +1,1 @@
+{"main-capability":{"identifier":"main-capability","description":"Capabilities for the main window to spawn the backend sidecar.","local":true,"windows":["main"],"permissions":["shell:allow-spawn","shell:allow-kill","shell:allow-stdin-write"]}}

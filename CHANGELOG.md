@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [0.2.1] - 2025-09-09
+
+### Fixed
+- Desktop/Backend: `POST /api/config/user_root_dir` now correctly parses JSON body (no longer treated as query params).
+- Better error handling and messages when setting the data directory (path validation, immediate storage re-init).
+- Windows: expand environment variables in paths (e.g., `%USERPROFILE%`).
+- Avoided CWD fallback by re-initializing storage with the newly set path explicitly.
+- Added lightweight server debug log at [%APPDATA%/Runicorn/server_debug.log](cci:1://file:///e:/pycharm_project/Runicorn/src/runicorn/sdk.py:287:0-292:62).
+
+### Changed
+- Build: [desktop/tauri/build_release.ps1](cci:7://file:///e:/pycharm_project/Runicorn/desktop/tauri/build_release.ps1:0:0-0:0) now syncs [web/frontend/dist](cci:7://file:///e:/pycharm_project/Runicorn/web/frontend/dist:0:0-0:0) into [src/runicorn/webui](cci:7://file:///e:/pycharm_project/Runicorn/src/runicorn/webui:0:0-0:0) before sidecar build to ship latest UI.
+- Docs: Added Desktop app instructions and Settings → Data Directory flow in both READMEs.
+
+### Desktop
+- NSIS installer (Tauri) bundles the sidecar backend and launches it automatically. First run lets users choose a writable data directory.
+
 ## [0.2.0] - 2025-09-08
 
 ### Added

@@ -88,13 +88,33 @@ runicorn viewer --storage ./.runicorn --host 127.0.0.1 --port 8000
 # 打开 http://127.0.0.1:8000
 ```
 
+## 桌面应用（Windows）
+
+- 推荐普通用户通过 GitHub Releases 安装，或在本地自行构建安装包。
+- 本地构建（生成 NSIS 安装器）：
+
+  ```powershell
+  # 在仓库根目录执行
+  powershell -ExecutionPolicy Bypass -File .\desktop\tauri\build_release.ps1 -Bundles nsis
+  # 安装包输出路径：
+  # desktop/tauri/src-tauri/target/release/bundle/nsis/Runicorn Desktop_<version>_x64-setup.exe
+  ```
+
+- 安装后启动「Runicorn Desktop」。
+  - 首次运行：右上角齿轮 → 设置 → 数据目录，选择一个可写路径（如 `D:\RunicornData`），点击保存。
+  - 桌面应用会自动启动本地后端并打开 UI。
+
 ## 配置
 
-- 一次性设置“用户级根目录”（全局生效）
-```bash
-runicorn config --set-user-root "E:\\RunicornData"
-runicorn config --show
-```
+- “用户级根目录”可通过 UI 或 CLI 设置：
+
+  - 桌面应用 UI：右上角齿轮 → 设置 → 数据目录（写入到 `%APPDATA%\Runicorn\config.json`）。
+
+  - 通过 CLI（全局复用）：
+  ```bash
+  runicorn config --set-user-root "E:\\RunicornData"
+  runicorn config --show
+  ```
 
 - 存储根目录的优先级（从高到低）：
   1. `runicorn.init(storage=...)`

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Runicorn Desktop",
+  "version": "0.2.1",
+  "identifier": "com.runicorn.desktop",
+
+  "build": {
+    "beforeBuildCommand": "",
+    "frontendDist": "../../../web/frontend/dist"
+  },
+
+  "app": {
+    "windows": [],
+    "security": { "csp": null }
+  },
+
+  "bundle": {
+    "icon": [
+      "../../docs/picture/icon.jpg"
+    ],
+    "externalBin": [
+      "../sidecar/dist/runicorn-viewer"
+    ]
+  }
+}

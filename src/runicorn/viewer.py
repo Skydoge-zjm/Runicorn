@@ -12,10 +12,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import aiofiles
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from .config import get_user_root_dir, set_user_root_dir
 
 from .sdk import DEFAULT_DIRNAME, _default_storage_dir
 
@@ -40,6 +41,17 @@ def _read_json(path: Path) -> Dict[str, Any]:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+def _debug_log(msg: str) -> None:
+    try:
+        from .config import get_config_file_path
+        p = get_config_file_path().parent / "server_debug.log"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(time.strftime("%H:%M:%S") + " | " + str(msg) + "\n")
+    except Exception:
+        # best-effort only
+        pass
 
 
 def _list_run_dirs_legacy(root: Path) -> List[Path]:
@@ -376,6 +388,47 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     async def gpu_telemetry():
         return _read_gpu_telemetry()
 
+    # ---- Config management ----
+    class SetUserRootBody(BaseModel):
+        path: str
+
+    @app.get("/api/config")
+    async def get_config():
+        return {
+            "user_root_dir": str(get_user_root_dir() or ""),
+            "storage": str(root),
+        }
+
+    @app.post("/api/config/user_root_dir")
+    async def set_user_root(payload: Dict[str, Any] = Body(...)):
+        nonlocal root
+        try:
+            # Accept plain dict to avoid model parsing edge-cases in frozen builds
+            raw = payload.get("path") if isinstance(payload, dict) else None
+            in_path = str(raw or "")
+            _debug_log(f"set_user_root called with path='{in_path}'")
+            # Expand env vars on Windows such as %USERPROFILE%
+            if os.name == "nt":
+                in_path = os.path.expandvars(in_path)
+            p = set_user_root_dir(in_path)
+        except Exception as e:
+            _debug_log(f"set_user_root_dir failed: {e}")
+            raise HTTPException(status_code=400, detail=f"invalid path or permission: {e}")
+
+        try:
+            # Recompute storage root to apply immediately using the path we just set
+            # Passing it explicitly avoids racing on config read and prevents CWD fallback
+            root = _storage_root(str(p))
+        except Exception as e:
+            _debug_log(f"_storage_root reinit failed: {e}")
+            raise HTTPException(status_code=500, detail=f"failed to reinitialize storage root: {e}")
+
+        return {
+            "ok": True,
+            "user_root_dir": str(p),
+            "storage": str(root),
+        }
+
     # ---- Project/Name discovery APIs ----
     @app.get("/api/projects")
     async def list_projects():
@@ -443,14 +496,25 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             )
         return items
 
-    # Optionally serve bundled static frontend (for pip-installed users)
+    # ---- Static frontend mounting ----
+    # Prefer an explicit frontend dist path provided via env var for dev/desktop
+    try:
+        env_dir_s = os.environ.get("RUNICORN_FRONTEND_DIST") or os.environ.get("RUNICORN_DESKTOP_FRONTEND")
+        if env_dir_s:
+            env_dir = Path(env_dir_s)
+            if env_dir.exists():
+                # Mount at root; '/api' routes remain available since they are explicit
+                app.mount("/", StaticFiles(directory=str(env_dir), html=True), name="frontend")
+                return app
+    except Exception:
+        pass
+    # Fallback: serve the packaged webui if present inside the Python package
     try:
         ui_dir = Path(__file__).parent / "webui"
         if ui_dir.exists():
-            # Mount at root; '/api' routes remain available since they are explicit
             app.mount("/", StaticFiles(directory=str(ui_dir), html=True), name="frontend")
     except Exception:
-        # Static UI not found or failed to mount; API still works (dev uses Vite)
+        # Static UI not found or failed to mount; API still works (dev can use external server)
         pass
 
     return app

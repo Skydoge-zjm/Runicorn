@@ -78,16 +78,36 @@ runicorn viewer --storage ./.runicorn --host 127.0.0.1 --port 8000
 # Then open http://127.0.0.1:8000
 ```
  
+Desktop app (Windows)
+---------------------
+- Install from GitHub Releases (recommended for end users), or build locally.
+- Build locally (creates an NSIS installer):
+
+  ```powershell
+  # From repo root
+  powershell -ExecutionPolicy Bypass -File .\desktop\tauri\build_release.ps1 -Bundles nsis
+  # Installer output:
+  # desktop/tauri/src-tauri/target/release/bundle/nsis/Runicorn Desktop_<version>_x64-setup.exe
+  ```
+
+- After installation, launch "Runicorn Desktop".
+  - First run: open the gear icon (top-right) → Settings → Data Directory, choose a writable path (e.g., `D:\RunicornData`), then Save.
+  - The desktop app auto-starts a local backend and opens the UI.
+
 Configuration
 -------------
-- Per-user storage root: set once via CLI
+- Per-user storage root can be set via UI or CLI:
 
+  - In Desktop app UI: gear icon → Settings → Data Directory (persisted to `%APPDATA%\Runicorn\config.json`).
+
+  - Via CLI (global, reused by all projects):
+  
   ```bash
   # Set a persistent per-user root used across all projects
   runicorn config --set-user-root "E:\\RunicornData"
   # Inspect current config
   runicorn config --show
-  ```
+```
 
 - Precedence for resolving storage root:
   1. `runicorn.init(storage=...)`

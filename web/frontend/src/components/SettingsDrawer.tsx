@@ -1,5 +1,6 @@
-import React from 'react'
-import { Drawer, Form, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider } from 'antd'
+import React, { useEffect, useState } from 'react'
+import { Drawer, Form, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message } from 'antd'
+import { getConfig, setUserRootDir as apiSetUserRootDir } from '../api'
 
 export type UiSettings = {
   themeMode: 'light' | 'dark' | 'auto'
@@ -34,8 +35,44 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
     loose: '宽松型（更舒适的留白）',
   } as const
 
+  // ----- Data directory (user_root_dir) settings -----
+  const [userRootDir, setUserRootDir] = useState<string>('')
+  const [storagePath, setStoragePath] = useState<string>('')
+  const [savingRoot, setSavingRoot] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    if (open) {
+      getConfig()
+        .then(({ user_root_dir, storage }) => {
+          if (!active) return
+          setUserRootDir(user_root_dir || '')
+          setStoragePath(storage || '')
+        })
+        .catch(() => {})
+    }
+    return () => { active = false }
+  }, [open])
+
+  const saveUserRoot = async () => {
+    if (!userRootDir || userRootDir.trim().length < 2) {
+      message.warning('请输入有效的目录绝对路径（例如 D:\\RunicornData）')
+      return
+    }
+    try {
+      setSavingRoot(true)
+      const res = await apiSetUserRootDir(userRootDir.trim())
+      setStoragePath(res.storage)
+      message.success('用户根目录已更新')
+    } catch (e: any) {
+      message.error(typeof e?.message === 'string' ? e.message : '更新失败')
+    } finally {
+      setSavingRoot(false)
+    }
+  }
+
   return (
-    <Drawer title="外观设置" width={420} open={open} onClose={onClose} destroyOnClose>
+    <Drawer title="设置" width={520} open={open} onClose={onClose} destroyOnClose>
       <Space direction="vertical" style={{ width: '100%' }} size="large">
         <div>
           <Typography.Title level={5}>主题</Typography.Title>
@@ -53,6 +90,27 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
                 optionType="button"
               />
             </div>
+
+        <Divider style={{ margin: '8px 0' }} />
+
+        <div>
+          <Typography.Title level={5}>数据目录</Typography.Title>
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <div style={{ color: '#999' }}>当前存储根（storage）：{storagePath || '未知'}</div>
+            <div>用户根目录（优先级低于环境变量 RUNICORN_DIR）</div>
+            <Input
+              placeholder="例如：D:\\RunicornData"
+              value={userRootDir}
+              onChange={(e) => setUserRootDir(e.target.value)}
+            />
+            <div style={{ fontSize: 12, color: '#999' }}>
+              设置后将写入用户配置，并立即生效。若设置了环境变量 RUNICORN_DIR，则优先使用环境变量。
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <Button loading={savingRoot} type="primary" onClick={saveUserRoot}>保存数据目录</Button>
+            </div>
+          </Space>
+        </div>
             <div>
               <div style={{ marginBottom: 6 }}>主色</div>
               <ColorPicker value={value.accentColor} onChange={(c) => set({ accentColor: c.toHexString() })} />

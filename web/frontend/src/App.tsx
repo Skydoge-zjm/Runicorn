@@ -4,7 +4,7 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import { UnorderedListOutlined, SettingOutlined } from '@ant-design/icons'
 import RunsPage from './pages/RunsPage'
 import RunDetailPage from './pages/RunDetailPage'
-import { health } from './api'
+import { health, getConfig } from './api'
 import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
 
 const { Header, Content, Footer } = Layout
@@ -95,6 +95,18 @@ export default function App() {
   }, [settings.glass, settings.backgroundBlur, isDark])
 
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // First-run: if user_root_dir is empty, automatically open Settings
+  useEffect(() => {
+    (async () => {
+      try {
+        const cfg = await getConfig()
+        if (!cfg.user_root_dir || cfg.user_root_dir.trim() === '') {
+          setSettingsOpen(true)
+        }
+      } catch {}
+    })()
+  }, [])
 
   const [apiStatus, setApiStatus] = useState<'ok' | 'down' | 'loading'>('loading')
   useEffect(() => {

@@ -40,6 +40,9 @@ data/
 web/frontend/node_modules/
 web/frontend/dist/
 web/frontend/.eslintcache
+web/frontend/.vite/
+web/frontend/coverage/
+web/frontend/*.tsbuildinfo
 
 # --- IDE / OS ---
 .idea/
@@ -54,3 +57,16 @@ Thumbs.db
 
 # Optional: ignore npmrc if it may contain tokens
 web/frontend/.npmrc
+
+# --- Tauri / Rust ---
+desktop/tauri/src-tauri/target/
+desktop/tauri/src-tauri/target/**
+desktop/tauri/src-tauri/target/release/bundle/
+desktop/tauri/src-tauri/target/debug/
+
+# --- Sidecar outputs ---
+desktop/tauri/sidecar/build/
+desktop/tauri/sidecar/dist/
+
+# --- Local run data (legacy) ---
+.runicorn/

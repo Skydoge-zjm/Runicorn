@@ -61,3 +61,20 @@ export async function listRunsByName(project: string, name: string) {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+// ----- Config helpers -----
+export async function getConfig() {
+  const res = await fetch(url('/config'))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ user_root_dir: string; storage: string }>
+}
+
+export async function setUserRootDir(path: string) {
+  const res = await fetch(url('/config/user_root_dir'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ ok: boolean; user_root_dir: string; storage: string }>
+}
