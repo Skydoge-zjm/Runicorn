@@ -6,6 +6,11 @@
 
 [English](README.md) | **简体中文**
 
+
+<p align="center">
+  <img src="docs/picture/icon.jpg" alt="Runicorn logo" width="120" />
+</p>
+
 本地、开源的实验追踪与可视化工具，100% 离线。轻量、零侵入，是 W&B 的自托管替代方案。
 
 - 包名称：`runicorn`

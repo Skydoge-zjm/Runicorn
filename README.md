@@ -6,6 +6,10 @@
 [![Python Versions](https://img.shields.io/pypi/pyversions/runicorn)](https://pypi.org/project/runicorn/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+<p align="center">
+  <img src="docs/picture/icon.jpg" alt="Runicorn logo" width="120" />
+</p>
+
 Local, open-source experiment tracking and visualization. 100% local. A lightweight, self-hosted alternative to W&B.
 
 - Package/Library name: runicorn
