@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/picture/icon.jpg" alt="Runicorn logo" width="120" />
+  <img src="docs/picture/icon.jpg" alt="Runicorn logo" width="360" />
 </p>
 
 Local, open-source experiment tracking and visualization. 100% local. A lightweight, self-hosted alternative to W&B.
