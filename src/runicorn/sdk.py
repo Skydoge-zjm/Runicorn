@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from filelock import FileLock
+from .config import get_user_root_dir
 
 # Optional imports for image handling
 try:  # pillow is optional
@@ -37,11 +38,19 @@ def _now_ts() -> float:
 
 
 def _default_storage_dir(storage: Optional[str]) -> Path:
+    # Priority:
+    # 1) Explicit storage argument
+    # 2) Environment variable RUNICORN_DIR
+    # 3) Global user config (user_root_dir)
+    # 4) Legacy local default ./.runicorn
     if storage:
         return Path(storage).expanduser().resolve()
     env = os.environ.get("RUNICORN_DIR")
     if env:
         return Path(env).expanduser().resolve()
+    cfg = get_user_root_dir()
+    if cfg:
+        return cfg
     return (Path.cwd() / DEFAULT_DIRNAME).resolve()
 
 
@@ -77,9 +86,15 @@ class Run:
         run_id: Optional[str] = None,
         name: Optional[str] = None,
     ) -> None:
-        self.project = project
+        self.project = project or "default"
+        # storage_root points to user_root_dir (or legacy ./.runicorn)
         self.storage_root = _default_storage_dir(storage)
-        self.runs_dir = self.storage_root / "runs"
+        # New hierarchy: user_root_dir / project / name / runs / run_id
+        exp_name = name or "default"
+        self.name = exp_name
+        self.project_dir = self.storage_root / self.project
+        self.experiment_dir = self.project_dir / exp_name
+        self.runs_dir = self.experiment_dir / "runs"
         self.runs_dir.mkdir(parents=True, exist_ok=True)
         self.id = run_id or _gen_run_id()
         self.run_dir = self.runs_dir / self.id
@@ -106,7 +121,7 @@ class Run:
         meta = RunMeta(
             id=self.id,
             project=self.project,
-            name=name,
+            name=self.name,
             created_at=_now_ts(),
             python=sys.version.split(" ")[0],
             platform=f"{platform.system()} {platform.release()} ({platform.machine()})",

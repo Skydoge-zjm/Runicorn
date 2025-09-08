@@ -42,11 +42,56 @@ def _read_json(path: Path) -> Dict[str, Any]:
         return {}
 
 
-def _list_run_dirs(root: Path) -> List[Path]:
+def _list_run_dirs_legacy(root: Path) -> List[Path]:
     runs_dir = root / "runs"
     if not runs_dir.exists():
         return []
     return sorted([p for p in runs_dir.iterdir() if p.is_dir()], key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+@dataclass
+class RunEntry:
+    project: Optional[str]
+    name: Optional[str]
+    dir: Path
+
+
+def _iter_all_runs(root: Path) -> List[RunEntry]:
+    """Discover runs in both new and legacy layouts.
+
+    New:   root/<project>/<name>/runs/<run_id>
+    Legacy:root/runs/<run_id>
+    """
+    entries: List[RunEntry] = []
+    # New layout: project/name/runs/*
+    try:
+        for proj in sorted([p for p in root.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
+            # skip well-known non-project dirs
+            if proj.name in {"runs", "webui"}:
+                continue
+            for name in sorted([n for n in proj.iterdir() if n.is_dir()], key=lambda p: p.name.lower()):
+                runs_dir = name / "runs"
+                if not runs_dir.exists():
+                    continue
+                for rd in sorted([p for p in runs_dir.iterdir() if p.is_dir()], key=lambda p: p.stat().st_mtime, reverse=True):
+                    entries.append(RunEntry(project=proj.name, name=name.name, dir=rd))
+    except Exception:
+        pass
+    # Legacy layout fallback
+    try:
+        for rd in _list_run_dirs_legacy(root):
+            # project/name can be inferred from meta.json if present; leave None here
+            entries.append(RunEntry(project=None, name=None, dir=rd))
+    except Exception:
+        pass
+    return entries
+
+
+def _find_run_dir_by_id(root: Path, run_id: str) -> Optional[RunEntry]:
+    for e in _iter_all_runs(root):
+        if e.dir.name == run_id:
+            return e
+    return None
 
 
 # ---------------- API schemas ----------------
@@ -58,6 +103,8 @@ class RunListItem(BaseModel):
     status: str
     pid: Optional[int] = None
     best_val_acc_top1: Optional[float] = None
+    project: Optional[str] = None
+    name: Optional[str] = None
 
 
 # ---------------- Metrics extraction ----------------
@@ -219,7 +266,8 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     @app.get("/api/runs", response_model=List[RunListItem])
     async def list_runs():
         items: List[RunListItem] = []
-        for d in _list_run_dirs(root):
+        for e in _iter_all_runs(root):
+            d = e.dir
             rid = d.name
             meta = _read_json(d / "meta.json")
             status = _read_json(d / "status.json")
@@ -230,6 +278,8 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                     created = d.stat().st_mtime
                 except Exception:
                     created = None
+            proj = (meta.get("project") if isinstance(meta, dict) else None) or e.project
+            name = (meta.get("name") if isinstance(meta, dict) else None) or e.name
             items.append(
                 RunListItem(
                     id=rid,
@@ -238,22 +288,29 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                     status=str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
                     pid=(meta.get("pid") if isinstance(meta, dict) else None),
                     best_val_acc_top1=(summ.get("best_val_acc_top1") if isinstance(summ, dict) else None),
+                    project=proj,
+                    name=name,
                 )
             )
         return items
 
     @app.get("/api/runs/{run_id}")
     async def run_detail(run_id: str):
-        d = root / "runs" / run_id
-        if not d.exists():
+        entry = _find_run_dir_by_id(root, run_id)
+        if not entry:
             raise HTTPException(status_code=404, detail="run not found")
+        d = entry.dir
         meta = _read_json(d / "meta.json")
         status = _read_json(d / "status.json")
+        proj = (meta.get("project") if isinstance(meta, dict) else None) or entry.project
+        name = (meta.get("name") if isinstance(meta, dict) else None) or entry.name
         return {
             "id": run_id,
             "status": str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
             "pid": (meta.get("pid") if isinstance(meta, dict) else None),
             "run_dir": str(d),
+            "project": proj,
+            "name": name,
             "logs": str(d / "logs.txt"),
             "metrics": str(d / "events.jsonl"),
             "metrics_step": str(d / "events.jsonl"),
@@ -261,16 +318,20 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
 
     @app.get("/api/runs/{run_id}/metrics")
     async def get_metrics(run_id: str):
-        d = root / "runs" / run_id
-        events = d / "events.jsonl"
+        entry = _find_run_dir_by_id(root, run_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="run not found")
+        events = entry.dir / "events.jsonl"
         # Return step/time metrics for compatibility; epoch view is deprecated
         cols, rows = _aggregate_step_metrics(events)
         return {"columns": cols, "rows": rows}
 
     @app.get("/api/runs/{run_id}/metrics_step")
     async def get_metrics_step(run_id: str):
-        d = root / "runs" / run_id
-        events = d / "events.jsonl"
+        entry = _find_run_dir_by_id(root, run_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail="run not found")
+        events = entry.dir / "events.jsonl"
         cols, rows = _aggregate_step_metrics(events)
         return {"columns": cols, "rows": rows}
 
@@ -283,7 +344,12 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     @app.websocket("/api/runs/{run_id}/logs/ws")
     async def logs_ws(websocket: WebSocket, run_id: str):
         await websocket.accept()
-        d = root / "runs" / run_id
+        entry = _find_run_dir_by_id(root, run_id)
+        if not entry:
+            await websocket.send_text("[error] run not found")
+            await websocket.close()
+            return
+        d = entry.dir
         log_file = d / "logs.txt"
         if not log_file.exists():
             await websocket.send_text("[info] logs.txt not found yet")
@@ -309,6 +375,73 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     @app.get("/api/gpu/telemetry")
     async def gpu_telemetry():
         return _read_gpu_telemetry()
+
+    # ---- Project/Name discovery APIs ----
+    @app.get("/api/projects")
+    async def list_projects():
+        projs: set[str] = set()
+        for e in _iter_all_runs(root):
+            if e.project:
+                projs.add(e.project)
+            else:
+                # legacy runs: try meta
+                meta = _read_json(e.dir / "meta.json")
+                p = meta.get("project") if isinstance(meta, dict) else None
+                if p:
+                    projs.add(str(p))
+        return {"projects": sorted(projs)}
+
+    @app.get("/api/projects/{project}/names")
+    async def list_names(project: str):
+        names: set[str] = set()
+        for e in _iter_all_runs(root):
+            # prefer explicit fields
+            p = e.project
+            n = e.name
+            if not p or p != project:
+                # try meta
+                meta = _read_json(e.dir / "meta.json")
+                p2 = meta.get("project") if isinstance(meta, dict) else None
+                n2 = meta.get("name") if isinstance(meta, dict) else None
+                if p2 == project and n2:
+                    names.add(str(n2))
+                continue
+            if n:
+                names.add(n)
+        return {"names": sorted(names)}
+
+    @app.get("/api/projects/{project}/names/{name}/runs", response_model=List[RunListItem])
+    async def list_runs_by_name(project: str, name: str):
+        items: List[RunListItem] = []
+        for e in _iter_all_runs(root):
+            meta = _read_json(e.dir / "meta.json")
+            p = (meta.get("project") if isinstance(meta, dict) else None) or e.project
+            n = (meta.get("name") if isinstance(meta, dict) else None) or e.name
+            if p != project or n != name:
+                continue
+            d = e.dir
+            rid = d.name
+            status = _read_json(d / "status.json")
+            summ = _read_json(d / "summary.json")
+            created = meta.get("created_at") if isinstance(meta, dict) else None
+            if not isinstance(created, (int, float)):
+                try:
+                    created = d.stat().st_mtime
+                except Exception:
+                    created = None
+            items.append(
+                RunListItem(
+                    id=rid,
+                    run_dir=str(d),
+                    created_time=created,
+                    status=str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
+                    pid=(meta.get("pid") if isinstance(meta, dict) else None),
+                    best_val_acc_top1=(summ.get("best_val_acc_top1") if isinstance(summ, dict) else None),
+                    project=p,
+                    name=n,
+                )
+            )
+        return items
 
     # Optionally serve bundled static frontend (for pip-installed users)
     try:

@@ -42,3 +42,22 @@ export async function getGpuTelemetry() {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+// ----- New hierarchy helpers -----
+export async function listProjects() {
+  const res = await fetch(url('/projects'))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ projects: string[] }>
+}
+
+export async function listNames(project: string) {
+  const res = await fetch(url(`/projects/${encodeURIComponent(project)}/names`))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ names: string[] }>
+}
+
+export async function listRunsByName(project: string, name: string) {
+  const res = await fetch(url(`/projects/${encodeURIComponent(project)}/names/${encodeURIComponent(name)}/runs`))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}

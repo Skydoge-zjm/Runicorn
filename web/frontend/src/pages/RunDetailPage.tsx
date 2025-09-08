@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Descriptions, Space, Alert, Popover, Tag, Switch, Select } from 'antd'
+import { Card, Descriptions, Space, Alert, Popover, Tag, Switch, Select, Button } from 'antd'
 import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined } from '@ant-design/icons'
-import { getRunDetail, getStepMetrics, getGpuTelemetry } from '../api'
+import { getRunDetail, getStepMetrics, getGpuTelemetry, listRunsByName } from '../api'
 import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
 import GpuTelemetry from '../components/GpuTelemetry'
+import MultiRunMetricChart from '../components/MultiRunMetricChart'
 
 export default function RunDetailPage() {
   const { id = '' } = useParams()
@@ -20,6 +21,12 @@ export default function RunDetailPage() {
   const [gpu, setGpu] = useState<{ util: number; mem: number; power: number; temp: number; gpus?: any[] } | null>(null)
   const gpuHistRef = useRef<Array<{ t: number; util: number; mem: number; power: number; temp: number }>>([])
 
+  // Compare runs (same experiment name) state
+  const [runsUnderName, setRunsUnderName] = useState<any[]>([])
+  const [selectedRunIds, setSelectedRunIds] = useState<string[]>([])
+  const [overlayKeys, setOverlayKeys] = useState<string[]>([])
+  const [overlayMetricsMap, setOverlayMetricsMap] = useState<Record<string, { columns: string[]; rows: any[] }>>({})
+
   const loadDetail = async () => setDetail(await getRunDetail(id))
   const loadStepMetrics = async () => setStepMetrics(await getStepMetrics(id))
 
@@ -32,6 +39,37 @@ export default function RunDetailPage() {
     }, 3000)
     return () => clearInterval(t)
   }, [id])
+
+  // Load runs under same project/name for comparison once detail is available
+  useEffect(() => {
+    (async () => {
+      if (!detail?.project || !detail?.name) { setRunsUnderName([]); return }
+      try {
+        const rows = await listRunsByName(detail.project, detail.name)
+        setRunsUnderName(rows || [])
+        // default selected: current id
+        setSelectedRunIds((prev) => (prev && prev.length ? prev : [id]))
+      } catch { setRunsUnderName([]) }
+    })()
+  }, [detail?.project, detail?.name, id])
+
+  // Fetch overlay metrics for selected runs
+  useEffect(() => {
+    let aborted = false
+    ;(async () => {
+      const next: Record<string, { columns: string[]; rows: any[] }> = { ...overlayMetricsMap }
+      for (const rid of selectedRunIds) {
+        if (!next[rid]) {
+          try {
+            const m = await getStepMetrics(rid)
+            if (!aborted) next[rid] = m
+          } catch {}
+        }
+      }
+      if (!aborted) setOverlayMetricsMap(next)
+    })()
+    return () => { aborted = true }
+  }, [selectedRunIds])
 
   useEffect(() => {
     try { localStorage.setItem(`run:${id}:step:xAxis`, stepXAxis) } catch {}
@@ -106,6 +144,20 @@ export default function RunDetailPage() {
   const skipCols = new Set(['epoch', 'global_step', 'iter', 'step', 'batch', 'time', 'stage'])
   const stepMetricKeys = useMemo(() => (stepMetrics.columns || []).filter(k => !skipCols.has(k) && isNumericColumn(stepMetrics, k)), [stepMetrics])
 
+  // Derive union metric keys across selected runs for overlay
+  const overlayMetricCandidates = useMemo(() => {
+    const keys = new Set<string>()
+    for (const rid of selectedRunIds) {
+      const m = overlayMetricsMap[rid]
+      if (!m) continue
+      const cols = m.columns || []
+      for (const k of cols) {
+        if (!skipCols.has(k) && isNumericColumn(m, k)) keys.add(k)
+      }
+    }
+    return Array.from(keys).sort()
+  }, [selectedRunIds, overlayMetricsMap])
+
   const gridStyle: React.CSSProperties = useMemo(() => ({
     display: 'grid',
     gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr',
@@ -122,6 +174,8 @@ export default function RunDetailPage() {
           items={[
             { key: 'status', label: 'Status', children: detail?.status || '-' },
             { key: 'pid', label: 'PID', children: detail?.pid || '-' },
+            { key: 'project', label: 'Project', children: detail?.project || '-' },
+            { key: 'name', label: 'Name', children: detail?.name || '-' },
             { key: 'run_dir', label: 'Run Dir', children: detail?.run_dir || '-' },
             { key: 'logs', label: 'Logs', children: detail?.logs || '-' },
             { key: 'metrics', label: 'Metrics Events', children: detail?.metrics || '-' },
@@ -153,6 +207,67 @@ export default function RunDetailPage() {
             )}
           </Space>
         </div>
+      </Card>
+
+      <Card title="Compare Runs (Same Experiment)">
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space wrap>
+            <span>
+              Runs:&nbsp;
+              <Select
+                mode="multiple"
+                allowClear
+                value={selectedRunIds}
+                onChange={setSelectedRunIds as any}
+                placeholder="Select runs to overlay"
+                style={{ minWidth: 360 }}
+                options={(runsUnderName || []).map((r: any) => ({ value: r.id, label: r.id }))}
+              />
+            </span>
+            <span>
+              Metrics:&nbsp;
+              <Select
+                mode="multiple"
+                allowClear
+                value={overlayKeys}
+                onChange={setOverlayKeys as any}
+                placeholder="Select metric keys"
+                style={{ minWidth: 300 }}
+                options={overlayMetricCandidates.map(k => ({ value: k, label: k }))}
+              />
+            </span>
+            <span>Step X: <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
+              { value: 'global_step', label: 'global_step' },
+              { value: 'time', label: 'time' },
+            ]} /></span>
+            <Button size="small" onClick={async () => {
+              const next: Record<string, { columns: string[]; rows: any[] }> = {}
+              for (const rid of selectedRunIds) {
+                try { next[rid] = await getStepMetrics(rid) } catch {}
+              }
+              setOverlayMetricsMap(next)
+            }}>Refresh</Button>
+          </Space>
+
+          {overlayKeys.length === 0 || selectedRunIds.length === 0 ? (
+            <Alert type="info" showIcon message="Select one or more runs and metrics to overlay." />
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr', gap: 16 }}>
+              {overlayKeys.map((k) => (
+                <MultiRunMetricChart
+                  key={k}
+                  title={k}
+                  xKey={stepXAxis}
+                  yKey={k}
+                  runs={selectedRunIds.map((rid) => ({ id: rid, metrics: overlayMetricsMap[rid] || { columns: [], rows: [] } }))}
+                  height={300}
+                  group={`overlay-group-${id}`}
+                  persistKey={`run:${id}:overlay:${k}`}
+                />
+              ))}
+            </div>
+          )}
+        </Space>
       </Card>
 
       <Card title="Metrics" extra={(
