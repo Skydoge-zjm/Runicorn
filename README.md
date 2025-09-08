@@ -111,7 +111,7 @@ Configuration
   runicorn config --set-user-root "E:\\RunicornData"
   # Inspect current config
   runicorn config --show
-```
+  ```
 
 - Precedence for resolving storage root:
   1. `runicorn.init(storage=...)`
