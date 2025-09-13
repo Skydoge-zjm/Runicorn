@@ -26,6 +26,8 @@
   <img src="https://github.com/Skydoge-zjm/Runicorn/blob/main/docs/picture/p3.png" alt="Runicorn 界面示例 3" width="49%" />
   <img src="https://github.com/Skydoge-zjm/Runicorn/blob/main/docs/picture/p4.png" alt="Runicorn 界面示例 4" width="49%" />
   <br/>
+  <img src="https://github.com/Skydoge-zjm/Runicorn/blob/main/docs/picture/p5.png" alt="Runicorn demo 5" width="98%" />
+  <br/>
   <span style="color:#888; font-size: 12px;">界面示意：运行列表、运行详情、指标叠加、GPU 面板</span>
 </p>
 

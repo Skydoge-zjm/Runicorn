@@ -24,7 +24,9 @@ Local, open-source experiment tracking and visualization. 100% local. A lightwei
   <img src="https://github.com/Skydoge-zjm/Runicorn/blob/main/docs/picture/p3.png" alt="Runicorn demo 3" width="49%" />
   <img src="https://github.com/Skydoge-zjm/Runicorn/blob/main/docs/picture/p4.png" alt="Runicorn demo 4" width="49%" />
   <br/>
-  <span style="color:#888; font-size: 12px;">Screenshots of Runicorn UI (Runs list, Run detail, Metrics overlay, GPU panel)</span>
+  <img src="https://github.com/Skydoge-zjm/Runicorn/blob/main/docs/picture/p5.png" alt="Runicorn demo 5" width="98%" />
+  <br/>
+  <span style="color:#888; font-size: 12px;">Screenshots of Runicorn UI </span>
   
 </p>
 
