@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Layout, Menu, Tag, Button, ConfigProvider, theme } from 'antd'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { UnorderedListOutlined, SettingOutlined } from '@ant-design/icons'
+import { UnorderedListOutlined, SettingOutlined, CloudSyncOutlined } from '@ant-design/icons'
 import RunsPage from './pages/RunsPage'
 import RunDetailPage from './pages/RunDetailPage'
+import RemoteSyncPage from './pages/RemoteSyncPage'
 import { health, getConfig } from './api'
 import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
 
@@ -11,7 +12,7 @@ const { Header, Content, Footer } = Layout
 
 export default function App() {
   const location = useLocation()
-  const selected = ['runs']
+  const selected = [location.pathname.startsWith('/remote') ? 'remote' : 'runs']
   // UI Settings with persistence
   const defaultSettings: UiSettings = {
     themeMode: 'auto',
@@ -131,6 +132,7 @@ export default function App() {
             selectedKeys={selected}
             items={[
               { key: 'runs', icon: <UnorderedListOutlined />, label: <Link to="/runs">Runs</Link> },
+              { key: 'remote', icon: <CloudSyncOutlined />, label: <Link to="/remote">Remote</Link> },
             ]}
             style={{ flex: 1, minWidth: 0 }}
           />
@@ -147,6 +149,7 @@ export default function App() {
               <Route path="/" element={<RunsPage />} />
               <Route path="/runs" element={<RunsPage />} />
               <Route path="/runs/:id" element={<RunDetailPage />} />
+              <Route path="/remote" element={<RemoteSyncPage />} />
             </Routes>
           </div>
         </Content>

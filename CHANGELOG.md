@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 
 
+## [0.2.6] - 2025-09-14
+
+### Added
+- Remote (SSH live sync) in the UI and backend.
+  - New "Remote" menu in the UI to connect over SSH, browse remote directories, and start/stop a live mirror from a Linux server into your local storage.
+  - APIs: `POST /api/ssh/connect`, `GET /api/ssh/listdir`, `POST /api/ssh/mirror/start`, `POST /api/ssh/mirror/stop`, `GET /api/ssh/mirror/list`.
+- Docs: Clarified that the web uploader for offline import (uploading `.zip`/`.tar.gz` in the UI) requires the optional dependency `python-multipart`, with install instructions.
+
+### Changed
+- Viewer: Even if `python-multipart` is not installed, the server now starts; only the upload endpoint returns `503` with an actionable hint.
+- Desktop (Windows): Improved startup robustness and user experience (no user action required).
+
+
 ## [0.2.1] - 2025-09-09
 
 ### Fixed

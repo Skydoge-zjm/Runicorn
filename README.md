@@ -36,12 +36,13 @@ Features
 - Step/time metrics with stage separators; live logs via WebSocket.
 - Optional GPU telemetry panel if `nvidia-smi` is available.
 - Global per-user storage with project/name hierarchy.
+- Remote SSH live sync to mirror runs from a Linux server to your local storage.
 - Compare multiple runs of the same experiment on a single chart (multi-run overlay).
 
 
 Installation
 ------------
-Requires Windows, Python 3.8+.
+Requires Python 3.8+ (Windows/Linux). The desktop app is currently Windows-only; the CLI/Viewer work on both Windows and Linux.
 
 ```bash
 pip install -U runicorn
@@ -81,10 +82,37 @@ runicorn viewer
 runicorn viewer --storage ./.runicorn --host 127.0.0.1 --port 8000
 # Then open http://127.0.0.1:8000
 ```
+
+Note: To use the web uploader for offline import (drag-and-drop .zip/.tar.gz in the UI), install the optional dependency:
+
+```bash
+pip install python-multipart
+```
  
+Remote (SSH live sync)
+----------------------
+Mirror runs from a remote Linux server to your local storage over SSH in real time.
+
+- Open the UI and go to the top menu: `Remote` (or visit `/remote`).
+- Steps:
+  1) Connect: enter `host`, `port` (default 22), `username`; optionally provide a password or a private key (content or path).
+  2) Browse remote directories and select the correct level:
+     - New layout: select `<project>/<name>/runs`
+     - Legacy layout: select `runs`
+     - Avoid selecting a specific `<run_id>` directory.
+  3) Click "Sync this directory". The task will appear under "Sync Tasks" and the "Runs" page refreshes immediately.
+
+Tips & troubleshooting
+- If no runs appear, verify:
+  - The mirror task exists: GET `/api/ssh/mirror/list` shows an `alive: true` task with increasing counters.
+  - The local storage root: GET `/api/config` and inspect the `storage` path. Check that runs are being created under the expected layout.
+  - Directory level: ensure you selected `.../runs` (not a specific run folder).
+  - Credentials are only used for the session and are not persisted. SSH is handled by Paramiko.
+
 Desktop app (Windows)
 ---------------------
 - Install from GitHub Releases (recommended for end users), or build locally.
+- Prerequisites: Node.js 18+; Rust & Cargo (stable); Python 3.8+; NSIS (for installer packaging).
 - Build locally (creates an NSIS installer):
 
   ```powershell
@@ -97,6 +125,15 @@ Desktop app (Windows)
 - After installation, launch "Runicorn Desktop".
   - First run: open the gear icon (top-right) → Settings → Data Directory, choose a writable path (e.g., `D:\RunicornData`), then Save.
   - The desktop app auto-starts a local backend and opens the UI.
+
+Linux development helper
+------------------------
+For local development on Linux, you can use the helper script:
+
+```bash
+chmod +x ./run_dev.sh
+BACKEND_PORT=8000 FRONTEND_PORT=5173 ./run_dev.sh
+```
 
 Configuration
 -------------
@@ -121,12 +158,55 @@ Configuration
 
 - Live logs are tailed from `logs.txt` via WebSocket at `/api/runs/{run_id}/logs/ws`.
  
+Offline workflow (headless Linux server ➜ local PC)
+--------------------------------------------------
+When training on an offline, headless Linux server, and you want to visualize on your own PC:
+
+1) On the Linux server (while or after training with `runicorn` SDK):
+   - Ensure runs are written under your chosen storage root (see precedence below).
+   - Export runs into a portable archive using the CLI:
+
+   ```bash
+   # Export all runs (new + legacy layouts) under the resolved storage root
+   python3 -m runicorn.cli export --out /tmp/runicorn_export_$(date +%s).tar.gz
+
+   # Or export a subset by project/name and/or run id
+   python3 -m runicorn.cli export --project demo --name exp1 --out /tmp/exp1_runs.tar.gz
+   python3 -m runicorn.cli export --run-id abc123 --run-id def456 --out /tmp/some_runs.tar.gz
+   ```
+
+   Transfer the archive to your PC via scp/USB.
+
+2) On your PC (Windows or Linux):
+   - Start the viewer:
+
+   ```bash
+   runicorn viewer
+   # open http://127.0.0.1:8000
+   ```
+
+   - Open the UI (gear icon ➜ Settings) and use the "Offline Import" uploader to drop the `.tar.gz` or `.zip` archive. The runs will be extracted into the active storage root. (Requires `python-multipart`; install with `pip install python-multipart`.)
+
+   - Alternatively, import via CLI without opening the UI:
+
+   ```bash
+   # Import into the configured storage root (or override with --storage)
+   python -m runicorn.cli import --archive /path/to/exported_runs.tar.gz
+   ```
+
 Privacy & Offline
 ------------------
 - No telemetry. The viewer only reads local files (JSON/JSONL and media).
 - Default storage root is your per-user folder if configured, otherwise falls back to `./.runicorn`.
 - Bundled UI allows using the viewer without Node.js at runtime.
- 
+
+Storage resolution precedence
+-----------------------------
+1. `runicorn.init(storage=...)`
+2. Environment variable `RUNICORN_DIR`
+3. Per-user config `user_root_dir` (set via `runicorn config`)
+4. Project-local `./.runicorn`
+
 Roadmap
 -------
 - Advanced filtering/search in the UI.

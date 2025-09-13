@@ -4,7 +4,7 @@ use std::{
     net::{SocketAddr, TcpStream},
     process::{Child, Command, Stdio},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
     sync::Mutex,
     path::PathBuf,
 };
@@ -16,6 +16,33 @@ use tauri_plugin_shell::process::CommandChild as ShellChild;
 fn is_port_available(port: u16) -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     TcpStream::connect(addr).is_err()
+}
+
+fn spawn_python_backend(port: u16) -> Option<BackendChild> {
+    let python = std::env::var("RUNICORN_DESKTOP_PY").unwrap_or_else(|_| "python".to_string());
+    let mut cmd = Command::new(python);
+    cmd.args([
+        "-X", "utf8",
+        "-m", "uvicorn",
+        "runicorn.viewer:create_app",
+        "--factory",
+        "--host", "127.0.0.1",
+        "--port", &port.to_string(),
+    ])
+    .stdin(Stdio::null())
+    .stdout(Stdio::null())
+    .stderr(Stdio::null());
+    if let Some(src_dir) = repo_src_dir_guess() {
+        let py_path_key = "PYTHONPATH";
+        let mut val = std::env::var(py_path_key).unwrap_or_default();
+        if !val.is_empty() { if cfg!(target_os = "windows") { val.push(';') } else { val.push(':') } }
+        val.push_str(&src_dir.to_string_lossy());
+        cmd.env(py_path_key, val);
+    }
+    if let Some(dist) = repo_frontend_dist_guess() {
+        cmd.env("RUNICORN_FRONTEND_DIST", dist.to_string_lossy().as_ref());
+    }
+    cmd.spawn().ok().map(BackendChild::Python)
 }
 
 fn repo_frontend_dist_guess() -> Option<PathBuf> {
@@ -74,7 +101,7 @@ fn spawn_backend(port: u16, app: &AppHandle) -> Option<BackendChild> {
         std::env::set_var("RUNICORN_FRONTEND_DIST", dist.to_string_lossy().as_ref());
     }
     if let Ok(cmd) = app.shell().sidecar("runicorn-viewer") {
-        if let Ok((_rx, child)) = cmd.args(["--port", &port.to_string()]).spawn() {
+        if let Ok((_rx, child)) = cmd.args(["--host", "127.0.0.1", "--port", &port.to_string()]).spawn() {
             return Some(BackendChild::Sidecar(child));
         }
     }
@@ -108,17 +135,11 @@ fn spawn_backend(port: u16, app: &AppHandle) -> Option<BackendChild> {
 
 fn wait_ready(port: u16, timeout_secs: u64) -> bool {
     let url = format!("http://127.0.0.1:{}/api/health", port);
-    let mut waited = 0u64;
-    while waited < timeout_secs {
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(timeout_secs) {
         let resp = ureq::get(&url).timeout(Duration::from_secs(1)).call();
-        if resp.is_ok() {
-            return true;
-        }
+        if resp.is_ok() { return true; }
         thread::sleep(Duration::from_millis(300));
-        waited += 0; // no-op
-        // track in seconds roughly
-        if waited % 3 == 0 { /* tick */ }
-        waited += 1;
     }
     false
 }
@@ -159,13 +180,19 @@ fn kill_child(state: &tauri::State<'_, AppState>) {
 
 fn start(app: AppHandle) {
     let port = pick_port();
-    let child = spawn_backend(port, &app).expect("failed to spawn backend (sidecar/python)");
+    // First attempt: sidecar (preferred for end users)
+    let mut child = spawn_backend(port, &app).expect("failed to spawn backend (sidecar/python)");
 
     let state: tauri::State<AppState> = app.state();
     *state.child.lock().unwrap() = Some(child);
 
-    if !wait_ready(port, 20) {
-        // still show window, but将来可弹错误提示
+    if !wait_ready(port, 30) {
+        // Fallback: kill current child and try python-based backend
+        kill_child(&state);
+        if let Some(py_child) = spawn_python_backend(port) {
+            *state.child.lock().unwrap() = Some(py_child);
+            let _ = wait_ready(port, 30);
+        }
     }
     let url = format!("http://127.0.0.1:{}/", port);
     *state.backend_url.lock().unwrap() = Some(url.clone());

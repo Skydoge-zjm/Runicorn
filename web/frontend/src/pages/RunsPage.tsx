@@ -31,6 +31,13 @@ export default function RunsPage() {
     load()
   }, [load])
 
+  // Refresh immediately when other components request it
+  useEffect(() => {
+    const handler = () => load()
+    window.addEventListener('runicorn:refresh', handler)
+    return () => window.removeEventListener('runicorn:refresh', handler)
+  }, [load])
+
   // load projects
   useEffect(() => {
     (async () => {

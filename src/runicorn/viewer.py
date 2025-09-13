@@ -8,17 +8,47 @@ import re
 import shutil
 import time
 from dataclasses import asdict, dataclass
+import tarfile
+import zipfile
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import aiofiles
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Body, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .config import get_user_root_dir, set_user_root_dir
 
 from .sdk import DEFAULT_DIRNAME, _default_storage_dir
+from . import ssh_sync
+
+# ---------------- API models (module-level to avoid Pydantic forward-ref issues) ----------------
+
+class SSHConnectBody(BaseModel):
+    host: str
+    port: Optional[int] = 22
+    username: str
+    password: Optional[str] = None
+    pkey: Optional[str] = None  # private key content
+    pkey_path: Optional[str] = None
+    passphrase: Optional[str] = None
+    use_agent: Optional[bool] = True
+
+
+class SSHCloseBody(BaseModel):
+    session_id: str
+
+
+class SSHMirrorStartBody(BaseModel):
+    session_id: str
+    remote_root: str
+    interval: Optional[float] = 2.0
+
+
+class SSHMirrorStopBody(BaseModel):
+    task_id: str
 
 
 # ---------------- Storage helpers ----------------
@@ -407,9 +437,8 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             raw = payload.get("path") if isinstance(payload, dict) else None
             in_path = str(raw or "")
             _debug_log(f"set_user_root called with path='{in_path}'")
-            # Expand env vars on Windows such as %USERPROFILE%
-            if os.name == "nt":
-                in_path = os.path.expandvars(in_path)
+            # Expand env vars on all platforms (Windows: %VAR%, POSIX: $VAR)
+            in_path = os.path.expandvars(in_path)
             p = set_user_root_dir(in_path)
         except Exception as e:
             _debug_log(f"set_user_root_dir failed: {e}")
@@ -428,6 +457,233 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             "user_root_dir": str(p),
             "storage": str(root),
         }
+
+    # ---- SSH remote browse & live mirror ----
+    # Models are defined at module scope (see top of file) to avoid Pydantic forward-ref issues.
+
+    @app.post("/api/ssh/connect")
+    async def ssh_connect(payload: Dict[str, Any] = Body(...)):
+        try:
+            host = str(payload.get("host") or "").strip()
+            username = str(payload.get("username") or "").strip()
+            if not host or not username:
+                raise HTTPException(status_code=400, detail="host and username are required")
+            port = int(payload.get("port") or 22)
+            sess = ssh_sync.create_session(
+                host=host,
+                port=port,
+                username=username,
+                password=payload.get("password"),
+                pkey_str=payload.get("pkey"),
+                pkey_path=payload.get("pkey_path"),
+                passphrase=payload.get("passphrase"),
+                use_agent=bool(payload.get("use_agent", True)),
+            )
+            return {"ok": True, "session_id": sess.id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"ssh connect failed: {e}")
+
+    @app.get("/api/ssh/sessions")
+    async def ssh_sessions():
+        return {"sessions": ssh_sync.list_sessions()}
+
+    # (model at module level) SSHCloseBody
+
+    @app.post("/api/ssh/close")
+    async def ssh_close(payload: Dict[str, Any] = Body(...)):
+        sid = str(payload.get("session_id") or "").strip()
+        if not sid:
+            raise HTTPException(status_code=400, detail="session_id required")
+        ok = ssh_sync.close_session(sid)
+        return {"ok": bool(ok)}
+
+    @app.get("/api/ssh/listdir")
+    async def ssh_listdir(session_id: str, path: Optional[str] = None):
+        try:
+            items = ssh_sync.sftp_listdir(session_id, path or "~")
+            return {"items": items}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    # (model at module level) SSHMirrorStartBody
+
+    @app.post("/api/ssh/mirror/start")
+    async def ssh_mirror_start(payload: Dict[str, Any] = Body(...)):
+        try:
+            sid = str(payload.get("session_id") or "").strip()
+            remote_root = str(payload.get("remote_root") or "").strip()
+            if not sid or not remote_root:
+                raise HTTPException(status_code=400, detail="session_id and remote_root are required")
+            interval = float(payload.get("interval") or 2.0)
+            task = ssh_sync.start_mirror(session_id=sid, remote_root=remote_root, local_root=root, interval=interval)
+            return {"ok": True, "task": {
+                "id": task.id,
+                "session_id": task.session.id,
+                "remote_root": task.remote_root,
+                "local_root": str(task.local_root),
+                "interval": task.interval,
+                "stats": dict(task.stats),
+            }}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"mirror start failed: {e}")
+
+    # (model at module level) SSHMirrorStopBody
+
+    @app.post("/api/ssh/mirror/stop")
+    async def ssh_mirror_stop(payload: Dict[str, Any] = Body(...)):
+        tid = str(payload.get("task_id") or "").strip()
+        if not tid:
+            raise HTTPException(status_code=400, detail="task_id required")
+        ok = ssh_sync.stop_mirror(tid)
+        return {"ok": bool(ok)}
+
+    @app.get("/api/ssh/mirror/list")
+    async def ssh_mirror_list():
+        return {"mirrors": ssh_sync.list_mirrors(), "storage": str(root)}
+
+    # ---- Offline import (zip/tar.gz) ----
+    def _is_within_directory(base: Path, target: Path) -> bool:
+        try:
+            base_resolved = base.resolve()
+            target_resolved = target.resolve()
+            return str(target_resolved).startswith(str(base_resolved))
+        except Exception:
+            return False
+
+    def _safe_extract_tar(tar: tarfile.TarFile, dest: Path) -> List[Path]:
+        extracted: List[Path] = []
+        for member in tar.getmembers():
+            if not member.name or member.name.strip() == "":
+                continue
+            # Skip symlinks/hardlinks for safety
+            try:
+                if member.issym() or member.islnk():
+                    continue
+            except Exception:
+                pass
+            # Prevent path traversal
+            target_path = dest / member.name
+            if not _is_within_directory(dest, target_path):
+                continue
+            try:
+                tar.extract(member, path=str(dest))
+                if member.isdir():
+                    continue
+                extracted.append(target_path)
+            except Exception:
+                continue
+        return extracted
+
+    def _safe_extract_zip(zf: zipfile.ZipFile, dest: Path) -> List[Path]:
+        extracted: List[Path] = []
+        for name in zf.namelist():
+            if not name or name.endswith("/"):
+                # directories
+                try:
+                    (dest / name).mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    pass
+                continue
+            target_path = dest / name
+            if not _is_within_directory(dest, target_path):
+                continue
+            try:
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(name) as src, open(target_path, "wb") as out:
+                    out.write(src.read())
+                extracted.append(target_path)
+            except Exception:
+                continue
+        return extracted
+
+    # Conditionally enable archive import (requires python-multipart)
+    _mp_ok = True
+    try:
+        import multipart  # type: ignore
+    except Exception:
+        _mp_ok = False
+
+    if _mp_ok:
+        @app.post("/api/import/archive")
+        async def import_archive(file: UploadFile = File(...)):
+            """
+            Import a packaged archive (.zip or .tar.gz/.tgz) of runs into the current storage root.
+
+            Expected layout inside archive: either the storage root itself (project/name/runs/<id>)
+            or any subset of that hierarchy. Files will be merged into the active storage root.
+            """
+            # Snapshot existing run dirs for delta reporting
+            before = {e.dir for e in _iter_all_runs(root)}
+
+            # Persist upload to a temp file first
+            try:
+                suffix = ".zip" if file.filename and file.filename.lower().endswith(".zip") else ".tar.gz"
+            except Exception:
+                suffix = ".zip"
+            tmp = tempfile.NamedTemporaryFile(prefix="runicorn_import_", suffix=suffix, delete=False)
+            tmp_path = Path(tmp.name)
+            try:
+                while True:
+                    chunk = await file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    tmp.write(chunk)
+            finally:
+                tmp.close()
+
+            # Detect and extract
+            imported_files: List[Path] = []
+            try:
+                fn = (file.filename or "").lower()
+                if fn.endswith(".zip"):
+                    with zipfile.ZipFile(tmp_path, "r") as zf:
+                        imported_files = _safe_extract_zip(zf, root)
+                elif fn.endswith(".tar.gz") or fn.endswith(".tgz"):
+                    with tarfile.open(tmp_path, "r:gz") as tf:
+                        imported_files = _safe_extract_tar(tf, root)
+                else:
+                    # Try zip first, then tar.gz
+                    try:
+                        with zipfile.ZipFile(tmp_path, "r") as zf:
+                            imported_files = _safe_extract_zip(zf, root)
+                    except Exception:
+                        try:
+                            with tarfile.open(tmp_path, "r:gz") as tf:
+                                imported_files = _safe_extract_tar(tf, root)
+                        except Exception as e2:
+                            raise HTTPException(status_code=400, detail=f"unsupported or corrupted archive: {e2}")
+            finally:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+            # Compute imported runs delta
+            after_entries = _iter_all_runs(root)
+            after = {e.dir for e in after_entries}
+            new_dirs = sorted([str(p) for p in (after - before)])
+            # Map run_ids for quick display
+            new_ids: List[str] = []
+            for e in after_entries:
+                if e.dir in (after - before):
+                    new_ids.append(e.dir.name)
+
+            return {
+                "ok": True,
+                "imported_files": len(imported_files),
+                "new_run_dirs": new_dirs,
+                "new_run_ids": sorted(new_ids),
+                "storage": str(root),
+            }
+    else:
+        @app.post("/api/import/archive")
+        async def import_archive_unavailable():
+            # Provide a stub to avoid breaking UI calls; returns Service Unavailable
+            raise HTTPException(status_code=503, detail="File upload not available: python-multipart not bundled in this build")
 
     # ---- Project/Name discovery APIs ----
     @app.get("/api/projects")

@@ -78,3 +78,89 @@ export async function setUserRootDir(path: string) {
   if (!res.ok) throw new Error(await res.text())
   return res.json() as Promise<{ ok: boolean; user_root_dir: string; storage: string }>
 }
+
+export async function importArchive(file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(url('/import/archive'), {
+    method: 'POST',
+    body: fd
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{
+    ok: boolean
+    imported_files: number
+    new_run_dirs: string[]
+    new_run_ids: string[]
+    storage: string
+  }>
+}
+
+// ----- SSH live sync helpers -----
+export async function sshConnect(payload: {
+  host: string
+  port?: number
+  username: string
+  password?: string
+  pkey?: string
+  pkey_path?: string
+  passphrase?: string
+  use_agent?: boolean
+}) {
+  const res = await fetch(url('/ssh/connect'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ ok: boolean; session_id: string }>
+}
+
+export async function sshSessions() {
+  const res = await fetch(url('/ssh/sessions'))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ sessions: Array<{ id: string; host: string; port: number; username: string }> }>
+}
+
+export async function sshClose(session_id: string) {
+  const res = await fetch(url('/ssh/close'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ ok: boolean }>
+}
+
+export async function sshListdir(session_id: string, path?: string) {
+  const q = new URLSearchParams({ session_id, path: path || '' })
+  const res = await fetch(url(`/ssh/listdir?${q.toString()}`))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ items: Array<{ name: string; path: string; type: 'dir'|'file'; size: number; mtime: number }> }>
+}
+
+export async function sshMirrorStart(payload: { session_id: string; remote_root: string; interval?: number }) {
+  const res = await fetch(url('/ssh/mirror/start'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ ok: boolean; task: any }>
+}
+
+export async function sshMirrorStop(task_id: string) {
+  const res = await fetch(url('/ssh/mirror/stop'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_id })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ ok: boolean }>
+}
+
+export async function sshMirrorList() {
+  const res = await fetch(url('/ssh/mirror/list'))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ mirrors: any[]; storage: string }>
+}

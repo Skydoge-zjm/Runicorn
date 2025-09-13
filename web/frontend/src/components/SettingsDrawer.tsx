@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { Drawer, Form, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message } from 'antd'
-import { getConfig, setUserRootDir as apiSetUserRootDir } from '../api'
+import { Drawer, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload } from 'antd'
+import { getConfig, setUserRootDir as apiSetUserRootDir, importArchive } from '../api'
 
 export type UiSettings = {
   themeMode: 'light' | 'dark' | 'auto'
@@ -39,6 +39,11 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
   const [userRootDir, setUserRootDir] = useState<string>('')
   const [storagePath, setStoragePath] = useState<string>('')
   const [savingRoot, setSavingRoot] = useState(false)
+  const [importing, setImporting] = useState(false)
+
+  
+
+  
 
   useEffect(() => {
     let active = true
@@ -190,6 +195,49 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           <Slider min={0} max={1} step={0.01} value={value.backgroundOpacity} onChange={(v) => set({ backgroundOpacity: Array.isArray(v) ? v[0] : v })} />
           <div>模糊强度</div>
           <Slider min={0} max={30} step={1} value={value.backgroundBlur} onChange={(v) => set({ backgroundBlur: Array.isArray(v) ? v[0] : v })} />
+        </div>
+
+        <Divider style={{ margin: '8px 0' }} />
+
+        <div>
+          <Typography.Title level={5}>离线导入（zip / tar.gz）</Typography.Title>
+          <Typography.Paragraph type="secondary">
+            从离线 Linux 服务器打包导出的运行记录导入到本机存储（storage）以便在本地查看。
+          </Typography.Paragraph>
+          <Upload.Dragger
+            accept=".zip,.tar.gz,.tgz"
+            multiple={false}
+            showUploadList={false}
+            disabled={importing}
+            beforeUpload={async (file) => {
+              try {
+                setImporting(true)
+                const res = await importArchive(file as any)
+                const added = (res?.new_run_ids || []).length
+                message.success(`导入成功：${added} 个新运行。`)
+              } catch (e: any) {
+                message.error(typeof e?.message === 'string' ? e.message : '导入失败')
+              } finally {
+                setImporting(false)
+              }
+              return false
+            }}
+          >
+            <div style={{ padding: 16, textAlign: 'center' }}>
+              <div style={{ marginBottom: 8 }}>将文件拖拽到此处，或点击选择本地归档</div>
+              <div style={{ fontSize: 12, color: '#999' }}>支持 .zip / .tar.gz（内部目录结构为 project/name/runs/&lt;run_id&gt;）</div>
+              {importing && <div style={{ marginTop: 8, color: '#1677ff' }}>正在导入…</div>}
+            </div>
+          </Upload.Dragger>
+        </div>
+
+        <Divider style={{ margin: '8px 0' }} />
+
+        <div>
+          <Typography.Title level={5}>远程同步</Typography.Title>
+          <Typography.Paragraph type="secondary">
+            远程实时同步已移动到独立页面。请通过顶部导航「Remote」进入，或点击 <a href="/remote">打开 Remote</a>。
+          </Typography.Paragraph>
         </div>
 
         <div style={{ textAlign: 'right' }}>

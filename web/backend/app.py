@@ -231,8 +231,9 @@ def _discover_new_run_dir(before: List[Path], timeout_s: float = 30.0) -> Option
 
 def _build_cli_from_request(req: StartRunRequest) -> List[str]:
     # Always start from default config for sane defaults
+    py = req.python_exec or ("python" if os.name == 'nt' else "python3")
     cli: List[str] = [
-        req.python_exec or "python",
+        py,
         "-X", "utf8",
         str(MAIN_ENTRY),
         "--config", str(DEFAULT_CONFIG),

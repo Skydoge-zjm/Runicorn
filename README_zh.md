@@ -17,6 +17,7 @@
 - 默认存储根：用户级目录（可配置），否则回退到项目目录下的 `./.runicorn`
 - 查看器：只读（Read-only），从本地存储读取指标、日志、媒体
 - GPU 面板：如果系统存在 `nvidia-smi` 则可显示
+- 远程 SSH 实时同步：将 Linux 服务器上的运行镜像到本地存储
 
 <p align="center">
   <img src="https://github.com/Skydoge-zjm/Runicorn/blob/main/docs/picture/p1.png" alt="Runicorn 界面示例 1" width="49%" />
@@ -51,7 +52,7 @@
 
 ## 安装
 
-要求 Windows 且 Python 3.8+
+需要 Python 3.8+（Windows/Linux）。桌面应用目前仅 Windows 可用；CLI/Viewer 在 Windows 与 Linux 均可运行。
 
 ```bash
 pip install -U runicorn
@@ -93,9 +94,36 @@ runicorn viewer --storage ./.runicorn --host 127.0.0.1 --port 8000
 # 打开 http://127.0.0.1:8000
 ```
 
+提示：如果要在 UI 中使用“离线导入”（上传 `.zip` 或 `.tar.gz`），需要安装可选依赖：
+
+```bash
+pip install python-multipart
+```
+
+## 远程同步（SSH 实时）
+
+将远程 Linux 服务器上的运行（runs）通过 SSH 实时镜像到本机 storage。
+
+- 打开 UI 顶部导航中的「Remote」，或直接访问 `/remote`
+- 操作步骤：
+  1) 连接：输入 `主机`、`端口`（默认 22）、`用户名`；可选输入 `密码` 或 `私钥内容/路径`
+  2) 浏览远程目录并选择正确的层级：
+     - 新目录结构：选择到 `<project>/<name>/runs`
+     - 旧目录结构：选择到 `runs`
+     - 不要选择具体的 `<run_id>` 目录
+  3) 点击「同步此目录」。下方会出现「同步任务」，「Runs」页面会立即刷新
+
+小贴士与排查
+- 看不到运行时，请确认：
+  - 同步任务是否存在：GET `/api/ssh/mirror/list` 应显示 `alive: true`，统计项递增
+  - 本地存储根是否正确：GET `/api/config` 查看 `storage` 路径；检查是否按预期层级生成
+  - 选择的层级是否为 `.../runs`（而不是某个具体 `<run_id>` 目录）
+  - 凭据仅用于本次会话，不会持久化；SSH 由 Paramiko 负责
+
 ## 桌面应用（Windows）
 
 - 推荐普通用户通过 GitHub Releases 安装，或在本地自行构建安装包。
+- 构建前置依赖：Node.js 18+；Rust & Cargo（稳定版）；Python 3.8+；NSIS（用于打包安装器）
 - 本地构建（生成 NSIS 安装器）：
 
   ```powershell

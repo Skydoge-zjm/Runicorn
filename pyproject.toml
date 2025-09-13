@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runicorn"
-version = "0.2.1"
+version = "0.2.6"
 description = "Local, open-source experiment tracking and visualization (a simple, self-hosted alternative to W&B)"
 readme = "README.md"
 authors = [{ name = "Runicorn Authors" }]
@@ -35,6 +35,7 @@ dependencies = [
   "pydantic>=2,<3",
   "aiofiles>=23,<24",
   "filelock>=3.12",
+  "paramiko>=3.3,<4",
 ]
 
 [project.optional-dependencies]
