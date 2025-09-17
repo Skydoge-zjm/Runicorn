@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Table, Tag, Space, Button, Switch, Tooltip, Select } from 'antd'
 import { Link } from 'react-router-dom'
 import { listRuns, listProjects, listNames, listRunsByName } from '../api'
+import { useTranslation } from 'react-i18next'
 
 export default function RunsPage() {
+  const { t } = useTranslation()
   const [data, setData] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
@@ -67,68 +69,68 @@ export default function RunsPage() {
 
   const columns = useMemo(() => ([
     {
-      title: 'Project',
+      title: t('table.project'),
       dataIndex: 'project',
       render: (v: string | undefined) => v || '-',
     },
     {
-      title: 'Name',
+      title: t('table.name'),
       dataIndex: 'name',
       render: (v: string | undefined) => v || '-',
     },
     {
-      title: 'Run ID',
+      title: t('table.run_id'),
       dataIndex: 'id',
       render: (v: string) => <Link to={`/runs/${v}`}>{v}</Link>,
     },
     {
-      title: 'Status',
+      title: t('table.status'),
       dataIndex: 'status',
       render: (v: string) => (
         <Tag color={v === 'running' ? 'processing' : 'default'}>{v}</Tag>
       ),
     },
     {
-      title: 'Best Top1',
+      title: t('table.best_top1'),
       dataIndex: 'best_val_acc_top1',
       render: (v: number | null) => (v != null ? `${v.toFixed(2)}%` : '-')
     },
     {
-      title: 'PID',
+      title: t('table.pid'),
       dataIndex: 'pid',
     },
     {
-      title: 'Created',
+      title: t('table.created'),
       dataIndex: 'created_time',
       render: (ts?: number) => ts ? new Date(ts * 1000).toLocaleString() : '-',
     },
     {
-      title: 'Actions',
+      title: t('table.actions'),
       key: 'actions',
       render: (_: any, row: any) => (
         <Space>
           <Link to={`/runs/${row.id}`}>
-            <Button size="small">View</Button>
+            <Button size="small">{t('table.view')}</Button>
           </Link>
         </Space>
       )
     }
-  ]), [load])
+  ]), [load, t])
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Space>
-        <Button onClick={load} loading={loading}>Refresh</Button>
-        <Tooltip title="Auto refresh every 5s">
+        <Button onClick={load} loading={loading}>{t('runs.refresh')}</Button>
+        <Tooltip title={t('runs.auto_refresh_hint')}>
           <span>
-            Auto Refresh <Switch checked={autoRefresh} onChange={setAutoRefresh} style={{ marginLeft: 8 }} />
+            {t('runs.auto_refresh')} <Switch checked={autoRefresh} onChange={setAutoRefresh} style={{ marginLeft: 8 }} />
           </span>
         </Tooltip>
         <span>
-          Project:&nbsp;
+          {t('runs.filter.project')}&nbsp;
           <Select
             allowClear
-            placeholder="All"
+            placeholder={t('runs.filter.all')}
             value={project}
             onChange={setProject as any}
             style={{ width: 180 }}
@@ -136,10 +138,10 @@ export default function RunsPage() {
           />
         </span>
         <span>
-          Name:&nbsp;
+          {t('runs.filter.name')}&nbsp;
           <Select
             allowClear
-            placeholder="All"
+            placeholder={t('runs.filter.all')}
             value={name}
             onChange={setName as any}
             style={{ width: 200 }}

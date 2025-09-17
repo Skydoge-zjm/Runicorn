@@ -3,6 +3,7 @@ import ReactECharts from 'echarts-for-react'
 import { Alert, Space, Switch, Typography, Collapse } from 'antd'
 import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined } from '@ant-design/icons'
 import { getGpuTelemetry } from '../api'
+import { useTranslation } from 'react-i18next'
 
 interface GpuSample {
   ts: number
@@ -20,6 +21,7 @@ interface GpuSample {
 const MAX_POINTS = 120 // keep last 120 samples
 
 export default function GpuTelemetry() {
+  const { t } = useTranslation()
   const [available, setAvailable] = useState<boolean | null>(null)
   const [reason, setReason] = useState<string>('')
   const [paused, setPaused] = useState(false)
@@ -36,7 +38,7 @@ export default function GpuTelemetry() {
         const res = await getGpuTelemetry()
         if (!res?.available) {
           setAvailable(false)
-          setReason(res?.reason || 'GPU telemetry unavailable')
+          setReason(res?.reason || t('gpu.not_available'))
           return
         }
         setAvailable(true)
@@ -48,7 +50,7 @@ export default function GpuTelemetry() {
         setTick((x) => x + 1)
       } catch (e: any) {
         setAvailable(false)
-        setReason(e?.message || 'Failed to fetch GPU telemetry')
+        setReason(e?.message || t('gpu.not_available'))
       }
     }
     // immediate fetch, then interval
@@ -111,7 +113,7 @@ export default function GpuTelemetry() {
   const baseGrid = { left: 48, right: 16, top: 40, bottom: 40 }
 
   const optUtil = useMemo(() => ({
-    title: { text: 'GPU Utilization %' },
+    title: { text: t('gpu.chart.util') },
     tooltip: { trigger: 'axis' },
     legend: { data: seriesUtil.map(s => s.name) },
     xAxis: { type: 'category', data: times },
@@ -119,10 +121,10 @@ export default function GpuTelemetry() {
     grid: baseGrid,
     dataZoom: [ { type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 8 } ],
     series: seriesUtil,
-  }), [times, seriesUtil])
+  }), [times, seriesUtil, t])
 
   const optMem = useMemo(() => ({
-    title: { text: 'Memory Used %' },
+    title: { text: t('gpu.chart.mem') },
     tooltip: { trigger: 'axis' },
     legend: { data: seriesMem.map(s => s.name) },
     xAxis: { type: 'category', data: times },
@@ -130,10 +132,10 @@ export default function GpuTelemetry() {
     grid: baseGrid,
     dataZoom: [ { type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 8 } ],
     series: seriesMem,
-  }), [times, seriesMem])
+  }), [times, seriesMem, t])
 
   const optPower = useMemo(() => ({
-    title: { text: 'Power (W)' },
+    title: { text: t('gpu.chart.power') },
     tooltip: { trigger: 'axis' },
     legend: { data: seriesPower.map(s => s.name) },
     xAxis: { type: 'category', data: times },
@@ -141,10 +143,10 @@ export default function GpuTelemetry() {
     grid: baseGrid,
     dataZoom: [ { type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 8 } ],
     series: seriesPower,
-  }), [times, seriesPower])
+  }), [times, seriesPower, t])
 
   const optTemp = useMemo(() => ({
-    title: { text: 'Temperature (°C)' },
+    title: { text: t('gpu.chart.temp') },
     tooltip: { trigger: 'axis' },
     legend: { data: seriesTemp.map(s => s.name) },
     xAxis: { type: 'category', data: times },
@@ -152,17 +154,17 @@ export default function GpuTelemetry() {
     grid: baseGrid,
     dataZoom: [ { type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 8 } ],
     series: seriesTemp,
-  }), [times, seriesTemp])
+  }), [times, seriesTemp, t])
 
   if (available === false) {
-    return <Alert type="warning" showIcon message="GPU telemetry not available" description={reason || undefined} />
+    return <Alert type="warning" showIcon message={t('gpu.not_available')} description={reason || undefined} />
   }
 
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
       <Space align="center" style={{ marginBottom: 8 }}>
-        <Typography.Text type="secondary">Polling every 2s</Typography.Text>
-        <span style={{ marginLeft: 12 }}>Pause <Switch checked={paused} onChange={setPaused} /></span>
+        <Typography.Text type="secondary">{t('polling.every2s')}</Typography.Text>
+        <span style={{ marginLeft: 12 }}>{t('pause')} <Switch checked={paused} onChange={setPaused} /></span>
       </Space>
 
       <Collapse
@@ -172,16 +174,16 @@ export default function GpuTelemetry() {
           setTimeout(() => { try { window.dispatchEvent(new Event('resize')) } catch {} }, 350)
         }}
         items={[
-          { key: 'util', label: 'GPU Utilization %', children: (
+          { key: 'util', label: t('gpu.chart.util'), children: (
             <ReactECharts option={optUtil as any} style={{ height: 260, width: '100%' }} />
           ) },
-          { key: 'mem', label: 'Memory Used %', children: (
+          { key: 'mem', label: t('gpu.chart.mem'), children: (
             <ReactECharts option={optMem as any} style={{ height: 260, width: '100%' }} />
           ) },
-          { key: 'power', label: 'Power (W)', children: (
+          { key: 'power', label: t('gpu.chart.power'), children: (
             <ReactECharts option={optPower as any} style={{ height: 260, width: '100%' }} />
           ) },
-          { key: 'temp', label: 'Temperature (°C)', children: (
+          { key: 'temp', label: t('gpu.chart.temp'), children: (
             <ReactECharts option={optTemp as any} style={{ height: 260, width: '100%' }} />
           ) },
         ]}
@@ -190,22 +192,22 @@ export default function GpuTelemetry() {
       {/* Static compact badges when panels are collapsed */}
       {available && (activeKeys.indexOf('power') === -1) && (
         <div style={{ position: 'absolute', right: 12, top: 12, background: 'rgba(0,0,0,0.55)', color: '#fff', borderRadius: 8, padding: '4px 8px', pointerEvents: 'none' }}>
-          <ThunderboltOutlined style={{ marginRight: 6 }} />功耗 {summary.powerNow}{summary.powerMax ? `/${summary.powerMax}` : ''} W
+          <ThunderboltOutlined style={{ marginRight: 6 }} />{t('gpu.power')} {summary.powerNow}{summary.powerMax ? `/${summary.powerMax}` : ''} W
         </div>
       )}
       {available && (activeKeys.indexOf('util') === -1) && (
         <div style={{ position: 'absolute', right: 12, top: 44, background: 'rgba(0,0,0,0.55)', color: '#fff', borderRadius: 8, padding: '4px 8px', pointerEvents: 'none' }}>
-          <DashboardOutlined style={{ marginRight: 6 }} />利用率 {summary.utilAvg}%
+          <DashboardOutlined style={{ marginRight: 6 }} />{t('gpu.util')} {summary.utilAvg}%
         </div>
       )}
       {available && (activeKeys.indexOf('mem') === -1) && (
         <div style={{ position: 'absolute', right: 12, top: 76, background: 'rgba(0,0,0,0.55)', color: '#fff', borderRadius: 8, padding: '4px 8px', pointerEvents: 'none' }}>
-          <DatabaseOutlined style={{ marginRight: 6 }} />显存 {summary.memAvg}%
+          <DatabaseOutlined style={{ marginRight: 6 }} />{t('gpu.mem')} {summary.memAvg}%
         </div>
       )}
       {available && (activeKeys.indexOf('temp') === -1) && (
         <div style={{ position: 'absolute', right: 12, top: 108, background: 'rgba(0,0,0,0.55)', color: '#fff', borderRadius: 8, padding: '4px 8px', pointerEvents: 'none' }}>
-          <FireOutlined style={{ marginRight: 6 }} />温度 {summary.tempMax}°C
+          <FireOutlined style={{ marginRight: 6 }} />{t('gpu.temp')} {summary.tempMax}°C
         </div>
       )}
     </div>

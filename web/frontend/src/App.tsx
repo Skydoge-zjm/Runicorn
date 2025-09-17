@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Layout, Menu, Tag, Button, ConfigProvider, theme } from 'antd'
+import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import { UnorderedListOutlined, SettingOutlined, CloudSyncOutlined } from '@ant-design/icons'
 import RunsPage from './pages/RunsPage'
@@ -7,12 +7,14 @@ import RunDetailPage from './pages/RunDetailPage'
 import RemoteSyncPage from './pages/RemoteSyncPage'
 import { health, getConfig } from './api'
 import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
+import { useTranslation } from 'react-i18next'
 
 const { Header, Content, Footer } = Layout
 
 export default function App() {
   const location = useLocation()
   const selected = [location.pathname.startsWith('/remote') ? 'remote' : 'runs']
+  const { t, i18n } = useTranslation()
   // UI Settings with persistence
   const defaultSettings: UiSettings = {
     themeMode: 'auto',
@@ -125,21 +127,28 @@ export default function App() {
       <div style={bgStyle} />
       <Layout style={{ minHeight: '100vh', position: 'relative', zIndex: 1, background: 'transparent' }}>
         <Header style={{ display: 'flex', alignItems: 'center' }}>
-          <div style={{ color: '#fff', fontWeight: 700, marginRight: 24 }}>Runicorn Viewer</div>
+          <div style={{ color: '#fff', fontWeight: 700, marginRight: 24 }}>{t('app.title')}</div>
           <Menu
             theme="dark"
             mode="horizontal"
             selectedKeys={selected}
             items={[
-              { key: 'runs', icon: <UnorderedListOutlined />, label: <Link to="/runs">Runs</Link> },
-              { key: 'remote', icon: <CloudSyncOutlined />, label: <Link to="/remote">Remote</Link> },
+              { key: 'runs', icon: <UnorderedListOutlined />, label: <Link to="/runs">{t('menu.runs')}</Link> },
+              { key: 'remote', icon: <CloudSyncOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
             ]}
             style={{ flex: 1, minWidth: 0 }}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {apiStatus === 'ok' && <Tag color="green">API OK</Tag>}
-            {apiStatus === 'loading' && <Tag color="processing">API…</Tag>}
-            {apiStatus === 'down' && <Tag>API DOWN</Tag>}
+            {apiStatus === 'ok' && <Tag color="green">{t('tag.api_ok')}</Tag>}
+            {apiStatus === 'loading' && <Tag color="processing">{t('tag.api_loading')}</Tag>}
+            {apiStatus === 'down' && <Tag>{t('tag.api_down')}</Tag>}
+            <Select
+              size="small"
+              value={i18n.language?.startsWith('zh') ? 'zh' : 'en'}
+              onChange={(lng) => i18n.changeLanguage(lng)}
+              style={{ width: 88 }}
+              options={[{ value: 'en', label: 'EN' }, { value: 'zh', label: '中文' }]}
+            />
             <Button type="link" icon={<SettingOutlined style={{ color: '#fff' }} />} onClick={() => setSettingsOpen(true)} />
           </div>
         </Header>
@@ -153,7 +162,7 @@ export default function App() {
             </Routes>
           </div>
         </Content>
-        <Footer style={{ textAlign: 'center' }}> {new Date().getFullYear()} Runicorn Viewer</Footer>
+        <Footer style={{ textAlign: 'center' }}> {new Date().getFullYear()} {t('app.title')}</Footer>
       </Layout>
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} value={settings} onChange={setSettings} />
     </ConfigProvider>

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Button, Divider, Input, Space, Typography, message } from 'antd'
 import { sshConnect, sshClose, sshListdir, sshMirrorStart, sshMirrorStop, sshMirrorList } from '../api'
+import { useTranslation } from 'react-i18next'
 
 export default function RemoteSyncPage() {
+  const { t } = useTranslation()
   // SSH connection states
   const [sshHost, setSshHost] = useState('')
   const [sshPort, setSshPort] = useState<number | undefined>(22)
@@ -40,16 +42,16 @@ export default function RemoteSyncPage() {
   }, [])
 
   const doSshConnect = async () => {
-    if (!sshHost || !sshUser) { message.warning('请填写主机与用户名'); return }
+    if (!sshHost || !sshUser) { message.warning(t('remote.msg.fill_host_user')); return }
     try {
       setSshConnecting(true)
       const res = await sshConnect({ host: sshHost.trim(), port: sshPort || 22, username: sshUser.trim(), password: sshPassword || undefined, pkey: sshPkey || undefined, pkey_path: sshPkeyPath || undefined })
       setSshSessionId(res.session_id)
-      message.success('SSH 已连接')
+      message.success(t('remote.msg.ssh_connected'))
       setSshRemotePath('~')
       await listRemote('~', res.session_id)
     } catch (e: any) {
-      message.error(typeof e?.message === 'string' ? e.message : '连接失败')
+      message.error(typeof e?.message === 'string' ? e.message : t('remote.msg.connect_failed'))
     } finally { setSshConnecting(false) }
   }
 
@@ -70,7 +72,7 @@ export default function RemoteSyncPage() {
       setSshItems(res.items || [])
       setSshRemotePath(path)
     } catch (e: any) {
-      message.error(typeof e?.message === 'string' ? e.message : '读取目录失败')
+      message.error(typeof e?.message === 'string' ? e.message : t('remote.msg.dir_failed'))
     } finally { setSshListing(false) }
   }
 
@@ -93,16 +95,16 @@ export default function RemoteSyncPage() {
   }
 
   const startMirror = async () => {
-    if (!sshSessionId) { message.warning('请先建立 SSH 连接'); return }
-    if (!sshRemotePath) { message.warning('请选择远程目录'); return }
+    if (!sshSessionId) { message.warning(t('remote.msg.need_connect')); return }
+    if (!sshRemotePath) { message.warning(t('remote.msg.need_path')); return }
     try {
       await sshMirrorStart({ session_id: sshSessionId, remote_root: sshRemotePath, interval: mirrorIntervalSec })
-      message.success('已启动实时同步')
+      message.success(t('remote.msg.started'))
       await loadMirrorList()
       // notify runs page to refresh
       try { window.dispatchEvent(new Event('runicorn:refresh')) } catch {}
     } catch (e: any) {
-      message.error(typeof e?.message === 'string' ? e.message : '启动失败')
+      message.error(typeof e?.message === 'string' ? e.message : t('remote.msg.start_failed'))
     }
   }
 
@@ -115,34 +117,34 @@ export default function RemoteSyncPage() {
 
   return (
     <div>
-      <Typography.Title level={3}>远程同步（SSH）</Typography.Title>
+      <Typography.Title level={3}>{t('remote.title')}</Typography.Title>
       <Typography.Paragraph type="secondary">
-        建立到 Linux 服务器的 SSH 连接，浏览并选择远程目录作为数据源，实时同步到本地 storage 并在“Runs”页面可视化。
+        {t('remote.desc')}
       </Typography.Paragraph>
 
       <Divider />
 
       <Space direction="vertical" style={{ width: '100%' }}>
         <div>
-          <Typography.Title level={5}>连接到服务器</Typography.Title>
+          <Typography.Title level={5}>{t('remote.connect.title')}</Typography.Title>
           <Space direction="vertical" style={{ width: '100%' }}>
             <Space wrap>
-              <Input style={{ width: 180 }} placeholder="主机，例如 10.0.0.2" value={sshHost} onChange={e => setSshHost(e.target.value)} />
-              <Input style={{ width: 90 }} placeholder="端口" value={sshPort} onChange={e => setSshPort(Number(e.target.value)||22)} />
-              <Input style={{ width: 140 }} placeholder="用户名" value={sshUser} onChange={e => setSshUser(e.target.value)} />
-              <Input.Password style={{ width: 180 }} placeholder="密码（可选）" value={sshPassword} onChange={e => setSshPassword(e.target.value)} />
+              <Input style={{ width: 180 }} placeholder={t('remote.placeholder.host')} value={sshHost} onChange={e => setSshHost(e.target.value)} />
+              <Input style={{ width: 90 }} placeholder={t('remote.placeholder.port')} value={sshPort} onChange={e => setSshPort(Number(e.target.value)||22)} />
+              <Input style={{ width: 140 }} placeholder={t('remote.placeholder.user')} value={sshUser} onChange={e => setSshUser(e.target.value)} />
+              <Input.Password style={{ width: 180 }} placeholder={t('remote.placeholder.password')} value={sshPassword} onChange={e => setSshPassword(e.target.value)} />
             </Space>
             <Space wrap>
-              <Input style={{ width: 360 }} placeholder="私钥内容（可选）" value={sshPkey} onChange={e => setSshPkey(e.target.value)} />
-              <Input style={{ width: 260 }} placeholder="或 私钥路径（可选，如 ~/.ssh/id_rsa）" value={sshPkeyPath} onChange={e => setSshPkeyPath(e.target.value)} />
+              <Input style={{ width: 360 }} placeholder={t('remote.placeholder.pkey')} value={sshPkey} onChange={e => setSshPkey(e.target.value)} />
+              <Input style={{ width: 260 }} placeholder={t('remote.placeholder.pkey_path')} value={sshPkeyPath} onChange={e => setSshPkeyPath(e.target.value)} />
             </Space>
             <Space>
               {!sshSessionId ? (
-                <Button type="primary" loading={sshConnecting} onClick={doSshConnect}>连接</Button>
+                <Button type="primary" loading={sshConnecting} onClick={doSshConnect}>{t('remote.connect.button')}</Button>
               ) : (
                 <>
-                  <Typography.Text type="secondary">已连接：{sshUser}@{sshHost}:{sshPort}</Typography.Text>
-                  <Button danger onClick={doSshClose}>断开</Button>
+                  <Typography.Text type="secondary">{t('remote.connected', { user: sshUser, host: sshHost, port: sshPort })}</Typography.Text>
+                  <Button danger onClick={doSshClose}>{t('remote.disconnect')}</Button>
                 </>
               )}
             </Space>
@@ -151,12 +153,12 @@ export default function RemoteSyncPage() {
 
         {sshSessionId && (
           <div>
-            <Typography.Title level={5}>选择远程目录</Typography.Title>
+            <Typography.Title level={5}>{t('remote.choose.title')}</Typography.Title>
             <Space align="center" style={{ marginBottom: 8 }}>
-              <Typography.Text>当前目录：</Typography.Text>
+              <Typography.Text>{t('remote.current_dir')}</Typography.Text>
               <Typography.Text code>{sshRemotePath}</Typography.Text>
-              <Button size="small" onClick={pathUp}>上一级</Button>
-              <Button size="small" loading={sshListing} onClick={() => listRemote(sshRemotePath)}>刷新</Button>
+              <Button size="small" onClick={pathUp}>{t('remote.up')}</Button>
+              <Button size="small" loading={sshListing} onClick={() => listRemote(sshRemotePath)}>{t('remote.refresh')}</Button>
             </Space>
             <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid #eee', borderRadius: 6, padding: 8 }}>
               {sshItems.map(it => (
@@ -166,15 +168,15 @@ export default function RemoteSyncPage() {
                   <span style={{ marginLeft: 8 }}>{it.name}</span>
                 </div>
               ))}
-              {sshItems.length === 0 && <div style={{ color: '#999' }}>空目录或无权限</div>}
+              {sshItems.length === 0 && <div style={{ color: '#999' }}>{t('remote.empty')}</div>}
             </div>
             <Space style={{ marginTop: 8 }}>
               <Input style={{ width: 380 }} value={sshRemotePath} onChange={e => setSshRemotePath(e.target.value)} />
-              <Input style={{ width: 120 }} value={mirrorIntervalSec} onChange={e => setMirrorIntervalSec(Number(e.target.value)||2)} suffix="秒" />
-              <Button type="primary" onClick={startMirror}>同步此目录</Button>
+              <Input style={{ width: 120 }} value={mirrorIntervalSec} onChange={e => setMirrorIntervalSec(Number(e.target.value)||2)} suffix={t('remote.interval.suffix')} />
+              <Button type="primary" onClick={startMirror}>{t('remote.sync_dir')}</Button>
             </Space>
             <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>
-              建议选择到 <code>project/name/runs</code>（新结构）或 <code>runs</code>（旧结构）这一层而不是具体 <code>&lt;run_id&gt;</code>。
+              {t('remote.tip')}
             </Typography.Paragraph>
           </div>
         )}
@@ -182,24 +184,29 @@ export default function RemoteSyncPage() {
         <Divider />
 
         <div>
-          <Typography.Title level={5} style={{ marginBottom: 8 }}>同步任务</Typography.Title>
+          <Typography.Title level={5} style={{ marginBottom: 8 }}>{t('remote.tasks.title')}</Typography.Title>
           <div style={{ border: '1px solid #eee', borderRadius: 6, padding: 8 }}>
             {mirrorList.map(m => (
               <div key={m.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
                 <div>
                   <div><b>{m.remote_root}</b> ➜ <code>{m.local_root}</code></div>
-                  <div style={{ color: '#999', fontSize: 12 }}>copied: {m.stats?.copied_files ?? 0}, appended: {m.stats?.appended_bytes ?? 0}B, scans: {m.stats?.scans ?? 0}, alive: {String(m.alive)}</div>
+                  <div style={{ color: '#999', fontSize: 12 }}>{t('remote.tasks.item.stats', {
+                    copied: m.stats?.copied_files ?? 0,
+                    appended: m.stats?.appended_bytes ?? 0,
+                    scans: m.stats?.scans ?? 0,
+                    alive: String(m.alive),
+                  })}</div>
                 </div>
-                <Button danger size="small" onClick={() => stopMirror(m.id)}>停止</Button>
+                <Button danger size="small" onClick={() => stopMirror(m.id)}>{t('remote.tasks.stop')}</Button>
               </div>
             ))}
-            {mirrorList.length === 0 && <div style={{ color: '#999' }}>暂无任务</div>}
+            {mirrorList.length === 0 && <div style={{ color: '#999' }}>{t('remote.tasks.none')}</div>}
           </div>
         </div>
 
         <div>
           <Typography.Paragraph>
-            同步成功后，前往 <a href="/runs">Runs</a> 页面查看实时可视化。
+            {t('remote.to_runs')}
           </Typography.Paragraph>
         </div>
       </Space>

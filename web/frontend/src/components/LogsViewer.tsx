@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Space, Switch, Tag, Tooltip, message } from 'antd'
+import { useTranslation } from 'react-i18next'
 
 function isTqdmLine(s: string) {
   // Heuristics for tqdm progress frames when redirected to file
@@ -11,6 +12,7 @@ function isTqdmLine(s: string) {
 }
 
 export default function LogsViewer({ url, persistKey }: { url: string, persistKey?: string }) {
+  const { t } = useTranslation()
   const [lines, setLines] = useState<string[]>(() => {
     if (!persistKey) return []
     try {
@@ -85,30 +87,35 @@ export default function LogsViewer({ url, persistKey }: { url: string, persistKe
   const copyAll = async () => {
     try {
       await navigator.clipboard.writeText(lines.join('\n'))
-      message.success('Copied logs to clipboard')
+      message.success(t('logs.copied'))
     } catch {
-      message.error('Copy failed')
+      message.error(t('logs.copy_failed'))
     }
   }
 
   const statusTag = useMemo(() => {
-    if (connected === 'connected') return <Tag color="green">Connected</Tag>
-    if (connected === 'connecting') return <Tag color="processing">Connecting...</Tag>
-    return <Tag color="default">Disconnected{nextRetryMs ? `, retry in ${Math.ceil(nextRetryMs/1000)}s` : ''}</Tag>
-  }, [connected, nextRetryMs])
+    if (connected === 'connected') return <Tag color="green">{t('logs.status.connected')}</Tag>
+    if (connected === 'connecting') return <Tag color="processing">{t('logs.status.connecting')}</Tag>
+    return (
+      <Tag color="default">
+        {t('logs.status.disconnected')}
+        {nextRetryMs ? `, ${t('logs.status.retry_in', { sec: Math.ceil(nextRetryMs/1000) })}` : ''}
+      </Tag>
+    )
+  }, [connected, nextRetryMs, t])
 
   return (
     <div>
       <Space style={{ marginBottom: 8 }}>
         {statusTag}
-        <Tooltip title="Automatically scroll to the latest line">
-          <span>Auto Scroll <Switch checked={autoScroll} onChange={setAutoScroll} style={{ marginLeft: 6 }} /></span>
+        <Tooltip title={t('logs.tooltip.autoscroll')}>
+          <span>{t('logs.autoscroll')} <Switch checked={autoScroll} onChange={setAutoScroll} style={{ marginLeft: 6 }} /></span>
         </Tooltip>
-        <Tooltip title="Hide tqdm progress frames to reduce noise">
-          <span>Filter tqdm <Switch checked={filterTqdm} onChange={setFilterTqdm} style={{ marginLeft: 6 }} /></span>
+        <Tooltip title={t('logs.tooltip.filter_tqdm')}>
+          <span>{t('logs.filter_tqdm')} <Switch checked={filterTqdm} onChange={setFilterTqdm} style={{ marginLeft: 6 }} /></span>
         </Tooltip>
-        <Button size="small" onClick={() => { setLines([]); try { if (persistKey) localStorage.removeItem(persistKey) } catch {} }}>Clear</Button>
-        <Button size="small" onClick={copyAll}>Copy</Button>
+        <Button size="small" onClick={() => { setLines([]); try { if (persistKey) localStorage.removeItem(persistKey) } catch {} }}>{t('logs.clear')}</Button>
+        <Button size="small" onClick={copyAll}>{t('logs.copy')}</Button>
       </Space>
       <div ref={ref} style={{ height: 320, overflow: 'auto', background: '#0b1020', color: '#e6e9ef', padding: 12, borderRadius: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', fontSize: 12 }}>
         {lines.map((l, i) => (

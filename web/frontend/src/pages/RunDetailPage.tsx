@@ -7,9 +7,11 @@ import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
 import GpuTelemetry from '../components/GpuTelemetry'
 import MultiRunMetricChart from '../components/MultiRunMetricChart'
+import { useTranslation } from 'react-i18next'
 
 export default function RunDetailPage() {
   const { id = '' } = useParams()
+  const { t } = useTranslation()
   const [detail, setDetail] = useState<any>(null)
   const [stepMetrics, setStepMetrics] = useState<{ columns: string[]; rows: any[] }>({ columns: [], rows: [] })
   const [stepXAxis, setStepXAxis] = useState<'global_step' | 'time'>(() => {
@@ -166,28 +168,28 @@ export default function RunDetailPage() {
 
   return (
     <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Card title={`Run ${id}`}>
+      <Card title={t('run.title', { id })}>
         <Descriptions
           bordered
           size="small"
           column={1}
           items={[
-            { key: 'status', label: 'Status', children: detail?.status || '-' },
-            { key: 'pid', label: 'PID', children: detail?.pid || '-' },
-            { key: 'project', label: 'Project', children: detail?.project || '-' },
-            { key: 'name', label: 'Name', children: detail?.name || '-' },
-            { key: 'run_dir', label: 'Run Dir', children: detail?.run_dir || '-' },
-            { key: 'logs', label: 'Logs', children: detail?.logs || '-' },
-            { key: 'metrics', label: 'Metrics Events', children: detail?.metrics || '-' },
+            { key: 'status', label: t('run.descriptions.status'), children: detail?.status || '-' },
+            { key: 'pid', label: t('run.descriptions.pid'), children: detail?.pid || '-' },
+            { key: 'project', label: t('run.descriptions.project'), children: detail?.project || '-' },
+            { key: 'name', label: t('run.descriptions.name'), children: detail?.name || '-' },
+            { key: 'run_dir', label: t('run.descriptions.dir'), children: detail?.run_dir || '-' },
+            { key: 'logs', label: t('run.descriptions.logs'), children: detail?.logs || '-' },
+            { key: 'metrics', label: t('run.descriptions.metrics'), children: detail?.metrics || '-' },
           ]}
         />
         <div style={{ height: 12 }} />
         <div style={{ marginBottom: 8 }}>
           <Space size="large" wrap>
-            <span><DashboardOutlined style={{ marginRight: 6 }} />利用率 {gpu?.util ?? '-'}% {trendIcon('util')}</span>
-            <span><DatabaseOutlined style={{ marginRight: 6 }} />显存 {gpu?.mem ?? '-'}% {trendIcon('mem')}</span>
-            <span><ThunderboltOutlined style={{ marginRight: 6 }} />功耗 {gpu?.power ?? '-'} W {trendIcon('power')}</span>
-            <span><FireOutlined style={{ marginRight: 6 }} />温度 {gpu?.temp ?? '-'}°C {trendIcon('temp')}</span>
+            <span><DashboardOutlined style={{ marginRight: 6 }} />{t('gpu.util')} {gpu?.util ?? '-'}% {trendIcon('util')}</span>
+            <span><DatabaseOutlined style={{ marginRight: 6 }} />{t('gpu.mem')} {gpu?.mem ?? '-'}% {trendIcon('mem')}</span>
+            <span><ThunderboltOutlined style={{ marginRight: 6 }} />{t('gpu.power')} {gpu?.power ?? '-'} W {trendIcon('power')}</span>
+            <span><FireOutlined style={{ marginRight: 6 }} />{t('gpu.temp')} {gpu?.temp ?? '-'}°C {trendIcon('temp')}</span>
             {gpu?.gpus && (
               <Popover
                 placement="bottom"
@@ -195,48 +197,53 @@ export default function RunDetailPage() {
                   <div style={{ minWidth: 220 }}>
                     {gpu.gpus.map((x: any, i: number) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>GPU{x.index} {x.name}</span>
-                        <span style={{ color: '#555' }}>{Math.round(x.util_gpu ?? 0)}% · {Math.round(x.mem_used_pct ?? 0)}% · {Math.round(x.power_w ?? 0)}W · {Math.round(x.temp_c ?? 0)}°C</span>
+                        <span>{t('gpu.tooltip.item', { index: x.index, name: x.name })}</span>
+                        <span style={{ color: '#555' }}>{t('gpu.tooltip.metrics', {
+                          util: Math.round(x.util_gpu ?? 0),
+                          mem: Math.round(x.mem_used_pct ?? 0),
+                          power: Math.round(x.power_w ?? 0),
+                          temp: Math.round(x.temp_c ?? 0),
+                        })}</span>
                       </div>
                     ))}
                   </div>
                 )}
               >
-                <Tag color="blue" style={{ cursor: 'pointer' }}>GPUs: {gpu.gpus.length}</Tag>
+                <Tag color="blue" style={{ cursor: 'pointer' }}>{t('gpu.detail', { count: gpu.gpus.length })}</Tag>
               </Popover>
             )}
           </Space>
         </div>
       </Card>
 
-      <Card title="Compare Runs (Same Experiment)">
+      <Card title={t('compare.title')}>
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Space wrap>
             <span>
-              Runs:&nbsp;
+              {t('compare.select.runs')}&nbsp;
               <Select
                 mode="multiple"
                 allowClear
                 value={selectedRunIds}
                 onChange={setSelectedRunIds as any}
-                placeholder="Select runs to overlay"
+                placeholder={t('compare.select.runs.placeholder')}
                 style={{ minWidth: 360 }}
                 options={(runsUnderName || []).map((r: any) => ({ value: r.id, label: r.id }))}
               />
             </span>
             <span>
-              Metrics:&nbsp;
+              {t('compare.select.metrics')}&nbsp;
               <Select
                 mode="multiple"
                 allowClear
                 value={overlayKeys}
                 onChange={setOverlayKeys as any}
-                placeholder="Select metric keys"
+                placeholder={t('compare.select.metrics.placeholder')}
                 style={{ minWidth: 300 }}
                 options={overlayMetricCandidates.map(k => ({ value: k, label: k }))}
               />
             </span>
-            <span>Step X: <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
+            <span>{t('compare.stepx')} <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
               { value: 'global_step', label: 'global_step' },
               { value: 'time', label: 'time' },
             ]} /></span>
@@ -246,11 +253,11 @@ export default function RunDetailPage() {
                 try { next[rid] = await getStepMetrics(rid) } catch {}
               }
               setOverlayMetricsMap(next)
-            }}>Refresh</Button>
+            }}>{t('compare.refresh')}</Button>
           </Space>
 
           {overlayKeys.length === 0 || selectedRunIds.length === 0 ? (
-            <Alert type="info" showIcon message="Select one or more runs and metrics to overlay." />
+            <Alert type="info" showIcon message={t('compare.tip')} />
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr', gap: 16 }}>
               {overlayKeys.map((k) => (
@@ -270,17 +277,17 @@ export default function RunDetailPage() {
         </Space>
       </Card>
 
-      <Card title="Metrics" extra={(
+      <Card title={t('metrics.title')} extra={(
         <Space>
-          <span>Two Columns <Switch checked={twoCol} onChange={setTwoCol} /></span>
-          <span>Step X: <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
+          <span>{t('metrics.two_columns')} <Switch checked={twoCol} onChange={setTwoCol} /></span>
+          <span>{t('compare.stepx')} <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
             { value: 'global_step', label: 'global_step' },
             { value: 'time', label: 'time' },
           ]} /></span>
         </Space>
       )}>
         {stepMetricKeys.length === 0 ? (
-          <Alert type="info" showIcon message="No step metrics yet." />
+          <Alert type="info" showIcon message={t('metrics.none')} />
         ) : (
           <div style={gridStyle}>
             {stepMetricKeys.map((k) => (
@@ -291,11 +298,11 @@ export default function RunDetailPage() {
         )}
       </Card>
 
-      <Card title="GPU Telemetry">
+      <Card title={t('gpu.title')}>
         <GpuTelemetry />
       </Card>
 
-      <Card title="Live Logs">
+      <Card title={t('logs.title')}>
         <LogsViewer url={logUrl} persistKey={`run_${id}_logs`} />
       </Card>
     </Space>
