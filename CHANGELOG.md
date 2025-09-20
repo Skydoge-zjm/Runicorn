@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 
 
+## [0.2.7] - 2025-09-17
+
+### Added
+- Language options:
+  - Support switching between Chinese and English.
+
+
 ## [0.2.6] - 2025-09-14
 
 ### Added
