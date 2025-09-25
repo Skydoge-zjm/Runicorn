@@ -164,3 +164,59 @@ export async function sshMirrorList() {
   if (!res.ok) throw new Error(await res.text())
   return res.json() as Promise<{ mirrors: any[]; storage: string }>
 }
+
+// ----- Status management -----
+export async function checkAllStatus() {
+  const res = await fetch(url('/status/check'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ checked: number; updated: number; message: string }>
+}
+
+// ----- Soft delete / Recycle bin -----
+export async function softDeleteRuns(runIds: string[]) {
+  const res = await fetch(url('/runs/soft-delete'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ run_ids: runIds })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ deleted_count: number; results: Record<string, any>; message: string }>
+}
+
+export async function listDeletedRuns() {
+  const res = await fetch(url('/recycle-bin'))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ deleted_runs: Array<{
+    id: string
+    project: string
+    name: string
+    created_time: number
+    deleted_at: number
+    delete_reason: string
+    original_status: string
+    run_dir: string
+  }> }>
+}
+
+export async function restoreRuns(runIds: string[]) {
+  const res = await fetch(url('/recycle-bin/restore'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ run_ids: runIds })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ restored_count: number; results: Record<string, any>; message: string }>
+}
+
+export async function emptyRecycleBin() {
+  const res = await fetch(url('/recycle-bin/empty'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: true })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ permanently_deleted: number; message: string }>
+}

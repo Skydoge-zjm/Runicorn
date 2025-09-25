@@ -1,0 +1,44 @@
+# 或在Python中：
+import runicorn as rn
+
+# 生成测试实验
+run = rn.init(project="test_project", name="experiment_1", capture_env=True)
+print(f"Created run: id={run.id} dir={run.run_dir}")
+run.log_text(f"[info] Starting dummy run '{run.name}' (project={run.project})")
+
+# 设置主要指标为准确率（最大化）
+rn.set_primary_metric("accuracy_123", mode="max")
+
+# 模拟训练
+import random
+import math
+import time
+for epoch in range(200):
+    # 模拟指标
+    time.sleep(0.1)
+    
+    # 测试异常处理：取消注释下行来模拟程序崩溃
+    # if epoch == 50: raise ValueError("Test crash")
+    
+    #loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1 if epoch < 50 else float('nan')
+    loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1
+    acc = 100 * (1 - math.exp(-epoch/30)) + random.random() * 2
+    
+    # 记录指标
+    rn.log({
+        "loss_1234": loss,
+        "accuracy_123": acc,
+        "learning_rate_12": 0.001 * (0.95 ** epoch),
+    }, stage=f"epoch {epoch // 10}")
+    print(f"epoch {epoch // 10} | loss {loss:.4f} | accuracy {acc:.2f}")
+
+
+
+# 记录摘要（best metric会自动记录）
+rn.summary({
+    "final_loss": 0.05,
+    "total_epochs": 100,
+    "notes": "Demo run with auto-tracked accuracy metric"
+})
+
+rn.finish()

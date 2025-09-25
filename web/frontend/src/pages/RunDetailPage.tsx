@@ -1,25 +1,39 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Descriptions, Space, Alert, Popover, Tag, Switch, Select, Button } from 'antd'
-import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined } from '@ant-design/icons'
+import { Card, Descriptions, Space, Alert, Popover, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge } from 'antd'
+import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, ReloadOutlined, FullscreenOutlined } from '@ant-design/icons'
 import { getRunDetail, getStepMetrics, getGpuTelemetry, listRunsByName } from '../api'
 import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
 import GpuTelemetry from '../components/GpuTelemetry'
 import MultiRunMetricChart from '../components/MultiRunMetricChart'
+import { useSettings } from '../contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
 
 export default function RunDetailPage() {
   const { id = '' } = useParams()
   const { t } = useTranslation()
+  const { settings } = useSettings()
   const [detail, setDetail] = useState<any>(null)
   const [stepMetrics, setStepMetrics] = useState<{ columns: string[]; rows: any[] }>({ columns: [], rows: [] })
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [metricsLoading, setMetricsLoading] = useState(false)
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null)
   const [stepXAxis, setStepXAxis] = useState<'global_step' | 'time'>(() => {
     try { return (localStorage.getItem(`run:${id}:step:xAxis`) as any) || 'global_step' } catch { return 'global_step' }
   })
   const [twoCol, setTwoCol] = useState<boolean>(() => {
     try { return localStorage.getItem(`run:${id}:layout:twoCol`) === '1' } catch { return true }
   })
+  
+  // Add responsive layout detection
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
   const [gpu, setGpu] = useState<{ util: number; mem: number; power: number; temp: number; gpus?: any[] } | null>(null)
   const gpuHistRef = useRef<Array<{ t: number; util: number; mem: number; power: number; temp: number }>>([])
 
@@ -29,15 +43,40 @@ export default function RunDetailPage() {
   const [overlayKeys, setOverlayKeys] = useState<string[]>([])
   const [overlayMetricsMap, setOverlayMetricsMap] = useState<Record<string, { columns: string[]; rows: any[] }>>({})
 
-  const loadDetail = async () => setDetail(await getRunDetail(id))
-  const loadStepMetrics = async () => setStepMetrics(await getStepMetrics(id))
+  const loadDetail = async (showLoading = true) => {
+    if (showLoading) setDetailLoading(true)
+    try {
+      const result = await getRunDetail(id)
+      setDetail(result)
+      setLastUpdateTime(new Date())
+    } catch (error) {
+      console.error('Failed to load run detail:', error)
+      message.error(t('run.load_failed') || 'Failed to load run details')
+    } finally {
+      if (showLoading) setDetailLoading(false)
+    }
+  }
+  
+  const loadStepMetrics = async (showLoading = true) => {
+    if (showLoading) setMetricsLoading(true)
+    try {
+      const result = await getStepMetrics(id)
+      setStepMetrics(result)
+    } catch (error) {
+      console.error('Failed to load step metrics:', error)
+      message.error(t('run.metrics_failed') || 'Failed to load metrics')
+    } finally {
+      if (showLoading) setMetricsLoading(false)
+    }
+  }
 
   useEffect(() => {
     loadDetail()
     loadStepMetrics()
     const t = setInterval(() => {
-      loadDetail();
-      loadStepMetrics();
+      // Silent refresh without loading indicators
+      loadDetail(false);
+      loadStepMetrics(false);
     }, 3000)
     return () => clearInterval(t)
   }, [id])
@@ -160,29 +199,163 @@ export default function RunDetailPage() {
     return Array.from(keys).sort()
   }, [selectedRunIds, overlayMetricsMap])
 
-  const gridStyle: React.CSSProperties = useMemo(() => ({
-    display: 'grid',
-    gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr',
-    gap: 16,
-  }), [twoCol])
+  const gridStyle: React.CSSProperties = useMemo(() => {
+    // Force single column on narrow screens
+    const effectiveTwoCol = twoCol && windowWidth >= 900
+    
+    return {
+      display: 'grid',
+      gridTemplateColumns: effectiveTwoCol ? 'repeat(auto-fit, minmax(400px, 1fr))' : '1fr',
+      gap: 16,
+      width: '100%',
+      maxWidth: '100%',
+    }
+  }, [twoCol, windowWidth])
+  
+  // Use settings-based chart height with responsive scaling
+  const chartHeight = useMemo(() => {
+    const baseHeight = settings.defaultChartHeight
+    if (windowWidth >= 1200) return baseHeight + 30  // Large screens
+    if (windowWidth >= 900) return baseHeight        // Medium screens  
+    return Math.max(250, baseHeight - 40)            // Small screens, with minimum
+  }, [windowWidth, settings.defaultChartHeight])
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Card title={t('run.title', { id })}>
-        <Descriptions
-          bordered
-          size="small"
-          column={1}
-          items={[
-            { key: 'status', label: t('run.descriptions.status'), children: detail?.status || '-' },
-            { key: 'pid', label: t('run.descriptions.pid'), children: detail?.pid || '-' },
-            { key: 'project', label: t('run.descriptions.project'), children: detail?.project || '-' },
-            { key: 'name', label: t('run.descriptions.name'), children: detail?.name || '-' },
-            { key: 'run_dir', label: t('run.descriptions.dir'), children: detail?.run_dir || '-' },
-            { key: 'logs', label: t('run.descriptions.logs'), children: detail?.logs || '-' },
-            { key: 'metrics', label: t('run.descriptions.metrics'), children: detail?.metrics || '-' },
-          ]}
-        />
+    <Space direction="vertical" size="large" style={{ 
+      width: '100%', 
+      maxWidth: '100%',
+      overflowX: 'hidden' 
+    }}>
+      <Card 
+        title={
+          <Space>
+            <span>{t('run.title', { id })}</span>
+            {detail?.status && (
+              <Tag color={
+                detail.status === 'running' ? 'processing' :
+                detail.status === 'finished' ? 'success' :
+                detail.status === 'failed' ? 'error' : 'default'
+              }>
+                {detail.status}
+              </Tag>
+            )}
+            {lastUpdateTime && (
+              <Tooltip title={`Last updated: ${lastUpdateTime.toLocaleTimeString()}`}>
+                <Badge status="processing" text="Auto-refreshing" />
+              </Tooltip>
+            )}
+          </Space>
+        }
+        extra={
+          <Space>
+            <Tooltip title={t('metrics.more_columns_tooltip') || 'Display charts in multiple columns for better comparison'}>
+              <span>{t('metrics.more_columns')} <Switch checked={twoCol} onChange={setTwoCol} /></span>
+            </Tooltip>
+            <Tooltip title="Manual refresh">
+              <Button 
+                type="text" 
+                icon={<ReloadOutlined />} 
+                loading={detailLoading}
+                onClick={() => {
+                  loadDetail()
+                  loadStepMetrics()
+                  message.success('Data refreshed')
+                }}
+              />
+            </Tooltip>
+          </Space>
+        }
+      >
+        <Spin spinning={detailLoading}>
+          <Descriptions
+            bordered
+            size="middle"
+            column={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }}
+            labelStyle={{ 
+              fontWeight: 600, 
+              fontSize: '14px',
+              color: '#262626',
+              width: '120px'
+            }}
+            contentStyle={{ 
+              fontSize: '14px',
+              color: '#595959',
+              fontFamily: 'inherit'
+            }}
+            items={[
+              { 
+                key: 'project', 
+                label: t('run.descriptions.project'), 
+                children: detail?.project ? (
+                  <Tag color="blue" style={{ fontSize: '13px', padding: '4px 8px' }}>
+                    {detail.project}
+                  </Tag>
+                ) : '-'
+              },
+              { 
+                key: 'name', 
+                label: t('run.descriptions.name'), 
+                children: detail?.name ? (
+                  <Tag color="purple" style={{ fontSize: '13px', padding: '4px 8px' }}>
+                    {detail.name}
+                  </Tag>
+                ) : '-'
+              },
+              { 
+                key: 'status', 
+                label: t('run.descriptions.status'), 
+                children: detail?.status ? (
+                  <Tag color={
+                    detail.status === 'running' ? 'processing' :
+                    detail.status === 'finished' ? 'success' :
+                    detail.status === 'failed' ? 'error' : 'default'
+                  } style={{ fontSize: '13px', padding: '4px 8px', fontWeight: 500 }}>
+                    {detail.status.toUpperCase()}
+                  </Tag>
+                ) : '-'
+              },
+              { 
+                key: 'pid', 
+                label: t('run.descriptions.pid'), 
+                children: detail?.pid ? (
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#1677ff' }}>
+                    {detail.pid}
+                  </span>
+                ) : '-'
+              },
+              { 
+                key: 'run_dir', 
+                label: t('run.descriptions.dir'), 
+                children: detail?.run_dir ? (
+                  <div style={{ 
+                    fontSize: '13px', 
+                    wordBreak: 'break-all',
+                    lineHeight: '1.5',
+                    maxWidth: '400px',
+                    color: '#595959'
+                  }}>
+                    {detail.run_dir}
+                  </div>
+                ) : '-'
+              },
+              { 
+                key: 'logs', 
+                label: t('run.descriptions.logs'), 
+                children: detail?.logs ? (
+                  <div style={{ 
+                    fontSize: '13px', 
+                    wordBreak: 'break-all',
+                    lineHeight: '1.5',
+                    maxWidth: '400px',
+                    color: '#595959'
+                  }}>
+                    {detail.logs}
+                  </div>
+                ) : '-'
+              },
+            ]}
+          />
+        </Spin>
         <div style={{ height: 12 }} />
         <div style={{ marginBottom: 8 }}>
           <Space size="large" wrap>
@@ -216,93 +389,244 @@ export default function RunDetailPage() {
         </div>
       </Card>
 
-      <Card title={t('compare.title')}>
+      <Card 
+        title={
+          <Space>
+            <span>{t('compare.title')}</span>
+            {selectedRunIds.length > 1 && overlayKeys.length > 0 && (
+              <Badge 
+                count={`${selectedRunIds.length} runs × ${overlayKeys.length} metrics`} 
+                style={{ backgroundColor: '#52c41a' }} 
+              />
+            )}
+          </Space>
+        }
+        extra={
+          <Space>
+            <Tooltip title="Select all available metrics">
+              <Button 
+                size="small" 
+                type="dashed"
+                onClick={() => setOverlayKeys(overlayMetricCandidates)}
+                disabled={overlayMetricCandidates.length === 0}
+              >
+                Select All Metrics
+              </Button>
+            </Tooltip>
+            <Tooltip title="Clear all selections">
+              <Button 
+                size="small" 
+                type="text"
+                onClick={() => {
+                  setOverlayKeys([])
+                  setSelectedRunIds([id])  // Keep current run
+                }}
+              >
+                Clear
+              </Button>
+            </Tooltip>
+          </Space>
+        }
+      >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Space wrap>
-            <span>
-              {t('compare.select.runs')}&nbsp;
+          <Space wrap style={{ width: '100%' }}>
+            <div style={{ minWidth: 200, maxWidth: windowWidth >= 768 ? 360 : '100%' }}>
+              <div style={{ marginBottom: 4, fontSize: '14px', fontWeight: 500 }}>
+                {t('compare.select.runs')}
+              </div>
               <Select
                 mode="multiple"
                 allowClear
                 value={selectedRunIds}
                 onChange={setSelectedRunIds as any}
                 placeholder={t('compare.select.runs.placeholder')}
-                style={{ minWidth: 360 }}
+                style={{ width: '100%', minWidth: 200 }}
                 options={(runsUnderName || []).map((r: any) => ({ value: r.id, label: r.id }))}
               />
-            </span>
-            <span>
-              {t('compare.select.metrics')}&nbsp;
+            </div>
+            <div style={{ minWidth: 200, maxWidth: windowWidth >= 768 ? 300 : '100%' }}>
+              <div style={{ marginBottom: 4, fontSize: '14px', fontWeight: 500 }}>
+                <Space>
+                  <span>{t('compare.select.metrics')}</span>
+                  <Space.Compact>
+                    <Tooltip title="Common loss metrics">
+                      <Button 
+                        size="small" 
+                        type="text"
+                        onClick={() => {
+                          const lossMetrics = overlayMetricCandidates.filter(k => 
+                            k.toLowerCase().includes('loss') || k.toLowerCase().includes('error')
+                          )
+                          setOverlayKeys(lossMetrics)
+                        }}
+                      >
+                        Loss
+                      </Button>
+                    </Tooltip>
+                    <Tooltip title="Common accuracy metrics">
+                      <Button 
+                        size="small" 
+                        type="text"
+                        onClick={() => {
+                          const accMetrics = overlayMetricCandidates.filter(k => 
+                            k.toLowerCase().includes('acc') || k.toLowerCase().includes('accuracy')
+                          )
+                          setOverlayKeys(accMetrics)
+                        }}
+                      >
+                        Acc
+                      </Button>
+                    </Tooltip>
+                  </Space.Compact>
+                </Space>
+              </div>
               <Select
                 mode="multiple"
                 allowClear
                 value={overlayKeys}
                 onChange={setOverlayKeys as any}
                 placeholder={t('compare.select.metrics.placeholder')}
-                style={{ minWidth: 300 }}
+                style={{ width: '100%', minWidth: 200 }}
                 options={overlayMetricCandidates.map(k => ({ value: k, label: k }))}
+                maxTagCount="responsive"
               />
-            </span>
-            <span>{t('compare.stepx')} <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
-              { value: 'global_step', label: 'global_step' },
-              { value: 'time', label: 'time' },
-            ]} /></span>
-            <Button size="small" onClick={async () => {
-              const next: Record<string, { columns: string[]; rows: any[] }> = {}
-              for (const rid of selectedRunIds) {
-                try { next[rid] = await getStepMetrics(rid) } catch {}
-              }
-              setOverlayMetricsMap(next)
-            }}>{t('compare.refresh')}</Button>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+              <div>
+                <div style={{ marginBottom: 4, fontSize: '14px', fontWeight: 500 }}>
+                  {t('compare.stepx')}
+                </div>
+                <Select 
+                  size="small" 
+                  value={stepXAxis} 
+                  onChange={v => setStepXAxis(v as any)} 
+                  style={{ width: 140 }} 
+                  options={[
+                    { value: 'global_step', label: 'global_step' },
+                    { value: 'time', label: 'time' },
+                  ]} 
+                />
+              </div>
+              <Button size="small" onClick={async () => {
+                const next: Record<string, { columns: string[]; rows: any[] }> = {}
+                for (const rid of selectedRunIds) {
+                  try { next[rid] = await getStepMetrics(rid) } catch {}
+                }
+                setOverlayMetricsMap(next)
+              }}>{t('compare.refresh')}</Button>
+            </div>
           </Space>
 
           {overlayKeys.length === 0 || selectedRunIds.length === 0 ? (
             <Alert type="info" showIcon message={t('compare.tip')} />
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: twoCol ? '1fr 1fr' : '1fr', gap: 16 }}>
+            <div style={gridStyle}>
               {overlayKeys.map((k) => (
-                <MultiRunMetricChart
-                  key={k}
-                  title={k}
-                  xKey={stepXAxis}
-                  yKey={k}
-                  runs={selectedRunIds.map((rid) => ({ id: rid, metrics: overlayMetricsMap[rid] || { columns: [], rows: [] } }))}
-                  height={300}
-                  group={`overlay-group-${id}`}
-                  persistKey={`run:${id}:overlay:${k}`}
-                />
+                <div key={k} style={{ 
+                  minWidth: 300, 
+                  maxWidth: '100%', 
+                  overflow: 'hidden',
+                  border: '1px solid #f0f0f0',
+                  borderRadius: '6px',
+                  padding: '8px'
+                }}>
+                  <MultiRunMetricChart
+                    title={k}
+                    xKey={stepXAxis}
+                    yKey={k}
+                    runs={selectedRunIds.map((rid) => ({ id: rid, metrics: overlayMetricsMap[rid] || { columns: [], rows: [] } }))}
+                    height={chartHeight}
+                    group={`overlay-group-${id}`}
+                    persistKey={`run:${id}:overlay:${k}`}
+                  />
+                </div>
               ))}
             </div>
           )}
         </Space>
       </Card>
 
-      <Card title={t('metrics.title')} extra={(
-        <Space>
-          <span>{t('metrics.two_columns')} <Switch checked={twoCol} onChange={setTwoCol} /></span>
-          <span>{t('compare.stepx')} <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
-            { value: 'global_step', label: 'global_step' },
-            { value: 'time', label: 'time' },
-          ]} /></span>
-        </Space>
-      )}>
+      <Card 
+        title={
+          <Space>
+            <span>{t('metrics.title')}</span>
+            <Badge count={stepMetricKeys.length} showZero style={{ backgroundColor: '#1677ff' }} />
+            {metricsLoading && <Spin size="small" />}
+          </Space>
+        } 
+        extra={(
+          <Space wrap>
+            <span>{t('compare.stepx')} <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
+              { value: 'global_step', label: 'global_step' },
+              { value: 'time', label: 'time' },
+            ]} /></span>
+            <Tooltip title="Refresh metrics">
+              <Button 
+                type="text" 
+                size="small"
+                icon={<ReloadOutlined />}
+                loading={metricsLoading}
+                onClick={() => loadStepMetrics()}
+              />
+            </Tooltip>
+          </Space>
+        )}
+      >
         {stepMetricKeys.length === 0 ? (
           <Alert type="info" showIcon message={t('metrics.none')} />
         ) : (
           <div style={gridStyle}>
             {stepMetricKeys.map((k) => (
-              <MetricChart key={k} metrics={stepMetrics} xKey={stepXAxis} yKeys={[k]} title={k} height={300}
-                group={`step-group-${id}`} persistKey={`run:${id}:step:${k}`} />
+              <div key={k} style={{ 
+                minWidth: 300, 
+                maxWidth: '100%', 
+                overflow: 'hidden',
+                border: '1px solid #f0f0f0',
+                borderRadius: '6px',
+                padding: '8px'
+              }}>
+                <MetricChart 
+                  metrics={stepMetrics} 
+                  xKey={stepXAxis} 
+                  yKeys={[k]} 
+                  title={k} 
+                  height={chartHeight}
+                  group={`step-group-${id}`} 
+                  persistKey={`run:${id}:step:${k}`} 
+                />
+              </div>
             ))}
           </div>
         )}
       </Card>
 
-      <Card title={t('gpu.title')}>
+      <Card 
+        title={
+          <Space>
+            <span>{t('gpu.title')}</span>
+            {gpu && gpu.gpus && (
+              <Badge count={gpu.gpus.length} showZero style={{ backgroundColor: '#52c41a' }} />
+            )}
+          </Space>
+        }
+        extra={
+          <Tooltip title={t('polling.every2s')}>
+            <Tag color="processing">Auto-polling</Tag>
+          </Tooltip>
+        }
+      >
         <GpuTelemetry />
       </Card>
 
-      <Card title={t('logs.title')}>
+      <Card 
+        title={
+          <Space>
+            <span>{t('logs.title')}</span>
+            <Tag color="cyan">Real-time</Tag>
+          </Space>
+        }
+        styles={{ body: { padding: 0 } }}
+      >
         <LogsViewer url={logUrl} persistKey={`run_${id}_logs`} />
       </Card>
     </Space>

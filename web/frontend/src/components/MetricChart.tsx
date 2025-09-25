@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Space, Switch, Tooltip, Slider, Select, Button } from 'antd'
 import AutoResizeEChart from './AutoResizeEChart'
+import { useSettings } from '../contexts/SettingsContext'
 
-export default function MetricChart({ metrics, xKey, yKeys, title, height = 360, persistKey, group }: { metrics: { columns: string[]; rows: any[] }, xKey: string, yKeys: string[], title: string, height?: number | string, persistKey?: string, group?: string }) {
+export default function MetricChart({ metrics, xKey, yKeys, title, height, persistKey, group }: { metrics: { columns: string[]; rows: any[] }, xKey: string, yKeys: string[], title: string, height?: number | string, persistKey?: string, group?: string }) {
+  const { settings } = useSettings()
+  
+  // Use settings-based height if not explicitly provided
+  const effectiveHeight = height ?? settings.defaultChartHeight
   const [useLog, setUseLog] = useState(false)
   const [dynamicScale, setDynamicScale] = useState(true)
   const [smoothing, setSmoothing] = useState(0) // EMA alpha in [0, 0.95]
@@ -118,7 +123,7 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height = 360,
         connectNulls: true,
         sampling: 'lttb',
         large: true,
-        data: dataVals,
+        data: dataVals.slice(0, settings.maxDataPoints), // Limit data points
         markPoint: bp ? { data: [{ type: bp, name: bp === 'max' ? 'Best (max)' : 'Best (min)' }], symbolSize: 60 } : undefined,
       }
       if (k === yKeys[0]) {
@@ -128,12 +133,26 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height = 360,
       return s
     })
     return {
-      title: { text: title },
+      title: { 
+        text: title,
+        left: 'center',
+        top: 8,
+        textStyle: {
+          fontSize: 14,
+          fontWeight: 'bold'
+        }
+      },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
-      legend: { data: yKeys },
+      legend: { data: yKeys, top: 32 },
       xAxis: { type: 'category', data: x },
       yAxis: { type: useLog ? 'log' : 'value', scale: dynamicScale, min: dynamicScale ? 'dataMin' : 0 },
-      grid: { left: 40, right: 20, top: 40, bottom: 72 },
+      grid: { 
+        left: 50, 
+        right: 30, 
+        top: yKeys.length > 1 ? 60 : 50, 
+        bottom: 72,
+        show: settings.showGridLines
+      },
       dataZoom: [
         { type: 'inside', throttle: 50 },
         { type: 'slider', height: 18, bottom: 36 }
@@ -146,8 +165,11 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height = 360,
         right: 10
       },
       series,
+      // Global animation settings
+      animation: settings.enableChartAnimations,
+      animationDuration: settings.enableChartAnimations ? 1000 : 0,
     }
-  }, [metrics, xKey, xAxisKey, yKeys, title, useLog, dynamicScale, smoothing, presentCols])
+  }, [metrics, xKey, xAxisKey, yKeys, title, useLog, dynamicScale, smoothing, presentCols, settings.enableChartAnimations, settings.maxDataPoints, settings.showGridLines])
 
   const exportCsv = () => {
     try {
@@ -199,8 +221,11 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height = 360,
         </Tooltip>
         <Button size="small" onClick={exportCsv}>Export CSV</Button>
       </Space>
-      <div style={{ height: height as any, width: '100%' }}>
-        <AutoResizeEChart option={option as any} group={group} />
+      <div style={{ height: effectiveHeight as any, width: '100%' }}>
+        <AutoResizeEChart 
+          option={option as any} 
+          group={group} 
+        />
       </div>
     </div>
   )

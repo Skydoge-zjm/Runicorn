@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runicorn"
-version = "0.2.7"
+version = "0.3.0"
 description = "Local, open-source experiment tracking and visualization (a simple, self-hosted alternative to W&B)"
 readme = "README.md"
 authors = [{ name = "Runicorn Authors" }]
@@ -36,6 +36,8 @@ dependencies = [
   "aiofiles>=23,<24",
   "filelock>=3.12",
   "paramiko>=3.3,<4",
+  "python-multipart>=0.0.9,<0.0.10",
+  "psutil>=5.8.0",
 ]
 
 [project.optional-dependencies]

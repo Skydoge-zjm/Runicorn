@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -11,6 +12,9 @@ import stat as statmod
 from typing import Dict, List, Optional, Tuple
 
 import paramiko
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 
 class SSHSession:
@@ -51,39 +55,67 @@ class SSHSession:
             kwargs["password"] = self.password
         pkey = None
         if self.pkey_str:
+            # Try RSA key first (most common)
             try:
                 pkey = paramiko.RSAKey.from_private_key(file_obj=StringIO(self.pkey_str), password=self.passphrase)
-            except Exception:
+                logger.debug(f"Successfully parsed RSA key for {self.username}@{self.host}")
+            except (paramiko.SSHException, ValueError) as e:
+                logger.debug(f"RSA key parse failed: {e}, trying Ed25519...")
                 try:
                     pkey = paramiko.Ed25519Key.from_private_key(file_obj=StringIO(self.pkey_str), password=self.passphrase)
-                except Exception:
-                    pass
+                    logger.debug(f"Successfully parsed Ed25519 key for {self.username}@{self.host}")
+                except (paramiko.SSHException, ValueError) as e2:
+                    logger.error(f"Failed to parse private key: RSA error: {e}, Ed25519 error: {e2}")
+                    raise paramiko.AuthenticationException(f"Invalid private key format")
         elif self.pkey_path:
             p = Path(self.pkey_path).expanduser()
             if p.exists():
                 try:
                     pkey = paramiko.RSAKey.from_private_key_file(str(p), password=self.passphrase)
-                except Exception:
+                    logger.debug(f"Successfully loaded RSA key from {p}")
+                except (paramiko.SSHException, ValueError, IOError) as e:
+                    logger.debug(f"RSA key load failed: {e}, trying Ed25519...")
                     try:
                         pkey = paramiko.Ed25519Key.from_private_key_file(str(p), password=self.passphrase)
-                    except Exception:
-                        pass
+                        logger.debug(f"Successfully loaded Ed25519 key from {p}")
+                    except (paramiko.SSHException, ValueError, IOError) as e2:
+                        logger.error(f"Failed to load private key from {p}: RSA error: {e}, Ed25519 error: {e2}")
+                        raise paramiko.AuthenticationException(f"Cannot read private key file: {p}")
         if pkey is not None:
             kwargs["pkey"] = pkey
 
-        client.connect(**kwargs)
-        self.client = client
-        self.sftp = client.open_sftp()
+        try:
+            client.connect(**kwargs)
+            self.client = client
+            self.sftp = client.open_sftp()
+            logger.info(f"Successfully connected to {self.username}@{self.host}:{self.port}")
+        except paramiko.AuthenticationException as e:
+            logger.error(f"Authentication failed for {self.username}@{self.host}: {e}")
+            raise
+        except paramiko.SSHException as e:
+            logger.error(f"SSH connection failed to {self.host}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error connecting to {self.host}: {e}")
+            raise paramiko.SSHException(f"Connection failed: {e}")
 
-    def close(self):
+    def close(self) -> None:
+        """Close SSH connection and SFTP channel gracefully."""
         try:
             if self.sftp:
                 self.sftp.close()
+                logger.debug(f"SFTP connection closed for {self.id}")
+        except Exception as e:
+            logger.warning(f"Error closing SFTP: {e}")
         finally:
             self.sftp = None
+        
         try:
             if self.client:
                 self.client.close()
+                logger.debug(f"SSH connection closed for {self.id}")
+        except Exception as e:
+            logger.warning(f"Error closing SSH client: {e}")
         finally:
             self.client = None
 

@@ -6,17 +6,30 @@
 
 [English](README.md) | **简体中文**
 
-
 <p align="center">
   <img src="docs/picture/icon.jpg" alt="Runicorn logo" width="360" />
 </p>
 
-本地、开源的实验追踪与可视化工具，100% 离线。轻量、零侵入，是 W&B 的自托管替代方案。
+本地、开源的实验追踪与可视化工具，100% 离线。专业的机器学习实验管理平台，现代化的 W&B 自托管替代方案。
 
-- 包名称：`runicorn`
-- 查看器：只读（Read-only），从本地存储读取指标、日志，支持多个实验的图表叠加阅读
-- 远程 SSH 实时同步：将 Linux 服务器上的运行镜像到本地存储
-- GPU 面板：如果系统存在 `nvidia-smi` 则可显示
+## ✨ v0.3.0 新特性
+
+- 🎯 **通用最佳指标系统** - 自定义主要指标，自动追踪最优值
+- 🗑️ **软删除和回收站** - 安全的实验管理，支持误删恢复  
+- 🛡️ **智能状态检测** - 自动检测程序崩溃和中断状态
+- 🎨 **现代设置界面** - 分栏设置，全面自定义选项
+- 📱 **响应式设计** - 完美适配任何屏幕尺寸
+- 🌍 **完整国际化** - 中英文完全支持
+- 📊 **增强实验管理** - 标签、搜索、批量操作
+- 🔧 **高级功能** - 环境追踪、多格式导出、异常检测
+
+## 核心功能
+
+- **Python包**: `runicorn` - 通用SDK，支持任何ML框架
+- **Web查看器**: 实时图表界面和实验对比功能
+- **远程同步**: Linux服务器实时SSH镜像
+- **桌面应用**: Windows原生应用，自动后端启动
+- **GPU监控**: 实时GPU遥测（需要`nvidia-smi`）
 
 <p align="center">
   <img src="docs/picture/p1.png" alt="Runicorn 界面示例 1" width="49%" />
@@ -33,13 +46,28 @@
 
 ## 特性
 
+### 🏠 **本地安全**
 - 100% 本地，数据只存储在你的机器上
-- 只读 Viewer（FastAPI），对训练过程零侵入
-- UI 资源打包进 wheel，安装后可离线使用
-- 支持“步/时间”双横轴、阶段分隔线（stage）、实时日志（WebSocket）
-- 可选 GPU 面板（依赖 `nvidia-smi`）
-- 用户级根目录 + 项目/实验层级组织
-- 同一实验下的多运行叠加展示（对比不同 run 的同一指标）
+- 零遥测，完全隐私保护
+- 安装后可完全离线使用
+
+### 🎯 **智能实验追踪**
+- **通用最佳指标** - 自定义主要指标，自动追踪最优值
+- **智能状态检测** - 自动检测程序崩溃和中断状态
+- **软删除和回收站** - 安全的实验管理，支持误删恢复
+- **环境自动捕获** - 自动记录Git信息、依赖项、系统规格
+
+### 📊 **高级可视化**
+- **多运行对比** - 在单个图表上叠加多个实验
+- **响应式图表** - 适配任何屏幕尺寸的自适应布局
+- **实时更新** - 通过WebSocket实现实时日志和GPU监控
+- **多种导出格式** - CSV、Excel、TensorBoard、Markdown报告
+
+### 🎨 **现代界面**
+- **分栏设置** - 全面自定义选项，实时预览
+- **多语言支持** - 完整的中英文国际化
+- **玻璃拟态界面** - 美观的现代设计，可定制主题
+- **智能布局** - 自动响应式设计
 
 ## 安装
 
@@ -76,21 +104,67 @@ runicorn viewer --host 127.0.0.1 --port 8000
   - 该配置信息会写入到 `%APPDATA%\Runicorn\config.json`，也可以直接修改该文件。
 
 ### 使用示例
+
 ```python
 import runicorn as rn
 import math, random
 
-# 指定项目与实验名；默认写入用户级根目录
-run = rn.init(project="demo", name="exp1")
+# 初始化实验，自动捕获环境信息
+run = rn.init(project="demo", name="exp1", capture_env=True)
 
-stages = ["warmup", "train"]
+# 设置主要指标，系统自动追踪最优值
+rn.set_primary_metric("accuracy", mode="max")  # 或 mode="min" 用于loss
+
+stages = ["warmup", "train", "eval"]
 for i in range(1, 101):
-    stage = stages[min((i - 1) // 50, len(stages) - 1)]
+    stage = stages[min((i - 1) // 33, len(stages) - 1)]
+    
+    # 模拟训练指标
     loss = max(0.02, 2.0 * math.exp(-0.02 * i) + random.uniform(-0.02, 0.02))
-    rn.log({"loss": round(loss, 4)}, stage=stage)
+    accuracy = min(95.0, 60 + i * 0.3 + random.uniform(-2, 2))
+    
+    # 记录指标 - 最佳准确率将被自动追踪
+    rn.log({
+        "loss": round(loss, 4),
+        "accuracy": round(accuracy, 2),
+        "learning_rate": 0.001 * (0.95 ** i)
+    }, stage=stage)
 
-rn.summary({"best_val_acc_top1": 77.3})
-rn.finish()
+# 摘要指标
+rn.summary({
+    "final_accuracy": 92.1,
+    "total_epochs": 100,
+    "notes": "改进架构的基线模型"
+})
+
+rn.finish()  # 最佳指标自动保存
+```
+
+### 高级功能
+
+```python
+# 异常处理（自动）
+try:
+    # 你的训练代码
+    train_model()
+    rn.finish("finished")
+except Exception as e:
+    rn.finish("failed")  # 状态正确更新
+
+# 环境追踪
+run = rn.init(project="研究", name="实验_v2", capture_env=True)
+# 自动捕获：Git信息、依赖项、系统规格
+
+# 监控和告警（可选）
+if hasattr(rn, 'MetricMonitor'):
+    monitor = rn.MetricMonitor()
+    # 自动检测NaN/Inf值和训练问题
+
+# 数据导出（可选）
+if hasattr(rn, 'MetricsExporter'):
+    exporter = rn.MetricsExporter(run.run_dir)
+    exporter.to_excel("results.xlsx", include_charts=True)
+    exporter.generate_report("report.md", format="markdown")
 ```
 
 可选：显式覆盖存储根目录
@@ -100,7 +174,8 @@ run = rn.init(project="demo", name="exp1", storage="E:\\RunicornData")
 存储根目录的优先级（从高到低）：
   1. `runicorn.init(storage=...)`
   2. 环境变量 `RUNICORN_DIR`
-  3. 全局配置 `user_root_dir`（`runicorn config` 设置）
+  3. 全局配置 `user_root_dir`（通过 `runicorn config` 或Web界面设置）
+
 
 ## 远程同步
 

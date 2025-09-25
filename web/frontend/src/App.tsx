@@ -1,25 +1,34 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { UnorderedListOutlined, SettingOutlined, CloudSyncOutlined } from '@ant-design/icons'
-import RunsPage from './pages/RunsPage'
+import { SettingOutlined, CloudSyncOutlined, ExperimentOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
 import RemoteSyncPage from './pages/RemoteSyncPage'
+import ExperimentPage from './pages/ExperimentPage'
 import { health, getConfig } from './api'
 import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
+import { SettingsProvider } from './contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
 
 const { Header, Content, Footer } = Layout
 
 export default function App() {
   const location = useLocation()
-  const selected = [location.pathname.startsWith('/remote') ? 'remote' : 'runs']
+  const getSelectedKey = () => {
+    if (location.pathname.startsWith('/remote')) return 'remote'
+    if (location.pathname.startsWith('/runs/')) return 'experiments'  // Detail page also under experiments
+    return 'experiments'  // Default to experiments
+  }
+  const selected = [getSelectedKey()]
   const { t, i18n } = useTranslation()
   // UI Settings with persistence
   const defaultSettings: UiSettings = {
+    // Appearance
     themeMode: 'auto',
     accentColor: '#1677ff',
     density: 'default',
+    
+    // Layout & Visual Effects
     glass: true,
     backgroundType: 'gradient',
     backgroundImageUrl: '',
@@ -27,6 +36,18 @@ export default function App() {
     backgroundColor: '#0b1220',
     backgroundOpacity: 0.9,
     backgroundBlur: 8,
+    
+    // Performance & Behavior
+    autoRefresh: true,
+    refreshInterval: 5,
+    animationsEnabled: true,
+    enableSounds: false,
+    
+    // Charts & Data Display
+    defaultChartHeight: 320,
+    showGridLines: true,
+    enableChartAnimations: true,
+    maxDataPoints: 1000,
   }
   const [settings, setSettings] = useState<UiSettings>(() => {
     try {
@@ -84,18 +105,26 @@ export default function App() {
   }, [settings.backgroundType, settings.backgroundImageUrl, settings.backgroundGradient, settings.backgroundColor, settings.backgroundOpacity])
 
   const wrapperStyle = useMemo<React.CSSProperties>(() => {
+    const baseStyle: React.CSSProperties = {
+      borderRadius: 8,
+      transition: settings.animationsEnabled ? 'all 0.3s ease' : 'none',
+    }
+    
     if (settings.glass) {
       const bg = isDark ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.6)'
       return {
+        ...baseStyle,
         background: bg,
         backdropFilter: `blur(${settings.backgroundBlur}px)`,
         WebkitBackdropFilter: `blur(${settings.backgroundBlur}px)`,
-        borderRadius: 8,
         boxShadow: isDark ? '0 4px 30px rgba(0,0,0,0.3)' : '0 4px 30px rgba(0,0,0,0.1)'
       }
     }
-    return { background: isDark ? '#111a2c' : '#fff', borderRadius: 8 }
-  }, [settings.glass, settings.backgroundBlur, isDark])
+    return { 
+      ...baseStyle,
+      background: isDark ? '#111a2c' : '#fff' 
+    }
+  }, [settings.glass, settings.backgroundBlur, settings.animationsEnabled, isDark])
 
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -118,53 +147,68 @@ export default function App() {
       try { await health(); if (active) setApiStatus('ok') } catch { if (active) setApiStatus('down') }
     }
     ping()
-    const t = setInterval(ping, 5000)
+    // Use user-configured refresh interval (convert to milliseconds)
+    const interval = (settings.autoRefresh ? settings.refreshInterval : 5) * 1000
+    const t = setInterval(ping, interval)
     return () => { active = false; clearInterval(t) }
-  }, [])
+  }, [settings.autoRefresh, settings.refreshInterval])
 
   return (
-    <ConfigProvider theme={{ algorithm: algorithms as any, token: tokenOverrides }}>
-      <div style={bgStyle} />
-      <Layout style={{ minHeight: '100vh', position: 'relative', zIndex: 1, background: 'transparent' }}>
-        <Header style={{ display: 'flex', alignItems: 'center' }}>
-          <div style={{ color: '#fff', fontWeight: 700, marginRight: 24 }}>{t('app.title')}</div>
-          <Menu
-            theme="dark"
-            mode="horizontal"
-            selectedKeys={selected}
-            items={[
-              { key: 'runs', icon: <UnorderedListOutlined />, label: <Link to="/runs">{t('menu.runs')}</Link> },
-              { key: 'remote', icon: <CloudSyncOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
-            ]}
-            style={{ flex: 1, minWidth: 0 }}
-          />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {apiStatus === 'ok' && <Tag color="green">{t('tag.api_ok')}</Tag>}
-            {apiStatus === 'loading' && <Tag color="processing">{t('tag.api_loading')}</Tag>}
-            {apiStatus === 'down' && <Tag>{t('tag.api_down')}</Tag>}
-            <Select
-              size="small"
-              value={i18n.language?.startsWith('zh') ? 'zh' : 'en'}
-              onChange={(lng) => i18n.changeLanguage(lng)}
-              style={{ width: 88 }}
-              options={[{ value: 'en', label: 'EN' }, { value: 'zh', label: '中文' }]}
+    <ConfigProvider theme={{ 
+      algorithm: algorithms as any, 
+      token: {
+        ...tokenOverrides,
+        motion: settings.animationsEnabled
+      }
+    }}>
+      <SettingsProvider value={{ settings, setSettings }}>
+        <div style={bgStyle} />
+        <Layout style={{ 
+          minHeight: '100vh', 
+          position: 'relative', 
+          zIndex: 1, 
+          background: 'transparent',
+          transition: settings.animationsEnabled ? 'all 0.3s ease' : 'none'
+        }}>
+          <Header style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ color: '#fff', fontWeight: 700, marginRight: 24 }}>{t('app.title')}</div>
+            <Menu
+              theme="dark"
+              mode="horizontal"
+              selectedKeys={selected}
+              items={[
+                { key: 'experiments', icon: <ExperimentOutlined />, label: <Link to="/">{t('menu.experiments')}</Link> },
+                { key: 'remote', icon: <CloudSyncOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
+              ]}
+              style={{ flex: 1, minWidth: 0 }}
             />
-            <Button type="link" icon={<SettingOutlined style={{ color: '#fff' }} />} onClick={() => setSettingsOpen(true)} />
-          </div>
-        </Header>
-        <Content style={{ padding: '24px' }}>
-          <div style={{ ...wrapperStyle, padding: 24, minHeight: 360 }}>
-            <Routes>
-              <Route path="/" element={<RunsPage />} />
-              <Route path="/runs" element={<RunsPage />} />
-              <Route path="/runs/:id" element={<RunDetailPage />} />
-              <Route path="/remote" element={<RemoteSyncPage />} />
-            </Routes>
-          </div>
-        </Content>
-        <Footer style={{ textAlign: 'center' }}> {new Date().getFullYear()} {t('app.title')}</Footer>
-      </Layout>
-      <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} value={settings} onChange={setSettings} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {apiStatus === 'ok' && <Tag color="green">{t('tag.api_ok')}</Tag>}
+              {apiStatus === 'loading' && <Tag color="processing">{t('tag.api_loading')}</Tag>}
+              {apiStatus === 'down' && <Tag>{t('tag.api_down')}</Tag>}
+              <Select
+                size="small"
+                value={i18n.language?.startsWith('zh') ? 'zh' : 'en'}
+                onChange={(lng) => i18n.changeLanguage(lng)}
+                style={{ width: 88 }}
+                options={[{ value: 'en', label: 'EN' }, { value: 'zh', label: '中文' }]}
+              />
+              <Button type="link" icon={<SettingOutlined style={{ color: '#fff' }} />} onClick={() => setSettingsOpen(true)} />
+            </div>
+          </Header>
+          <Content style={{ padding: '24px' }}>
+            <div style={{ ...wrapperStyle, padding: 24, minHeight: 360 }}>
+              <Routes>
+                <Route path="/" element={<ExperimentPage />} />
+                <Route path="/runs/:id" element={<RunDetailPage />} />
+                <Route path="/remote" element={<RemoteSyncPage />} />
+              </Routes>
+            </div>
+          </Content>
+          <Footer style={{ textAlign: 'center' }}> {new Date().getFullYear()} {t('app.title')}</Footer>
+        </Layout>
+        <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} value={settings} onChange={setSettings} />
+      </SettingsProvider>
     </ConfigProvider>
   )
 }

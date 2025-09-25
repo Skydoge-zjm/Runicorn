@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import csv
 import json
+import logging
 import os
 import re
 import shutil
 import time
+import psutil
 from dataclasses import asdict, dataclass
 import tarfile
 import zipfile
@@ -23,6 +25,27 @@ from .config import get_user_root_dir, set_user_root_dir
 
 from .sdk import DEFAULT_DIRNAME, _default_storage_dir
 from . import ssh_sync
+
+# Setup logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Import new modules if available
+try:
+    from .experiment import ExperimentManager
+    HAS_EXPERIMENT_MANAGER = True
+except ImportError:
+    ExperimentManager = None
+    HAS_EXPERIMENT_MANAGER = False
+    logger.debug("ExperimentManager not available")
+
+try:
+    from .exporters import MetricsExporter
+    HAS_EXPORTER = True
+except ImportError:
+    MetricsExporter = None
+    HAS_EXPORTER = False
+    logger.debug("MetricsExporter not available")
 
 # ---------------- API models (module-level to avoid Pydantic forward-ref issues) ----------------
 
@@ -72,16 +95,93 @@ def _read_json(path: Path) -> Dict[str, Any]:
     except Exception:
         return {}
 
-def _debug_log(msg: str) -> None:
+def _is_process_alive(pid: Optional[int]) -> bool:
+    """Check if a process is still running."""
+    if pid is None:
+        return False
     try:
-        from .config import get_config_file_path
-        p = get_config_file_path().parent / "server_debug.log"
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with open(p, "a", encoding="utf-8") as f:
-            f.write(time.strftime("%H:%M:%S") + " | " + str(msg) + "\n")
+        return psutil.pid_exists(pid)
     except Exception:
-        # best-effort only
-        pass
+        # Fallback to basic method if psutil is not available
+        try:
+            if os.name == 'nt':  # Windows
+                import subprocess
+                result = subprocess.run(['tasklist', '/FI', f'PID eq {pid}'], 
+                                      capture_output=True, text=True, timeout=5)
+                return str(pid) in result.stdout
+            else:  # Unix/Linux
+                os.kill(pid, 0)  # Signal 0 just checks if process exists
+                return True
+        except (OSError, subprocess.SubprocessError, ProcessLookupError):
+            return False
+        except Exception:
+            return False
+
+def _update_status_if_process_dead(run_dir: Path) -> None:
+    """Update run status to 'failed' if the process is no longer running."""
+    try:
+        meta_path = run_dir / "meta.json"
+        status_path = run_dir / "status.json"
+        
+        if not meta_path.exists() or not status_path.exists():
+            return
+        
+        meta = _read_json(meta_path)
+        status = _read_json(status_path)
+        
+        # Only check if status is currently "running"
+        if status.get("status") != "running":
+            return
+        
+        pid = meta.get("pid")
+        if pid and not _is_process_alive(pid):
+            # Process is dead, mark as failed
+            status.update({
+                "status": "failed",
+                "ended_at": _ts(),
+                "exit_reason": "process_not_found"
+            })
+            status_path.write_text(
+                json.dumps(status, ensure_ascii=False, indent=2), 
+                encoding="utf-8"
+            )
+            logger.info(f"Run {run_dir.name} marked as failed (PID {pid} not found)")
+    except Exception as e:
+        logger.debug(f"Failed to update status for {run_dir.name}: {e}")
+
+async def _periodic_status_check(root: Path) -> None:
+    """Periodically check and update status of running experiments."""
+    while True:
+        try:
+            # Check all running experiments
+            for e in _iter_all_runs(root):
+                d = e.dir
+                status = _read_json(d / "status.json")
+                if status.get("status") == "running":
+                    _update_status_if_process_dead(d)
+            
+            # Wait 30 seconds before next check
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            logger.info("Status check task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Status check task error: {e}")
+            await asyncio.sleep(30)  # Continue checking despite errors
+
+def _setup_logging() -> None:
+    """Setup logging configuration for the viewer module."""
+    # Configure logging format
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # Add console handler if not already configured
+    if not logger.handlers:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
 
 
 def _list_run_dirs_legacy(root: Path) -> List[Path]:
@@ -98,11 +198,47 @@ class RunEntry:
     dir: Path
 
 
-def _iter_all_runs(root: Path) -> List[RunEntry]:
+def _is_run_deleted(run_dir: Path) -> bool:
+    """Check if a run is marked as deleted."""
+    return (run_dir / ".deleted").exists()
+
+def _soft_delete_run(run_dir: Path, reason: str = "user_deleted") -> bool:
+    """Mark a run as deleted by creating .deleted marker file."""
+    try:
+        deleted_info = {
+            "deleted_at": _ts(),
+            "reason": reason,
+            "original_status": _read_json(run_dir / "status.json").get("status", "unknown")
+        }
+        deleted_file = run_dir / ".deleted"
+        deleted_file.write_text(json.dumps(deleted_info, ensure_ascii=False, indent=2), encoding="utf-8")
+        logger.info(f"Soft deleted run: {run_dir.name}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to soft delete run {run_dir.name}: {e}")
+        return False
+
+def _restore_run(run_dir: Path) -> bool:
+    """Restore a soft-deleted run by removing .deleted marker."""
+    try:
+        deleted_file = run_dir / ".deleted"
+        if deleted_file.exists():
+            deleted_file.unlink()
+            logger.info(f"Restored run: {run_dir.name}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Failed to restore run {run_dir.name}: {e}")
+        return False
+
+def _iter_all_runs(root: Path, include_deleted: bool = False) -> List[RunEntry]:
     """Discover runs in both new and legacy layouts.
 
     New:   root/<project>/<name>/runs/<run_id>
     Legacy:root/runs/<run_id>
+    
+    Args:
+        include_deleted: If False, filter out soft-deleted runs
     """
     entries: List[RunEntry] = []
     # New layout: project/name/runs/*
@@ -116,12 +252,18 @@ def _iter_all_runs(root: Path) -> List[RunEntry]:
                 if not runs_dir.exists():
                     continue
                 for rd in sorted([p for p in runs_dir.iterdir() if p.is_dir()], key=lambda p: p.stat().st_mtime, reverse=True):
+                    # Filter out soft-deleted runs unless explicitly requested
+                    if not include_deleted and _is_run_deleted(rd):
+                        continue
                     entries.append(RunEntry(project=proj.name, name=name.name, dir=rd))
     except Exception:
         pass
     # Legacy layout fallback
     try:
         for rd in _list_run_dirs_legacy(root):
+            # Filter out soft-deleted runs unless explicitly requested
+            if not include_deleted and _is_run_deleted(rd):
+                continue
             # project/name can be inferred from meta.json if present; leave None here
             entries.append(RunEntry(project=None, name=None, dir=rd))
     except Exception:
@@ -129,8 +271,8 @@ def _iter_all_runs(root: Path) -> List[RunEntry]:
     return entries
 
 
-def _find_run_dir_by_id(root: Path, run_id: str) -> Optional[RunEntry]:
-    for e in _iter_all_runs(root):
+def _find_run_dir_by_id(root: Path, run_id: str, include_deleted: bool = False) -> Optional[RunEntry]:
+    for e in _iter_all_runs(root, include_deleted=include_deleted):
         if e.dir.name == run_id:
             return e
     return None
@@ -144,7 +286,8 @@ class RunListItem(BaseModel):
     created_time: Optional[float]
     status: str
     pid: Optional[int] = None
-    best_val_acc_top1: Optional[float] = None
+    best_metric_value: Optional[float] = None
+    best_metric_name: Optional[str] = None
     project: Optional[str] = None
     name: Optional[str] = None
 
@@ -171,6 +314,16 @@ def _iter_events(events_path: Path) -> Iterator[Dict[str, Any]]:
 
 
 def _aggregate_step_metrics(events_path: Path) -> Tuple[List[str], List[Dict[str, Any]]]:
+    """Aggregate step metrics from events file, handling NaN and Inf values."""
+    import math
+    
+    def sanitize_value(v):
+        """Convert NaN/Inf to None for JSON compatibility."""
+        if isinstance(v, float):
+            if math.isnan(v) or math.isinf(v):
+                return None
+        return v
+    
     # Use 'global_step' if present; otherwise fall back to 'step'.
     # Merge multiple events at the same step into a single row to avoid duplicate x-axis
     # categories (which can cause apparent "jumps" for dense series when sparse series are interleaved).
@@ -197,7 +350,7 @@ def _aggregate_step_metrics(events_path: Path) -> Tuple[List[str], List[Dict[str
             if kk in ("global_step", "step", "epoch"):
                 continue
             if isinstance(vv, (int, float, str)) or vv is None:
-                row[kk] = vv  # last write wins for the same key at the same step
+                row[kk] = sanitize_value(vv)  # Sanitize NaN/Inf values
                 keys.add(kk)
     if not step_rows:
         return [], []
@@ -291,8 +444,9 @@ def _read_gpu_telemetry() -> dict:
 
 def create_app(storage: Optional[str] = None) -> FastAPI:
     root = _storage_root(storage)
-
-    app = FastAPI(title="Runicorn Viewer API", version="0.1.0")
+    # Initialize logging
+    _setup_logging()
+    app = FastAPI(title="Runicorn Viewer", version="0.3.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*", "http://localhost:5173", "http://127.0.0.1:5173"],
@@ -300,10 +454,171 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    # Background task to check process status
+    _status_check_task = None
+    
+    @app.on_event("startup")
+    async def startup_event():
+        """Start background status checking task."""
+        nonlocal _status_check_task
+        _status_check_task = asyncio.create_task(_periodic_status_check(root))
+        logger.info("Started background process status checker")
+    
+    @app.on_event("shutdown") 
+    async def shutdown_event():
+        """Stop background status checking task."""
+        if _status_check_task:
+            _status_check_task.cancel()
+            try:
+                await _status_check_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Stopped background process status checker")
 
     @app.get("/api/health")
     async def health():
         return {"status": "ok", "storage": str(root)}
+    
+    @app.post("/api/status/check")
+    async def check_all_status():
+        """Manually trigger status check for all running experiments."""
+        checked_count = 0
+        updated_count = 0
+        
+        for e in _iter_all_runs(root):
+            d = e.dir
+            status = _read_json(d / "status.json")
+            if status.get("status") == "running":
+                checked_count += 1
+                # Store original status for comparison
+                original_status = status.copy()
+                _update_status_if_process_dead(d)
+                # Re-read to see if it changed
+                new_status = _read_json(d / "status.json")
+                if new_status.get("status") != original_status.get("status"):
+                    updated_count += 1
+        
+        return {
+            "checked": checked_count,
+            "updated": updated_count,
+            "message": f"Checked {checked_count} running experiments, updated {updated_count} statuses"
+        }
+    
+    @app.post("/api/runs/soft-delete")
+    async def soft_delete_runs(payload: Dict[str, Any] = Body(...)):
+        """Soft delete runs (move to recycle bin)."""
+        run_ids = payload.get("run_ids", [])
+        if not run_ids or not isinstance(run_ids, list):
+            raise HTTPException(status_code=400, detail="run_ids is required and must be a list")
+        
+        results = {}
+        for run_id in run_ids:
+            entry = _find_run_dir_by_id(root, run_id)
+            if not entry:
+                results[run_id] = {"success": False, "error": "run not found"}
+                continue
+            
+            # Check if already deleted
+            if _is_run_deleted(entry.dir):
+                results[run_id] = {"success": False, "error": "already deleted"}
+                continue
+            
+            success = _soft_delete_run(entry.dir, "user_deleted")
+            results[run_id] = {"success": success}
+        
+        successful_deletes = sum(1 for r in results.values() if r["success"])
+        return {
+            "deleted_count": successful_deletes,
+            "results": results,
+            "message": f"Soft deleted {successful_deletes} of {len(run_ids)} runs"
+        }
+    
+    @app.get("/api/recycle-bin")
+    async def list_deleted_runs():
+        """List runs in recycle bin (soft deleted)."""
+        items: List[Dict[str, Any]] = []
+        for e in _iter_all_runs(root, include_deleted=True):
+            if not _is_run_deleted(e.dir):
+                continue  # Only show deleted runs
+            
+            d = e.dir
+            rid = d.name
+            meta = _read_json(d / "meta.json") 
+            deleted_info = _read_json(d / ".deleted")
+            
+            proj = (meta.get("project") if isinstance(meta, dict) else None) or e.project
+            name = (meta.get("name") if isinstance(meta, dict) else None) or e.name
+            created = meta.get("created_at") if isinstance(meta, dict) else None
+            if not isinstance(created, (int, float)):
+                try:
+                    created = d.stat().st_mtime
+                except Exception:
+                    created = None
+            
+            items.append({
+                "id": rid,
+                "project": proj,
+                "name": name,
+                "created_time": created,
+                "deleted_at": deleted_info.get("deleted_at"),
+                "delete_reason": deleted_info.get("reason", "unknown"),
+                "original_status": deleted_info.get("original_status", "unknown"),
+                "run_dir": str(d)
+            })
+        
+        return {"deleted_runs": items}
+    
+    @app.post("/api/recycle-bin/restore")
+    async def restore_runs(payload: Dict[str, Any] = Body(...)):
+        """Restore runs from recycle bin."""
+        run_ids = payload.get("run_ids", [])
+        if not run_ids or not isinstance(run_ids, list):
+            raise HTTPException(status_code=400, detail="run_ids is required and must be a list")
+        
+        results = {}
+        for run_id in run_ids:
+            entry = _find_run_dir_by_id(root, run_id, include_deleted=True)
+            if not entry:
+                results[run_id] = {"success": False, "error": "run not found"}
+                continue
+            
+            if not _is_run_deleted(entry.dir):
+                results[run_id] = {"success": False, "error": "run not deleted"}
+                continue
+            
+            success = _restore_run(entry.dir)
+            results[run_id] = {"success": success}
+        
+        successful_restores = sum(1 for r in results.values() if r["success"])
+        return {
+            "restored_count": successful_restores,
+            "results": results,
+            "message": f"Restored {successful_restores} of {len(run_ids)} runs"
+        }
+    
+    @app.post("/api/recycle-bin/empty")
+    async def empty_recycle_bin(payload: Dict[str, Any] = Body(...)):
+        """Permanently delete all runs in recycle bin."""
+        confirm = payload.get("confirm", False)
+        if not confirm:
+            raise HTTPException(status_code=400, detail="Must set confirm=true to permanently delete")
+        
+        deleted_count = 0
+        for e in _iter_all_runs(root, include_deleted=True):
+            if _is_run_deleted(e.dir):
+                try:
+                    import shutil
+                    shutil.rmtree(e.dir)
+                    deleted_count += 1
+                    logger.info(f"Permanently deleted run: {e.dir.name}")
+                except Exception as e:
+                    logger.error(f"Failed to permanently delete {e.dir.name}: {e}")
+        
+        return {
+            "permanently_deleted": deleted_count,
+            "message": f"Permanently deleted {deleted_count} runs"
+        }
 
     @app.get("/api/runs", response_model=List[RunListItem])
     async def list_runs():
@@ -311,6 +626,10 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
         for e in _iter_all_runs(root):
             d = e.dir
             rid = d.name
+            
+            # Check and update process status if needed
+            _update_status_if_process_dead(d)
+            
             meta = _read_json(d / "meta.json")
             status = _read_json(d / "status.json")
             summ = _read_json(d / "summary.json")
@@ -322,6 +641,13 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                     created = None
             proj = (meta.get("project") if isinstance(meta, dict) else None) or e.project
             name = (meta.get("name") if isinstance(meta, dict) else None) or e.name
+            # Get best metric info from summary
+            best_metric_value = None
+            best_metric_name = None
+            if isinstance(summ, dict):
+                best_metric_value = summ.get("best_metric_value")
+                best_metric_name = summ.get("best_metric_name")
+            
             items.append(
                 RunListItem(
                     id=rid,
@@ -329,7 +655,8 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                     created_time=created,
                     status=str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
                     pid=(meta.get("pid") if isinstance(meta, dict) else None),
-                    best_val_acc_top1=(summ.get("best_val_acc_top1") if isinstance(summ, dict) else None),
+                    best_metric_value=best_metric_value,
+                    best_metric_name=best_metric_name,
                     project=proj,
                     name=name,
                 )
@@ -342,6 +669,10 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
         if not entry:
             raise HTTPException(status_code=404, detail="run not found")
         d = entry.dir
+        
+        # Check and update process status if needed
+        _update_status_if_process_dead(d)
+        
         meta = _read_json(d / "meta.json")
         status = _read_json(d / "status.json")
         proj = (meta.get("project") if isinstance(meta, dict) else None) or entry.project
@@ -436,12 +767,12 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             # Accept plain dict to avoid model parsing edge-cases in frozen builds
             raw = payload.get("path") if isinstance(payload, dict) else None
             in_path = str(raw or "")
-            _debug_log(f"set_user_root called with path='{in_path}'")
+            logger.debug(f"set_user_root called with path='{in_path}'")
             # Expand env vars on all platforms (Windows: %VAR%, POSIX: $VAR)
             in_path = os.path.expandvars(in_path)
             p = set_user_root_dir(in_path)
         except Exception as e:
-            _debug_log(f"set_user_root_dir failed: {e}")
+            logger.error(f"set_user_root_dir failed: {e}")
             raise HTTPException(status_code=400, detail=f"invalid path or permission: {e}")
 
         try:
@@ -449,7 +780,7 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             # Passing it explicitly avoids racing on config read and prevents CWD fallback
             root = _storage_root(str(p))
         except Exception as e:
-            _debug_log(f"_storage_root reinit failed: {e}")
+            logger.error(f"_storage_root reinit failed: {e}")
             raise HTTPException(status_code=500, detail=f"failed to reinitialize storage root: {e}")
 
         return {
@@ -544,6 +875,162 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     @app.get("/api/ssh/mirror/list")
     async def ssh_mirror_list():
         return {"mirrors": ssh_sync.list_mirrors(), "storage": str(root)}
+    
+    # ---- Experiment Management ----
+    @app.post("/api/experiments/tag")
+    async def tag_experiment(payload: Dict[str, Any] = Body(...)):
+        """Add tags to an experiment."""
+        if not HAS_EXPERIMENT_MANAGER:
+            raise HTTPException(status_code=501, detail="Experiment management not available")
+        
+        run_id = payload.get("run_id")
+        tags = payload.get("tags", [])
+        append = payload.get("append", True)
+        
+        if not run_id:
+            raise HTTPException(status_code=400, detail="run_id is required")
+        
+        try:
+            manager = ExperimentManager(root)
+            success = manager.tag_experiment(run_id, tags, append)
+            return {"success": success}
+        except Exception as e:
+            logger.error(f"Failed to tag experiment: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/experiments/search")
+    async def search_experiments(
+        project: Optional[str] = None,
+        tags: Optional[str] = None,  # Comma-separated
+        text: Optional[str] = None,
+        archived: bool = False
+    ):
+        """Search experiments by various criteria."""
+        if not HAS_EXPERIMENT_MANAGER:
+            raise HTTPException(status_code=501, detail="Experiment management not available")
+        
+        try:
+            manager = ExperimentManager(root)
+            tag_list = tags.split(",") if tags else None
+            results = manager.search_experiments(
+                project=project,
+                tags=tag_list,
+                text=text,
+                archived=archived
+            )
+            return {"experiments": [r.to_dict() for r in results]}
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.delete("/api/experiments/delete")
+    async def delete_experiments(payload: Dict[str, Any] = Body(...)):
+        """Delete experiments."""
+        if not HAS_EXPERIMENT_MANAGER:
+            raise HTTPException(status_code=501, detail="Experiment management not available")
+        
+        run_ids = payload.get("run_ids", [])
+        force = payload.get("force", False)
+        
+        if not run_ids:
+            raise HTTPException(status_code=400, detail="run_ids are required")
+        
+        try:
+            manager = ExperimentManager(root)
+            results = manager.delete_experiments(run_ids, force)
+            return {"results": results}
+        except Exception as e:
+            logger.error(f"Delete failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    # ---- Data Export ----
+    @app.get("/api/export/{run_id}/csv")
+    async def export_csv(run_id: str):
+        """Export run metrics as CSV."""
+        if not HAS_EXPORTER:
+            raise HTTPException(status_code=501, detail="Export functionality not available")
+        
+        entry = _find_run_dir_by_id(root, run_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+        
+        try:
+            exporter = MetricsExporter(entry.dir)
+            csv_content = exporter.to_csv()
+            
+            if csv_content:
+                from fastapi.responses import Response
+                return Response(
+                    content=csv_content,
+                    media_type="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={run_id}_metrics.csv"}
+                )
+            else:
+                raise HTTPException(status_code=404, detail="No metrics to export")
+        except Exception as e:
+            logger.error(f"CSV export failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/export/{run_id}/report")
+    async def export_report(run_id: str, format: str = "markdown"):
+        """Generate experiment report."""
+        if not HAS_EXPORTER:
+            raise HTTPException(status_code=501, detail="Export functionality not available")
+        
+        if format not in ["markdown", "html"]:
+            raise HTTPException(status_code=400, detail="Format must be markdown or html")
+        
+        entry = _find_run_dir_by_id(root, run_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+        
+        try:
+            exporter = MetricsExporter(entry.dir)
+            import tempfile
+            
+            with tempfile.NamedTemporaryFile(mode='w', suffix=f'.{format}', delete=False) as f:
+                temp_path = Path(f.name)
+            
+            if format == "markdown":
+                success = exporter._generate_markdown_report(temp_path)
+            else:
+                success = exporter._generate_html_report(temp_path)
+            
+            if success and temp_path.exists():
+                content = temp_path.read_text(encoding='utf-8')
+                temp_path.unlink()  # Clean up temp file
+                
+                media_type = "text/markdown" if format == "markdown" else "text/html"
+                from fastapi.responses import Response
+                return Response(
+                    content=content,
+                    media_type=media_type,
+                    headers={"Content-Disposition": f"attachment; filename={run_id}_report.{format}"}
+                )
+            else:
+                raise HTTPException(status_code=500, detail="Report generation failed")
+        except Exception as e:
+            logger.error(f"Report generation failed: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    @app.get("/api/environment/{run_id}")
+    async def get_environment(run_id: str):
+        """Get environment information for a run."""
+        entry = _find_run_dir_by_id(root, run_id)
+        if not entry:
+            raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
+        
+        env_path = entry.dir / "environment.json"
+        if not env_path.exists():
+            return {"available": False}
+        
+        try:
+            with open(env_path, 'r', encoding='utf-8') as f:
+                env_data = json.load(f)
+            return {"available": True, "environment": env_data}
+        except Exception as e:
+            logger.error(f"Failed to load environment: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
     # ---- Offline import (zip/tar.gz) ----
     def _is_within_directory(base: Path, target: Path) -> bool:
@@ -730,6 +1217,10 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                 continue
             d = e.dir
             rid = d.name
+            
+            # Check and update process status if needed
+            _update_status_if_process_dead(d)
+            
             status = _read_json(d / "status.json")
             summ = _read_json(d / "summary.json")
             created = meta.get("created_at") if isinstance(meta, dict) else None
@@ -738,6 +1229,13 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                     created = d.stat().st_mtime
                 except Exception:
                     created = None
+            # Get best metric info from summary
+            best_metric_value = None
+            best_metric_name = None
+            if isinstance(summ, dict):
+                best_metric_value = summ.get("best_metric_value")
+                best_metric_name = summ.get("best_metric_name")
+            
             items.append(
                 RunListItem(
                     id=rid,
@@ -745,7 +1243,8 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                     created_time=created,
                     status=str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
                     pid=(meta.get("pid") if isinstance(meta, dict) else None),
-                    best_val_acc_top1=(summ.get("best_val_acc_top1") if isinstance(summ, dict) else None),
+                    best_metric_value=best_metric_value,
+                    best_metric_name=best_metric_name,
                     project=p,
                     name=n,
                 )

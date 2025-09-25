@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2025-09-25
+
+### 🎯 Major Features Added
+
+#### Universal Best Metric System
+- **NEW**: `rn.set_primary_metric(metric_name, mode="max|min")` - Set any metric as primary indicator
+- **NEW**: Automatic tracking of best values during training
+- **NEW**: Best metric display in experiment list with metric name and value
+
+#### Soft Delete & Recycle Bin
+- **NEW**: Safe experiment deletion - files preserved, can be restored
+- **NEW**: Recycle bin interface for managing deleted experiments
+- **NEW**: Batch restore and permanent deletion capabilities
+- **NEW**: `.deleted` marker files for soft delete implementation
+
+#### Smart Status Detection
+- **NEW**: Automatic detection of crashed/interrupted experiments
+- **NEW**: Process liveness checking using `psutil`
+- **NEW**: Background status checking task (30-second intervals)
+- **NEW**: Manual status check button in web interface
+- **NEW**: Support for `interrupted` status (Ctrl+C handling)
+
+### 🎨 Interface & UX Improvements
+
+#### Settings Interface
+- **NEW**: Tabbed settings interface (Appearance/Layout/Data/Performance)
+- **NEW**: Live preview for colors, backgrounds, and effects
+- **NEW**: Comprehensive customization options
+- **NEW**: Performance settings (auto-refresh intervals, chart heights)
+
+#### Responsive Design Enhancement
+- **NEW**: Adaptive chart layouts for different screen sizes
+- **NEW**: Smart column switching based on window width
+- **IMPROVED**: Chart title positioning to prevent overlap
+
+
 
 ## [0.2.7] - 2025-09-17
 

@@ -23,7 +23,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_viewer = sub.add_parser("viewer", help="Start the local read-only viewer API")
     p_viewer.add_argument("--storage", default=os.environ.get("RUNICORN_DIR") or None, help="Storage root directory; if omitted, uses global config or legacy ./.runicorn")
     p_viewer.add_argument("--host", default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
-    p_viewer.add_argument("--port", type=int, default=8000, help="Port to bind (default: 8000)")
+    p_viewer.add_argument("--port", type=int, default=23300, help="Port to bind (default: 23300)")
     p_viewer.add_argument("--reload", action="store_true", help="Enable auto-reload (dev only)")
 
     p_cfg = sub.add_parser("config", help="Manage Runicorn user configuration")
@@ -40,6 +40,24 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_imp = sub.add_parser("import", help="Import an archive (.zip/.tar.gz) of runs into storage")
     p_imp.add_argument("--storage", default=os.environ.get("RUNICORN_DIR") or None, help="Target storage root; if omitted, uses global config or legacy ./.runicorn")
     p_imp.add_argument("--archive", required=True, help="Path to the .zip or .tar.gz archive to import")
+    
+    # Export data subcommand
+    p_data = sub.add_parser("export-data", help="Export run metrics to CSV or Excel")
+    p_data.add_argument("--storage", default=os.environ.get("RUNICORN_DIR") or None, help="Storage root directory")
+    p_data.add_argument("--run-id", required=True, help="Run ID to export")
+    p_data.add_argument("--format", choices=["csv", "excel", "markdown", "html"], default="csv", help="Export format")
+    p_data.add_argument("--output", help="Output file path (default: auto-generated)")
+    
+    # Manage experiments subcommand
+    p_manage = sub.add_parser("manage", help="Manage experiments (tag, search, delete)")
+    p_manage.add_argument("--storage", default=os.environ.get("RUNICORN_DIR") or None, help="Storage root directory")
+    p_manage.add_argument("--action", choices=["tag", "search", "delete", "cleanup"], required=True, help="Management action")
+    p_manage.add_argument("--run-id", help="Run ID for tagging")
+    p_manage.add_argument("--tags", help="Comma-separated tags")
+    p_manage.add_argument("--project", help="Filter by project")
+    p_manage.add_argument("--text", help="Search text")
+    p_manage.add_argument("--days", type=int, default=30, help="Days for cleanup (default: 30)")
+    p_manage.add_argument("--dry-run", action="store_true", help="Preview cleanup without deleting")
 
     args = parser.parse_args(argv)
 
@@ -184,6 +202,116 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"Import failed: {e}")
             return 1
 
+    if args.cmd == "export-data":
+        root = _default_storage_dir(getattr(args, "storage", None))
+        run_id = args.run_id
+        format = args.format
+        output = args.output
+        
+        # Find run directory
+        from pathlib import Path
+        run_dir = None
+        
+        # Try new layout
+        for proj in root.iterdir():
+            if not proj.is_dir() or proj.name in ["runs", "webui"]:
+                continue
+            for exp in proj.iterdir():
+                if not exp.is_dir():
+                    continue
+                runs_dir = exp / "runs"
+                if runs_dir.exists():
+                    candidate = runs_dir / run_id
+                    if candidate.exists():
+                        run_dir = candidate
+                        break
+            if run_dir:
+                break
+        
+        # Try legacy layout
+        if not run_dir:
+            legacy = root / "runs" / run_id
+            if legacy.exists():
+                run_dir = legacy
+        
+        if not run_dir:
+            print(f"Run {run_id} not found")
+            return 1
+        
+        try:
+            from .exporters import MetricsExporter
+            exporter = MetricsExporter(run_dir)
+            
+            if format == "csv":
+                if output:
+                    exporter.to_csv(Path(output))
+                    print(f"Exported to {output}")
+                else:
+                    content = exporter.to_csv()
+                    if content:
+                        print(content)
+            elif format == "excel":
+                output = output or f"{run_id}_metrics.xlsx"
+                exporter.to_excel(Path(output))
+                print(f"Exported to {output}")
+            elif format in ["markdown", "html"]:
+                output = output or f"{run_id}_report.{format}"
+                exporter.generate_report(Path(output), format)
+                print(f"Report generated: {output}")
+            
+            return 0
+        except Exception as e:
+            print(f"Export failed: {e}")
+            return 1
+    
+    if args.cmd == "manage":
+        root = _default_storage_dir(getattr(args, "storage", None))
+        action = args.action
+        
+        try:
+            from .experiment import ExperimentManager
+            manager = ExperimentManager(root)
+            
+            if action == "tag":
+                if not args.run_id:
+                    print("--run-id is required for tagging")
+                    return 1
+                tags = args.tags.split(",") if args.tags else []
+                success = manager.tag_experiment(args.run_id, tags)
+                print(f"Tagged {args.run_id}: {success}")
+            
+            elif action == "search":
+                tags = args.tags.split(",") if args.tags else None
+                results = manager.search_experiments(
+                    project=args.project,
+                    tags=tags,
+                    text=args.text
+                )
+                print(f"Found {len(results)} experiments:")
+                for exp in results:
+                    print(f"  - {exp.id}: {exp.project}/{exp.name} [{', '.join(exp.tags)}]")
+            
+            elif action == "delete":
+                if not args.run_id:
+                    print("--run-id is required for deletion")
+                    return 1
+                results = manager.delete_experiments([args.run_id])
+                print(f"Deleted: {results}")
+            
+            elif action == "cleanup":
+                to_delete = manager.cleanup_old_experiments(args.days, args.dry_run)
+                if args.dry_run:
+                    print(f"Would delete {len(to_delete)} old experiments:")
+                    for run_id in to_delete:
+                        print(f"  - {run_id}")
+                else:
+                    print(f"Deleted {len(to_delete)} old experiments")
+            
+            return 0
+        except Exception as e:
+            print(f"Management failed: {e}")
+            return 1
+    
     parser.print_help()
     return 1
 

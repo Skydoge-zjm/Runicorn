@@ -343,7 +343,8 @@ class RunListItem(BaseModel):
     created_time: Optional[float]
     status: str
     pid: Optional[int]
-    best_val_acc_top1: Optional[float] = None
+    best_metric_value: Optional[float] = None
+    best_metric_name: Optional[str] = None
 
 
 @app.get("/api/runs", response_model=List[RunListItem])
@@ -354,28 +355,14 @@ async def list_runs():
         rid = d.name
         rec = RUNS.get(rid)
         status = "running" if rec and (rec.popen.poll() is None) else "finished"
-        best_acc = None
-        metrics = d / "log_files" / "metrics.csv"
-        if metrics.exists():
-            try:
-                with open(metrics, "r", encoding="utf-8") as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        val = row.get("val_acc_top1")
-                        if val:
-                            try:
-                                v = float(val)
-                                best_acc = v if best_acc is None else max(best_acc, v)
-                            except Exception:
-                                pass
-            except Exception:
-                pass
-        items.append(RunListItem(id=rid, run_dir=str(d), created_time=d.stat().st_mtime, status=status, pid=rec.pid if rec else None, best_val_acc_top1=best_acc))
+        # Note: This training backend should not implement hardcoded metric extraction
+        # Best metrics should be handled by the unified system through summary.json
+        items.append(RunListItem(id=rid, run_dir=str(d), created_time=d.stat().st_mtime, status=status, pid=rec.pid if rec else None, best_metric_value=None, best_metric_name=None))
     # Also include still-running processes that haven't created a run_dir yet
     for rid, rec in RUNS.items():
         if rec.run_dir is None:
             status = "running" if rec.popen.poll() is None else "finished"
-            items.append(RunListItem(id=rid, run_dir=None, created_time=rec.created_ts, status=status, pid=rec.pid))
+            items.append(RunListItem(id=rid, run_dir=None, created_time=rec.created_ts, status=status, pid=rec.pid, best_metric_value=None, best_metric_name=None))
     # Sort newest first
     items.sort(key=lambda x: x.created_time or 0, reverse=True)
     return items

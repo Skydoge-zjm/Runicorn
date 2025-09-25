@@ -10,12 +10,26 @@
   <img src="docs/picture/icon.jpg" alt="Runicorn logo" width="360" />
 </p>
 
-Local, open-source experiment tracking and visualization. 100% offline. Lightweight and zero-intrusion; a self-hosted alternative to W&B.
+Local, open-source experiment tracking and visualization. 100% offline. Professional ML experiment management; a modern self-hosted alternative to W&B.
 
-- Package name: `runicorn`
-- Viewer: read-only; reads metrics/logs from local storage; supports overlaying charts across multiple experiments
-- Remote SSH live sync: mirror runs from a Linux server to your local storage in real time
-- GPU panel: shown if `nvidia-smi` is available
+## ✨ What's New in v0.3.0
+
+- 🎯 **Universal Best Metric System** - Track any metric as primary indicator
+- 🗑️ **Soft Delete & Recycle Bin** - Safe experiment management with restore capability  
+- 🛡️ **Smart Status Detection** - Automatic detection of crashed/interrupted experiments
+- 🎨 **Modern Settings Interface** - Tabbed settings with comprehensive customization
+- 📱 **Responsive Design** - Perfect display on any screen size
+- 🌍 **Full Internationalization** - Complete Chinese/English support
+- 📊 **Enhanced Experiment Management** - Tagging, search, batch operations
+- 🔧 **Advanced Features** - Environment tracking, multiple export formats, anomaly detection
+
+## Core Features
+
+- **Package**: `runicorn` - Universal Python SDK for any ML framework
+- **Viewer**: Web interface with real-time charts and experiment comparison
+- **Remote Sync**: Live SSH mirroring from Linux servers  
+- **Desktop App**: Native Windows application with auto-backend
+- **GPU Monitoring**: Real-time GPU telemetry if `nvidia-smi` available
 
 
 <p align="center">
@@ -33,13 +47,29 @@ Local, open-source experiment tracking and visualization. 100% offline. Lightwei
 
 Features
 --------
+
+### 🏠 **Local & Secure**
 - 100% local; data stays on your machine
-- Read-only viewer (FastAPI); zero intrusion to your training process
-- UI assets bundled in the wheel; available offline after install
-- Supports step/time dual x-axes, stage separators (stage), and live logs (WebSocket)
-- Optional GPU panel (requires `nvidia-smi`)
-- Per-user root directory with project/experiment hierarchy
-- Overlay multiple runs of the same experiment on a single chart
+- Zero telemetry; complete privacy
+- Offline-capable after installation
+
+### 🎯 **Smart Experiment Tracking**
+- **Universal Best Metric** - Set any metric as primary indicator with auto-tracking
+- **Intelligent Status Detection** - Automatic detection of crashed/interrupted experiments
+- **Soft Delete & Recycle Bin** - Safe experiment management with restore capability
+- **Environment Capture** - Automatic Git, dependencies, and system info tracking
+
+### 📊 **Advanced Visualization**
+- **Multi-run Comparison** - Overlay multiple experiments on single charts
+- **Responsive Charts** - Adaptive layouts for any screen size
+- **Real-time Updates** - Live logs and GPU monitoring via WebSocket
+- **Multiple Export Formats** - CSV, Excel, TensorBoard, Markdown reports
+
+### 🎨 **Modern Interface**
+- **Tabbed Settings** - Comprehensive customization with live preview
+- **Multi-language Support** - Full Chinese/English internationalization
+- **Glass Morphism UI** - Beautiful modern design with customizable themes
+- **Smart Layouts** - Automatic responsive design
 
 
 Installation
@@ -83,17 +113,62 @@ The setting is written to `%APPDATA%\Runicorn\config.json` and can be edited dir
 import runicorn as rn
 import math, random
 
-# Specify project and experiment names; by default it writes under the per-user root
-run = rn.init(project="demo", name="exp1")
+# Initialize experiment with automatic environment capture
+run = rn.init(project="demo", name="exp1", capture_env=True)
 
-stages = ["warmup", "train"]
+# Set primary metric for automatic best value tracking
+rn.set_primary_metric("accuracy", mode="max")  # or mode="min" for loss
+
+stages = ["warmup", "train", "eval"]
 for i in range(1, 101):
-    stage = stages[min((i - 1) // 50, len(stages) - 1)]
+    stage = stages[min((i - 1) // 33, len(stages) - 1)]
+    
+    # Simulate training metrics
     loss = max(0.02, 2.0 * math.exp(-0.02 * i) + random.uniform(-0.02, 0.02))
-    rn.log({"loss": round(loss, 4)}, stage=stage)
+    accuracy = min(95.0, 60 + i * 0.3 + random.uniform(-2, 2))
+    
+    # Log metrics - best accuracy will be automatically tracked
+    rn.log({
+        "loss": round(loss, 4),
+        "accuracy": round(accuracy, 2),
+        "learning_rate": 0.001 * (0.95 ** i)
+    }, stage=stage)
 
-rn.summary({"best_val_acc_top1": 77.3})
-rn.finish()
+# Summary metrics
+rn.summary({
+    "final_accuracy": 92.1,
+    "total_epochs": 100,
+    "notes": "Baseline model with improved architecture"
+})
+
+rn.finish()  # Best metric automatically saved
+```
+
+### Advanced features
+
+```python
+# Exception handling (automatic)
+try:
+    # Your training code
+    train_model()
+    rn.finish("finished")
+except Exception as e:
+    rn.finish("failed")  # Status correctly updated
+
+# Environment tracking
+run = rn.init(project="research", name="experiment_v2", capture_env=True)
+# Automatically captures: Git info, dependencies, system specs
+
+# Monitoring and alerts (optional)
+if hasattr(rn, 'MetricMonitor'):
+    monitor = rn.MetricMonitor()
+    # Automatic detection of NaN/Inf values and training issues
+
+# Data export (optional)
+if hasattr(rn, 'MetricsExporter'):
+    exporter = rn.MetricsExporter(run.run_dir)
+    exporter.to_excel("results.xlsx", include_charts=True)
+    exporter.generate_report("report.md", format="markdown")
 ```
 
 Optional: explicitly override the storage root
@@ -106,7 +181,8 @@ Storage root precedence (high → low):
 
 1. `runicorn.init(storage=...)`
 2. Environment variable `RUNICORN_DIR`
-3. Per-user config `user_root_dir` (set via `runicorn config`)
+3. Per-user config `user_root_dir` (set via `runicorn config` or web UI)
+
 
 Remote
 ----------------------

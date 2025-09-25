@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import platform
 import socket
@@ -10,21 +11,48 @@ import time
 import uuid
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from filelock import FileLock
 from .config import get_user_root_dir
 
-# Optional imports for image handling
-try:  # pillow is optional
-    from PIL import Image  # type: ignore
-except Exception:  # pragma: no cover
-    Image = None  # type: ignore
+# Setup logging
+logger = logging.getLogger(__name__)
 
-try:  # numpy is optional
+# Optional: Import monitoring if needed
+try:
+    from .monitors import MetricMonitor, AnomalyDetector
+    HAS_MONITORING = True
+except ImportError:
+    MetricMonitor = None
+    AnomalyDetector = None
+    HAS_MONITORING = False
+
+# Optional: Import environment capture
+try:
+    from .environment import EnvironmentCapture
+    HAS_ENV_CAPTURE = True
+except ImportError:
+    EnvironmentCapture = None
+    HAS_ENV_CAPTURE = False
+
+# Optional imports for image handling
+# Optional imports for image handling
+try:
+    from PIL import Image  # type: ignore
+    HAS_PIL = True
+except ImportError:
+    Image = None  # type: ignore
+    HAS_PIL = False
+    logger.debug("Pillow not available, image features limited")
+
+try:
     import numpy as np  # type: ignore
-except Exception:  # pragma: no cover
+    HAS_NUMPY = True
+except ImportError:
     np = None  # type: ignore
+    HAS_NUMPY = False
+    logger.debug("NumPy not available, array image features limited")
 
 
 DEFAULT_DIRNAME = ".runicorn"
@@ -85,6 +113,7 @@ class Run:
         storage: Optional[str] = None,
         run_id: Optional[str] = None,
         name: Optional[str] = None,
+        capture_env: bool = True,
     ) -> None:
         self.project = project or "default"
         # storage_root points to user_root_dir (or legacy ./.runicorn)
@@ -117,6 +146,19 @@ class Run:
         # Global step counter for metrics logging
         # Starts from 0; first auto step will be 1
         self._global_step: int = 0
+        
+        # Primary metric tracking
+        self._primary_metric_name: Optional[str] = None
+        self._primary_metric_mode: str = "max"  # "max" or "min"
+        self._best_metric_value: Optional[float] = None
+        self._best_metric_step: Optional[int] = None
+        
+        # Optional monitoring
+        self.monitor = None
+        self.anomaly_detector = None
+        if HAS_MONITORING:
+            self.monitor = MetricMonitor()
+            self.anomaly_detector = AnomalyDetector()
 
         meta = RunMeta(
             id=self.id,
@@ -131,8 +173,35 @@ class Run:
         )
         self._write_json(self._meta_path, asdict(meta))
         self._write_json(self._status_path, {"status": "running", "started_at": _now_ts()})
+        
+        # Capture environment if requested
+        if capture_env and HAS_ENV_CAPTURE:
+            try:
+                env_capture = EnvironmentCapture()
+                env_info = env_capture.capture_all()
+                env_info.save(self.run_dir / "environment.json")
+                logger.info(f"Environment captured for run {self.id}")
+            except Exception as e:
+                logger.warning(f"Failed to capture environment: {e}")
 
     # ---------------- public API -----------------
+    def set_primary_metric(self, metric_name: str, mode: str = "max") -> None:
+        """Set the primary metric to track for best value display.
+        
+        Args:
+            metric_name: Name of the metric to track (e.g., "accuracy", "loss")
+            mode: Optimization direction, either "max" or "min"
+        """
+        if mode not in ["max", "min"]:
+            raise ValueError(f"Mode must be 'max' or 'min', got '{mode}'")
+        
+        self._primary_metric_name = metric_name
+        self._primary_metric_mode = mode
+        self._best_metric_value = None  # Reset when changing metric
+        self._best_metric_step = None
+        
+        logger.info(f"Set primary metric: {metric_name} (mode: {mode})")
+    
     def log(self, data: Optional[Dict[str, Any]] = None, *, step: Optional[int] = None, stage: Optional[Any] = None, **kwargs: Any) -> None:
         """Log arbitrary scalar metrics.
 
@@ -161,8 +230,8 @@ class Run:
         if step is not None:
             try:
                 self._global_step = int(step)
-            except Exception:
-                # If unparsable, ignore and just auto-increment
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid step value '{step}': {e}, auto-incrementing instead")
                 self._global_step += 1
         else:
             self._global_step += 1
@@ -179,6 +248,18 @@ class Run:
 
         evt = {"ts": ts, "type": "metrics", "data": payload}
         self._append_jsonl(self._events_path, evt, self._events_lock)
+        
+        # Update primary metric best value if configured
+        self._update_best_metric(payload)
+        
+        # Check for anomalies if monitoring is enabled
+        if self.monitor:
+            try:
+                alerts = self.monitor.check_metrics(payload)
+                for alert in alerts:
+                    self.log_text(alert)
+            except Exception as e:
+                logger.debug(f"Monitoring check failed: {e}")
 
     def log_text(self, text: str) -> None:
         # Write to logs.txt to support Live Logs viewer
@@ -204,25 +285,28 @@ class Run:
         path = self.media_dir / rel_name
 
         # Accept PIL.Image, numpy array, bytes, path-like
-        if Image and isinstance(image, Image.Image):  # type: ignore
-            image.save(path, format=format.upper(), quality=quality)
-        elif np is not None and hasattr(image, "shape"):
-            # Treat as numpy array
-            if Image is None:  # pragma: no cover
-                raise RuntimeError("Pillow is required to save numpy arrays")
-            img = Image.fromarray(image)
-            img.save(path, format=format.upper(), quality=quality)
-        elif isinstance(image, (bytes, bytearray)):
-            with open(path, "wb") as f:
-                f.write(image)
-        else:
-            # Try as path-like
-            p = Path(str(image))
-            if not p.exists():
-                raise FileNotFoundError(f"image not found: {image}")
-            data = p.read_bytes()
-            with open(path, "wb") as f:
-                f.write(data)
+        try:
+            if HAS_PIL and hasattr(image, 'save'):  # PIL.Image
+                image.save(path, format=format.upper(), quality=quality)
+            elif HAS_NUMPY and hasattr(image, "shape"):  # numpy array
+                if not HAS_PIL:
+                    raise RuntimeError("Pillow is required to save numpy arrays. Install with: pip install pillow")
+                img = Image.fromarray(image)
+                img.save(path, format=format.upper(), quality=quality)
+            elif isinstance(image, (bytes, bytearray)):
+                with open(path, "wb") as f:
+                    f.write(image)
+            else:
+                # Try as path-like
+                p = Path(str(image))
+                if not p.exists():
+                    raise FileNotFoundError(f"Image file not found: {image}")
+                data = p.read_bytes()
+                with open(path, "wb") as f:
+                    f.write(data)
+        except Exception as e:
+            logger.error(f"Failed to save image '{key}': {e}")
+            raise
 
         evt = {
             "ts": _now_ts(),
@@ -238,21 +322,75 @@ class Run:
             if self._summary_path.exists():
                 try:
                     cur = json.loads(self._summary_path.read_text(encoding="utf-8"))
-                except Exception:
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.warning(f"Failed to read summary file: {e}, starting fresh")
                     cur = {}
             cur.update(update or {})
             self._summary_path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    def _update_best_metric(self, payload: Dict[str, Any]) -> None:
+        """Update the best metric value if primary metric is configured."""
+        if not self._primary_metric_name or self._primary_metric_name not in payload:
+            return
+        
+        current_value = payload[self._primary_metric_name]
+        if not isinstance(current_value, (int, float)):
+            return
+        
+        # Check if this is a new best value
+        is_new_best = False
+        if self._best_metric_value is None:
+            is_new_best = True
+        elif self._primary_metric_mode == "max" and current_value > self._best_metric_value:
+            is_new_best = True
+        elif self._primary_metric_mode == "min" and current_value < self._best_metric_value:
+            is_new_best = True
+        
+        if is_new_best:
+            self._best_metric_value = current_value
+            self._best_metric_step = payload.get("global_step", payload.get("step"))
+            logger.debug(f"New best {self._primary_metric_name}: {current_value} at step {self._best_metric_step}")
+    
     def finish(self, status: str = "finished") -> None:
+        """Mark the run as finished and ensure all data is written."""
+        # Save best metric to summary before finishing
+        if self._best_metric_value is not None:
+            best_metric_summary = {
+                "best_metric_value": self._best_metric_value,
+                "best_metric_name": self._primary_metric_name,
+                "best_metric_step": self._best_metric_step,
+                "best_metric_mode": self._primary_metric_mode
+            }
+            self.summary(best_metric_summary)
+        
         with self._status_lock:
             cur: Dict[str, Any] = {}
             if self._status_path.exists():
                 try:
                     cur = json.loads(self._status_path.read_text(encoding="utf-8"))
-                except Exception:
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.warning(f"Failed to read status file: {e}, starting fresh")
                     cur = {}
             cur.update({"status": status, "ended_at": _now_ts()})
             self._status_path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+            
+        # Force flush to ensure data is written to disk
+        try:
+            import os
+            os.sync()  # Unix/Linux
+        except (AttributeError, OSError):
+            try:
+                import ctypes
+                # Windows fallback
+                kernel32 = ctypes.windll.kernel32
+                kernel32.FlushFileBuffers.argtypes = [ctypes.c_void_p]
+                kernel32.FlushFileBuffers.restype = ctypes.c_bool
+            except:
+                pass  # Best effort
+                
+        # Small delay to ensure file system catches up
+        import time
+        time.sleep(0.1)
 
     # ---------------- helpers -----------------
     @staticmethod
@@ -270,10 +408,10 @@ class Run:
 
 # --------------- module-level convenience APIs ---------------
 
-def init(project: str = "default", storage: Optional[str] = None, run_id: Optional[str] = None, name: Optional[str] = None) -> Run:
+def init(project: str = "default", storage: Optional[str] = None, run_id: Optional[str] = None, name: Optional[str] = None, capture_env: bool = True) -> Run:
     global _active_run
     with _active_run_lock:
-        r = Run(project=project, storage=storage, run_id=run_id, name=name)
+        r = Run(project=project, storage=storage, run_id=run_id, name=name, capture_env=capture_env)
         _active_run = r
     return r
 
@@ -303,3 +441,13 @@ def summary(update: Dict[str, Any]) -> None:
 
 def finish(status: str = "finished") -> None:
     _require_run().finish(status)
+
+
+def set_primary_metric(metric_name: str, mode: str = "max") -> None:
+    """Set the primary metric to track for best value display.
+    
+    Args:
+        metric_name: Name of the metric to track (e.g., "accuracy", "loss")
+        mode: Optimization direction, either "max" or "min"
+    """
+    _require_run().set_primary_metric(metric_name, mode)

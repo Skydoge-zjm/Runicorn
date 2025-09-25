@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Space, Switch, Tooltip, Slider, Button } from 'antd'
 import AutoResizeEChart from './AutoResizeEChart'
+import { useSettings } from '../contexts/SettingsContext'
 
 export type RunMetric = { id: string; label?: string; metrics: { columns: string[]; rows: any[] } }
 
@@ -19,7 +20,7 @@ export default function MultiRunMetricChart({
   xKey,
   yKey,
   title,
-  height = 360,
+  height,
   persistKey,
   group,
 }: {
@@ -31,6 +32,10 @@ export default function MultiRunMetricChart({
   persistKey?: string
   group?: string
 }) {
+  const { settings } = useSettings()
+  
+  // Use settings-based height if not explicitly provided
+  const effectiveHeight = height ?? settings.defaultChartHeight
   const [useLog, setUseLog] = useState(false)
   const [dynamicScale, setDynamicScale] = useState(true)
   const [smoothing, setSmoothing] = useState(0)
@@ -94,25 +99,46 @@ export default function MultiRunMetricChart({
         connectNulls: true,
         sampling: 'lttb',
         large: true,
-        data: points,
+        data: points.slice(0, settings.maxDataPoints), // Limit data points
       } as any
     })
 
     return {
-      title: { text: title },
+      title: { 
+        text: title,
+        left: 'center',
+        top: 8,
+        textStyle: {
+          fontSize: 14,
+          fontWeight: 'bold'
+        }
+      },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
-      legend: { data: runs.map(r => r.label || r.id) },
+      legend: { 
+        data: runs.map(r => r.label || r.id),
+        top: 32,
+        type: 'scroll'
+      },
       xAxis: { type: 'value', name: xKey },
       yAxis: { type: useLog ? 'log' : 'value', scale: dynamicScale, min: dynamicScale ? 'dataMin' : 0 },
-      grid: { left: 40, right: 20, top: 40, bottom: 72 },
+      grid: { 
+        left: 50, 
+        right: 30, 
+        top: 60, 
+        bottom: 72,
+        show: settings.showGridLines
+      },
       dataZoom: [
         { type: 'inside', throttle: 50 },
         { type: 'slider', height: 18, bottom: 36 }
       ],
       toolbox: { feature: { restore: {}, saveAsImage: {} }, right: 10 },
       series,
+      // Global animation settings
+      animation: settings.enableChartAnimations,
+      animationDuration: settings.enableChartAnimations ? 1000 : 0,
     }
-  }, [runs, xKey, yKey, title, useLog, dynamicScale, smoothing])
+  }, [runs, xKey, yKey, title, useLog, dynamicScale, smoothing, settings.enableChartAnimations, settings.maxDataPoints, settings.showGridLines])
 
   const exportCsv = () => {
     try {
@@ -152,8 +178,11 @@ export default function MultiRunMetricChart({
         </Tooltip>
         <Button size="small" onClick={exportCsv}>Export CSV</Button>
       </Space>
-      <div style={{ height: height as any, width: '100%' }}>
-        <AutoResizeEChart option={option as any} group={group} />
+      <div style={{ height: effectiveHeight as any, width: '100%' }}>
+        <AutoResizeEChart 
+          option={option as any} 
+          group={group} 
+        />
       </div>
     </div>
   )
