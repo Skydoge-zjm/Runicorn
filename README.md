@@ -33,15 +33,13 @@ Local, open-source experiment tracking and visualization. 100% offline. Professi
 
 
 <p align="center">
-  <img src="docs/picture/p1.png" alt="Runicorn UI example 1" width="49%" />
-  <img src="docs/picture/p2.png" alt="Runicorn UI example 2" width="49%" />
+  <img src="docs/picture/p1.png" alt="Runicorn demo 1" width="98%" />
   <br/>
-  <img src="docs/picture/p3.png" alt="Runicorn UI example 3" width="49%" />
-  <img src="docs/picture/p4.png" alt="Runicorn UI example 4" width="49%" />
+  <img src="docs/picture/p2.png" alt="Runicorn demo 2" width="98%" />
   <br/>
-  <img src="docs/picture/p5.png" alt="Runicorn UI example 5" width="98%" />
+  <img src="docs/picture/p3.png" alt="Runicorn demo 3" width="98%" />
   <br/>
-  <span style="color:#888; font-size: 12px;">UI overview: run list, run details, metrics overlay, GPU panel</span>
+  <span style="color:#888; font-size: 12px;">UI overview</span>
   
 </p>
 

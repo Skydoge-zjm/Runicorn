@@ -32,15 +32,13 @@
 - **GPU监控**: 实时GPU遥测（需要`nvidia-smi`）
 
 <p align="center">
-  <img src="docs/picture/p1.png" alt="Runicorn 界面示例 1" width="49%" />
-  <img src="docs/picture/p2.png" alt="Runicorn 界面示例 2" width="49%" />
+  <img src="docs/picture/p1.png" alt="Runicorn demo 1" width="98%" />
   <br/>
-  <img src="docs/picture/p3.png" alt="Runicorn 界面示例 3" width="49%" />
-  <img src="docs/picture/p4.png" alt="Runicorn 界面示例 4" width="49%" />
+  <img src="docs/picture/p2.png" alt="Runicorn demo 2" width="98%" />
   <br/>
-  <img src="docs/picture/p5.png" alt="Runicorn demo 5" width="98%" />
+  <img src="docs/picture/p3.png" alt="Runicorn demo 3" width="98%" />
   <br/>
-  <span style="color:#888; font-size: 12px;">界面示意：运行列表、运行详情、指标叠加、GPU 面板</span>
+  <span style="color:#888; font-size: 12px;">界面</span>
 </p>
 
 
