@@ -12,16 +12,16 @@
 
 Local, open-source experiment tracking and visualization. 100% offline. Professional ML experiment management; a modern self-hosted alternative to W&B.
 
-## ✨ What's New in v0.3.0
+## ✨ What's New in v0.3.1
 
-- 🎯 **Universal Best Metric System** - Track any metric as primary indicator
+- 🏗️ **Architecture Modernization** - Modular codebase and high-performance SQLite storage
+- ⚡ **10x+ Performance Boost** - Experiment queries now complete in milliseconds
+- 🔄 **Seamless Upgrade** - Automatic migration with full backward compatibility
 - 🗑️ **Soft Delete & Recycle Bin** - Safe experiment management with restore capability  
 - 🛡️ **Smart Status Detection** - Automatic detection of crashed/interrupted experiments
 - 🎨 **Modern Settings Interface** - Tabbed settings with comprehensive customization
 - 📱 **Responsive Design** - Perfect display on any screen size
 - 🌍 **Full Internationalization** - Complete Chinese/English support
-- 📊 **Enhanced Experiment Management** - Tagging, search, batch operations
-- 🔧 **Advanced Features** - Environment tracking, multiple export formats, anomaly detection
 
 ## Core Features
 

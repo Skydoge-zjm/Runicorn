@@ -4,7 +4,7 @@ import runicorn as rn
 # 生成测试实验
 run = rn.init(project="test_project", name="experiment_1", capture_env=True)
 print(f"Created run: id={run.id} dir={run.run_dir}")
-run.log_text(f"[info] Starting dummy run '{run.name}' (project={run.project})")
+rn.log_text(f"[info] Starting dummy run '{run.name}' (project={run.project})")
 
 # 设置主要指标为准确率（最大化）
 rn.set_primary_metric("accuracy_123", mode="max")
@@ -30,6 +30,7 @@ for epoch in range(200):
         "accuracy_123": acc,
         "learning_rate_12": 0.001 * (0.95 ** epoch),
     }, stage=f"epoch {epoch // 10}")
+    rn.log_text(f"epoch {epoch // 10} | loss {loss:.4f} | accuracy {acc:.2f}")
     print(f"epoch {epoch // 10} | loss {loss:.4f} | accuracy {acc:.2f}")
 
 
@@ -40,5 +41,6 @@ rn.summary({
     "total_epochs": 100,
     "notes": "Demo run with auto-tracked accuracy metric"
 })
-
+rn.log_text("[info] Summary metrics recorded")
+rn.log_text("[info] Run finished successfully with auto-tracked best metrics.")
 rn.finish()

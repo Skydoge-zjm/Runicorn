@@ -19,6 +19,17 @@ from .config import get_user_root_dir
 # Setup logging
 logger = logging.getLogger(__name__)
 
+# Import modern storage components (graceful fallback if not available)
+try:
+    from .storage.backends import SQLiteStorageBackend, HybridStorageBackend
+    from .storage.models import ExperimentRecord, MetricRecord
+    from .storage.migration import ensure_modern_storage, detect_storage_type
+    HAS_MODERN_STORAGE = True
+    logger.info("Modern storage system available")
+except ImportError as e:
+    logger.debug(f"Modern storage not available: {e}")
+    HAS_MODERN_STORAGE = False
+
 # Optional: Import monitoring if needed
 try:
     from .monitors import MetricMonitor, AnomalyDetector
@@ -153,6 +164,14 @@ class Run:
         self._best_metric_value: Optional[float] = None
         self._best_metric_step: Optional[int] = None
         
+        # Initialize modern storage backend
+        self.storage_backend = None
+        if HAS_MODERN_STORAGE:
+            try:
+                self._init_modern_storage()
+            except Exception as e:
+                logger.warning(f"Failed to initialize modern storage: {e}, using file-only mode")
+        
         # Optional monitoring
         self.monitor = None
         self.anomaly_detector = None
@@ -183,6 +202,48 @@ class Run:
                 logger.info(f"Environment captured for run {self.id}")
             except Exception as e:
                 logger.warning(f"Failed to capture environment: {e}")
+
+    def _init_modern_storage(self) -> None:
+        """Initialize modern storage backend."""
+        try:
+            # Initialize SQLite backend
+            self.storage_backend = SQLiteStorageBackend(self.storage_root)
+            
+            # Create experiment record in modern storage
+            experiment = ExperimentRecord(
+                id=self.id,
+                project=self.project,
+                name=self.name,
+                created_at=_now_ts(),
+                updated_at=_now_ts(),
+                status="running",
+                pid=os.getpid(),
+                python_version=sys.version.split(" ")[0],
+                platform=f"{platform.system()} {platform.release()} ({platform.machine()})",
+                hostname=socket.gethostname(),
+                run_dir=str(self.run_dir)
+            )
+            
+            # Use sync version of async call for compatibility
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If we're already in an event loop, schedule for later
+                    asyncio.create_task(self.storage_backend.create_experiment(experiment))
+                else:
+                    # Run in the current thread's event loop
+                    loop.run_until_complete(self.storage_backend.create_experiment(experiment))
+            except RuntimeError:
+                # No event loop, create one
+                asyncio.run(self.storage_backend.create_experiment(experiment))
+            
+            logger.info(f"✅ Modern storage initialized: {type(self.storage_backend).__name__}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize modern storage: {e}")
+            self.storage_backend = None
+            raise
 
     # ---------------- public API -----------------
     def set_primary_metric(self, metric_name: str, mode: str = "max") -> None:
@@ -246,8 +307,43 @@ class Run:
         if stage_val is not None:
             payload["stage"] = stage_val
 
+        # Write to traditional events.jsonl (always for compatibility)
         evt = {"ts": ts, "type": "metrics", "data": payload}
         self._append_jsonl(self._events_path, evt, self._events_lock)
+        
+        # Also write to modern storage if available
+        if self.storage_backend:
+            try:
+                # Convert metrics to MetricRecord format
+                metrics = []
+                for metric_name, metric_value in payload.items():
+                    if metric_name in ("global_step", "time", "stage"):
+                        continue
+                    if isinstance(metric_value, (int, float)):
+                        metrics.append(MetricRecord(
+                            experiment_id=self.id,
+                            timestamp=ts,
+                            metric_name=metric_name,
+                            metric_value=metric_value,
+                            step=self._global_step,
+                            stage=stage_val
+                        ))
+                
+                if metrics:
+                    # Log to modern storage (async in sync context)
+                    import asyncio
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(self.storage_backend.log_metrics(self.id, metrics))
+                        else:
+                            loop.run_until_complete(self.storage_backend.log_metrics(self.id, metrics))
+                    except RuntimeError:
+                        # No event loop, create one
+                        asyncio.run(self.storage_backend.log_metrics(self.id, metrics))
+                        
+            except Exception as e:
+                logger.debug(f"Failed to log to modern storage: {e}")
         
         # Update primary metric best value if configured
         self._update_best_metric(payload)
@@ -317,6 +413,7 @@ class Run:
         return f"media/{rel_name}"
 
     def summary(self, update: Dict[str, Any]) -> None:
+        # Update traditional summary.json file (always for compatibility)
         with self._summary_lock:
             cur: Dict[str, Any] = {}
             if self._summary_path.exists():
@@ -327,6 +424,34 @@ class Run:
                     cur = {}
             cur.update(update or {})
             self._summary_path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        # Also update modern storage if available
+        if self.storage_backend:
+            try:
+                import asyncio
+                # Map summary fields to experiment record fields
+                storage_updates = {}
+                if "best_metric_value" in update:
+                    storage_updates["best_metric_value"] = update["best_metric_value"]
+                if "best_metric_name" in update:
+                    storage_updates["best_metric_name"] = update["best_metric_name"]
+                if "best_metric_step" in update:
+                    storage_updates["best_metric_step"] = update["best_metric_step"]
+                if "best_metric_mode" in update:
+                    storage_updates["best_metric_mode"] = update["best_metric_mode"]
+                
+                if storage_updates:
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(self.storage_backend.update_experiment(self.id, storage_updates))
+                        else:
+                            loop.run_until_complete(self.storage_backend.update_experiment(self.id, storage_updates))
+                    except RuntimeError:
+                        asyncio.run(self.storage_backend.update_experiment(self.id, storage_updates))
+                        
+            except Exception as e:
+                logger.debug(f"Failed to update summary in modern storage: {e}")
 
     def _update_best_metric(self, payload: Dict[str, Any]) -> None:
         """Update the best metric value if primary metric is configured."""
@@ -350,6 +475,29 @@ class Run:
             self._best_metric_value = current_value
             self._best_metric_step = payload.get("global_step", payload.get("step"))
             logger.debug(f"New best {self._primary_metric_name}: {current_value} at step {self._best_metric_step}")
+            
+            # Update modern storage with new best metric
+            if self.storage_backend:
+                try:
+                    import asyncio
+                    updates = {
+                        "best_metric_value": self._best_metric_value,
+                        "best_metric_name": self._primary_metric_name,
+                        "best_metric_step": self._best_metric_step,
+                        "best_metric_mode": self._primary_metric_mode
+                    }
+                    
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            asyncio.create_task(self.storage_backend.update_experiment(self.id, updates))
+                        else:
+                            loop.run_until_complete(self.storage_backend.update_experiment(self.id, updates))
+                    except RuntimeError:
+                        asyncio.run(self.storage_backend.update_experiment(self.id, updates))
+                        
+                except Exception as e:
+                    logger.debug(f"Failed to update best metric in modern storage: {e}")
     
     def finish(self, status: str = "finished") -> None:
         """Mark the run as finished and ensure all data is written."""
@@ -363,6 +511,7 @@ class Run:
             }
             self.summary(best_metric_summary)
         
+        # Update status file (always for compatibility)
         with self._status_lock:
             cur: Dict[str, Any] = {}
             if self._status_path.exists():
@@ -373,6 +522,27 @@ class Run:
                     cur = {}
             cur.update({"status": status, "ended_at": _now_ts()})
             self._status_path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+        
+        # Also update modern storage if available
+        if self.storage_backend:
+            try:
+                import asyncio
+                updates = {
+                    "status": status,
+                    "ended_at": _now_ts()
+                }
+                
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.create_task(self.storage_backend.update_experiment(self.id, updates))
+                    else:
+                        loop.run_until_complete(self.storage_backend.update_experiment(self.id, updates))
+                except RuntimeError:
+                    asyncio.run(self.storage_backend.update_experiment(self.id, updates))
+                    
+            except Exception as e:
+                logger.debug(f"Failed to update status in modern storage: {e}")
             
         # Force flush to ensure data is written to disk
         try:
@@ -429,6 +599,19 @@ def log(data: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
     step = kwargs.pop("step", None)
     stage = kwargs.pop("stage", None)
     _require_run().log(data, step=step, stage=stage, **kwargs)
+
+
+def log_text(text: str) -> None:
+    """
+    Log text message to the logs file.
+    
+    This provides a consistent module-level API for text logging,
+    matching the pattern of other module-level functions like log().
+    
+    Args:
+        text: Text message to log
+    """
+    _require_run().log_text(text)
 
 
 def log_image(key: str, image: Any, step: Optional[int] = None, caption: Optional[str] = None, format: str = "png", quality: int = 90) -> str:

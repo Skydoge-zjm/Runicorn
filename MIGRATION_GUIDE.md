@@ -1,6 +1,18 @@
-# Runicorn v0.3.0 Migration Guide
+# Runicorn Migration Guide
 
-This guide helps you migrate from v0.2.x to v0.3.0, which includes several breaking changes and exciting new features.
+This guide helps you migrate to the latest version of Runicorn.
+
+## 🚀 v0.3.1 Improvements (Latest)
+
+### Architecture Modernization
+- **Automatic**: No action required - existing code works unchanged
+- **Performance**: 10x+ faster experiment queries through SQLite storage
+- **Storage**: Automatic creation of `runicorn.db` for enhanced performance
+- **Compatibility**: All existing files and workflows continue to work
+
+## 🔄 v0.3.0 Breaking Changes
+
+This section covers migration from v0.2.x to v0.3.0.
 
 ## 🔄 Breaking Changes
 

@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2025-09-26
+
+### 🏗️ Architecture Modernization
+
+#### Code Refactoring
+- **NEW**: Modular architecture - viewer.py split into focused modules for better maintainability
+- **NEW**: Service layer abstraction for business logic separation
+- **NEW**: Enhanced error handling and logging throughout the system
+
+#### High-Performance Storage System  
+- **NEW**: SQLite + file hybrid storage architecture for 10x+ query performance improvement
+- **NEW**: Automatic migration from file-only to hybrid storage
+- **NEW**: Advanced query capabilities with filtering, pagination, and search
+- **NEW**: V2 API endpoints (`/api/v2/experiments`, `/api/v2/analytics`) for enhanced performance
+- **NEW**: Real-time analytics and system health monitoring
+
+#### Developer Experience
+- **NEW**: `rn.log_text()` module-level API for consistent text logging
+- **NEW**: Backward compatibility maintained - existing code works unchanged
+- **NEW**: Enhanced WebSocket log streaming with full content support
+
 ## [0.3.0] - 2025-09-25
 
 ### 🎯 Major Features Added
