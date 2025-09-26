@@ -112,12 +112,16 @@ import runicorn as rn
 import math, random
 
 # Initialize experiment with automatic environment capture
-run = rn.init(project="demo", name="exp1", capture_env=True)
+run = rn.init(project="test_project", name="experiment_1", capture_env=True)
+print(f"Created run: id={run.id} dir={run.run_dir}")
+
+# Use rn.log_text to log info
+rn.log_text(f"[info] Starting dummy run '{run.name}' (project={run.project})")
 
 # Set primary metric for automatic best value tracking
 rn.set_primary_metric("accuracy", mode="max")  # or mode="min" for loss
 
-stages = ["warmup", "train", "eval"]
+stages = ["s1", "s2"]
 for i in range(1, 101):
     stage = stages[min((i - 1) // 33, len(stages) - 1)]
     
@@ -144,32 +148,16 @@ rn.finish()  # Best metric automatically saved
 
 ### Advanced features
 
+#### Data export (optional)
 ```python
-# Exception handling (automatic)
-try:
-    # Your training code
-    train_model()
-    rn.finish("finished")
-except Exception as e:
-    rn.finish("failed")  # Status correctly updated
-
-# Environment tracking
-run = rn.init(project="research", name="experiment_v2", capture_env=True)
-# Automatically captures: Git info, dependencies, system specs
-
-# Monitoring and alerts (optional)
-if hasattr(rn, 'MetricMonitor'):
-    monitor = rn.MetricMonitor()
-    # Automatic detection of NaN/Inf values and training issues
-
-# Data export (optional)
-if hasattr(rn, 'MetricsExporter'):
-    exporter = rn.MetricsExporter(run.run_dir)
-    exporter.to_excel("results.xlsx", include_charts=True)
-    exporter.generate_report("report.md", format="markdown")
+# init
+exporter = rn.MetricsExporter(run.run_dir)
+# Your training code
+exporter.to_excel("results.xlsx", include_charts=True)
+exporter.generate_report("report.md", format="markdown")
 ```
 
-Optional: explicitly override the storage root
+#### Explicitly override the storage root (optional)
 
 ```python
 run = rn.init(project="demo", name="exp1", storage="E:\\RunicornData")

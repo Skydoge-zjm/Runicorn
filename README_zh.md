@@ -108,7 +108,11 @@ import runicorn as rn
 import math, random
 
 # 初始化实验，自动捕获环境信息
-run = rn.init(project="demo", name="exp1", capture_env=True)
+run = rn.init(project="test_project", name="experiment_1", capture_env=True)
+print(f"Created run: id={run.id} dir={run.run_dir}")
+
+# 使用 rn.log_text 记录文本信息
+rn.log_text(f"[info] Starting dummy run '{run.name}' (project={run.project})")
 
 # 设置主要指标，系统自动追踪最优值
 rn.set_primary_metric("accuracy", mode="max")  # 或 mode="min" 用于loss
@@ -139,33 +143,15 @@ rn.finish()  # 最佳指标自动保存
 ```
 
 ### 高级功能
-
+#### 数据导出（可选）
 ```python
-# 异常处理（自动）
-try:
-    # 你的训练代码
-    train_model()
-    rn.finish("finished")
-except Exception as e:
-    rn.finish("failed")  # 状态正确更新
-
-# 环境追踪
-run = rn.init(project="研究", name="实验_v2", capture_env=True)
-# 自动捕获：Git信息、依赖项、系统规格
-
-# 监控和告警（可选）
-if hasattr(rn, 'MetricMonitor'):
-    monitor = rn.MetricMonitor()
-    # 自动检测NaN/Inf值和训练问题
-
-# 数据导出（可选）
 if hasattr(rn, 'MetricsExporter'):
     exporter = rn.MetricsExporter(run.run_dir)
     exporter.to_excel("results.xlsx", include_charts=True)
     exporter.generate_report("report.md", format="markdown")
 ```
 
-可选：显式覆盖存储根目录
+#### 显式覆盖存储根目录（可选） 
 ```python
 run = rn.init(project="demo", name="exp1", storage="E:\\RunicornData")
 ```

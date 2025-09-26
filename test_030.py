@@ -9,19 +9,22 @@ rn.log_text(f"[info] Starting dummy run '{run.name}' (project={run.project})")
 # 设置主要指标为准确率（最大化）
 rn.set_primary_metric("accuracy_123", mode="max")
 
+if hasattr(rn, 'MetricsExporter'):
+    exporter = rn.MetricsExporter(run.run_dir)
+    
 # 模拟训练
 import random
 import math
 import time
 for epoch in range(200):
     # 模拟指标
-    time.sleep(0.1)
+    time.sleep(0.01)
     
     # 测试异常处理：取消注释下行来模拟程序崩溃
     # if epoch == 50: raise ValueError("Test crash")
     
-    #loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1 if epoch < 50 else float('nan')
-    loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1
+    loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1 if epoch < 50 else float('nan')
+    #loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1
     acc = 100 * (1 - math.exp(-epoch/30)) + random.random() * 2
     
     # 记录指标
@@ -43,4 +46,9 @@ rn.summary({
 })
 rn.log_text("[info] Summary metrics recorded")
 rn.log_text("[info] Run finished successfully with auto-tracked best metrics.")
+
+exporter.to_excel("results.xlsx", include_charts=True)
+exporter.generate_report("report.md", format="markdown")
+print("Exported to Excel and report.md")
+
 rn.finish()
