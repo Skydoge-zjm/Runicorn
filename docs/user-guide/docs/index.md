@@ -57,7 +57,7 @@
 
     Explore the web viewer and UI features
 
-    [:octicons-arrow-right-24: UI Guide](ui/overview.md)
+    [:octicons-arrow-right-24: CLI Guide](cli/overview.md)
 
 </div>
 
@@ -183,9 +183,9 @@ runicorn viewer
 !!! tip "Recommended Learning Path"
 
     1. **[Quick Start Guide](getting-started/quickstart.md)** - Set up Runicorn in 5 minutes
-    2. **[Your First Experiment](getting-started/first-experiment.md)** - Track a real ML experiment
-    3. **[Python SDK Overview](sdk/overview.md)** - Learn the core functions
-    4. **[Model Versioning Tutorial](tutorials/model-versioning.md)** - Version control for models
+    2. **[Python SDK Overview](sdk/overview.md)** - Learn the core functions
+    3. **[Image Classification Tutorial](tutorials/image-classification.md)** - Complete example
+    4. **[FAQ](reference/faq.md)** - Frequently asked questions
 
 ---
 

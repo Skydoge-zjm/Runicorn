@@ -116,10 +116,7 @@ You should see your experiment in the list!
 
 ### 1. Experiments Page
 
-<figure markdown>
-  ![Experiments Page](../assets/screenshots/experiments-page.png)
-  <figcaption>View all your experiments in one place</figcaption>
-</figure>
+The Experiments page lets you view all your experiments in one place with filtering and search.
 
 **Features**:
 - 📋 List all experiments
@@ -138,10 +135,7 @@ Click on any experiment to see:
 
 ### 3. Artifacts Page
 
-<figure markdown>
-  ![Artifacts Page](../assets/screenshots/artifacts-page.png)
-  <figcaption>Manage model versions with Git-like workflow</figcaption>
-</figure>
+The Artifacts page provides Git-like version control for your ML models and datasets.
 
 **Features**:
 - 📦 List all models and datasets
@@ -195,23 +189,12 @@ Runicorn determines storage location in this order:
 
 ## What's Next?
 
-### Learn the Basics
+### Learn More
 
-- [📚 Your First Real Experiment](first-experiment.md) - Track a real ML model
-- [⚙️ Configuration Guide](configuration.md) - Customize Runicorn
 - [📖 Python SDK Overview](../sdk/overview.md) - Learn all SDK functions
-
-### Advanced Features
-
-- [📦 Model Versioning](../tutorials/model-versioning.md) - Version control for models
-- [🔄 Remote Sync](../guides/sync-remote.md) - Connect to training servers
-- [📊 Experiment Comparison](../guides/compare-experiments.md) - Compare multiple runs
-
-### Tutorials
-
-- [🖼️ Image Classification](../tutorials/image-classification.md) - Complete PyTorch example
-- [💬 NLP Fine-tuning](../tutorials/nlp-finetuning.md) - BERT fine-tuning with artifacts
-- [🎮 Multi-GPU Training](../tutorials/multi-gpu.md) - Distributed training tracking
+- [💻 CLI Overview](../cli/overview.md) - Command-line tools
+- [🖼️ Image Classification Tutorial](../tutorials/image-classification.md) - Complete PyTorch example
+- [❓ FAQ](../reference/faq.md) - Frequently asked questions
 
 ---
 

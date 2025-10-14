@@ -344,14 +344,13 @@ kill -9 <PID>
 
 ## Next Steps
 
-- [📺 Viewer Commands](viewer.md) - Detailed viewer options
-- [⚙️ Config Commands](config.md) - Configuration management
-- [📦 Artifacts Management](artifacts.md) - CLI artifact operations
-- [📤 Export & Import](export-import.md) - Data portability
+- More CLI documentation coming soon
+- For now, use `runicorn --help` to see all available commands
+- See [Python SDK](../sdk/overview.md) for programmatic usage
 
 ---
 
 <div align="center">
-  <p><a href="viewer.md">Learn More About Viewer Commands →</a></p>
+  <p><a href="../sdk/overview.md">Explore Python SDK →</a></p>
 </div>
 

@@ -389,14 +389,13 @@ Or view on GitHub: [image_classification_tutorial.py](https://github.com/youruse
 
 ## Related Tutorials
 
-- [💬 NLP Fine-tuning](nlp-finetuning.md) - Fine-tune BERT on text classification
-- [📦 Model Versioning](model-versioning.md) - Advanced artifact workflows
-- [🎮 Multi-GPU Training](multi-gpu.md) - Distributed training
+- More tutorials coming soon
+- Check back for NLP, multi-GPU, and other advanced tutorials
 
 ---
 
 <div align="center">
   <p><strong>Ready for more?</strong></p>
-  <p><a href="nlp-finetuning.md">Try NLP Fine-tuning Tutorial →</a></p>
+  <p><a href="../reference/faq.md">Check FAQ →</a></p>
 </div>
 

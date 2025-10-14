@@ -563,7 +563,7 @@ for exp in experiments:
     print(f"{exp['id']}: {exp['status']}")
 ```
 
-See [API Documentation](../../api/README.md) for details.
+See the API documentation for details (visit `http://127.0.0.1:23300/docs` after starting viewer).
 
 ### Can I run multiple viewers?
 
@@ -581,10 +581,10 @@ runicorn viewer --storage "E:\Project2" --port 23301
 
 ## Still Have Questions?
 
-- 📖 Check [Glossary](glossary.md) for terminology
-- 🔧 See [Troubleshooting Guide](../guides/troubleshooting.md)
-- 💬 Ask on [GitHub Discussions](https://github.com/yourusername/runicorn/discussions)
-- 🐛 [Report bugs](https://github.com/yourusername/runicorn/issues)
+- 📖 See [Python SDK Overview](../sdk/overview.md) for programming guide
+- 🔧 See [CLI Overview](../cli/overview.md) for command-line usage
+- 💬 Ask on [GitHub Discussions](https://github.com/Skydoge-zjm/Runicorn/discussions)
+- 🐛 [Report bugs](https://github.com/Skydoge-zjm/Runicorn/issues)
 
 ---
 
