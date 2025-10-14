@@ -47,6 +47,18 @@ except ImportError:
     EnvironmentCapture = None
     HAS_ENV_CAPTURE = False
 
+# Optional: Import artifacts system
+try:
+    from .artifacts import Artifact, ArtifactStorage, LineageTracker, create_artifact_storage
+    HAS_ARTIFACTS = True
+    logger.info("Artifacts system available")
+except ImportError as e:
+    logger.debug(f"Artifacts system not available: {e}")
+    Artifact = None
+    ArtifactStorage = None
+    LineageTracker = None
+    HAS_ARTIFACTS = False
+
 # Optional imports for image handling
 # Optional imports for image handling
 try:
@@ -166,7 +178,11 @@ class Run:
         
         # Initialize modern storage backend
         self.storage_backend = None
-        if HAS_MODERN_STORAGE:
+        
+        # Allow disabling modern storage via environment variable (useful for testing)
+        disable_modern_storage = os.environ.get("RUNICORN_DISABLE_MODERN_STORAGE", "").lower() in ("1", "true", "yes")
+        
+        if HAS_MODERN_STORAGE and not disable_modern_storage:
             try:
                 self._init_modern_storage()
             except Exception as e:
@@ -178,6 +194,14 @@ class Run:
         if HAS_MONITORING:
             self.monitor = MetricMonitor()
             self.anomaly_detector = AnomalyDetector()
+        
+        # Optional artifacts
+        self.artifact_storage = None
+        if HAS_ARTIFACTS:
+            try:
+                self.artifact_storage = create_artifact_storage(self.storage_root)
+            except Exception as e:
+                logger.warning(f"Failed to initialize artifact storage: {e}")
 
         meta = RunMeta(
             id=self.id,
@@ -224,19 +248,9 @@ class Run:
                 run_dir=str(self.run_dir)
             )
             
-            # Use sync version of async call for compatibility
-            import asyncio
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If we're already in an event loop, schedule for later
-                    asyncio.create_task(self.storage_backend.create_experiment(experiment))
-                else:
-                    # Run in the current thread's event loop
-                    loop.run_until_complete(self.storage_backend.create_experiment(experiment))
-            except RuntimeError:
-                # No event loop, create one
-                asyncio.run(self.storage_backend.create_experiment(experiment))
+            # Use synchronous wrapper to safely create experiment
+            from .storage.sync_utils import create_experiment_sync
+            create_experiment_sync(self.storage_backend, experiment)
             
             logger.info(f"✅ Modern storage initialized: {type(self.storage_backend).__name__}")
             
@@ -330,17 +344,9 @@ class Run:
                         ))
                 
                 if metrics:
-                    # Log to modern storage (async in sync context)
-                    import asyncio
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            asyncio.create_task(self.storage_backend.log_metrics(self.id, metrics))
-                        else:
-                            loop.run_until_complete(self.storage_backend.log_metrics(self.id, metrics))
-                    except RuntimeError:
-                        # No event loop, create one
-                        asyncio.run(self.storage_backend.log_metrics(self.id, metrics))
+                    # Use synchronous wrapper to safely log metrics
+                    from .storage.sync_utils import log_metrics_sync
+                    log_metrics_sync(self.storage_backend, self.id, metrics)
                         
             except Exception as e:
                 logger.debug(f"Failed to log to modern storage: {e}")
@@ -499,6 +505,207 @@ class Run:
                 except Exception as e:
                     logger.debug(f"Failed to update best metric in modern storage: {e}")
     
+    def log_artifact(self, artifact: 'Artifact') -> int:
+        """
+        Log (save) an artifact with version control.
+        
+        Args:
+            artifact: Artifact object to log
+            
+        Returns:
+            Version number assigned to this artifact
+            
+        Raises:
+            RuntimeError: If artifacts system is not available
+            
+        Example:
+            artifact = rn.Artifact("my-model", type="model")
+            artifact.add_file("model.pth")
+            artifact.add_metadata({"accuracy": 0.95})
+            version = run.log_artifact(artifact)
+        """
+        if not HAS_ARTIFACTS or not self.artifact_storage:
+            raise RuntimeError(
+                "Artifacts system is not available. "
+                "Make sure runicorn.artifacts module is properly installed."
+            )
+        
+        # Save artifact
+        version = self.artifact_storage.save_artifact(
+            artifact=artifact,
+            run_id=self.id,
+            staged_files=artifact._staged_files,
+            staged_references=artifact._staged_references,
+            user=None  # TODO: Add user tracking
+        )
+        
+        # Update artifact object
+        artifact._version = version
+        artifact._storage = self.artifact_storage
+        artifact._is_loaded = True
+        
+        # Record artifact creation in run metadata
+        artifacts_created_path = self.run_dir / "artifacts_created.json"
+        
+        try:
+            if artifacts_created_path.exists():
+                try:
+                    created = json.loads(artifacts_created_path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.warning(f"Failed to read artifacts_created.json, starting fresh: {e}")
+                    created = {"artifacts": []}
+            else:
+                created = {"artifacts": []}
+            
+            # Calculate size safely (files may have been moved/deleted)
+            total_size = 0
+            for source_path, _ in artifact._staged_files:
+                try:
+                    if source_path.exists():
+                        total_size += source_path.stat().st_size
+                except Exception:
+                    pass  # File may have been deleted after staging
+            
+            created["artifacts"].append({
+                "name": artifact.name,
+                "type": artifact.type,
+                "version": version,
+                "created_at": time.time(),
+                "size_bytes": total_size,
+                "num_files": len(artifact._staged_files),
+                "num_references": len(artifact._staged_references)
+            })
+            
+            # Atomic write
+            self._write_json_atomic(artifacts_created_path, created)
+            
+        except Exception as e:
+            logger.warning(f"Failed to record artifact creation: {e}")
+            # Don't fail the whole operation if recording fails
+        
+        logger.info(f"Logged artifact {artifact.name}:v{version}")
+        return version
+    
+    def use_artifact(self, artifact_spec: str) -> 'Artifact':
+        """
+        Use (load) an artifact by name and version.
+        
+        Args:
+            artifact_spec: Artifact specification in format "name:version" or "name:alias"
+                         Examples: "my-model:v3", "my-model:latest", "dataset:production"
+            
+        Returns:
+            Artifact object with loaded metadata
+            
+        Raises:
+            RuntimeError: If artifacts system is not available
+            FileNotFoundError: If artifact not found
+            ValueError: If artifact_spec format is invalid
+            
+        Example:
+            artifact = run.use_artifact("my-model:latest")
+            model_path = artifact.download()
+        """
+        if not HAS_ARTIFACTS or not self.artifact_storage:
+            raise RuntimeError(
+                "Artifacts system is not available. "
+                "Make sure runicorn.artifacts module is properly installed."
+            )
+        
+        # Parse artifact spec
+        if ":" not in artifact_spec:
+            raise ValueError(
+                f"Artifact spec must be in format 'name:version' or 'name:alias', got: {artifact_spec}"
+            )
+        
+        name, version_or_alias = artifact_spec.split(":", 1)
+        
+        # Determine type by searching
+        artifact_type = None
+        for type_name in ["model", "dataset", "config", "code", "custom"]:
+            artifact_dir = self.artifact_storage.artifacts_root / type_name / name
+            if artifact_dir.exists():
+                artifact_type = type_name
+                break
+        
+        if not artifact_type:
+            raise FileNotFoundError(f"Artifact not found: {name}")
+        
+        # Determine version number
+        if version_or_alias.lower().startswith("v"):
+            # Direct version number (case-insensitive)
+            try:
+                version = int(version_or_alias[1:])
+                if version <= 0:
+                    raise ValueError(f"Invalid version number: {version}")
+            except (ValueError, IndexError) as e:
+                raise ValueError(f"Invalid version format: {version_or_alias}") from e
+        else:
+            # Alias (e.g., "latest", "production")
+            index = self.artifact_storage._load_index(name, artifact_type)
+            version = index.get_version_by_alias(version_or_alias)
+            
+            if version is None:
+                available_aliases = list(index.aliases.keys())
+                raise ValueError(
+                    f"Alias not found: {version_or_alias} for artifact {name}. "
+                    f"Available aliases: {available_aliases}"
+                )
+        
+        # Load artifact
+        metadata, manifest = self.artifact_storage.load_artifact(name, artifact_type, version)
+        
+        # Create artifact object
+        artifact = Artifact(
+            name=name,
+            type=artifact_type,
+            description=metadata.description,
+            metadata=metadata.metadata
+        )
+        artifact._version = version
+        artifact._storage = self.artifact_storage
+        artifact._manifest = manifest
+        artifact._artifact_metadata = metadata
+        artifact._is_loaded = True
+        
+        # Record artifact usage in run metadata
+        artifacts_used_path = self.run_dir / "artifacts_used.json"
+        
+        try:
+            if artifacts_used_path.exists():
+                try:
+                    used = json.loads(artifacts_used_path.read_text(encoding="utf-8"))
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.warning(f"Failed to read artifacts_used.json, starting fresh: {e}")
+                    used = {"artifacts": []}
+            else:
+                used = {"artifacts": []}
+            
+            # Check if already recorded (avoid duplicates)
+            already_recorded = any(
+                a["name"] == name and a["version"] == version
+                for a in used.get("artifacts", [])
+            )
+            
+            if not already_recorded:
+                used["artifacts"].append({
+                    "name": name,
+                    "type": artifact_type,
+                    "version": version,
+                    "used_at": time.time(),
+                    "size_bytes": metadata.size_bytes,
+                    "num_files": metadata.num_files
+                })
+                
+                # Atomic write
+                self._write_json_atomic(artifacts_used_path, used)
+        except Exception as e:
+            logger.warning(f"Failed to record artifact usage: {e}")
+            # Don't fail the whole operation
+        
+        logger.info(f"Using artifact {name}:v{version}")
+        return artifact
+    
     def finish(self, status: str = "finished") -> None:
         """Mark the run as finished and ensure all data is written."""
         # Save best metric to summary before finishing
@@ -544,6 +751,31 @@ class Run:
             except Exception as e:
                 logger.debug(f"Failed to update status in modern storage: {e}")
             
+            # Close storage backend connections (critical for Windows)
+            try:
+                if hasattr(self.storage_backend, 'close'):
+                    self.storage_backend.close()
+                    logger.debug("Closed storage backend connections")
+                    
+                    # Additional: Force close all file handles
+                    import gc
+                    gc.collect()  # Force garbage collection to release handles
+                    
+                    # Small delay for Windows to release file locks
+                    import time as time_module
+                    time_module.sleep(0.05)
+                    
+            except Exception as e:
+                logger.debug(f"Failed to close storage backend: {e}")
+        
+        # Close artifact storage (if initialized)
+        if self.artifact_storage and hasattr(self.artifact_storage, 'close'):
+            try:
+                # ArtifactStorage doesn't have close, but check anyway
+                pass
+            except Exception:
+                pass
+            
         # Force flush to ensure data is written to disk
         try:
             import os
@@ -567,7 +799,54 @@ class Run:
     def _write_json(path: Path, obj: Dict[str, Any]) -> None:
         os.makedirs(path.parent, exist_ok=True)
         path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
-
+    
+    @staticmethod
+    def _write_json_atomic(path: Path, obj: Dict[str, Any]) -> None:
+        """
+        Write JSON file atomically using temp-then-rename pattern.
+        
+        This prevents corruption if process crashes during write.
+        Windows-compatible version.
+        """
+        os.makedirs(path.parent, exist_ok=True)
+        
+        import tempfile
+        
+        # Create temp file (Windows: must close fd before using path)
+        temp_fd, temp_path = tempfile.mkstemp(
+            dir=path.parent,
+            prefix=f".{path.stem}_",
+            suffix=".json.tmp",
+            text=False  # Binary mode for Windows
+        )
+        
+        try:
+            # Close fd immediately (Windows compatibility)
+            os.close(temp_fd)
+            
+            # Write to temp file
+            with open(temp_path, 'w', encoding='utf-8') as f:
+                json.dump(obj, f, ensure_ascii=False, indent=2)
+            
+            # On Windows, must remove target first
+            if os.name == 'nt' and path.exists():
+                try:
+                    path.unlink()
+                except Exception:
+                    pass
+            
+            # Atomic rename
+            Path(temp_path).replace(path)
+            
+        except Exception:
+            # Clean up temp file
+            try:
+                if Path(temp_path).exists():
+                    Path(temp_path).unlink()
+            except Exception:
+                pass
+            raise
+ 
     @staticmethod
     def _append_jsonl(path: Path, obj: Dict[str, Any], lock: FileLock) -> None:
         os.makedirs(path.parent, exist_ok=True)

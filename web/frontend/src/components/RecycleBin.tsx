@@ -3,6 +3,7 @@ import { Modal, Table, Button, Space, Tag, message, Tooltip, Alert, Typography, 
 import { DeleteOutlined, UndoOutlined, ClearOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { listDeletedRuns, restoreRuns, emptyRecycleBin } from '../api'
 import { useTranslation } from 'react-i18next'
+import logger from '../utils/logger'
 
 interface DeletedRun {
   id: string
@@ -37,7 +38,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       const result = await listDeletedRuns()
       setDeletedRuns(result.deleted_runs || [])
     } catch (error) {
-      console.error('Failed to fetch deleted runs:', error)
+      logger.error('Failed to fetch deleted runs:', error)
       message.error(t('recycle_bin.fetch_failed') || 'Failed to load recycle bin')
     } finally {
       setLoading(false)
@@ -70,7 +71,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
         message.warning('No runs were restored')
       }
     } catch (error) {
-      console.error('Restore failed:', error)
+      logger.error('Restore failed:', error)
       message.error(t('recycle_bin.restore_failed') || 'Failed to restore runs')
     } finally {
       setRestoreLoading(false)
@@ -84,7 +85,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       message.success(t('recycle_bin.empty_success', { count: result.permanently_deleted }) || `Permanently deleted ${result.permanently_deleted} runs`)
       fetchDeletedRuns()
     } catch (error) {
-      console.error('Empty bin failed:', error)
+      logger.error('Empty bin failed:', error)
       message.error(t('recycle_bin.empty_failed') || 'Failed to empty recycle bin')
     } finally {
       setEmptyLoading(false)

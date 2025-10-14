@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Request, HTTPException
 from ..services.storage import iter_all_runs, read_json, update_status_if_process_dead
+from ..utils.cache import get_metrics_cache
 
 router = APIRouter()
 
@@ -19,13 +20,24 @@ async def health(request: Request) -> Dict[str, Any]:
     Get system health status.
     
     Returns:
-        System health information including storage path
+        System health information including storage path and cache stats
     """
     storage_root = request.app.state.storage_root
+    cache = get_metrics_cache()
+    cache_stats = cache.stats()
+    
     return {
         "status": "ok", 
         "storage": str(storage_root),
-        "version": "0.3.0"
+        "version": "0.3.1",
+        "cache": {
+            "enabled": True,
+            "hit_rate": f"{cache_stats['hit_rate']:.1%}",
+            "hits": cache_stats['hits'],
+            "misses": cache_stats['misses'],
+            "size": cache_stats['size'],
+            "max_size": cache_stats['max_size'],
+        }
     }
 
 

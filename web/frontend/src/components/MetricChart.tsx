@@ -1,9 +1,31 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Space, Switch, Tooltip, Slider, Select, Button } from 'antd'
+import React, { useEffect, useMemo, useRef, useState, memo } from 'react'
+import { Space, Switch, Tooltip, Slider, Select, Button, Card, Typography, Divider } from 'antd'
+import { ExportOutlined } from '@ant-design/icons'
 import AutoResizeEChart from './AutoResizeEChart'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTranslation } from 'react-i18next'
+import designTokens from '../styles/designTokens'
 
-export default function MetricChart({ metrics, xKey, yKeys, title, height, persistKey, group }: { metrics: { columns: string[]; rows: any[] }, xKey: string, yKeys: string[], title: string, height?: number | string, persistKey?: string, group?: string }) {
+const { Text } = Typography
+
+const MetricChart = memo(function MetricChart({ 
+  metrics, 
+  xKey, 
+  yKeys, 
+  title, 
+  height, 
+  persistKey, 
+  group 
+}: { 
+  metrics: { columns: string[]; rows: any[] }, 
+  xKey: string, 
+  yKeys: string[], 
+  title: string, 
+  height?: number | string, 
+  persistKey?: string, 
+  group?: string 
+}) {
+  const { t } = useTranslation()
   const { settings } = useSettings()
   
   // Use settings-based height if not explicitly provided
@@ -48,7 +70,7 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height, persi
   useEffect(() => {
     if (!persistKey) return
     try {
-      localStorage.setItem(`MetricChart:${persistKey}` , JSON.stringify({ useLog, dynamicScale, smoothing, xAxisKey }))
+      localStorage.setItem(`MetricChart:${persistKey}`, JSON.stringify({ useLog, dynamicScale, smoothing, xAxisKey }))
     } catch {}
   }, [persistKey, useLog, dynamicScale, smoothing, xAxisKey])
 
@@ -128,7 +150,15 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height, persi
       }
       if (k === yKeys[0]) {
         const allLines = stageLines
-        if (allLines.length) s.markLine = { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: '#bbb' }, data: allLines }
+        if (allLines.length) {
+          s.markLine = { 
+            silent: true, 
+            symbol: 'none', 
+            lineStyle: { type: 'dashed', color: '#bbb', width: 1 }, 
+            label: { show: false }, // Hide labels to prevent overlap with legend
+            data: allLines 
+          }
+        }
       }
       return s
     })
@@ -136,26 +166,31 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height, persi
       title: { 
         text: title,
         left: 'center',
-        top: 8,
+        top: designTokens.spacing.xs,
         textStyle: {
-          fontSize: 14,
-          fontWeight: 'bold'
+          fontSize: designTokens.typography.fontSize.md,
+          fontWeight: designTokens.typography.fontWeight.semibold
         }
       },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
-      legend: { data: yKeys, top: 32 },
+      legend: { 
+        data: yKeys, 
+        top: designTokens.spacing.xl,
+        padding: [5, 10],
+      },
       xAxis: { type: 'category', data: x },
       yAxis: { type: useLog ? 'log' : 'value', scale: dynamicScale, min: dynamicScale ? 'dataMin' : 0 },
       grid: { 
         left: 50, 
         right: 30, 
-        top: yKeys.length > 1 ? 60 : 50, 
-        bottom: 72,
+        // Increase top spacing to give more room for legend, especially with multiple metrics
+        top: yKeys.length > 3 ? 70 : (yKeys.length > 1 ? 60 : 50), 
+        bottom: 80,
         show: settings.showGridLines
       },
       dataZoom: [
         { type: 'inside', throttle: 50 },
-        { type: 'slider', height: 18, bottom: 36 }
+        { type: 'slider', height: 18, bottom: 40 }
       ],
       toolbox: {
         feature: {
@@ -165,7 +200,6 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height, persi
         right: 10
       },
       series,
-      // Global animation settings
       animation: settings.enableChartAnimations,
       animationDuration: settings.enableChartAnimations ? 1000 : 0,
     }
@@ -201,26 +235,84 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height, persi
 
   return (
     <div>
-      <Space wrap style={{ marginBottom: 8 }}>
-        <Tooltip title="Use logarithmic y-axis (hides non-positive values)">
-          <span>Log Y <Switch checked={useLog} onChange={setUseLog} style={{ marginLeft: 6 }} /></span>
-        </Tooltip>
-        <Tooltip title="Dynamic y-axis (do not force start at 0)">
-          <span>Auto Scale Y <Switch checked={dynamicScale} onChange={setDynamicScale} style={{ marginLeft: 6 }} /></span>
-        </Tooltip>
-        <Tooltip title="Exponential moving average smoothing (0 = off)">
-          <span style={{ display: 'inline-flex', alignItems: 'center' }}>Smooth <Slider min={0} max={0.95} step={0.05} value={smoothing} onChange={(v) => setSmoothing(Array.isArray(v) ? v[0] : v)} style={{ width: 160, marginLeft: 6 }} /></span>
-        </Tooltip>
-        <Tooltip title="X-axis source column (only shows if available in metrics.csv)">
-          <span>
-            X:&nbsp;
-            <Select size="small" value={presentCols.includes(xAxisKey) ? xAxisKey : xKey} style={{ width: 140 }} onChange={setXAxisKey}
-              options={(xCandidates.length ? xCandidates : [xKey]).map(k => ({ value: k, label: k }))}
+      <Card 
+        size="small"
+        style={{ 
+          marginBottom: designTokens.spacing.md,
+          borderRadius: designTokens.borderRadius.md,
+        }}
+        bodyStyle={{ padding: `${designTokens.spacing.sm}px ${designTokens.spacing.md}px` }}
+      >
+        {/* Use simple Space wrap layout - prevents overlap in narrow columns */}
+        <Space wrap size="small" style={{ width: '100%' }}>
+          {/* Y-Axis Toggles */}
+          <Tooltip title={t('chart.log_y_tooltip')}>
+            <Switch 
+              checkedChildren={t('chart.log')} 
+              unCheckedChildren={t('chart.linear')} 
+              checked={useLog} 
+              onChange={setUseLog} 
+              size="small"
             />
-          </span>
-        </Tooltip>
-        <Button size="small" onClick={exportCsv}>Export CSV</Button>
-      </Space>
+          </Tooltip>
+
+          <Tooltip title={t('chart.auto_scale_tooltip')}>
+            <Switch 
+              checkedChildren={t('chart.auto')} 
+              unCheckedChildren={t('chart.fixed')} 
+              checked={dynamicScale} 
+              onChange={setDynamicScale} 
+              size="small"
+            />
+          </Tooltip>
+
+          <Divider type="vertical" style={{ margin: '0 4px' }} />
+
+          {/* Smoothing Control */}
+          <Space size="small" style={{ minWidth: 140, maxWidth: 200 }}>
+            <Text type="secondary" style={{ fontSize: designTokens.typography.fontSize.xs, whiteSpace: 'nowrap' }}>
+              {t('chart.smooth')}:
+            </Text>
+            <Slider 
+              min={0} 
+              max={0.95} 
+              step={0.05} 
+              value={smoothing} 
+              onChange={(v) => setSmoothing(Array.isArray(v) ? v[0] : v)} 
+              style={{ width: 90 }} 
+              tooltip={{ 
+                formatter: (v) => v ? `${(v * 100).toFixed(0)}%` : t('chart.off')
+              }}
+            />
+          </Space>
+
+          <Divider type="vertical" style={{ margin: '0 4px' }} />
+
+          {/* X-Axis Selector */}
+          <Select 
+            size="small" 
+            value={presentCols.includes(xAxisKey) ? xAxisKey : xKey} 
+            style={{ minWidth: 100 }} 
+            onChange={setXAxisKey}
+            options={(xCandidates.length ? xCandidates : [xKey]).map(k => ({ 
+              value: k, 
+              label: `${t('chart.x_axis')}: ${k}` 
+            }))}
+          />
+
+          <Divider type="vertical" style={{ margin: '0 4px' }} />
+
+          {/* Export Button */}
+          <Button 
+            size="small" 
+            icon={<ExportOutlined />} 
+            onClick={exportCsv}
+          >
+            {t('chart.export_csv')}
+          </Button>
+        </Space>
+      </Card>
+
       <div style={{ height: effectiveHeight as any, width: '100%' }}>
         <AutoResizeEChart 
           option={option as any} 
@@ -229,4 +321,18 @@ export default function MetricChart({ metrics, xKey, yKeys, title, height, persi
       </div>
     </div>
   )
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison for performance optimization
+  // Only re-render if data or key props actually changed
+  return (
+    prevProps.metrics === nextProps.metrics &&
+    prevProps.xKey === nextProps.xKey &&
+    JSON.stringify(prevProps.yKeys) === JSON.stringify(nextProps.yKeys) &&
+    prevProps.title === nextProps.title &&
+    prevProps.height === nextProps.height &&
+    prevProps.persistKey === nextProps.persistKey &&
+    prevProps.group === nextProps.group
+  )
+})
+
+export default MetricChart

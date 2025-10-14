@@ -2,6 +2,94 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2025-10-03
+
+### 🎉 Major New Feature: Model & Data Versioning (Artifacts)
+
+#### Core Features
+- **Added**: Complete Artifacts system for model and dataset version control
+- **Added**: `rn.Artifact()` class for creating versioned assets
+- **Added**: `run.log_artifact()` for saving artifacts with automatic versioning
+- **Added**: `run.use_artifact()` for loading specific artifact versions
+- **Added**: Automatic version numbering (v1, v2, v3...)
+- **Added**: Alias system (latest, production, etc.)
+
+#### Smart Storage
+- **Added**: Content deduplication based on SHA256 hashing
+- **Added**: Hardlink optimization - identical files stored only once (save 50-90% space)
+- **Added**: Dedup pool mechanism for intelligent content sharing
+- **Added**: Atomic writes to prevent data corruption
+
+#### Lineage Tracking
+- **Added**: Automatic lineage tracking for artifact dependencies
+- **Added**: LineageTracker for building complete dependency graphs
+- **Added**: Cycle detection to prevent infinite recursion
+- **Added**: Interactive lineage visualization with ECharts
+
+#### Web UI
+- **Added**: Artifacts management page with list, search, and statistics
+- **Added**: Artifact detail page with version history, files, and metadata
+- **Added**: Lineage graph visualization
+- **Added**: Storage statistics panel showing dedup effectiveness
+
+#### CLI Tools
+- **Added**: `runicorn artifacts` command with actions: list, versions, info, delete, stats
+
+#### API Endpoints
+- **Added**: Full RESTful API for artifact management (7 endpoints)
+
+#### Internationalization
+- **Added**: 60+ translations for Artifacts features (Chinese & English)
+
+### 🔧 Code Quality Improvements
+
+#### Performance
+- **Added**: Metrics caching - 10-20x faster API responses
+- **Improved**: Process status checking - 4-10x faster list loading
+- **Added**: Recursion depth limits
+
+#### Refactoring
+- **Refactored**: Dedup function split into single-responsibility functions
+- **Added**: Atomic JSON writes
+- **Added**: Cycle detection with visited sets
+
+#### Security
+- **Added**: Triple-layer path traversal protection
+- **Added**: Input validation for run_id, batch_size, version numbers
+- **Added**: Path length checking for Windows compatibility
+
+#### User Experience
+- **Improved**: Unified design system with designTokens
+- **Improved**: Chart controls layout with auto-wrapping
+- **Added**: Skeleton screen loading states
+- **Improved**: More informative error messages
+
+#### Code Cleanup
+- **Removed**: All console.log statements
+- **Added**: React.memo optimization
+- **Fixed**: WebSocket memory leak
+
+### 🐛 Bug Fixes
+- **Fixed**: SDK async call confusion causing potential data loss
+- **Fixed**: Stage line overlapping with legend
+- **Fixed**: Text overlap in multi-column mode
+- **Fixed**: Windows file lock issues with SQLite
+- **Fixed**: 31+ other architecture, security, and performance issues
+
+### 📚 Documentation
+- **Added**: `docs/ARTIFACTS_GUIDE.md` - Complete Artifacts user guide
+- **Added**: `examples/user_workflow_demo.py` - Full workflow demonstration
+- **Added**: `examples/realistic_ml_project/` - Real project example
+- **Added**: `tests/TESTING_GUIDE.md` - Testing guide
+- **Added**: 35+ test cases
+
+### ⚠️ Known Limitations
+- Windows test cleanup may fail (doesn't affect functionality)
+- Cross-drive hardlinks fallback to copy (recommend same drive)
+- Windows path length limit (~240 characters)
+
+---
+
 ## [0.3.1] - 2025-09-26
 
 ### 🏗️ Architecture Modernization

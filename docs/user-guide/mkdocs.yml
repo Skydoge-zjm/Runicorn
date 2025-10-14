@@ -1,0 +1,157 @@
+site_name: Runicorn User Guide
+site_description: Complete user guide for Runicorn - Local ML experiment tracking platform
+site_author: Runicorn Team
+site_url: https://Skydoge-zjm.github.io/Runicorn
+
+repo_name: Runicorn
+repo_url: https://github.com/Skydoge-zjm/Runicorn
+edit_uri: edit/main/docs/user-guide/docs/
+
+# Copyright
+copyright: Copyright &copy; 2025 Runicorn Team
+
+# Theme configuration
+theme:
+  name: material
+  language: en
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  
+  icon:
+    repo: fontawesome/brands/github
+    admonition:
+      note: octicons/tag-16
+      abstract: octicons/checklist-16
+      info: octicons/info-16
+      tip: octicons/flame-16
+      success: octicons/check-16
+      question: octicons/question-16
+      warning: octicons/alert-16
+      failure: octicons/x-circle-16
+
+# Extensions
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+# Navigation
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - First Experiment: getting-started/first-experiment.md
+    - Configuration: getting-started/configuration.md
+  
+  - Python SDK:
+    - Overview: sdk/overview.md
+    - Experiment Tracking: sdk/experiment-tracking.md
+    - Logging Metrics: sdk/logging-metrics.md
+    - Artifacts (Models): sdk/artifacts.md
+    - Advanced Features: sdk/advanced.md
+    - API Reference: sdk/api-reference.md
+  
+  - Command Line:
+    - CLI Overview: cli/overview.md
+    - Viewer Commands: cli/viewer.md
+    - Config Commands: cli/config.md
+    - Export & Import: cli/export-import.md
+    - Artifacts Management: cli/artifacts.md
+  
+  - Web Interface:
+    - UI Overview: ui/overview.md
+    - Experiments Page: ui/experiments.md
+    - Artifact Management: ui/artifacts.md
+    - Remote Sync: ui/remote-sync.md
+    - Settings & Preferences: ui/settings.md
+  
+  - Tutorials:
+    - Image Classification: tutorials/image-classification.md
+    - NLP Fine-tuning: tutorials/nlp-finetuning.md
+    - Model Versioning: tutorials/model-versioning.md
+    - Remote Training: tutorials/remote-training.md
+    - Multi-GPU Training: tutorials/multi-gpu.md
+  
+  - How-To Guides:
+    - Compare Experiments: guides/compare-experiments.md
+    - Manage Model Versions: guides/manage-models.md
+    - Export Results: guides/export-results.md
+    - Sync Remote Server: guides/sync-remote.md
+    - Troubleshooting: guides/troubleshooting.md
+  
+  - Reference:
+    - Storage Structure: reference/storage-structure.md
+    - File Formats: reference/file-formats.md
+    - Best Practices: reference/best-practices.md
+    - FAQ: reference/faq.md
+    - Glossary: reference/glossary.md
+
+# Plugins
+plugins:
+  - search:
+      lang: en
+  - minify:
+      minify_html: true
+
+# Extra
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/yourusername/runicorn
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/runicorn/
+  
+  version:
+    provider: mike
+    default: stable
+
+# Custom CSS
+extra_css:
+  - stylesheets/extra.css
+

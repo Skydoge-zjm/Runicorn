@@ -1,0 +1,42 @@
+/* Resizable table column styles */
+
+.react-resizable {
+  position: relative;
+  background-clip: padding-box;
+}
+
+.react-resizable-handle {
+  position: absolute;
+  right: -5px;
+  bottom: 0;
+  z-index: 1;
+  width: 10px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.react-resizable-handle:hover {
+  background-color: rgba(24, 144, 255, 0.2);
+}
+
+.react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 20px;
+  background-color: #d9d9d9;
+  transition: background-color 0.3s;
+}
+
+.react-resizable-handle:hover::after {
+  background-color: #1890ff;
+}
+
+/* Prevent text selection during resize */
+.react-resizable-handle-dragging * {
+  user-select: none;
+}
+

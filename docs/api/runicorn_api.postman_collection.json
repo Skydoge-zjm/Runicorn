@@ -1,0 +1,393 @@
+{
+  "info": {
+    "name": "Runicorn API",
+    "description": "Complete API collection for Runicorn experiment tracking platform",
+    "version": "0.4.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:23300/api",
+      "type": "string"
+    },
+    {
+      "key": "run_id",
+      "value": "20250114_153045_a1b2c3",
+      "type": "string"
+    },
+    {
+      "key": "artifact_name",
+      "value": "resnet50-model",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & System",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          }
+        },
+        {
+          "name": "Get Config",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/config"
+          }
+        },
+        {
+          "name": "GPU Telemetry",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/gpu/telemetry"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Runs API",
+      "item": [
+        {
+          "name": "List Runs",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/runs"
+          }
+        },
+        {
+          "name": "Get Run Detail",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/runs/{{run_id}}"
+          }
+        },
+        {
+          "name": "Soft Delete Runs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"run_ids\": [\"{{run_id}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/runs/soft-delete"
+          }
+        },
+        {
+          "name": "List Recycle Bin",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/recycle-bin"
+          }
+        },
+        {
+          "name": "Restore Runs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"run_ids\": [\"{{run_id}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/recycle-bin/restore"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Metrics API",
+      "item": [
+        {
+          "name": "Get Metrics (Time)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/runs/{{run_id}}/metrics"
+          }
+        },
+        {
+          "name": "Get Metrics (Step)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/runs/{{run_id}}/metrics_step"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Artifacts API",
+      "item": [
+        {
+          "name": "List All Artifacts",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/artifacts"
+          }
+        },
+        {
+          "name": "List Models Only",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/artifacts?type=model"
+          }
+        },
+        {
+          "name": "List Artifact Versions",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/versions?type=model"
+          }
+        },
+        {
+          "name": "Get Artifact Detail",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/v3?type=model"
+          }
+        },
+        {
+          "name": "List Artifact Files",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/v3/files?type=model"
+          }
+        },
+        {
+          "name": "Get Lineage Graph",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/v3/lineage?type=model&max_depth=3"
+          }
+        },
+        {
+          "name": "Get Storage Stats",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/artifacts/stats"
+          }
+        },
+        {
+          "name": "Delete Artifact Version (Soft)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/v2?type=model&permanent=false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "V2 API (High Performance)",
+      "item": [
+        {
+          "name": "List Experiments (Basic)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v2/experiments?page=1&per_page=50"
+          }
+        },
+        {
+          "name": "List Experiments (Filtered)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v2/experiments?project=image_classification&status=finished&best_metric_min=0.9&order_by=best_metric_value&order_desc=true&page=1&per_page=20"
+          }
+        },
+        {
+          "name": "Get Experiment Detail",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v2/experiments/{{run_id}}"
+          }
+        },
+        {
+          "name": "Fast Metrics Query",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/v2/experiments/{{run_id}}/metrics/fast?metric_names=loss,accuracy&downsample=100"
+          }
+        },
+        {
+          "name": "Batch Delete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"exp_ids\": [\"{{run_id}}\"],\n  \"reason\": \"cleanup\"\n}"
+            },
+            "url": "{{baseUrl}}/v2/experiments/batch-delete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Config API",
+      "item": [
+        {
+          "name": "Get Configuration",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/config"
+          }
+        },
+        {
+          "name": "Set User Root Dir",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"E:\\\\RunicornData\"\n}"
+            },
+            "url": "{{baseUrl}}/config/user_root_dir"
+          }
+        },
+        {
+          "name": "List SSH Connections",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/config/ssh_connections"
+          }
+        },
+        {
+          "name": "Save SSH Connection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"host\": \"192.168.1.100\",\n  \"port\": 22,\n  \"username\": \"user\",\n  \"name\": \"Lab Server\",\n  \"auth_method\": \"password\",\n  \"remember_password\": true,\n  \"password\": \"secret123\"\n}"
+            },
+            "url": "{{baseUrl}}/config/ssh_connections"
+          }
+        }
+      ]
+    },
+    {
+      "name": "SSH/Remote API",
+      "item": [
+        {
+          "name": "Connect to Remote",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"host\": \"192.168.1.100\",\n  \"port\": 22,\n  \"username\": \"user\",\n  \"password\": \"secret123\",\n  \"use_agent\": false\n}"
+            },
+            "url": "{{baseUrl}}/unified/connect"
+          }
+        },
+        {
+          "name": "Get Connection Status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/unified/status"
+          }
+        },
+        {
+          "name": "List Remote Directory",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/unified/listdir?path=/data/runicorn"
+          }
+        },
+        {
+          "name": "Configure Smart Mode",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"smart\",\n  \"remote_root\": \"/data/runicorn\",\n  \"auto_sync\": true,\n  \"sync_interval_minutes\": 5\n}"
+            },
+            "url": "{{baseUrl}}/unified/configure_mode"
+          }
+        },
+        {
+          "name": "Disconnect",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": "{{baseUrl}}/unified/disconnect"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Projects API",
+      "item": [
+        {
+          "name": "List Projects",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/projects"
+          }
+        },
+        {
+          "name": "List Experiment Names",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/projects/image_classification/names"
+          }
+        },
+        {
+          "name": "List Runs in Experiment",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/projects/image_classification/names/resnet_baseline/runs"
+          }
+        }
+      ]
+    }
+  ]
+}
+

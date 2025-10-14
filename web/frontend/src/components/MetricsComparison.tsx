@@ -10,6 +10,7 @@ import {
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import { useTranslation } from 'react-i18next'
+import logger from '../utils/logger'
 
 interface RunMetrics {
   id: string
@@ -55,7 +56,7 @@ export default function MetricsComparison({ runs = [] }: ComparisonProps) {
       })
       setSelectedMetrics(Array.from(allMetrics).slice(0, 4)) // Select first 4 metrics
     }).catch(err => {
-      console.error('Failed to fetch run metrics:', err)
+      logger.error('Failed to fetch run metrics:', err)
     }).finally(() => {
       setLoading(false)
     })

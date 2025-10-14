@@ -1,7 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Space, Switch, Tooltip, Slider, Button } from 'antd'
+import React, { useEffect, useMemo, useRef, useState, memo } from 'react'
+import { Space, Switch, Tooltip, Slider, Button, Card, Typography, Divider } from 'antd'
+import { ExportOutlined } from '@ant-design/icons'
 import AutoResizeEChart from './AutoResizeEChart'
 import { useSettings } from '../contexts/SettingsContext'
+import { useTranslation } from 'react-i18next'
+import designTokens from '../styles/designTokens'
+
+const { Text } = Typography
 
 export type RunMetric = { id: string; label?: string; metrics: { columns: string[]; rows: any[] } }
 
@@ -15,7 +20,7 @@ function ema(vals: Array<number | null>, alpha: number) {
   })
 }
 
-export default function MultiRunMetricChart({
+const MultiRunMetricChart = memo(function MultiRunMetricChart({
   runs,
   xKey,
   yKey,
@@ -32,6 +37,7 @@ export default function MultiRunMetricChart({
   persistKey?: string
   group?: string
 }) {
+  const { t } = useTranslation()
   const { settings } = useSettings()
   
   // Use settings-based height if not explicitly provided
@@ -107,34 +113,35 @@ export default function MultiRunMetricChart({
       title: { 
         text: title,
         left: 'center',
-        top: 8,
+        top: designTokens.spacing.xs,
         textStyle: {
-          fontSize: 14,
-          fontWeight: 'bold'
+          fontSize: designTokens.typography.fontSize.md,
+          fontWeight: designTokens.typography.fontWeight.semibold
         }
       },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
       legend: { 
         data: runs.map(r => r.label || r.id),
-        top: 32,
-        type: 'scroll'
+        top: designTokens.spacing.xl,
+        type: 'scroll',
+        padding: [5, 10],
       },
       xAxis: { type: 'value', name: xKey },
       yAxis: { type: useLog ? 'log' : 'value', scale: dynamicScale, min: dynamicScale ? 'dataMin' : 0 },
       grid: { 
         left: 50, 
         right: 30, 
-        top: 60, 
-        bottom: 72,
+        // Increase top spacing for legend, especially with multiple runs
+        top: runs.length > 3 ? 70 : (runs.length > 1 ? 60 : 50), 
+        bottom: 80,
         show: settings.showGridLines
       },
       dataZoom: [
         { type: 'inside', throttle: 50 },
-        { type: 'slider', height: 18, bottom: 36 }
+        { type: 'slider', height: 18, bottom: 40 }
       ],
       toolbox: { feature: { restore: {}, saveAsImage: {} }, right: 10 },
       series,
-      // Global animation settings
       animation: settings.enableChartAnimations,
       animationDuration: settings.enableChartAnimations ? 1000 : 0,
     }
@@ -166,18 +173,70 @@ export default function MultiRunMetricChart({
 
   return (
     <div>
-      <Space wrap style={{ marginBottom: 8 }}>
-        <Tooltip title="Use logarithmic y-axis (hides non-positive values)">
-          <span>Log Y <Switch checked={useLog} onChange={setUseLog} style={{ marginLeft: 6 }} /></span>
-        </Tooltip>
-        <Tooltip title="Dynamic y-axis (do not force start at 0)">
-          <span>Auto Scale Y <Switch checked={dynamicScale} onChange={setDynamicScale} style={{ marginLeft: 6 }} /></span>
-        </Tooltip>
-        <Tooltip title="Exponential moving average smoothing (0 = off)">
-          <span style={{ display: 'inline-flex', alignItems: 'center' }}>Smooth <Slider min={0} max={0.95} step={0.05} value={smoothing} onChange={(v) => setSmoothing(Array.isArray(v) ? v[0] : v)} style={{ width: 160, marginLeft: 6 }} /></span>
-        </Tooltip>
-        <Button size="small" onClick={exportCsv}>Export CSV</Button>
-      </Space>
+      <Card 
+        size="small"
+        style={{ 
+          marginBottom: designTokens.spacing.md,
+          borderRadius: designTokens.borderRadius.md,
+        }}
+        bodyStyle={{ padding: `${designTokens.spacing.sm}px ${designTokens.spacing.md}px` }}
+      >
+        {/* Use simple Space wrap layout - prevents overlap in narrow columns */}
+        <Space wrap size="small" style={{ width: '100%' }}>
+          {/* Y-Axis Toggles */}
+          <Tooltip title={t('chart.log_y_tooltip')}>
+            <Switch 
+              checkedChildren={t('chart.log')} 
+              unCheckedChildren={t('chart.linear')} 
+              checked={useLog} 
+              onChange={setUseLog} 
+              size="small"
+            />
+          </Tooltip>
+
+          <Tooltip title={t('chart.auto_scale_tooltip')}>
+            <Switch 
+              checkedChildren={t('chart.auto')} 
+              unCheckedChildren={t('chart.fixed')} 
+              checked={dynamicScale} 
+              onChange={setDynamicScale} 
+              size="small"
+            />
+          </Tooltip>
+
+          <Divider type="vertical" style={{ margin: '0 4px' }} />
+
+          {/* Smoothing Control */}
+          <Space size="small" style={{ minWidth: 140, maxWidth: 200 }}>
+            <Text type="secondary" style={{ fontSize: designTokens.typography.fontSize.xs, whiteSpace: 'nowrap' }}>
+              {t('chart.smooth')}:
+            </Text>
+            <Slider 
+              min={0} 
+              max={0.95} 
+              step={0.05} 
+              value={smoothing} 
+              onChange={(v) => setSmoothing(Array.isArray(v) ? v[0] : v)} 
+              style={{ width: 90 }} 
+              tooltip={{ 
+                formatter: (v) => v ? `${(v * 100).toFixed(0)}%` : t('chart.off')
+              }}
+            />
+          </Space>
+
+          <Divider type="vertical" style={{ margin: '0 4px' }} />
+
+          {/* Export Button */}
+          <Button 
+            size="small" 
+            icon={<ExportOutlined />} 
+            onClick={exportCsv}
+          >
+            {t('chart.export_csv')}
+          </Button>
+        </Space>
+      </Card>
+
       <div style={{ height: effectiveHeight as any, width: '100%' }}>
         <AutoResizeEChart 
           option={option as any} 
@@ -186,4 +245,17 @@ export default function MultiRunMetricChart({
       </div>
     </div>
   )
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison for performance optimization
+  return (
+    JSON.stringify(prevProps.runs) === JSON.stringify(nextProps.runs) &&
+    prevProps.xKey === nextProps.xKey &&
+    prevProps.yKey === nextProps.yKey &&
+    prevProps.title === nextProps.title &&
+    prevProps.height === nextProps.height &&
+    prevProps.persistKey === nextProps.persistKey &&
+    prevProps.group === nextProps.group
+  )
+})
+
+export default MultiRunMetricChart

@@ -38,7 +38,7 @@ class SSHSession:
         self.sftp: Optional[paramiko.SFTPClient] = None
         self.id = f"{self.username}@{self.host}:{self.port}:{int(time.time()*1000)}"
 
-    def connect(self):
+    def connect(self) -> None:
         if self.client:
             return
         client = paramiko.SSHClient()
@@ -65,8 +65,9 @@ class SSHSession:
                     pkey = paramiko.Ed25519Key.from_private_key(file_obj=StringIO(self.pkey_str), password=self.passphrase)
                     logger.debug(f"Successfully parsed Ed25519 key for {self.username}@{self.host}")
                 except (paramiko.SSHException, ValueError) as e2:
-                    logger.error(f"Failed to parse private key: RSA error: {e}, Ed25519 error: {e2}")
-                    raise paramiko.AuthenticationException(f"Invalid private key format")
+                    # Log detailed error for debugging but don't expose to user
+                    logger.debug(f"Failed to parse private key: RSA error: {e}, Ed25519 error: {e2}")
+                    raise paramiko.AuthenticationException("Invalid private key format or passphrase")
         elif self.pkey_path:
             p = Path(self.pkey_path).expanduser()
             if p.exists():
@@ -139,10 +140,10 @@ class MirrorTask:
         # map of remote posix path -> last size
         self._known_sizes: Dict[str, int] = {}
 
-    def start(self):
+    def start(self) -> None:
         self._thread.start()
 
-    def stop(self):
+    def stop(self) -> None:
         self._stop.set()
         self._thread.join(timeout=3.0)
 
@@ -302,8 +303,9 @@ def sftp_listdir(session_id: str, path: str) -> List[dict]:
         # try expand ~
         if path.startswith('~'):
             try:
-                stdin, stdout, stderr = sess.client.exec_command('echo -n $HOME')  # type: ignore
-                home = stdout.read().decode('utf-8')
+                # Use safe command with shell escape
+                stdin, stdout, stderr = sess.client.exec_command("echo -n \"$HOME\"")  # type: ignore
+                home = stdout.read().decode('utf-8').strip()
                 if home:
                     path = path.replace('~', home, 1)
                     entries = sftp.listdir_attr(path)

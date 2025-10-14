@@ -16,9 +16,13 @@ import aiofiles
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from ..services.storage import find_run_dir_by_id
+from ..utils.cache import get_metrics_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Global metrics cache instance
+metrics_cache = get_metrics_cache()
 
 
 def iter_events(events_path) -> Iterator[Dict[str, Any]]:
@@ -50,7 +54,7 @@ def iter_events(events_path) -> Iterator[Dict[str, Any]]:
 
 def aggregate_step_metrics(events_path) -> Tuple[List[str], List[Dict[str, Any]]]:
     """
-    Aggregate step metrics from events file, handling NaN and Inf values.
+    Aggregate step metrics from events file with caching, handling NaN and Inf values.
     
     Args:
         events_path: Path to events.jsonl file
@@ -58,6 +62,11 @@ def aggregate_step_metrics(events_path) -> Tuple[List[str], List[Dict[str, Any]]
     Returns:
         Tuple of (column_names, rows)
     """
+    # Check cache first
+    cached_result = metrics_cache.get(events_path)
+    if cached_result is not None:
+        return cached_result
+    
     def sanitize_value(v):
         """Convert NaN/Inf to None for JSON compatibility."""
         if isinstance(v, float):
@@ -100,16 +109,21 @@ def aggregate_step_metrics(events_path) -> Tuple[List[str], List[Dict[str, Any]]
                 keys.add(kk)
     
     if not step_rows:
-        return [], []
+        result = ([], [])
+    else:
+        rows = [step_rows[s] for s in sorted(step_rows.keys())]
+        cols = ["global_step"] + sorted(list(keys))
+        
+        for r in rows:
+            for c in cols:
+                r.setdefault(c, None)
+        
+        result = (cols, rows)
     
-    rows = [step_rows[s] for s in sorted(step_rows.keys())]
-    cols = ["global_step"] + sorted(list(keys))
+    # Cache the result
+    metrics_cache.set(events_path, result)
     
-    for r in rows:
-        for c in cols:
-            r.setdefault(c, None)
-    
-    return cols, rows
+    return result
 
 
 @router.get("/runs/{run_id}/metrics")
@@ -186,7 +200,13 @@ async def get_progress(run_id: str, request: Request) -> Dict[str, Any]:
 @router.websocket("/runs/{run_id}/logs/ws")
 async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
     """
-    WebSocket endpoint for real-time log streaming.
+    WebSocket endpoint for real-time log streaming with memory optimization.
+    
+    Features:
+    - Streaming read (no large file loading into memory)
+    - Automatic timeout after 1 hour of inactivity
+    - Dynamic polling interval based on activity
+    - Line limit to prevent abuse
     
     Args:
         websocket: WebSocket connection
@@ -199,41 +219,116 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
     entry = find_run_dir_by_id(storage_root, run_id)
     
     if not entry:
-        await websocket.send_text("[error] run not found")
-        await websocket.close()
+        try:
+            await websocket.send_text("[error] run not found")
+            await websocket.close()
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            pass
         return
     
     log_file = entry.dir / "logs.txt"
+    
+    # If log file doesn't exist, wait for it to be created
+    import asyncio
     if not log_file.exists():
-        await websocket.send_text("[info] logs.txt not found yet")
-        await websocket.close()
-        return
+        try:
+            await websocket.send_text("[info] No logs available yet. Waiting for logs to be created...")
+        except WebSocketDisconnect:
+            logger.debug(f"WebSocket disconnected early for run {run_id}")
+            return
+        except Exception:
+            return
+        
+        # Keep checking for log file
+        try:
+            while not log_file.exists():
+                await asyncio.sleep(2)
+                # Send periodic keep-alive to prevent timeout
+                if not log_file.exists():
+                    await websocket.ping()
+        except WebSocketDisconnect:
+            logger.debug(f"WebSocket disconnected while waiting for logs for run {run_id}")
+            return
+        except Exception:
+            return
+        
+        # Log file now exists, send notification
+        try:
+            await websocket.send_text("[info] Logs are now available, streaming...")
+        except WebSocketDisconnect:
+            return
+        except Exception:
+            return
     
     try:
-        # Stream the log file content
+        import time as time_module
+        
+        # Stream the log file content without loading all into memory
         async with aiofiles.open(log_file, mode="r", encoding="utf-8", errors="ignore") as f:
-            # First, send existing content
-            existing_content = await f.read()
-            if existing_content:
-                for line in existing_content.splitlines():
-                    if line.strip():  # Skip empty lines
-                        await websocket.send_text(line)
+            # Send existing content line by line (streaming)
+            sent_lines = 0
+            max_initial_lines = 10000  # Limit initial lines to prevent abuse
             
-            # Then tail for new content
+            async for line in f:
+                if sent_lines >= max_initial_lines:
+                    await websocket.send_text(f"[info] Showing last {max_initial_lines} lines. Full log file: {log_file.name}")
+                    break
+                
+                line = line.rstrip("\n")
+                if line.strip():  # Skip empty lines
+                    await websocket.send_text(line)
+                    sent_lines += 1
+            
+            # Tail for new content with dynamic polling and timeout
+            start_time = time_module.time()
+            last_activity = time_module.time()
+            max_idle_time = 3600  # 1 hour timeout
+            
             while True:
+                # Check for timeout
+                current_time = time_module.time()
+                idle_time = current_time - last_activity
+                
+                if idle_time > max_idle_time:
+                    await websocket.send_text("[info] Connection timeout after 1 hour of inactivity")
+                    break
+                
+                # Read new line
                 line = await f.readline()
+                
                 if line:
-                    await websocket.send_text(line.rstrip("\n"))
+                    # Got new content
+                    line = line.rstrip("\n")
+                    if line.strip():
+                        await websocket.send_text(line)
+                    last_activity = current_time  # Reset idle timer
                 else:
-                    # No new content, wait a bit
-                    await asyncio.sleep(0.5)
+                    # No new content, use dynamic delay
+                    # Start with short delay, gradually increase if no activity
+                    if idle_time < 10:
+                        delay = 0.2  # Very active: 200ms
+                    elif idle_time < 60:
+                        delay = 0.5  # Recent activity: 500ms
+                    elif idle_time < 300:
+                        delay = 1.0  # Some activity: 1s
+                    else:
+                        delay = 2.0  # Long idle: 2s
+                    
+                    await asyncio.sleep(delay)
                     
     except WebSocketDisconnect:
+        logger.debug(f"WebSocket disconnected for run {run_id}")
         return
     except Exception as e:
+        logger.error(f"WebSocket error for run {run_id}: {e}")
         try:
             await websocket.send_text(f"[error] {e}")
         except Exception:
             pass
-        finally:
+    finally:
+        try:
             await websocket.close()
+        except Exception:
+            pass

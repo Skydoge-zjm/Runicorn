@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runicorn"
-version = "0.3.1"
-description = "Local, open-source experiment tracking and visualization (a simple, self-hosted alternative to W&B)"
+version = "0.4.0"
+description = "Local experiment tracking with model versioning - self-hosted W&B alternative with Artifacts"
 readme = "README.md"
 authors = [{ name = "Runicorn Authors" }]
 license = "MIT"

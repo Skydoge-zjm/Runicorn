@@ -6,8 +6,18 @@ import { useNavigate } from 'react-router-dom'
 import { useSettings } from '../contexts/SettingsContext'
 import { checkAllStatus, softDeleteRuns } from '../api'
 import RecycleBin from '../components/RecycleBin'
+import { ExperimentListSkeleton } from '../components/LoadingSkeleton'
+import ResizableTitle from '../components/ResizableTitle'
+import { useColumnWidths } from '../hooks/useColumnWidths'
+import logger from '../utils/logger'
 import type { ColumnsType, TableProps } from 'antd/es/table'
 import type { SorterResult } from 'antd/es/table/interface'
+import '../styles/resizable-table.css'
+
+// Define ResizeCallbackData type locally
+interface ResizeCallbackData {
+  size: { width: number }
+}
 
 interface RunData {
   run_id: string
@@ -19,6 +29,8 @@ interface RunData {
   pid?: number
   best_metric_value?: number
   best_metric_name?: string
+  artifacts_created_count?: number
+  artifacts_used_count?: number
 }
 
 interface FilterState {
@@ -56,11 +68,35 @@ const ExperimentPage: React.FC = () => {
   const setAutoRefresh = (checked: boolean) => {
     setSettings({ ...settings, autoRefresh: checked })
   }
+  // Column width management
+  const defaultColumnWidths = {
+    project: 120,
+    name: 100,
+    run_id: 280,          // 增加宽度以显示完整ID (20251009_082632_d5a4c7)
+    status: 100,
+    created: 210,         // 增加宽度以显示完整日期时间 (2025/10/09 08:26:32)
+    best_metric: 200,
+    artifacts_created: 120,
+    actions: 120,
+  }
+  
+  const { columnWidths, setColumnWidth } = useColumnWidths('experiments', defaultColumnWidths)
+  
   const [sortedInfo, setSortedInfo] = useState<SorterResult<RunData>>({})
   const [pageSize, setPageSize] = useState(10)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [exportLoading, setExportLoading] = useState(false)
   const [statusCheckLoading, setStatusCheckLoading] = useState(false)
+  
+  // Handle column resize
+  const handleResize = useCallback(
+    (columnKey: string) =>
+      (_: React.SyntheticEvent, { size }: ResizeCallbackData) => {
+        setColumnWidth(columnKey, size.width)
+      },
+    [setColumnWidth]
+  )
+  
   const [recycleBinOpen, setRecycleBinOpen] = useState(false)
 
   // Persist user preferences
@@ -111,7 +147,9 @@ const ExperimentPage: React.FC = () => {
           summary: r.summary || {},
           pid: r.pid,
           best_metric_value: r.best_metric_value,
-          best_metric_name: r.best_metric_name
+          best_metric_name: r.best_metric_name,
+          artifacts_created_count: r.artifacts_created_count || 0,
+          artifacts_used_count: r.artifacts_used_count || 0
         }
       })
       
@@ -139,7 +177,7 @@ const ExperimentPage: React.FC = () => {
         })
       }
     } catch (error) {
-      console.error('Failed to fetch runs:', error)
+      logger.error('Failed to fetch runs:', error)
       if (showLoading) {
         message.error(t('experiments.fetch_failed') || 'Failed to fetch runs')
       }
@@ -205,7 +243,7 @@ const ExperimentPage: React.FC = () => {
             message.warning('No runs were moved to recycle bin')
           }
         } catch (error) {
-          console.error('Delete failed:', error)
+          logger.error('Delete failed:', error)
           message.error(t('experiments.delete_failed') || 'Failed to move runs to recycle bin')
         } finally {
           setDeleteLoading(false)
@@ -255,7 +293,7 @@ const ExperimentPage: React.FC = () => {
       
       message.success(t('experiments.export_success', { count: selectedRunData.length }) || `Successfully exported ${selectedRunData.length} runs`)
     } catch (error) {
-      console.error('Export failed:', error)
+      logger.error('Export failed:', error)
       message.error(t('experiments.export_failed') || 'Failed to export runs')
     }
   }
@@ -272,7 +310,7 @@ const ExperimentPage: React.FC = () => {
         message.info('All experiment statuses are up to date')
       }
     } catch (error) {
-      console.error('Status check failed:', error)
+      logger.error('Status check failed:', error)
       message.error('Failed to check experiment statuses')
     } finally {
       setStatusCheckLoading(false)
@@ -333,7 +371,7 @@ const ExperimentPage: React.FC = () => {
       
       message.success(t('experiments.export_success', { count: selectedRunData.length }) || `Successfully exported ${selectedRunData.length} runs`)
     } catch (error) {
-      console.error('Export failed:', error)
+      logger.error('Export failed:', error)
       message.error(t('experiments.export_failed') || 'Failed to export runs')
     } finally {
       setExportLoading(false)
@@ -390,44 +428,59 @@ const ExperimentPage: React.FC = () => {
     })
   }, [runs, searchText, projectFilter, statusFilter])
 
-  // Enhanced table columns with sorting and better rendering
-  const columns: ColumnsType<RunData> = [
+  // Enhanced table columns with sorting and better rendering (resizable)
+  const columns: ColumnsType<RunData> = useMemo(() => [
     {
       title: t('table.project'),
       dataIndex: 'project',
       key: 'project',
       sorter: (a, b) => a.project.localeCompare(b.project),
       render: (text) => <Tag color="blue">{text}</Tag>,
-      width: 120,
+      width: columnWidths.project,
+      onHeaderCell: () => ({
+        width: columnWidths.project,
+        onResize: handleResize('project'),
+      }),
     },
     {
       title: t('table.name'),
       dataIndex: 'name',
       key: 'name',
+      width: columnWidths.name,
       sorter: (a, b) => a.name.localeCompare(b.name),
       render: (text, record) => (
         <Tooltip title={`${record.project}/${text}`}>
           <strong>{text}</strong>
         </Tooltip>
       ),
+      onHeaderCell: () => ({
+        width: columnWidths.name,
+        onResize: handleResize('name'),
+      }),
     },
     {
       title: t('table.run_id'),
       dataIndex: 'run_id',
       key: 'run_id',
-      width: 100,
+      width: columnWidths.run_id,
       render: (text) => (
-        <Tooltip title={text}>
-          <code>{text.substring(0, 8)}...</code>
-        </Tooltip>
+        <code style={{ fontSize: '11px', wordBreak: 'break-all' }}>{text}</code>
       ),
+      onHeaderCell: () => ({
+        width: columnWidths.run_id,
+        onResize: handleResize('run_id'),
+      }),
     },
     {
       title: t('table.status'),
       dataIndex: 'status',
       key: 'status',
-      width: 100,
+      width: columnWidths.status,
       sorter: (a, b) => a.status.localeCompare(b.status),
+      onHeaderCell: () => ({
+        width: columnWidths.status,
+        onResize: handleResize('status'),
+      }),
       render: (status, record) => {
         let icon = null
         let color = 'default'
@@ -461,17 +514,39 @@ const ExperimentPage: React.FC = () => {
       title: t('table.created'),
       dataIndex: 'created',
       key: 'created',
-      width: 180,
+      width: columnWidths.created,
       sorter: (a, b) => new Date(a.created).getTime() - new Date(b.created).getTime(),
-      render: (text) => (
-        <Tooltip title={new Date(text).toLocaleString()}>
-          {new Date(text).toLocaleDateString()}
-        </Tooltip>
-      ),
+      render: (text) => {
+        const date = new Date(text)
+        // 使用当前语言设置
+        const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
+        return (
+          <span style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>
+            {date.toLocaleString(locale, {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false
+            })}
+          </span>
+        )
+      },
+      onHeaderCell: () => ({
+        width: columnWidths.created,
+        onResize: handleResize('created'),
+      }),
     },
     {
       title: t('experiments.best_metric') || 'Best Metric',
       key: 'best_metric',
+      width: columnWidths.best_metric,
+      onHeaderCell: () => ({
+        width: columnWidths.best_metric,
+        onResize: handleResize('best_metric'),
+      }),
       render: (_, record) => {
         const value = record.best_metric_value
         const name = record.best_metric_name
@@ -487,8 +562,33 @@ const ExperimentPage: React.FC = () => {
       },
     },
     {
+      title: t('experiments.artifacts_created') || 'Artifacts',
+      key: 'artifacts_created',
+      width: columnWidths.artifacts_created,
+      onHeaderCell: () => ({
+        width: columnWidths.artifacts_created,
+        onResize: handleResize('artifacts_created'),
+      }),
+      render: (_, record) => {
+        const count = record.artifacts_created_count || 0
+        if (count === 0) {
+          return <span style={{ color: '#999' }}>-</span>
+        }
+        return (
+          <Tooltip title={t('experiments.artifacts_created_tip', { count })}>
+            <Badge count={count} style={{ backgroundColor: '#52c41a' }} />
+          </Tooltip>
+        )
+      },
+    },
+    {
       title: t('table.actions'),
       key: 'actions',
+      width: columnWidths.actions,
+      onHeaderCell: () => ({
+        width: columnWidths.actions,
+        onResize: handleResize('actions'),
+      }),
       render: (_, record) => (
         <Space size="small">
           <Tooltip title={t('table.view')}>
@@ -512,7 +612,12 @@ const ExperimentPage: React.FC = () => {
         </Space>
       ),
     },
-  ]
+  ], [t, navigate, columnWidths, handleResize, handleDelete])
+
+  // Show skeleton on initial load
+  if (loading && runs.length === 0) {
+    return <ExperimentListSkeleton />
+  }
 
   return (
     <div style={{ padding: 24 }}>
@@ -647,8 +752,13 @@ const ExperimentPage: React.FC = () => {
         </Space>
       </Space>
 
-      {/* Enhanced Runs Table with better UX */}
+      {/* Enhanced Runs Table with better UX and resizable columns */}
       <Table
+        components={{
+          header: {
+            cell: ResizableTitle,
+          },
+        }}
         rowSelection={{
           selectedRowKeys,
           onChange: (keys) => setSelectedRowKeys(keys as string[]),

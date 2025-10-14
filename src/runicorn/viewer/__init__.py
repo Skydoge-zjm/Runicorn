@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .utils.logging import setup_logging
+from .middleware.rate_limit import RateLimitMiddleware
 from .services.storage import get_storage_root, periodic_status_check
 from .api import (
     health_router,
@@ -27,8 +28,34 @@ from .api import (
     export_router,
     projects_router,
     gpu_router,
-    import_router
+    import_router,
+    artifacts_router,
 )
+
+# Import experiment-artifacts integration router
+from .api.experiment_artifacts import router as experiment_artifacts_router
+
+# Import model lifecycle router
+from .api.model_lifecycle import router as model_lifecycle_router
+
+# Import UI preferences router
+from .api.ui_preferences import router as ui_preferences_router
+
+# Import unified SSH router
+try:
+    from .api.unified_ssh import router as unified_ssh_router
+    HAS_UNIFIED_SSH = True
+except ImportError:
+    unified_ssh_router = None
+    HAS_UNIFIED_SSH = False
+
+# Import remote storage router (optional)
+try:
+    from .api.remote_storage import router as remote_storage_router
+    HAS_REMOTE_STORAGE_API = True
+except ImportError:
+    remote_storage_router = None
+    HAS_REMOTE_STORAGE_API = False
 
 # Import v2 APIs for modern storage
 from .api.v2 import (
@@ -36,7 +63,7 @@ from .api.v2 import (
     v2_analytics_router
 )
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +100,9 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
         allow_headers=["*"],
     )
     
+    # Add rate limiting middleware
+    app.add_middleware(RateLimitMiddleware)
+    
     # Background task for status checking
     _status_check_task = None
     
@@ -85,7 +115,8 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     
     @app.on_event("shutdown") 
     async def shutdown_event():
-        """Cleanup background tasks on app shutdown."""
+        """Cleanup background tasks and connections on app shutdown."""
+        # Stop background status checker
         if _status_check_task:
             _status_check_task.cancel()
             try:
@@ -93,6 +124,14 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             except asyncio.CancelledError:
                 pass
             logger.info("Stopped background process status checker")
+        
+        # Close remote adapter if connected
+        if hasattr(app.state, 'remote_adapter') and app.state.remote_adapter:
+            try:
+                app.state.remote_adapter.close()
+                logger.info("Closed remote storage adapter")
+            except Exception as e:
+                logger.warning(f"Failed to close remote adapter: {e}")
     
     # Register v1 API routers (backward compatibility)
     app.include_router(health_router, prefix="/api", tags=["health"])
@@ -106,12 +145,36 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     app.include_router(gpu_router, prefix="/api", tags=["gpu"])
     app.include_router(import_router, prefix="/api", tags=["import"])
     
+    # Register artifacts router
+    app.include_router(artifacts_router, prefix="/api", tags=["artifacts"])
+    
+    # Register experiment-artifacts integration router
+    app.include_router(experiment_artifacts_router, prefix="/api", tags=["experiment-artifacts"])
+    
+    # Register model lifecycle router
+    app.include_router(model_lifecycle_router, prefix="/api", tags=["model-lifecycle"])
+    
+    # Register UI preferences router
+    app.include_router(ui_preferences_router, prefix="/api", tags=["ui-preferences"])
+    
+    # Register unified SSH router (if available)
+    if HAS_UNIFIED_SSH and unified_ssh_router:
+        app.include_router(unified_ssh_router, prefix="/api", tags=["unified-ssh"])
+        logger.info("Unified SSH API routes registered")
+    
+    # Register remote storage router (if available)
+    if HAS_REMOTE_STORAGE_API and remote_storage_router:
+        app.include_router(remote_storage_router, prefix="/api", tags=["remote-storage"])
+        logger.info("Remote storage API routes registered")
+    
     # Register v2 API routers (modern storage)
     app.include_router(v2_experiments_router, prefix="/api/v2", tags=["v2-experiments"])
     app.include_router(v2_analytics_router, prefix="/api/v2", tags=["v2-analytics"])
     
-    # Store storage root for access by routers
+    # Store storage root and mode for access by routers
     app.state.storage_root = root
+    app.state.storage_mode = "local"  # Default to local mode
+    app.state.remote_adapter = None   # Will be set when user connects
     
     # Mount static frontend if available
     _mount_static_frontend(app)

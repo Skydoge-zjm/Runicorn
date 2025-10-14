@@ -16,6 +16,7 @@ from .export import router as export_router
 from .projects import router as projects_router
 from .gpu import router as gpu_router
 from .import_ import router as import_router
+from .artifacts import router as artifacts_router
 
 __all__ = [
     "health_router",
@@ -27,5 +28,6 @@ __all__ = [
     "export_router",
     "projects_router",
     "gpu_router",
-    "import_router"
+    "import_router",
+    "artifacts_router",
 ]

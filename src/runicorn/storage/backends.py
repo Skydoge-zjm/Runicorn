@@ -18,6 +18,7 @@ import threading
 import queue
 
 from .models import ExperimentRecord, MetricRecord, QueryParams, EnvironmentRecord, StorageStats
+from .sql_utils import validate_column_name, ALLOWED_EXPERIMENT_COLUMNS
 
 logger = logging.getLogger(__name__)
 
@@ -340,10 +341,12 @@ class ConnectionPool:
         self.db_path = db_path
         self.pool = queue.Queue(maxsize=pool_size)
         self.lock = threading.Lock()
+        self.all_connections = []  # Track all connections for cleanup
         
         # Create connections
         for _ in range(pool_size):
             conn = self._create_connection()
+            self.all_connections.append(conn)
             self.pool.put(conn)
     
     def _create_connection(self) -> sqlite3.Connection:
@@ -369,13 +372,29 @@ class ConnectionPool:
         self.pool.put(conn)
     
     def close_all(self) -> None:
-        """Close all connections in pool."""
-        while not self.pool.empty():
-            try:
-                conn = self.pool.get_nowait()
-                conn.close()
-            except queue.Empty:
-                break
+        """
+        Close all connections in pool.
+        
+        This forcibly closes ALL connections, including those currently in use.
+        Should only be called when shutting down.
+        """
+        with self.lock:
+            # Close all tracked connections
+            for conn in self.all_connections:
+                try:
+                    conn.close()
+                except Exception as e:
+                    logger.debug(f"Failed to close connection: {e}")
+            
+            # Clear the pool
+            while not self.pool.empty():
+                try:
+                    self.pool.get_nowait()
+                except queue.Empty:
+                    break
+            
+            # Clear the list
+            self.all_connections.clear()
 
 
 class SQLiteStorageBackend(StorageBackend):
@@ -403,9 +422,31 @@ class SQLiteStorageBackend(StorageBackend):
         self._initialize_schema()
     
     def close(self) -> None:
-        """Close all database connections."""
-        if hasattr(self, 'pool'):
-            self.pool.close_all()
+        """Close all database connections and WAL files."""
+        if hasattr(self, 'pool') and self.pool:
+            try:
+                self.pool.close_all()
+                logger.debug("Closed all database connections")
+                
+                # Force checkpoint to close WAL file (Windows critical)
+                if self.db_path.exists():
+                    try:
+                        import sqlite3
+                        temp_conn = sqlite3.connect(str(self.db_path))
+                        temp_conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                        temp_conn.close()
+                    except Exception as e:
+                        logger.debug(f"Failed to checkpoint WAL: {e}")
+                
+            except Exception as e:
+                logger.warning(f"Failed to close database pool: {e}")
+    
+    def __del__(self):
+        """Destructor to ensure connections are closed."""
+        try:
+            self.close()
+        except Exception:
+            pass
     
     def _initialize_schema(self) -> None:
         """Initialize database schema from SQL file."""
@@ -463,8 +504,16 @@ class SQLiteStorageBackend(StorageBackend):
         params = []
         
         for key, value in updates.items():
+            # Validate column name to prevent SQL injection
+            if not validate_column_name(key, ALLOWED_EXPERIMENT_COLUMNS):
+                logger.warning(f"Rejecting invalid column name in update: {key}")
+                continue
             set_clauses.append(f"{key} = ?")
             params.append(value)
+        
+        if not set_clauses:
+            logger.warning("No valid columns to update")
+            return False
         
         # Always update the updated_at timestamp
         set_clauses.append("updated_at = ?")

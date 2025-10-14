@@ -1,0 +1,92 @@
+{
+  "default": {
+    "max_requests": 60,
+    "window_seconds": 60,
+    "burst_size": null,
+    "description": "Default rate limit for all endpoints"
+  },
+  "endpoints": {
+    "/api/remote/connect": {
+      "max_requests": 10,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "SSH connection operations - more restrictive to prevent brute force"
+    },
+    "/api/unified/connect": {
+      "max_requests": 10,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "Unified SSH connection operations"
+    },
+    "/api/ssh/connect": {
+      "max_requests": 10,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "Legacy SSH connection operations"
+    },
+    "/api/unified/status": {
+      "max_requests": 200,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "Status polling endpoint - very permissive"
+    },
+    "/api/remote/status": {
+      "max_requests": 200,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "Remote storage status polling"
+    },
+    "/api/ssh/sessions": {
+      "max_requests": 200,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "SSH session listing - used for UI polling"
+    },
+    "/api/ssh/mirror/list": {
+      "max_requests": 200,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "Mirror task listing - used for UI polling"
+    },
+    "/api/metrics/gpu": {
+      "max_requests": 120,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "GPU telemetry can be frequent"
+    },
+    "/api/remote/download": {
+      "max_requests": 30,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "File downloads - moderately restrictive"
+    },
+    "/api/remote/sync": {
+      "max_requests": 20,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "Sync operations - moderate restriction"
+    },
+    "/api/artifacts": {
+      "max_requests": 100,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "Artifact listing and queries"
+    },
+    "/api/runs": {
+      "max_requests": 100,
+      "window_seconds": 60,
+      "burst_size": null,
+      "description": "Experiment runs listing and queries"
+    }
+  },
+  "settings": {
+    "enable_rate_limiting": false,
+    "log_violations": true,
+    "whitelist_localhost": false,
+    "custom_headers": {
+      "rate_limit_header": "X-RateLimit-Limit",
+      "rate_limit_remaining_header": "X-RateLimit-Remaining",
+      "rate_limit_reset_header": "X-RateLimit-Reset"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+export default {
+  'app.title': 'Runicorn Viewer',
+  'menu.runs': 'Runs',
+  'menu.experiments': 'Experiments',
+  'menu.comparison': 'Comparison',
+  'menu.remote': 'Remote',
+  'tag.api_ok': 'API OK',
+  'tag.api_loading': 'API…',
+  'tag.api_down': 'API DOWN',
+  
+  'table.project': 'Project',
+  'table.name': 'Name',
+  'table.run_id': 'Run ID',
+  'table.status': 'Status',
+  'table.best_metric': 'Best Metric',
+  'table.pid': 'PID',
+  'table.created': 'Created',
+  'table.actions': 'Actions',
+  'table.view': 'View',
+  'table.duration': 'Duration',
+  
+  'pause': 'Pause',
+  'Info': 'Info',
+  'View': 'View',
+  'Load Lineage Graph': 'Load Lineage Graph',
+  
+  // Common actions
+  'actions': 'Actions',
+  'view': 'View',
+  'edit': 'Edit',
+  'delete': 'Delete',
+  'download': 'Download',
+  'upload': 'Upload',
+  'save': 'Save',
+  'cancel': 'Cancel',
+  'confirm': 'Confirm',
+  'close': 'Close',
+}
+

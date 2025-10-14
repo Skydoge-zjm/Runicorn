@@ -14,6 +14,13 @@ __all__ = [
     "set_primary_metric",
 ]
 
+# Optional artifacts import
+try:
+    from .artifacts import Artifact, ArtifactType
+    __all__.extend(["Artifact", "ArtifactType"])
+except ImportError:
+    pass
+
 # Optional imports for extended functionality
 try:
     from .monitors import MetricMonitor, AnomalyDetector, AlertRule

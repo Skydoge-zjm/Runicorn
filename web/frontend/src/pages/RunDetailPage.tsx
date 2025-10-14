@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Card, Descriptions, Space, Alert, Popover, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge } from 'antd'
-import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, ReloadOutlined, FullscreenOutlined } from '@ant-design/icons'
+import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, ReloadOutlined, FullscreenOutlined, RocketOutlined } from '@ant-design/icons'
 import { getRunDetail, getStepMetrics, getGpuTelemetry, listRunsByName } from '../api'
 import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
 import GpuTelemetry from '../components/GpuTelemetry'
 import MultiRunMetricChart from '../components/MultiRunMetricChart'
+import RunArtifacts from '../components/RunArtifacts'
+import { RunDetailSkeleton } from '../components/LoadingSkeleton'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
+import logger from '../utils/logger'
 
 export default function RunDetailPage() {
   const { id = '' } = useParams()
@@ -50,7 +53,7 @@ export default function RunDetailPage() {
       setDetail(result)
       setLastUpdateTime(new Date())
     } catch (error) {
-      console.error('Failed to load run detail:', error)
+      logger.error('Failed to load run detail:', error)
       message.error(t('run.load_failed') || 'Failed to load run details')
     } finally {
       if (showLoading) setDetailLoading(false)
@@ -63,7 +66,7 @@ export default function RunDetailPage() {
       const result = await getStepMetrics(id)
       setStepMetrics(result)
     } catch (error) {
-      console.error('Failed to load step metrics:', error)
+      logger.error('Failed to load step metrics:', error)
       message.error(t('run.metrics_failed') || 'Failed to load metrics')
     } finally {
       if (showLoading) setMetricsLoading(false)
@@ -219,6 +222,11 @@ export default function RunDetailPage() {
     if (windowWidth >= 900) return baseHeight        // Medium screens  
     return Math.max(250, baseHeight - 40)            // Small screens, with minimum
   }, [windowWidth, settings.defaultChartHeight])
+
+  // Show skeleton on initial load
+  if (detailLoading && !detail) {
+    return <RunDetailSkeleton />
+  }
 
   return (
     <Space direction="vertical" size="large" style={{ 
@@ -618,6 +626,21 @@ export default function RunDetailPage() {
         <GpuTelemetry />
       </Card>
 
+      {/* 关联的模型与数据集 - 只在有artifacts时显示 */}
+      {(detail?.artifacts_created_count > 0 || detail?.artifacts_used_count > 0) && (
+        <Card 
+          title={
+            <Space>
+              <RocketOutlined /> 
+              {t('run.artifacts.title')}
+            </Space>
+          }
+        >
+          <RunArtifacts runId={id} />
+        </Card>
+      )}
+
+      {/* 实时日志 */}
       <Card 
         title={
           <Space>

@@ -12,20 +12,21 @@
 
 本地、开源的实验追踪与可视化工具，100% 离线。专业的机器学习实验管理平台，现代化的 W&B 自托管替代方案。
 
-## ✨ v0.3.1 新特性
+## ✨ v0.4.0 新特性
 
-- 🏗️ **架构现代化** - 模块化代码架构和高性能SQLite存储系统
-- ⚡ **性能提升10倍+** - 实验查询速度提升至毫秒级响应
-- 🔄 **无缝升级** - 自动数据迁移，完全向后兼容
-- 🎯 **通用最佳指标系统** - 自定义主要指标，自动追踪最优值
-- 🗑️ **软删除和回收站** - 安全的实验管理，支持误删恢复  
-- 🛡️ **智能状态检测** - 自动检测程序崩溃和中断状态
-- 🎨 **现代设置界面** - 分栏设置，全面自定义选项
-- 🌍 **完整国际化** - 中英文完全支持
+- 📦 **模型版本控制** - Artifacts 系统，完整的模型和数据集版本管理
+- 🔗 **自动血缘追踪** - 追踪模型、数据集和实验的完整依赖关系
+- 💾 **智能去重存储** - 基于哈希的内容去重，节省 50-90% 存储空间
+- 🌳 **可视化血缘图** - ECharts 交互式依赖关系图
+- 🏷️ **版本别名** - latest, production 等语义化版本管理
+- 🔐 **安全增强** - 三层路径遍历防护，输入验证
+- ⚡ **性能优化** - 指标缓存，进程检查优化，响应速度提升 10-20 倍
+- 🎨 **UI 改进** - 统一设计系统，图表控件优化，骨架屏加载
 
 ## 核心功能
 
 - **Python包**: `runicorn` - 通用SDK，支持任何ML框架
+- **模型版本控制**: Artifacts系统 - 模型、数据集的Git-like管理
 - **Web查看器**: 实时图表界面和实验对比功能
 - **远程同步**: Linux服务器实时SSH镜像
 - **桌面应用**: Windows原生应用，自动后端启动
@@ -101,7 +102,7 @@ runicorn viewer --host 127.0.0.1 --port 8000
   ```
   - 该配置信息会写入到 `%APPDATA%\Runicorn\config.json`，也可以直接修改该文件。
 
-### 使用示例
+### 实验追踪示例
 
 ```python
 import runicorn as rn
@@ -140,6 +141,41 @@ rn.summary({
 })
 
 rn.finish()  # 最佳指标自动保存
+```
+
+### 模型版本控制示例（v0.4.0 新功能）
+
+```python
+import runicorn as rn
+
+# 训练模型
+run = rn.init(project="image_classification", name="resnet_training")
+
+# ... 训练代码 ...
+# torch.save(model.state_dict(), "model.pth")
+
+# 保存模型为 Artifact（自动版本控制）
+model = rn.Artifact("resnet50-model", type="model")
+model.add_file("model.pth")
+model.add_metadata({
+    "architecture": "ResNet50",
+    "val_accuracy": 0.95,
+    "epochs": 100
+})
+
+version = run.log_artifact(model)  # → v1, v2, v3...
+print(f"已保存: resnet50-model:v{version}")
+
+rn.finish()
+
+# 使用保存的模型
+run2 = rn.init(project="inference")
+
+model = run2.use_artifact("resnet50-model:latest")  # 或 "resnet50-model:v3"
+model_path = model.download()
+
+# 加载模型...
+rn.finish()
 ```
 
 ### 高级功能
@@ -215,6 +251,12 @@ user_root_dir/
           logs.txt
           media/
 ```
+
+## API 文档
+
+- **REST API 参考**: 查看 [docs/api/](docs/api/) 获取完整API文档
+- **交互式文档**: 启动 viewer 后访问 `http://127.0.0.1:23300/docs` (FastAPI自动生成)
+- **快速参考**: [docs/api/QUICK_REFERENCE.md](docs/api/QUICK_REFERENCE.md) - 常用操作速查表
 
 ## 社区
 

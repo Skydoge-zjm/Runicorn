@@ -71,4 +71,12 @@ desktop/tauri/sidecar/dist/
 # --- Local run data (legacy) ---
 .runicorn/
 
-docs/future
+# --- Memories ---
+.memories/
+
+# --- Documentation ---
+docs/future/
+
+# --- Examples ---
+examples/
+

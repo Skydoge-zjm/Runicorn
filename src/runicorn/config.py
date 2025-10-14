@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
+
+logger = logging.getLogger(__name__)
 
 
 def _config_root_dir() -> Path:
@@ -76,3 +79,100 @@ def get_user_root_dir() -> Optional[Path]:
             return Path(p)
         except Exception:
             return None
+
+
+def save_ssh_connections(connections: list[Dict[str, Any]]) -> None:
+    """Save SSH connection configurations with encryption."""
+    from .security.credentials import get_credential_manager
+    
+    manager = get_credential_manager()
+    encrypted_connections = [
+        manager.encrypt_config(conn) for conn in connections
+    ]
+    save_user_config({"ssh_connections": encrypted_connections})
+
+
+def get_ssh_connections() -> list[Dict[str, Any]]:
+    """Get saved SSH connection configurations with decryption."""
+    from .security.credentials import get_credential_manager
+    
+    cfg = load_user_config()
+    connections = cfg.get("ssh_connections", [])
+    
+    # Decrypt sensitive fields
+    manager = get_credential_manager()
+    return [
+        manager.decrypt_config(conn) for conn in connections
+    ]
+
+
+def add_ssh_connection(connection: Dict[str, Any]) -> None:
+    """Add or update an SSH connection configuration."""
+    connections = get_ssh_connections()
+    
+    # Find and update if exists (by host+port+username)
+    key = f"{connection.get('host')}:{connection.get('port', 22)}@{connection.get('username')}"
+    connection['key'] = key
+    
+    # Remove existing connection with same key
+    connections = [c for c in connections if c.get('key') != key]
+    
+    # Add new/updated connection
+    connections.append(connection)
+    
+    # Keep only last 10 connections
+    connections = connections[-10:]
+    
+    save_ssh_connections(connections)
+
+
+def remove_ssh_connection(key: str) -> None:
+    """Remove an SSH connection configuration."""
+    connections = get_ssh_connections()
+    connections = [c for c in connections if c.get('key') != key]
+    save_ssh_connections(connections)
+
+
+def get_rate_limit_config() -> Dict[str, Any]:
+    """Get rate limit configuration."""
+    # Try to load from rate_limits.json in the config directory
+    rate_limits_file = Path(__file__).parent / 'config' / 'rate_limits.json'
+    
+    # If not found, try the parent directory
+    if not rate_limits_file.exists():
+        rate_limits_file = Path(__file__).parent / 'rate_limits.json'
+    
+    if rate_limits_file.exists():
+        try:
+            with open(rate_limits_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load rate limits config: {e}")
+    
+    # Return default configuration if file not found
+    return {
+        "default": {
+            "max_requests": 60,
+            "window_seconds": 60,
+            "burst_size": None
+        },
+        "endpoints": {},
+        "settings": {
+            "enable_rate_limiting": True,
+            "log_violations": True,
+            "whitelist_localhost": False
+        }
+    }
+
+
+def save_rate_limit_config(config: Dict[str, Any]) -> None:
+    """Save rate limit configuration."""
+    rate_limits_file = Path(__file__).parent / 'config' / 'rate_limits.json'
+    rate_limits_file.parent.mkdir(exist_ok=True)
+    
+    try:
+        with open(rate_limits_file, 'w') as f:
+            json.dump(config, f, indent=2)
+        logger.info(f"Rate limit config saved to {rate_limits_file}")
+    except Exception as e:
+        logger.error(f"Failed to save rate limit config: {e}")

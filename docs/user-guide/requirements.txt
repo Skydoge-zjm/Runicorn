@@ -1,0 +1,6 @@
+# MkDocs and Material theme for building documentation site
+mkdocs>=1.5.3
+mkdocs-material>=9.5.0
+pymdown-extensions>=10.7
+mkdocs-minify-plugin>=0.8.0
+

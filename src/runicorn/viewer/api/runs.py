@@ -20,6 +20,7 @@ from ..services.storage import (
     soft_delete_run,
     restore_run
 )
+from ..utils.validation import validate_run_id, validate_batch_size
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -36,6 +37,8 @@ class RunListItem(BaseModel):
     best_metric_name: Optional[str] = None
     project: Optional[str] = None
     name: Optional[str] = None
+    artifacts_created_count: int = 0
+    artifacts_used_count: int = 0
 
 
 @router.get("/runs", response_model=List[RunListItem])
@@ -53,13 +56,18 @@ async def list_runs(request: Request) -> List[RunListItem]:
         run_dir = entry.dir
         run_id = run_dir.name
         
-        # Check and update process status if needed
-        update_status_if_process_dead(run_dir)
-        
-        # Load run metadata
+        # Load run metadata first
         meta = read_json(run_dir / "meta.json")
         status = read_json(run_dir / "status.json")
         summary = read_json(run_dir / "summary.json")
+        
+        # Only check process status if currently marked as "running"
+        # This significantly improves performance for large run lists
+        current_status = str((status.get("status") if isinstance(status, dict) else "finished") or "finished")
+        if current_status == "running":
+            update_status_if_process_dead(run_dir)
+            # Re-read status after potential update
+            status = read_json(run_dir / "status.json")
         
         # Extract creation time
         created = meta.get("created_at") if isinstance(meta, dict) else None
@@ -80,6 +88,26 @@ async def list_runs(request: Request) -> List[RunListItem]:
             best_metric_value = summary.get("best_metric_value")
             best_metric_name = summary.get("best_metric_name")
         
+        # Count artifacts created
+        artifacts_created_count = 0
+        artifacts_created_path = run_dir / "artifacts_created.json"
+        if artifacts_created_path.exists():
+            try:
+                artifacts_data = read_json(artifacts_created_path) or {}
+                artifacts_created_count = len(artifacts_data.get("artifacts", []))
+            except Exception:
+                pass
+        
+        # Count artifacts used
+        artifacts_used_count = 0
+        artifacts_used_path = run_dir / "artifacts_used.json"
+        if artifacts_used_path.exists():
+            try:
+                artifacts_data = read_json(artifacts_used_path) or {}
+                artifacts_used_count = len(artifacts_data.get("artifacts", []))
+            except Exception:
+                pass
+        
         items.append(
             RunListItem(
                 id=run_id,
@@ -91,6 +119,8 @@ async def list_runs(request: Request) -> List[RunListItem]:
                 best_metric_name=best_metric_name,
                 project=project,
                 name=name,
+                artifacts_created_count=artifacts_created_count,
+                artifacts_used_count=artifacts_used_count,
             )
         )
     
@@ -130,6 +160,26 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     project = (meta.get("project") if isinstance(meta, dict) else None) or entry.project
     name = (meta.get("name") if isinstance(meta, dict) else None) or entry.name
     
+    # Count artifacts created
+    artifacts_created_count = 0
+    artifacts_created_path = run_dir / "artifacts_created.json"
+    if artifacts_created_path.exists():
+        try:
+            artifacts_data = read_json(artifacts_created_path) or {}
+            artifacts_created_count = len(artifacts_data.get("artifacts", []))
+        except Exception:
+            pass
+    
+    # Count artifacts used
+    artifacts_used_count = 0
+    artifacts_used_path = run_dir / "artifacts_used.json"
+    if artifacts_used_path.exists():
+        try:
+            artifacts_data = read_json(artifacts_used_path) or {}
+            artifacts_used_count = len(artifacts_data.get("artifacts", []))
+        except Exception:
+            pass
+    
     return {
         "id": run_id,
         "status": str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
@@ -140,6 +190,8 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
         "logs": str(run_dir / "logs.txt"),
         "metrics": str(run_dir / "events.jsonl"),
         "metrics_step": str(run_dir / "events.jsonl"),
+        "artifacts_created_count": artifacts_created_count,
+        "artifacts_used_count": artifacts_used_count,
     }
 
 
@@ -165,6 +217,21 @@ async def soft_delete_runs(request: Request, payload: Dict[str, Any] = Body(...)
             status_code=400, 
             detail="run_ids is required and must be a list"
         )
+    
+    # Validate batch size
+    if not validate_batch_size(len(run_ids), max_size=100):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete more than 100 runs at once"
+        )
+    
+    # Validate each run_id format
+    for run_id in run_ids:
+        if not isinstance(run_id, str) or not validate_run_id(run_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid run_id format: {run_id}"
+            )
     
     results = {}
     for run_id in run_ids:
@@ -257,6 +324,21 @@ async def restore_runs(request: Request, payload: Dict[str, Any] = Body(...)) ->
             status_code=400, 
             detail="run_ids is required and must be a list"
         )
+    
+    # Validate batch size
+    if not validate_batch_size(len(run_ids), max_size=100):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot restore more than 100 runs at once"
+        )
+    
+    # Validate each run_id format
+    for run_id in run_ids:
+        if not isinstance(run_id, str) or not validate_run_id(run_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid run_id format: {run_id}"
+            )
     
     results = {}
     for run_id in run_ids:

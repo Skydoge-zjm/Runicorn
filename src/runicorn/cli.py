@@ -58,6 +58,31 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_manage.add_argument("--text", help="Search text")
     p_manage.add_argument("--days", type=int, default=30, help="Days for cleanup (default: 30)")
     p_manage.add_argument("--dry-run", action="store_true", help="Preview cleanup without deleting")
+    
+    # Artifacts management subcommand
+    p_artifacts = sub.add_parser("artifacts", help="Manage artifacts (models, datasets)")
+    p_artifacts.add_argument("--storage", default=os.environ.get("RUNICORN_DIR") or None, help="Storage root directory")
+    p_artifacts.add_argument("--action", choices=["list", "versions", "info", "delete", "stats"], required=True, help="Artifact action")
+    p_artifacts.add_argument("--name", help="Artifact name")
+    p_artifacts.add_argument("--type", help="Artifact type (model, dataset, config, etc.)")
+    p_artifacts.add_argument("--version", type=int, help="Artifact version number")
+    p_artifacts.add_argument("--permanent", action="store_true", help="Permanent delete (vs soft delete)")
+    
+    # Rate limit management subcommand
+    p_rate = sub.add_parser("rate-limit", help="Manage API rate limits")
+    p_rate.add_argument("--action", choices=["show", "list", "get", "set", "remove", "settings", "reset", "validate"], 
+                       default="show", help="Rate limit action (default: show)")
+    p_rate.add_argument("--endpoint", help="API endpoint path (e.g., /api/remote/connect)")
+    p_rate.add_argument("--max-requests", type=int, help="Maximum requests allowed")
+    p_rate.add_argument("--window", type=int, default=60, help="Time window in seconds (default: 60)")
+    p_rate.add_argument("--burst", type=int, help="Burst size limit")
+    p_rate.add_argument("--description", help="Description of the limit")
+    p_rate.add_argument("--enable", action="store_true", help="Enable rate limiting")
+    p_rate.add_argument("--disable", action="store_true", help="Disable rate limiting")
+    p_rate.add_argument("--log-violations", action="store_true", help="Log rate limit violations")
+    p_rate.add_argument("--no-log-violations", action="store_true", help="Don't log rate limit violations")
+    p_rate.add_argument("--whitelist-localhost", action="store_true", help="Whitelist localhost")
+    p_rate.add_argument("--no-whitelist-localhost", action="store_true", help="Don't whitelist localhost")
 
     args = parser.parse_args(argv)
 
@@ -81,6 +106,159 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"  user_root_dir : {cfg.get('user_root_dir') or '(not set)'}")
             if not cfg.get('user_root_dir'):
                 print("\nTip: Set it via:\n  runicorn config --set-user-root <ABSOLUTE_PATH>")
+        return 0
+    
+    if args.cmd == "artifacts":
+        try:
+            from .artifacts import create_artifact_storage, LineageTracker
+        except ImportError:
+            print("Error: Artifacts system is not available")
+            print("This may be a module loading issue. Check your installation.")
+            return 1
+        
+        import datetime
+        root = _default_storage_dir(getattr(args, "storage", None))
+        storage = create_artifact_storage(root)
+        
+        if args.action == "list":
+            artifacts = storage.list_artifacts(type=args.type)
+            
+            if not artifacts:
+                print("No artifacts found.")
+                return 0
+            
+            print(f"Found {len(artifacts)} artifact(s):\n")
+            print(f"{'Name':<30} {'Type':<10} {'Versions':<10} {'Size':<15} {'Latest':<10}")
+            print("-" * 85)
+            
+            for art in artifacts:
+                size_mb = art["size_bytes"] / (1024 * 1024)
+                print(f"{art['name']:<30} {art['type']:<10} {art['num_versions']:<10} {size_mb:>10.2f} MB   v{art['latest_version']}")
+            
+            return 0
+        
+        elif args.action == "versions":
+            if not args.name:
+                print("Error: --name is required for 'versions' action")
+                return 1
+            
+            versions = storage.list_versions(args.name, type=args.type)
+            
+            if not versions:
+                print(f"No versions found for artifact: {args.name}")
+                return 0
+            
+            print(f"Versions for {args.name}:\n")
+            print(f"{'Version':<10} {'Created':<25} {'Size':<15} {'Files':<8} {'Run'}")
+            print("-" * 90)
+            
+            for v in versions:
+                created = datetime.datetime.fromtimestamp(v.created_at).strftime("%Y-%m-%d %H:%M:%S")
+                size_mb = v.size_bytes / (1024 * 1024)
+                run_id = v.created_by_run[:20] + "..." if len(v.created_by_run) > 20 else v.created_by_run
+                print(f"v{v.version:<9} {created:<25} {size_mb:>10.2f} MB   {v.num_files:<8} {run_id}")
+            
+            return 0
+        
+        elif args.action == "info":
+            if not args.name or args.version is None:
+                print("Error: --name and --version are required for 'info' action")
+                return 1
+            
+            try:
+                metadata, manifest = storage.load_artifact(args.name, args.type, args.version)
+                
+                print(f"\nArtifact: {args.name}:v{args.version}")
+                print("=" * 60)
+                print(f"Type:         {metadata.type}")
+                print(f"Status:       {metadata.status}")
+                print(f"Created:      {datetime.datetime.fromtimestamp(metadata.created_at).strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"Created by:   {metadata.created_by_run}")
+                print(f"Size:         {metadata.size_bytes / (1024 * 1024):.2f} MB")
+                print(f"Files:        {metadata.num_files}")
+                print(f"References:   {metadata.num_references}")
+                
+                if metadata.description:
+                    print(f"Description:  {metadata.description}")
+                
+                if metadata.aliases:
+                    print(f"Aliases:      {', '.join(metadata.aliases)}")
+                
+                if metadata.tags:
+                    print(f"Tags:         {', '.join(metadata.tags)}")
+                
+                if metadata.metadata:
+                    print(f"\nMetadata:")
+                    for key, value in metadata.metadata.items():
+                        print(f"  {key}: {value}")
+                
+                if manifest.files:
+                    print(f"\nFiles ({len(manifest.files)}):")
+                    for f in manifest.files[:10]:  # Show first 10
+                        print(f"  {f.path} ({f.size / 1024:.1f} KB)")
+                    
+                    if len(manifest.files) > 10:
+                        print(f"  ... and {len(manifest.files) - 10} more files")
+                
+                return 0
+                
+            except FileNotFoundError as e:
+                print(f"Error: {e}")
+                return 1
+        
+        elif args.action == "delete":
+            if not args.name or args.version is None:
+                print("Error: --name and --version are required for 'delete' action")
+                return 1
+            
+            confirm = input(f"Delete {args.name}:v{args.version}? [y/N] ")
+            if confirm.lower() != 'y':
+                print("Cancelled.")
+                return 0
+            
+            try:
+                success = storage.delete_artifact_version(
+                    args.name,
+                    args.type or "model",
+                    args.version,
+                    soft_delete=not args.permanent
+                )
+                
+                if success:
+                    print(f"✅ {'Permanently' if args.permanent else 'Soft'} deleted {args.name}:v{args.version}")
+                else:
+                    print(f"Failed to delete {args.name}:v{args.version}")
+                    return 1
+                
+                return 0
+                
+            except Exception as e:
+                print(f"Error: {e}")
+                return 1
+        
+        elif args.action == "stats":
+            stats = storage.get_storage_stats()
+            
+            print("\nArtifact Storage Statistics")
+            print("=" * 60)
+            print(f"Total Artifacts:  {stats['total_artifacts']}")
+            print(f"Total Versions:   {stats['total_versions']}")
+            print(f"Total Size:       {stats['total_size_bytes'] / (1024**3):.2f} GB")
+            print(f"Dedup Enabled:    {stats['dedup_enabled']}")
+            
+            if stats['dedup_enabled']:
+                print(f"\nDeduplication Stats:")
+                print(f"  Pool Size:      {stats.get('dedup_pool_size_bytes', 0) / (1024**3):.2f} GB")
+                print(f"  Space Saved:    {stats.get('space_saved_bytes', 0) / (1024**3):.2f} GB")
+                print(f"  Dedup Ratio:    {stats.get('dedup_ratio', 0) * 100:.1f}%")
+            
+            if stats.get('by_type'):
+                print(f"\nBy Type:")
+                for type_name, type_stats in stats['by_type'].items():
+                    print(f"  {type_name.capitalize():<10} {type_stats['count']} artifacts, {type_stats['versions']} versions, {type_stats['size_bytes'] / (1024**3):.2f} GB")
+            
+            return 0
+        
         return 0
 
     if args.cmd == "export":
@@ -311,6 +489,205 @@ def main(argv: Optional[list[str]] = None) -> int:
         except Exception as e:
             print(f"Management failed: {e}")
             return 1
+    
+    if args.cmd == "rate-limit":
+        from .config import get_rate_limit_config, save_rate_limit_config
+        import json
+        
+        action = args.action
+        
+        if action == "show":
+            config = get_rate_limit_config()
+            print(json.dumps(config, indent=2))
+            return 0
+        
+        elif action == "list":
+            config = get_rate_limit_config()
+            
+            # Show default
+            default = config.get("default", {})
+            print("Default:")
+            print(f"  {default.get('max_requests', 60)}/{default.get('window_seconds', 60)}s")
+            
+            # Show endpoints
+            endpoints = config.get("endpoints", {})
+            if endpoints:
+                print("\nEndpoints:")
+                for endpoint, endpoint_config in sorted(endpoints.items()):
+                    desc = endpoint_config.get('description', '')
+                    desc_str = f" - {desc}" if desc else ""
+                    burst_str = f" (burst: {endpoint_config.get('burst_size')})" if endpoint_config.get('burst_size') else ""
+                    print(f"  {endpoint}: {endpoint_config.get('max_requests')}/{endpoint_config.get('window_seconds')}s{burst_str}{desc_str}")
+            else:
+                print("\nNo endpoint-specific limits configured.")
+            return 0
+        
+        elif action == "get":
+            if not args.endpoint:
+                print("Error: --endpoint is required for 'get' action")
+                return 1
+            
+            config = get_rate_limit_config()
+            endpoint_config = config.get("endpoints", {}).get(args.endpoint)
+            
+            if endpoint_config:
+                print(f"Endpoint: {args.endpoint}")
+                print(f"  Max Requests: {endpoint_config.get('max_requests')}")
+                print(f"  Window: {endpoint_config.get('window_seconds')}s")
+                print(f"  Burst Size: {endpoint_config.get('burst_size', 'None')}")
+                if 'description' in endpoint_config:
+                    print(f"  Description: {endpoint_config.get('description')}")
+            else:
+                # Show default
+                default_config = config.get("default", {})
+                print(f"Endpoint: {args.endpoint} (using default)")
+                print(f"  Max Requests: {default_config.get('max_requests', 60)}")
+                print(f"  Window: {default_config.get('window_seconds', 60)}s")
+                print(f"  Burst Size: {default_config.get('burst_size', 'None')}")
+            return 0
+        
+        elif action == "set":
+            if not args.endpoint or args.max_requests is None:
+                print("Error: --endpoint and --max-requests are required for 'set' action")
+                return 1
+            
+            config = get_rate_limit_config()
+            
+            if "endpoints" not in config:
+                config["endpoints"] = {}
+            
+            endpoint_config = {
+                "max_requests": args.max_requests,
+                "window_seconds": args.window,
+                "burst_size": args.burst
+            }
+            
+            if args.description:
+                endpoint_config["description"] = args.description
+            
+            config["endpoints"][args.endpoint] = endpoint_config
+            save_rate_limit_config(config)
+            
+            print(f"✓ Updated rate limit for {args.endpoint}")
+            print(f"  Max Requests: {args.max_requests}/{args.window}s")
+            if args.burst:
+                print(f"  Burst Size: {args.burst}")
+            return 0
+        
+        elif action == "remove":
+            if not args.endpoint:
+                print("Error: --endpoint is required for 'remove' action")
+                return 1
+            
+            config = get_rate_limit_config()
+            
+            if "endpoints" in config and args.endpoint in config["endpoints"]:
+                del config["endpoints"][args.endpoint]
+                save_rate_limit_config(config)
+                print(f"✓ Removed rate limit for {args.endpoint}")
+            else:
+                print(f"⚠ No specific rate limit found for {args.endpoint}")
+            return 0
+        
+        elif action == "settings":
+            config = get_rate_limit_config()
+            
+            if "settings" not in config:
+                config["settings"] = {}
+            
+            # Update settings based on args
+            if args.enable:
+                config["settings"]["enable_rate_limiting"] = True
+            elif args.disable:
+                config["settings"]["enable_rate_limiting"] = False
+            
+            if args.log_violations:
+                config["settings"]["log_violations"] = True
+            elif args.no_log_violations:
+                config["settings"]["log_violations"] = False
+            
+            if args.whitelist_localhost:
+                config["settings"]["whitelist_localhost"] = True
+            elif args.no_whitelist_localhost:
+                config["settings"]["whitelist_localhost"] = False
+            
+            save_rate_limit_config(config)
+            
+            settings = config["settings"]
+            print("✓ Updated settings:")
+            print(f"  Rate Limiting: {'Enabled' if settings.get('enable_rate_limiting', True) else 'Disabled'}")
+            print(f"  Log Violations: {'Yes' if settings.get('log_violations', True) else 'No'}")
+            print(f"  Whitelist Localhost: {'Yes' if settings.get('whitelist_localhost', False) else 'No'}")
+            return 0
+        
+        elif action == "reset":
+            confirm = input("Reset to default configuration? [y/N] ")
+            if confirm.lower() != 'y':
+                print("Cancelled.")
+                return 0
+            
+            default_config = {
+                "default": {
+                    "max_requests": 60,
+                    "window_seconds": 60,
+                    "burst_size": None,
+                    "description": "Default rate limit for all endpoints"
+                },
+                "endpoints": {},
+                "settings": {
+                    "enable_rate_limiting": True,
+                    "log_violations": True,
+                    "whitelist_localhost": False,
+                    "custom_headers": {
+                        "rate_limit_header": "X-RateLimit-Limit",
+                        "rate_limit_remaining_header": "X-RateLimit-Remaining",
+                        "rate_limit_reset_header": "X-RateLimit-Reset"
+                    }
+                }
+            }
+            
+            save_rate_limit_config(default_config)
+            print("✓ Reset to default configuration")
+            return 0
+        
+        elif action == "validate":
+            try:
+                config = get_rate_limit_config()
+                
+                # Basic validation
+                assert isinstance(config, dict), "Configuration must be a dictionary"
+                
+                # Check default section
+                if "default" in config:
+                    default = config["default"]
+                    assert isinstance(default.get("max_requests"), int), "max_requests must be an integer"
+                    assert isinstance(default.get("window_seconds"), int), "window_seconds must be an integer"
+                    assert default.get("max_requests") > 0, "max_requests must be positive"
+                    assert default.get("window_seconds") > 0, "window_seconds must be positive"
+                
+                # Check endpoints
+                if "endpoints" in config:
+                    endpoints = config["endpoints"]
+                    assert isinstance(endpoints, dict), "endpoints must be a dictionary"
+                    
+                    for endpoint, endpoint_config in endpoints.items():
+                        assert endpoint.startswith("/"), f"Endpoint '{endpoint}' must start with /"
+                        assert isinstance(endpoint_config.get("max_requests"), int), f"{endpoint}: max_requests must be an integer"
+                        assert isinstance(endpoint_config.get("window_seconds"), int), f"{endpoint}: window_seconds must be an integer"
+                        assert endpoint_config.get("max_requests") > 0, f"{endpoint}: max_requests must be positive"
+                        assert endpoint_config.get("window_seconds") > 0, f"{endpoint}: window_seconds must be positive"
+                
+                print("✓ Configuration is valid")
+                return 0
+                
+            except AssertionError as e:
+                print(f"✗ Configuration error: {e}")
+                return 1
+            except Exception as e:
+                print(f"✗ Failed to validate configuration: {e}")
+                return 1
+            
+        return 0
     
     parser.print_help()
     return 1

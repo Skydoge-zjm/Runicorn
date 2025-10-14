@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { SettingOutlined, CloudSyncOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { SettingOutlined, CloudSyncOutlined, ExperimentOutlined, DatabaseOutlined, CloudServerOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
-import RemoteSyncPage from './pages/RemoteSyncPage'
+import UnifiedRemotePage from './pages/UnifiedRemotePage'
 import ExperimentPage from './pages/ExperimentPage'
+import ArtifactsPage from './pages/ArtifactsPage'
+import ArtifactDetailPage from './pages/ArtifactDetailPage'
 import { health, getConfig } from './api'
 import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
+import RemoteStorageIndicator from './components/RemoteStorageIndicator'
 import { SettingsProvider } from './contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
 
@@ -16,11 +19,12 @@ export default function App() {
   const location = useLocation()
   const getSelectedKey = () => {
     if (location.pathname.startsWith('/remote')) return 'remote'
+    if (location.pathname.startsWith('/artifacts')) return 'artifacts'
     if (location.pathname.startsWith('/runs/')) return 'experiments'  // Detail page also under experiments
     return 'experiments'  // Default to experiments
   }
   const selected = [getSelectedKey()]
-  const { t, i18n } = useTranslation()
+  const { t, i18n} = useTranslation()
   // UI Settings with persistence
   const defaultSettings: UiSettings = {
     // Appearance
@@ -178,7 +182,8 @@ export default function App() {
               selectedKeys={selected}
               items={[
                 { key: 'experiments', icon: <ExperimentOutlined />, label: <Link to="/">{t('menu.experiments')}</Link> },
-                { key: 'remote', icon: <CloudSyncOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
+                { key: 'artifacts', icon: <DatabaseOutlined />, label: <Link to="/artifacts">{t('menu.artifacts')}</Link> },
+                { key: 'remote', icon: <CloudServerOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
               ]}
               style={{ flex: 1, minWidth: 0 }}
             />
@@ -186,6 +191,7 @@ export default function App() {
               {apiStatus === 'ok' && <Tag color="green">{t('tag.api_ok')}</Tag>}
               {apiStatus === 'loading' && <Tag color="processing">{t('tag.api_loading')}</Tag>}
               {apiStatus === 'down' && <Tag>{t('tag.api_down')}</Tag>}
+              <RemoteStorageIndicator />
               <Select
                 size="small"
                 value={i18n.language?.startsWith('zh') ? 'zh' : 'en'}
@@ -201,7 +207,9 @@ export default function App() {
               <Routes>
                 <Route path="/" element={<ExperimentPage />} />
                 <Route path="/runs/:id" element={<RunDetailPage />} />
-                <Route path="/remote" element={<RemoteSyncPage />} />
+                <Route path="/artifacts" element={<ArtifactsPage />} />
+                <Route path="/artifacts/:name" element={<ArtifactDetailPage />} />
+                <Route path="/remote" element={<UnifiedRemotePage />} />
               </Routes>
             </div>
           </Content>
