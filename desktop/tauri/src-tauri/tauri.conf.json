@@ -16,7 +16,7 @@
 
   "bundle": {
     "icon": [
-      "../../docs/picture/icon.jpg"
+      "../../docs/assets/icon.jpg"
     ],
     "externalBin": [
       "../sidecar/dist/runicorn-viewer"

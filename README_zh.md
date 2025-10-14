@@ -7,7 +7,7 @@
 [English](README.md) | **简体中文**
 
 <p align="center">
-  <img src="docs/picture/icon.jpg" alt="Runicorn logo" width="360" />
+  <img src="docs/assets/icon.jpg" alt="Runicorn logo" width="360" />
 </p>
 
 本地、开源的实验追踪与可视化工具，100% 离线。专业的机器学习实验管理平台，现代化的 W&B 自托管替代方案。
@@ -33,11 +33,11 @@
 - **GPU监控**: 实时GPU遥测（需要`nvidia-smi`）
 
 <p align="center">
-  <img src="docs/picture/p1.png" alt="Runicorn demo 1" width="98%" />
+  <img src="docs/assets/p1.png" alt="Runicorn demo 1" width="98%" />
   <br/>
-  <img src="docs/picture/p2.png" alt="Runicorn demo 2" width="98%" />
+  <img src="docs/assets/p2.png" alt="Runicorn demo 2" width="98%" />
   <br/>
-  <img src="docs/picture/p3.png" alt="Runicorn demo 3" width="98%" />
+  <img src="docs/assets/p3.png" alt="Runicorn demo 3" width="98%" />
   <br/>
   <span style="color:#888; font-size: 12px;">界面</span>
 </p>

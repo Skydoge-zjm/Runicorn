@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/picture/icon.jpg" alt="Runicorn logo" width="360" />
+  <img src="docs/assets/icon.jpg" alt="Runicorn logo" width="360" />
 </p>
 
 Local, open-source experiment tracking and visualization. 100% offline. Professional ML experiment management; a modern self-hosted alternative to W&B.
@@ -35,11 +35,11 @@ Local, open-source experiment tracking and visualization. 100% offline. Professi
 
 
 <p align="center">
-  <img src="docs/picture/p1.png" alt="Runicorn demo 1" width="98%" />
+  <img src="docs/assets/p1.png" alt="Runicorn demo 1" width="98%" />
   <br/>
-  <img src="docs/picture/p2.png" alt="Runicorn demo 2" width="98%" />
+  <img src="docs/assets/p2.png" alt="Runicorn demo 2" width="98%" />
   <br/>
-  <img src="docs/picture/p3.png" alt="Runicorn demo 3" width="98%" />
+  <img src="docs/assets/p3.png" alt="Runicorn demo 3" width="98%" />
   <br/>
   <span style="color:#888; font-size: 12px;">UI overview</span>
   

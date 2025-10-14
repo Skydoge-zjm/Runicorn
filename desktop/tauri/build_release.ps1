@@ -82,9 +82,9 @@ $IconIco = Join-Path $IconDir "icon.ico"
 if (-not (Test-Path $IconIco)) {
   New-Item -ItemType Directory -Force $IconDir | Out-Null
 
-  $IconSrc = Resolve-Path (Join-Path $RepoRoot "docs/picture/icon.jpg") -ErrorAction SilentlyContinue
-  if (-not $IconSrc) { $IconSrc = Resolve-Path (Join-Path $RepoRoot "docs/picture/p1.png") -ErrorAction SilentlyContinue }
-  if (-not $IconSrc) { throw "No source icon found at docs/picture/. Please add icon.jpg or p1.png." }
+  $IconSrc = Resolve-Path (Join-Path $RepoRoot "docs/assets/icon.jpg") -ErrorAction SilentlyContinue
+  if (-not $IconSrc) { $IconSrc = Resolve-Path (Join-Path $RepoRoot "docs/assets/p1.png") -ErrorAction SilentlyContinue }
+  if (-not $IconSrc) { throw "No source icon found at docs/assets/. Please add icon.jpg or p1.png." }
   try {
     Run "python -m pip install --user pillow" $null
     $py = @"
