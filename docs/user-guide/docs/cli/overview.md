@@ -22,16 +22,16 @@ runicorn --help
 
 ## Available Commands
 
-| Command | Description | Documentation |
-|---------|-------------|---------------|
-| `viewer` | Start the web viewer | [📖](viewer.md) |
-| `config` | Manage configuration | [📖](config.md) |
-| `export` | Export experiments | [📖](export-import.md#export) |
-| `import` | Import experiments | [📖](export-import.md#import) |
-| `artifacts` | Manage artifacts | [📖](artifacts.md) |
-| `export-data` | Export metrics to CSV/Excel | [📖](export-import.md#export-data) |
-| `manage` | Advanced experiment management | [📖](overview.md#manage-command) |
-| `rate-limit` | Configure rate limits | [📖](overview.md#rate-limit-command) |
+| Command | Description |
+|---------|-------------|
+| `viewer` | Start the web viewer |
+| `config` | Manage configuration |
+| `export` | Export experiments |
+| `import` | Import experiments |
+| `artifacts` | Manage artifacts |
+| `export-data` | Export metrics to CSV/Excel |
+| `manage` | Advanced experiment management |
+| `rate-limit` | Configure rate limits |
 
 ---
 
