@@ -84,53 +84,15 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started:
-    - Installation: getting-started/installation.md
     - Quick Start: getting-started/quickstart.md
-    - First Experiment: getting-started/first-experiment.md
-    - Configuration: getting-started/configuration.md
-  
   - Python SDK:
     - Overview: sdk/overview.md
-    - Experiment Tracking: sdk/experiment-tracking.md
-    - Logging Metrics: sdk/logging-metrics.md
-    - Artifacts (Models): sdk/artifacts.md
-    - Advanced Features: sdk/advanced.md
-    - API Reference: sdk/api-reference.md
-  
   - Command Line:
     - CLI Overview: cli/overview.md
-    - Viewer Commands: cli/viewer.md
-    - Config Commands: cli/config.md
-    - Export & Import: cli/export-import.md
-    - Artifacts Management: cli/artifacts.md
-  
-  - Web Interface:
-    - UI Overview: ui/overview.md
-    - Experiments Page: ui/experiments.md
-    - Artifact Management: ui/artifacts.md
-    - Remote Sync: ui/remote-sync.md
-    - Settings & Preferences: ui/settings.md
-  
   - Tutorials:
     - Image Classification: tutorials/image-classification.md
-    - NLP Fine-tuning: tutorials/nlp-finetuning.md
-    - Model Versioning: tutorials/model-versioning.md
-    - Remote Training: tutorials/remote-training.md
-    - Multi-GPU Training: tutorials/multi-gpu.md
-  
-  - How-To Guides:
-    - Compare Experiments: guides/compare-experiments.md
-    - Manage Model Versions: guides/manage-models.md
-    - Export Results: guides/export-results.md
-    - Sync Remote Server: guides/sync-remote.md
-    - Troubleshooting: guides/troubleshooting.md
-  
   - Reference:
-    - Storage Structure: reference/storage-structure.md
-    - File Formats: reference/file-formats.md
-    - Best Practices: reference/best-practices.md
     - FAQ: reference/faq.md
-    - Glossary: reference/glossary.md
 
 # Plugins
 plugins:
@@ -143,7 +105,7 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/yourusername/runicorn
+      link: https://github.com/Skydoge-zjm/Runicorn
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/runicorn/
   
@@ -151,7 +113,7 @@ extra:
     provider: mike
     default: stable
 
-# Custom CSS
-extra_css:
-  - stylesheets/extra.css
+# Custom CSS (uncomment when stylesheets/extra.css is created)
+# extra_css:
+#   - stylesheets/extra.css
 
