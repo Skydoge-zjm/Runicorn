@@ -40,15 +40,21 @@
 - **桌面应用**: Windows原生应用，自动后端启动
 - **GPU监控**: 实时GPU遥测（需要`nvidia-smi`）
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/p1.png" alt="实验列表页面" width="100%" /></td>
+    <td width="50%"><img src="docs/assets/p2.png" alt="实验详情页面" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/p3.png" alt="Artifacts管理" width="100%" /></td>
+    <td width="50%"><img src="docs/assets/p4.png" alt="远程连接" width="100%" /></td>
+  </tr>
+</table>
+
 <p align="center">
-  <img src="docs/assets/p1.png" alt="Runicorn demo 1" width="98%" />
-  <br/>
-  <img src="docs/assets/p2.png" alt="Runicorn demo 2" width="98%" />
-  <br/>
-  <img src="docs/assets/p3.png" alt="Runicorn demo 3" width="98%" />
-  <br/>
-  <span style="color:#888; font-size: 12px;">界面</span>
+  <span style="color:#888; font-size: 12px;">界面展示</span>
 </p>
+
 
 
 ## 特性

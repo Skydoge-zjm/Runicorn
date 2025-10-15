@@ -42,16 +42,21 @@ Local, open-source experiment tracking and visualization. 100% offline. Professi
 - **GPU Monitoring**: Real-time GPU telemetry (requires `nvidia-smi`)
 
 
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/p1.png" alt="Experiments page" width="100%" /></td>
+    <td width="50%"><img src="docs/assets/p2.png" alt="Experiment detail" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/assets/p3.png" alt="Artifacts management" width="100%" /></td>
+    <td width="50%"><img src="docs/assets/p4.png" alt="Remote connection" width="100%" /></td>
+  </tr>
+</table>
+
 <p align="center">
-  <img src="docs/assets/p1.png" alt="Runicorn demo 1" width="98%" />
-  <br/>
-  <img src="docs/assets/p2.png" alt="Runicorn demo 2" width="98%" />
-  <br/>
-  <img src="docs/assets/p3.png" alt="Runicorn demo 3" width="98%" />
-  <br/>
-  <span style="color:#888; font-size: 12px;">UI overview</span>
-  
+  <span style="color:#888; font-size: 12px;">UI Overview</span>
 </p>
+
 
 Features
 --------
