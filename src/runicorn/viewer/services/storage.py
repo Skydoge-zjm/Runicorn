@@ -299,9 +299,14 @@ async def periodic_status_check(root: Path) -> None:
         try:
             # Check all running experiments
             for entry in iter_all_runs(root):
-                status = read_json(entry.dir / "status.json")
-                if status.get("status") == "running":
-                    update_status_if_process_dead(entry.dir)
+                try:
+                    status = read_json(entry.dir / "status.json")
+                    if status.get("status") == "running":
+                        update_status_if_process_dead(entry.dir)
+                except Exception as entry_error:
+                    # Don't let one bad entry crash the whole checker
+                    logger.debug(f"Error checking status for {entry.dir.name}: {entry_error}")
+                    continue
             
             # Wait 30 seconds before next check
             await asyncio.sleep(30)
@@ -309,5 +314,6 @@ async def periodic_status_check(root: Path) -> None:
             logger.info("Status check task cancelled")
             break
         except Exception as e:
-            logger.error(f"Status check task error: {e}")
+            # Log but don't crash - keep checking
+            logger.error(f"Status check task error: {e}", exc_info=True)
             await asyncio.sleep(30)  # Continue checking despite errors

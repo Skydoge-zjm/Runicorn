@@ -19,7 +19,7 @@ from .models import (
     LineageGraph
 )
 from .artifact import Artifact
-from .storage import ArtifactStorage, create_artifact_storage
+from .storage import ArtifactStorage, create_artifact_storage, get_artifact_storage
 from .lineage import LineageTracker
 
 __all__ = [

@@ -63,7 +63,7 @@ from .api.v2 import (
     v2_analytics_router
 )
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +132,14 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                 logger.info("Closed remote storage adapter")
             except Exception as e:
                 logger.warning(f"Failed to close remote adapter: {e}")
+        
+        # Close storage service (CRITICAL for Windows desktop app)
+        try:
+            from .services.modern_storage import close_storage_service
+            close_storage_service()
+            logger.info("Closed storage service and database connections")
+        except Exception as e:
+            logger.warning(f"Failed to close storage service: {e}")
     
     # Register v1 API routers (backward compatibility)
     app.include_router(health_router, prefix="/api", tags=["health"])

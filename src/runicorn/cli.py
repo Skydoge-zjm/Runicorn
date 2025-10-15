@@ -507,7 +507,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             # Show default
             default = config.get("default", {})
             print("Default:")
-            print(f"  {default.get('max_requests', 60)}/{default.get('window_seconds', 60)}s")
+            print(f"  {default.get('max_requests', 6000)}/{default.get('window_seconds', 60)}s")
             
             # Show endpoints
             endpoints = config.get("endpoints", {})
@@ -541,7 +541,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 # Show default
                 default_config = config.get("default", {})
                 print(f"Endpoint: {args.endpoint} (using default)")
-                print(f"  Max Requests: {default_config.get('max_requests', 60)}")
+                print(f"  Max Requests: {default_config.get('max_requests', 6000)}")
                 print(f"  Window: {default_config.get('window_seconds', 60)}s")
                 print(f"  Burst Size: {default_config.get('burst_size', 'None')}")
             return 0
@@ -627,15 +627,16 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return 0
             
             default_config = {
+                "_comment": "Rate limits are high for local-only API with no internet exposure",
                 "default": {
-                    "max_requests": 60,
+                    "max_requests": 6000,
                     "window_seconds": 60,
                     "burst_size": None,
-                    "description": "Default rate limit for all endpoints"
+                    "description": "Default rate limit - very permissive for local use"
                 },
                 "endpoints": {},
                 "settings": {
-                    "enable_rate_limiting": True,
+                    "enable_rate_limiting": False,
                     "log_violations": True,
                     "whitelist_localhost": False,
                     "custom_headers": {

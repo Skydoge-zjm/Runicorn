@@ -56,12 +56,12 @@ def _get_storage_adapter(request: Request) -> Tuple[Any, bool]:
         return adapter, True
     
     else:
-        # Local mode: use local artifact storage
+        # Local mode: use local artifact storage (cached singleton)
         try:
-            from ...artifacts import create_artifact_storage
+            from ...artifacts import get_artifact_storage
             
             storage_root = request.app.state.storage_root
-            artifact_storage = create_artifact_storage(storage_root)
+            artifact_storage = get_artifact_storage(storage_root)
             
             return artifact_storage, False
             
@@ -456,11 +456,11 @@ async def get_artifacts_stats(request: Request) -> Dict[str, Any]:
             stats = adapter.get_stats()
             return stats.to_dict()
         else:
-            # Local mode: return local storage stats
-            from ...artifacts import create_artifact_storage
+            # Local mode: return local storage stats (use cached instance)
+            from ...artifacts import get_artifact_storage
             
             storage_root = request.app.state.storage_root
-            artifact_storage = create_artifact_storage(storage_root)
+            artifact_storage = get_artifact_storage(storage_root)
             
             return artifact_storage.get_storage_stats()
         

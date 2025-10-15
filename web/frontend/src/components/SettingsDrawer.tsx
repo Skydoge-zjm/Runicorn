@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
-import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Tooltip, Select, Alert } from 'antd'
+import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Tooltip, Select, Alert, theme } from 'antd'
 import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, InfoCircleOutlined, ThunderboltOutlined, GlobalOutlined, ExportOutlined } from '@ant-design/icons'
 import { getConfig, setUserRootDir as apiSetUserRootDir, importArchive } from '../api'
 import { useTranslation } from 'react-i18next'
+import SystemInfoPanel from './SystemInfoPanel'
 
 export type UiSettings = {
   // Appearance
@@ -46,6 +47,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
   onChange: (v: UiSettings) => void
 }) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const set = (patch: Partial<UiSettings>) => onChange({ ...value, ...patch })
   const densityTips = {
     compact: t('settings.appearance.density_compact'),
@@ -228,7 +230,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Typography.Text strong>{t('settings.glass')}</Typography.Text>
-              <div style={{ fontSize: '12px', color: '#999' }}>{t('settings.glass.desc')}</div>
+              <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.glass.desc')}</div>
             </div>
             <Switch checked={value.glass} onChange={(checked) => set({ glass: checked })} />
           </div>
@@ -251,7 +253,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Typography.Text strong>{t('settings.performance.animations')}</Typography.Text>
-              <div style={{ fontSize: '12px', color: '#999' }}>{t('settings.animations.ui_desc')}</div>
+              <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.animations.ui_desc')}</div>
             </div>
             <Switch 
               checked={value.animationsEnabled} 
@@ -262,7 +264,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Typography.Text strong>{t('settings.performance.chart_animations')}</Typography.Text>
-              <div style={{ fontSize: '12px', color: '#999' }}>{t('settings.animations.chart_desc')}</div>
+              <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.animations.chart_desc')}</div>
             </div>
             <Switch 
               checked={value.enableChartAnimations} 
@@ -336,8 +338,8 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
             >
               <div style={{ padding: '8px', textAlign: 'center' }}>
                 <div style={{ marginBottom: 4, fontSize: '14px' }}>{t('offline_import.drag')}</div>
-                <div style={{ fontSize: '11px', color: '#999' }}>{t('offline_import.supports')}</div>
-                {importing && <div style={{ marginTop: 4, color: '#1677ff', fontSize: '12px' }}>{t('offline_import.importing')}</div>}
+                <div style={{ fontSize: '11px', color: token.colorTextSecondary }}>{t('offline_import.supports')}</div>
+                {importing && <div style={{ marginTop: 4, color: token.colorPrimary, fontSize: '12px' }}>{t('offline_import.importing')}</div>}
               </div>
             </Upload.Dragger>
           </div>
@@ -353,7 +355,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Typography.Text strong>{t('settings.performance.auto_refresh')}</Typography.Text>
-              <div style={{ fontSize: '12px', color: '#999' }}>{t('settings.auto_refresh.desc')}</div>
+              <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.auto_refresh.desc')}</div>
             </div>
             <Switch 
               checked={value.autoRefresh} 
@@ -373,7 +375,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
                     onChange={(v) => set({ refreshInterval: v || 5 })}
                     style={{ width: 80 }}
                   />
-                  <span style={{ fontSize: '12px', color: '#999' }}>{t('settings.units.seconds')}</span>
+                  <span style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.units.seconds')}</span>
                 </div>
               </div>
             </div>
@@ -404,7 +406,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
                   onChange={(v) => set({ maxDataPoints: v || 1000 })}
                   style={{ width: 120 }}
                 />
-                <span style={{ fontSize: '12px', color: '#999' }}>{t('settings.units.points')}</span>
+                <span style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.units.points')}</span>
               </div>
             </div>
           </div>
@@ -416,7 +418,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Typography.Text strong>{t('settings.charts.grid_lines')}</Typography.Text>
-              <div style={{ fontSize: '12px', color: '#999' }}>{t('settings.grid_lines.desc')}</div>
+              <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.grid_lines.desc')}</div>
             </div>
             <Switch 
               checked={value.showGridLines} 
@@ -427,7 +429,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <Typography.Text strong>{t('settings.performance.sounds')}</Typography.Text>
-              <div style={{ fontSize: '12px', color: '#999' }}>{t('settings.sounds.desc')}</div>
+              <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.sounds.desc')}</div>
             </div>
             <Switch 
               checked={value.enableSounds} 
@@ -498,26 +500,20 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
             ),
             children: renderPerformanceTab(),
           },
+          {
+            key: 'system_info',
+            label: (
+              <Space>
+                <InfoCircleOutlined />
+                <span>{t('settings.tabs.system_info')}</span>
+              </Space>
+            ),
+            children: <SystemInfoPanel />,
+          },
         ]}
         tabPosition="top"
         size="small"
-        style={{ height: 'calc(100vh - 120px)' }}
       />
-      
-      <div style={{ 
-        position: 'absolute', 
-        bottom: 16, 
-        right: 16, 
-        left: 16,
-        borderTop: '1px solid #f0f0f0',
-        paddingTop: 16,
-        background: 'rgba(255, 255, 255, 0.9)',
-        backdropFilter: 'blur(8px)'
-      }}>
-        <Button onClick={onClose} type="primary" size="large" block>
-          {t('settings.done')}
-        </Button>
-      </div>
     </Drawer>
   )
 }

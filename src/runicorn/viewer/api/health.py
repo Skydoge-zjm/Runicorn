@@ -26,10 +26,13 @@ async def health(request: Request) -> Dict[str, Any]:
     cache = get_metrics_cache()
     cache_stats = cache.stats()
     
+    # Get version from viewer module
+    from .. import __version__
+    
     return {
         "status": "ok", 
         "storage": str(storage_root),
-        "version": "0.3.1",
+        "version": __version__,
         "cache": {
             "enabled": True,
             "hit_rate": f"{cache_stats['hit_rate']:.1%}",

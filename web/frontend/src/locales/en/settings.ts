@@ -1,4 +1,37 @@
 export default {
+  'settings.system_info.title': 'System Information',
+  'settings.system_info.refresh': 'Refresh',
+  'settings.system_info.copy_all': 'Copy All',
+  'settings.system_info.copied': 'System information copied to clipboard',
+  'settings.system_info.copy_failed': 'Failed to copy to clipboard',
+  'settings.system_info.loading': 'Loading system information...',
+  
+  'settings.system_info.version_info': 'Version Information',
+  'settings.system_info.runicorn_version': 'Runicorn Version',
+  'settings.system_info.api_status': 'API Status',
+  
+  'settings.system_info.storage_config': 'Storage Configuration',
+  'settings.system_info.storage_root': 'Storage Root',
+  
+  'settings.system_info.config_files': 'Configuration Files',
+  'settings.system_info.config_file': 'Main Config',
+  'settings.system_info.rate_limit_config': 'Rate Limit Config',
+  
+  'settings.system_info.cache_stats': 'Cache Statistics',
+  'settings.system_info.cache_status': 'Status',
+  'settings.system_info.hit_rate': 'Hit Rate',
+  'settings.system_info.hits': 'Hits',
+  'settings.system_info.misses': 'Misses',
+  'settings.system_info.cache_size': 'Cache Size',
+  
+  'settings.system_info.artifacts_stats': 'Artifacts Statistics',
+  'settings.system_info.total_artifacts': 'Total Artifacts',
+  'settings.system_info.total_versions': 'Total Versions',
+  'settings.system_info.deduplication': 'Deduplication',
+  'settings.system_info.space_saved': 'Space Saved',
+  
+  'settings.system_info.help_text': 'This information is useful for debugging and support. Click "Copy All" to copy all details to clipboard.',
+  
   'settings.drawer.title': 'Settings',
   'settings.theme.title': 'Theme',
   'settings.theme.mode': 'Mode',
@@ -39,6 +72,7 @@ export default {
   'settings.tabs.layout': 'Layout',
   'settings.tabs.data': 'Data',
   'settings.tabs.performance': 'Performance',
+  'settings.tabs.system_info': 'System Info',
   
   'settings.cards.theme': 'Theme',
   'settings.cards.background': 'Background',
@@ -56,7 +90,6 @@ export default {
   'settings.messages.enter_valid_path': 'Please enter a valid absolute path (e.g. D:\\RunicornData)',
   'settings.messages.updated': 'User root updated',
   'settings.messages.update_failed': 'Update failed',
-  'settings.done': 'Done',
   
   'background.title': 'Background',
   'background.type.label': 'Background Type',

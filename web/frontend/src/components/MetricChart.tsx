@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, memo } from 'react'
-import { Space, Switch, Tooltip, Slider, Select, Button, Card, Typography, Divider } from 'antd'
+import { Space, Switch, Tooltip, Slider, Select, Button, Card, Typography, Divider, theme } from 'antd'
 import { ExportOutlined } from '@ant-design/icons'
 import AutoResizeEChart from './AutoResizeEChart'
 import { useSettings } from '../contexts/SettingsContext'
@@ -27,6 +27,7 @@ const MetricChart = memo(function MetricChart({
 }) {
   const { t } = useTranslation()
   const { settings } = useSettings()
+  const { token } = theme.useToken()
   
   // Use settings-based height if not explicitly provided
   const effectiveHeight = height ?? settings.defaultChartHeight
@@ -154,7 +155,7 @@ const MetricChart = memo(function MetricChart({
           s.markLine = { 
             silent: true, 
             symbol: 'none', 
-            lineStyle: { type: 'dashed', color: '#bbb', width: 1 }, 
+            lineStyle: { type: 'dashed', color: token.colorBorder, width: 1 }, 
             label: { show: false }, // Hide labels to prevent overlap with legend
             data: allLines 
           }

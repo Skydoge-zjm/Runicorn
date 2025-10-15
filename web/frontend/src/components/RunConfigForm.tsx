@@ -68,7 +68,7 @@ export default function RunConfigForm({ onSubmit, submitting }: { onSubmit: (v: 
         <Col span={8}>
           <Form.Item name="epochs" label={
             <span>
-              Train Epochs <Tooltip title="Training config only. Viewer metrics use step/time with stage separators."><span style={{ color: '#999' }}>ⓘ</span></Tooltip>
+              Train Epochs <Tooltip title="Training config only. Viewer metrics use step/time with stage separators."><InfoCircleOutlined style={{ fontSize: 12, opacity: 0.45 }} /></Tooltip>
             </span>
           } rules={[{ required: true, message: 'Train epochs is required' }]}
           >
@@ -80,7 +80,7 @@ export default function RunConfigForm({ onSubmit, submitting }: { onSubmit: (v: 
         <Col span={8}>
           <Form.Item name="batchSize" label={
             <span>
-              Batch Size <Tooltip title="Per-step batch size; use grad accumulation in config to emulate larger batch if needed."><span style={{ color: '#999' }}>ⓘ</span></Tooltip>
+              Batch Size <Tooltip title="Per-step batch size; use grad accumulation in config to emulate larger batch if needed."><InfoCircleOutlined style={{ fontSize: 12, opacity: 0.45 }} /></Tooltip>
             </span>
           } rules={[{ required: true, message: 'Batch size is required' }]}
           >
@@ -90,7 +90,7 @@ export default function RunConfigForm({ onSubmit, submitting }: { onSubmit: (v: 
         <Col span={8}>
           <Form.Item name="lr" label={
             <span>
-              Learning Rate <Tooltip title="Base learning rate for optimizer"><span style={{ color: '#999' }}>ⓘ</span></Tooltip>
+              Learning Rate <Tooltip title="Base learning rate for optimizer"><InfoCircleOutlined style={{ fontSize: 12, opacity: 0.45 }} /></Tooltip>
             </span>
           } rules={[{ required: true, message: 'LR is required' }]}
           >
@@ -112,7 +112,7 @@ export default function RunConfigForm({ onSubmit, submitting }: { onSubmit: (v: 
         <Col span={8}>
           <Form.Item name="saveEachEpoch" label={
             <span>
-              Save Each Epoch <Tooltip title="Training checkpointing option; does not affect viewer metrics"><span style={{ color: '#999' }}>ⓘ</span></Tooltip>
+              Save Each Epoch <Tooltip title="Training checkpointing option; does not affect viewer metrics"><InfoCircleOutlined style={{ fontSize: 12, opacity: 0.45 }} /></Tooltip>
             </span>
           } valuePropName="checked">
             <Switch />

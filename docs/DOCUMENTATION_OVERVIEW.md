@@ -1,5 +1,6 @@
 # Runicorn Documentation System Overview
 
+**Version**: v0.4.1  
 **Last Updated**: 2025-10-14  
 **Purpose**: Complete overview of all documentation in the Runicorn project
 

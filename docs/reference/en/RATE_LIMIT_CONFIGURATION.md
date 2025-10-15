@@ -14,11 +14,12 @@ The rate limit configuration is stored at:
 
 ```json
 {
+  "_comment": "Rate limits are high for local-only API with no internet exposure",
   "default": {
-    "max_requests": 60,
+    "max_requests": 6000,
     "window_seconds": 60,
     "burst_size": null,
-    "description": "Default rate limit for all endpoints"
+    "description": "Default rate limit - very permissive for local use"
   },
   "endpoints": {
     "/api/endpoint/path": {
@@ -69,10 +70,10 @@ Each endpoint can have its own specific configuration with the same parameters a
 }
 ```
 
-### 2. Status Polling Endpoints (Permissive)
+### 2. Status Polling Endpoints (Very Permissive)
 ```json
 "/api/unified/status": {
-  "max_requests": 200,
+  "max_requests": 20000,
   "window_seconds": 60,
   "description": "Status polling - very permissive for UI updates"
 }
@@ -81,7 +82,7 @@ Each endpoint can have its own specific configuration with the same parameters a
 ### 3. Download Endpoints (Moderate)
 ```json
 "/api/remote/download": {
-  "max_requests": 30,
+  "max_requests": 3000,
   "window_seconds": 60,
   "description": "File downloads - moderately restrictive"
 }

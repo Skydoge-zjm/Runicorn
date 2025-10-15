@@ -69,10 +69,33 @@ def main(argv: Optional[list[str]] = None) -> int:
         log("[runicorn-viewer] create_app not found on runicorn.viewer")
         print("[runicorn-viewer] create_app not found on runicorn.viewer")
         return 2
+    
+    # Setup signal handlers for graceful shutdown
+    import signal
+    def signal_handler(signum, frame):
+        log(f"[runicorn-viewer] received signal {signum}, shutting down gracefully")
+        # Uvicorn will handle graceful shutdown
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     try:
         log("[runicorn-viewer] starting uvicorn:", args.host, args.port)
         # Disable uvicorn's default logging config to avoid "Unable to configure formatter 'default'" under PyInstaller
-        uvicorn.run(app_factory, host=args.host, port=args.port, factory=True, log_level="info", log_config=None)
+        # timeout_graceful_shutdown: Give time for cleanup handlers to run
+        uvicorn.run(
+            app_factory, 
+            host=args.host, 
+            port=args.port, 
+            factory=True, 
+            log_level="info", 
+            log_config=None,
+            timeout_graceful_shutdown=5  # 5 seconds for graceful shutdown
+        )
+    except KeyboardInterrupt:
+        log("[runicorn-viewer] keyboard interrupt, shutting down")
+        return 0
     except Exception as e:
         log("[runicorn-viewer] uvicorn run failed:", repr(e))
         print("[runicorn-viewer] uvicorn run failed:", e)
@@ -84,9 +107,14 @@ def main(argv: Optional[list[str]] = None) -> int:
             log("  sys.path:", sys.path)
             log("  sys.executable:", sys.executable)
             log("  os.getcwd():", os.getcwd())
+            log("  Exception details:", str(e))
+            import traceback
+            log("  Traceback:", traceback.format_exc())
         except Exception:
             pass
         return 1
+    finally:
+        log("[runicorn-viewer] main() exiting")
     return 0
 
 

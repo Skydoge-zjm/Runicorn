@@ -15,7 +15,9 @@ from ...config import (
     set_user_root_dir,
     get_ssh_connections,
     add_ssh_connection,
-    remove_ssh_connection
+    remove_ssh_connection,
+    get_config_file_path,
+    load_user_config
 )
 from ..services.storage import get_storage_root
 
@@ -29,13 +31,15 @@ async def get_config(request: Request) -> Dict[str, Any]:
     Get current configuration settings.
     
     Returns:
-        Current configuration including user root directory and storage path
+        Current configuration including user root directory, storage path, and config file locations
     """
     storage_root = request.app.state.storage_root
+    config_file_path = get_config_file_path()
     
     return {
         "user_root_dir": str(get_user_root_dir() or ""),
         "storage": str(storage_root),
+        "config_file": str(config_file_path),
     }
 
 

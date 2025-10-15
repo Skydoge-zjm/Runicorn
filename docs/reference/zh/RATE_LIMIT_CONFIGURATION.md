@@ -18,11 +18,12 @@ Runicorn 中的速率限制系统现在可以通过 JSON 配置文件进行配�
 
 ```json
 {
+  "_comment": "速率限制很高，因为这是本地API，无互联网暴露",
   "default": {
-    "max_requests": 60,
+    "max_requests": 6000,
     "window_seconds": 60,
     "burst_size": null,
-    "description": "所有端点的默认速率限制"
+    "description": "默认速率限制 - 本地使用非常宽松"
   },
   "endpoints": {
     "/api/endpoint/path": {
@@ -73,10 +74,10 @@ Runicorn 中的速率限制系统现在可以通过 JSON 配置文件进行配�
 }
 ```
 
-### 2. 状态轮询端点（宽松）
+### 2. 状态轮询端点（非常宽松）
 ```json
 "/api/unified/status": {
-  "max_requests": 200,
+  "max_requests": 20000,
   "window_seconds": 60,
   "description": "状态轮询 - UI 更新非常宽松"
 }
@@ -85,7 +86,7 @@ Runicorn 中的速率限制系统现在可以通过 JSON 配置文件进行配�
 ### 3. 下载端点（适中）
 ```json
 "/api/remote/download": {
-  "max_requests": 30,
+  "max_requests": 3000,
   "window_seconds": 60,
   "description": "文件下载 - 适度限制"
 }

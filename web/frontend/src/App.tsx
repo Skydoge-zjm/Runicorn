@@ -145,10 +145,29 @@ export default function App() {
   }, [])
 
   const [apiStatus, setApiStatus] = useState<'ok' | 'down' | 'loading'>('loading')
+  const [failureCount, setFailureCount] = useState(0)
+  
   useEffect(() => {
     let active = true
     const ping = async () => {
-      try { await health(); if (active) setApiStatus('ok') } catch { if (active) setApiStatus('down') }
+      try {
+        await health()
+        if (active) {
+          setApiStatus('ok')
+          setFailureCount(0) // Reset failure count on success
+        }
+      } catch {
+        if (active) {
+          // Only mark as 'down' after 2 consecutive failures to avoid false positives
+          setFailureCount(prev => {
+            const newCount = prev + 1
+            if (newCount >= 2) {
+              setApiStatus('down')
+            }
+            return newCount
+          })
+        }
+      }
     }
     ping()
     // Use user-configured refresh interval (convert to milliseconds)

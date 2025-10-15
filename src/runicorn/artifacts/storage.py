@@ -963,9 +963,40 @@ class ArtifactStorage:
         return cleaned
 
 
+# Global artifact storage instance
+_artifact_storage_instance: Optional[ArtifactStorage] = None
+
+
+def get_artifact_storage(storage_root: Path) -> ArtifactStorage:
+    """
+    Get the global artifact storage instance (singleton pattern).
+    
+    This prevents re-initialization on every API call, which was causing
+    performance issues and excessive logging.
+    
+    Args:
+        storage_root: Storage root directory
+        
+    Returns:
+        ArtifactStorage instance (cached)
+    """
+    global _artifact_storage_instance
+    
+    # Check if we need to create or recreate
+    if (_artifact_storage_instance is None or 
+        _artifact_storage_instance.storage_root != Path(storage_root)):
+        _artifact_storage_instance = ArtifactStorage(storage_root, enable_dedup=True)
+        logger.info(f"Artifact storage instance created for: {storage_root}")
+    
+    return _artifact_storage_instance
+
+
 def create_artifact_storage(storage_root: Path) -> ArtifactStorage:
     """
     Factory function to create artifact storage.
+    
+    Deprecated: Use get_artifact_storage() instead for better performance.
+    This function is kept for backward compatibility.
     
     Args:
         storage_root: Storage root directory
@@ -973,4 +1004,4 @@ def create_artifact_storage(storage_root: Path) -> ArtifactStorage:
     Returns:
         ArtifactStorage instance
     """
-    return ArtifactStorage(storage_root, enable_dedup=True)
+    return get_artifact_storage(storage_root)

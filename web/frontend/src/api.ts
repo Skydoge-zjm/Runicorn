@@ -32,9 +32,22 @@ export async function getProgress(id: string) {
 }
 
 export async function health() {
-  const res = await fetch(url('/health'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout
+  
+  try {
+    const res = await fetch(url('/health'), {
+      signal: controller.signal,
+      // Add cache: 'no-store' to prevent caching issues
+      cache: 'no-store'
+    })
+    clearTimeout(timeoutId)
+    if (!res.ok) throw new Error(await res.text())
+    return res.json()
+  } catch (error) {
+    clearTimeout(timeoutId)
+    throw error
+  }
 }
 
 export async function getGpuTelemetry() {

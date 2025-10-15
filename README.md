@@ -12,7 +12,15 @@
 
 Local, open-source experiment tracking and visualization. 100% offline. Professional ML experiment management; a modern self-hosted alternative to W&B.
 
-## ✨ What's New in v0.4.0
+## ✨ What's New
+
+### v0.4.1 (Latest)
+
+- 🆕 **System Information Panel** - View version, storage, and cache stats in Settings
+- 🎨 **Dark Mode Improvements** - Better text readability across all pages
+- ⚡ **Stability & Performance** - Optimized resource management and bug fixes
+
+### v0.4.0
 
 - 📦 **Model Versioning** - Complete Artifacts system for models and datasets
 - 🔗 **Auto Lineage Tracking** - Track complete dependencies between artifacts and experiments

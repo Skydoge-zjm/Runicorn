@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { 
   Card, Table, Tag, Button, Input, Select, Space, Modal, 
   message, Tooltip, Badge, Dropdown, Checkbox, DatePicker,
-  Drawer, Descriptions, Tabs, Progress, Alert, Empty
+  Drawer, Descriptions, Tabs, Progress, Alert, Empty, Typography
 } from 'antd'
 import {
   SearchOutlined, DeleteOutlined, TagsOutlined, DownloadOutlined,
@@ -282,7 +282,7 @@ export default function ExperimentManager() {
           <a onClick={() => window.open(`/runs/${record.id}`, '_blank')}>
             <ExperimentOutlined /> {text}
           </a>
-          <span style={{ fontSize: 11, color: '#8c8c8c' }}>{record.id}</span>
+          <Typography.Text type="secondary" style={{ fontSize: 11 }}>{record.id}</Typography.Text>
         </Space>
       )
     },

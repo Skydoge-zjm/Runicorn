@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { Card, Empty, Space, Tag, Typography } from 'antd'
+import { Card, Empty, Space, Tag, Typography, theme } from 'antd'
 import { DatabaseOutlined, ThunderboltOutlined, ArrowRightOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import { useTranslation } from 'react-i18next'
@@ -26,6 +26,7 @@ interface LineageGraphProps {
 
 const LineageGraph: React.FC<LineageGraphProps> = ({ data }) => {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
 
   // Convert data to ECharts graph format
   const chartOption = useMemo(() => {
@@ -178,7 +179,7 @@ const LineageGraph: React.FC<LineageGraphProps> = ({ data }) => {
     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
       {/* Legend Explanation */}
       <Card size="small">
-        <Space split={<span style={{ margin: '0 12px', color: '#d9d9d9' }}>•</span>}>
+        <Space split={<span style={{ margin: '0 12px', color: token.colorBorder }}>•</span>}>
           <Space size="small">
             <DatabaseOutlined style={{ color: designTokens.colors.info }} />
             <Text type="secondary" style={{ fontSize: designTokens.typography.fontSize.xs }}>

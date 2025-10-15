@@ -1,9 +1,10 @@
 {
+  "_comment": "Rate limits are high because this is a local-only API with no internet exposure. High limits accommodate UI polling, real-time updates, and multiple concurrent requests when viewing experiment details.",
   "default": {
-    "max_requests": 60,
+    "max_requests": 6000,
     "window_seconds": 60,
     "burst_size": null,
-    "description": "Default rate limit for all endpoints"
+    "description": "Default rate limit for all endpoints - very permissive for local use"
   },
   "endpoints": {
     "/api/remote/connect": {
@@ -25,55 +26,55 @@
       "description": "Legacy SSH connection operations"
     },
     "/api/unified/status": {
-      "max_requests": 200,
+      "max_requests": 20000,
       "window_seconds": 60,
       "burst_size": null,
-      "description": "Status polling endpoint - very permissive"
+      "description": "Status polling endpoint - very permissive for UI updates"
     },
     "/api/remote/status": {
-      "max_requests": 200,
+      "max_requests": 20000,
       "window_seconds": 60,
       "burst_size": null,
       "description": "Remote storage status polling"
     },
     "/api/ssh/sessions": {
-      "max_requests": 200,
+      "max_requests": 20000,
       "window_seconds": 60,
       "burst_size": null,
       "description": "SSH session listing - used for UI polling"
     },
     "/api/ssh/mirror/list": {
-      "max_requests": 200,
+      "max_requests": 20000,
       "window_seconds": 60,
       "burst_size": null,
       "description": "Mirror task listing - used for UI polling"
     },
     "/api/metrics/gpu": {
-      "max_requests": 120,
+      "max_requests": 12000,
       "window_seconds": 60,
       "burst_size": null,
-      "description": "GPU telemetry can be frequent"
+      "description": "GPU telemetry - polled every 2s by UI"
     },
     "/api/remote/download": {
-      "max_requests": 30,
+      "max_requests": 3000,
       "window_seconds": 60,
       "burst_size": null,
-      "description": "File downloads - moderately restrictive"
+      "description": "File downloads - still moderately restrictive"
     },
     "/api/remote/sync": {
-      "max_requests": 20,
+      "max_requests": 2000,
       "window_seconds": 60,
       "burst_size": null,
       "description": "Sync operations - moderate restriction"
     },
     "/api/artifacts": {
-      "max_requests": 100,
+      "max_requests": 10000,
       "window_seconds": 60,
       "burst_size": null,
       "description": "Artifact listing and queries"
     },
     "/api/runs": {
-      "max_requests": 100,
+      "max_requests": 10000,
       "window_seconds": 60,
       "burst_size": null,
       "description": "Experiment runs listing and queries"

@@ -261,6 +261,22 @@ class ModernStorageService:
             }
         }
     
+    def close(self) -> None:
+        """
+        Close the storage backend and release resources.
+        
+        This is critical for Windows to properly release database locks.
+        """
+        if self.backend and hasattr(self.backend, 'close'):
+            try:
+                self.backend.close()
+                logger.info("Closed storage backend")
+            except Exception as e:
+                logger.warning(f"Failed to close storage backend: {e}")
+        
+        self.backend = None
+        self._initialized = False
+    
     def _experiment_to_api_format(self, experiment: ExperimentRecord) -> Dict[str, Any]:
         """
         Convert ExperimentRecord to API format expected by frontend.
@@ -310,7 +326,22 @@ def get_storage_service(root_dir: Path) -> ModernStorageService:
     return _storage_service
 
 
+def close_storage_service() -> None:
+    """
+    Close the global storage service and release resources.
+    
+    This should be called on application shutdown to properly
+    close database connections and release file locks.
+    """
+    global _storage_service
+    if _storage_service is not None:
+        _storage_service.close()
+        _storage_service = None
+
+
 def reset_storage_service() -> None:
     """Reset the global storage service (for testing)."""
     global _storage_service
+    if _storage_service is not None:
+        _storage_service.close()
     _storage_service = None

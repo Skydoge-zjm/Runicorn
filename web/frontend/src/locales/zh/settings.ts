@@ -1,4 +1,37 @@
 export default {
+  'settings.system_info.title': '系统信息',
+  'settings.system_info.refresh': '刷新',
+  'settings.system_info.copy_all': '复制全部',
+  'settings.system_info.copied': '系统信息已复制到剪贴板',
+  'settings.system_info.copy_failed': '复制到剪贴板失败',
+  'settings.system_info.loading': '加载系统信息中...',
+  
+  'settings.system_info.version_info': '版本信息',
+  'settings.system_info.runicorn_version': 'Runicorn 版本',
+  'settings.system_info.api_status': 'API 状态',
+  
+  'settings.system_info.storage_config': '存储配置',
+  'settings.system_info.storage_root': '存储根目录',
+  
+  'settings.system_info.config_files': '配置文件',
+  'settings.system_info.config_file': '主配置',
+  'settings.system_info.rate_limit_config': '速率限制配置',
+  
+  'settings.system_info.cache_stats': '缓存统计',
+  'settings.system_info.cache_status': '状态',
+  'settings.system_info.hit_rate': '命中率',
+  'settings.system_info.hits': '命中次数',
+  'settings.system_info.misses': '未命中次数',
+  'settings.system_info.cache_size': '缓存大小',
+  
+  'settings.system_info.artifacts_stats': 'Artifacts 统计',
+  'settings.system_info.total_artifacts': '总 Artifacts',
+  'settings.system_info.total_versions': '总版本数',
+  'settings.system_info.deduplication': '去重',
+  'settings.system_info.space_saved': '节省空间',
+  
+  'settings.system_info.help_text': '此信息对调试和技术支持很有用。点击"复制全部"将所有详情复制到剪贴板。',
+  
   'settings.drawer.title': '设置',
   'settings.theme.title': '主题',
   'settings.theme.mode': '模式',
@@ -39,6 +72,7 @@ export default {
   'settings.tabs.layout': '布局',
   'settings.tabs.data': '数据',
   'settings.tabs.performance': '性能',
+  'settings.tabs.system_info': '系统信息',
   
   'settings.cards.theme': '主题',
   'settings.cards.background': '背景',
@@ -56,7 +90,6 @@ export default {
   'settings.messages.enter_valid_path': '请输入有效的目录绝对路径（例如 D:\\RunicornData）',
   'settings.messages.updated': '用户根目录已更新',
   'settings.messages.update_failed': '更新失败',
-  'settings.done': '完成',
   
   'background.title': '背景',
   'background.type.label': '背景类型',
