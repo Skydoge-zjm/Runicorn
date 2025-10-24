@@ -25,6 +25,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_viewer.add_argument("--host", default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
     p_viewer.add_argument("--port", type=int, default=23300, help="Port to bind (default: 23300)")
     p_viewer.add_argument("--reload", action="store_true", help="Enable auto-reload (dev only)")
+    p_viewer.add_argument("--remote-mode", action="store_true", help="Remote mode: bind only to 127.0.0.1 and enable auto-shutdown")
+    p_viewer.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Logging level (default: INFO)")
 
     p_cfg = sub.add_parser("config", help="Manage Runicorn user configuration")
     p_cfg.add_argument("--show", action="store_true", help="Show current configuration")
@@ -97,9 +99,28 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     if args.cmd == "viewer":
+        # Handle remote mode
+        if args.remote_mode:
+            # Remote mode: force 127.0.0.1, disable reload, set log level
+            host = "127.0.0.1"
+            log_level = args.log_level.lower()
+            print(f"[Remote Mode] Starting viewer on {host}:{args.port}", flush=True)
+            print(f"[Remote Mode] Log level: {log_level}", flush=True)
+            print(f"[Remote Mode] Storage: {args.storage or 'default'}", flush=True)
+        else:
+            host = args.host
+            log_level = "info"
+        
         # uvicorn can serve factory via --factory style; do it programmatically here
         app = lambda: create_app(storage=args.storage)  # noqa: E731
-        uvicorn.run(app, host=args.host, port=args.port, reload=bool(args.reload), factory=True)
+        uvicorn.run(
+            app, 
+            host=host, 
+            port=args.port, 
+            reload=bool(args.reload) and not args.remote_mode,  # Disable reload in remote mode
+            factory=True,
+            log_level=log_level
+        )
         return 0
 
     if args.cmd == "config":

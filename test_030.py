@@ -4,12 +4,12 @@ import runicorn as rn
 # 生成测试实验
 run = rn.init(project="test_project", name="experiment_1", capture_env=True)
 print(f"Created run: id={run.id} dir={run.run_dir}")
-rn.log_text(f"[info] Starting dummy run '{run.name}' (project={run.project})")
+run.log_text(f"[info] Starting dummy run '{run.name}' (project={run.project})")
 
 # 设置主要指标为准确率（最大化）
-rn.set_primary_metric("accuracy_123", mode="max")
+run.set_primary_metric("accuracy_123", mode="max")
 
-if hasattr(rn, 'MetricsExporter'):
+if hasattr(run, 'MetricsExporter'):
     exporter = rn.MetricsExporter(run.run_dir)
     
 # 模拟训练
@@ -28,23 +28,23 @@ for epoch in range(200):
     acc = 100 * (1 - math.exp(-epoch/30)) + random.random() * 2
     
     # 记录指标
-    rn.log({
+    run.log({
         "loss_": loss,
         "accuracy_": acc,
         "learning_rate_": 0.001 * (0.95 ** epoch),
     }, stage=f"epoch {epoch // 10}")
-    rn.log_text(f"epoch {epoch // 10} | loss {loss:.4f} | accuracy {acc:.2f}")
+    run.log_text(f"epoch {epoch // 10} | loss {loss:.4f} | accuracy {acc:.2f}")
     print(f"epoch {epoch // 10} | loss {loss:.4f} | accuracy {acc:.2f}")
 
 
 
 # 记录摘要（best metric会自动记录）
-rn.summary({
+run.summary({
     "final_loss": 0.05,
     "total_epochs": 100,
     "notes": "Demo run with auto-tracked accuracy metric"
 })
-rn.log_text("[info] Summary metrics recorded")
-rn.log_text("[info] Run finished successfully with auto-tracked best metrics.")
+run.log_text("[info] Summary metrics recorded")
+run.log_text("[info] Run finished successfully with auto-tracked best metrics.")
 
-rn.finish()
+run.finish()
