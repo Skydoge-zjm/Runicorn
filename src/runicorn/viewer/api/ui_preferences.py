@@ -168,3 +168,132 @@ async def reset_column_widths(
         "message": "Column width preferences reset"
     }
 
+
+@router.post("/config/column-widths/reset")
+async def reset_column_width_preferences(
+    table: str = Query(..., description="Table identifier"),
+    size: Optional[str] = Query(None, description="Window size key (if None, reset all)")
+) -> Dict[str, Any]:
+    """
+    Reset column width preferences.
+    
+    Args:
+        table: Table identifier
+        size: Window size key (if None, reset all)
+        
+    Returns:
+        Success status
+    """
+    preferences = load_all_preferences()
+    column_widths = preferences.get("column_widths", {})
+    
+    if size:
+        # Reset specific size
+        key = f"{table}@{size}"
+        column_widths.pop(key, None)
+    else:
+        # Reset all sizes for this table
+        keys_to_delete = [k for k in column_widths.keys() if k.startswith(f"{table}@")]
+        for key in keys_to_delete:
+            del column_widths[key]
+    
+    preferences["column_widths"] = column_widths
+    save_all_preferences(preferences)
+    
+    return {
+        "ok": True,
+        "message": "Column width preferences reset"
+    }
+
+
+@router.get("/config/dismissed-alerts")
+async def get_dismissed_alerts() -> Dict[str, Any]:
+    """
+    Get list of dismissed alert IDs.
+    
+    Returns:
+        List of dismissed alert IDs
+    """
+    preferences = load_all_preferences()
+    dismissed_alerts = preferences.get("dismissed_alerts", [])
+    
+    return {
+        "dismissed_alerts": dismissed_alerts
+    }
+
+
+@router.post("/config/dismissed-alerts/dismiss")
+async def dismiss_alert(
+    alert_id: str = Body(..., embed=True, description="Alert ID to dismiss")
+) -> Dict[str, Any]:
+    """
+    Dismiss an alert (add to dismissed list).
+    
+    Args:
+        alert_id: Alert identifier
+        
+    Returns:
+        Success status
+    """
+    preferences = load_all_preferences()
+    
+    if "dismissed_alerts" not in preferences:
+        preferences["dismissed_alerts"] = []
+    
+    if alert_id not in preferences["dismissed_alerts"]:
+        preferences["dismissed_alerts"].append(alert_id)
+        save_all_preferences(preferences)
+        logger.info(f"Dismissed alert: {alert_id}")
+    
+    return {
+        "ok": True,
+        "message": f"Alert '{alert_id}' dismissed"
+    }
+
+
+@router.post("/config/dismissed-alerts/undismiss")
+async def undismiss_alert(
+    alert_id: str = Body(..., embed=True, description="Alert ID to undismiss")
+) -> Dict[str, Any]:
+    """
+    Undismiss an alert (remove from dismissed list).
+    
+    Args:
+        alert_id: Alert identifier
+        
+    Returns:
+        Success status
+    """
+    preferences = load_all_preferences()
+    dismissed_alerts = preferences.get("dismissed_alerts", [])
+    
+    if alert_id in dismissed_alerts:
+        dismissed_alerts.remove(alert_id)
+        preferences["dismissed_alerts"] = dismissed_alerts
+        save_all_preferences(preferences)
+        logger.info(f"Undismissed alert: {alert_id}")
+    
+    return {
+        "ok": True,
+        "message": f"Alert '{alert_id}' restored"
+    }
+
+
+@router.post("/config/dismissed-alerts/clear")
+async def clear_dismissed_alerts() -> Dict[str, Any]:
+    """
+    Clear all dismissed alerts.
+    
+    Returns:
+        Success status
+    """
+    preferences = load_all_preferences()
+    preferences["dismissed_alerts"] = []
+    save_all_preferences(preferences)
+    
+    logger.info("Cleared all dismissed alerts")
+    
+    return {
+        "ok": True,
+        "message": "All dismissed alerts cleared"
+    }

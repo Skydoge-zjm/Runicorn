@@ -24,6 +24,7 @@ import {
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { RemoteConfig, SSHConnectionConfig } from '../../types/remote'
+import DismissibleAlert from '../DismissibleAlert'
 
 const { Text, Title } = Typography
 
@@ -96,7 +97,8 @@ export default function RemoteConfigCard({
       </Descriptions>
 
       {!config.storageRootExists && (
-        <Alert
+        <DismissibleAlert
+          alertId="remote.config.pathNotExists"
           message={t('remote.config.pathNotExistsWarning')}
           description={t('remote.config.pathNotExistsHint')}
           type="warning"

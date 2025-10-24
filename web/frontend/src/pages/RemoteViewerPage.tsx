@@ -33,6 +33,7 @@ import RemoteSessionCard from '../components/remote/RemoteSessionCard'
 import SavedConnectionsList from '../components/remote/SavedConnectionsList'
 import RemoteConfigCard from '../components/remote/RemoteConfigCard'
 import CondaEnvSelector from '../components/remote/CondaEnvSelector'
+import DismissibleAlert from '../components/DismissibleAlert'
 
 import { useRemoteSessions } from '../hooks/useRemoteSessions'
 import { useSavedConnections } from '../hooks/useSavedConnections'
@@ -506,6 +507,16 @@ export default function RemoteViewerPage() {
         </Paragraph>
       </div>
 
+      {/* Architecture Introduction */}
+      <DismissibleAlert
+        alertId="remote.intro"
+        type="info"
+        message={t('remote.help.architecture')}
+        description={t('remote.help.advantages')}
+        showIcon
+        style={{ marginBottom: 24 }}
+      />
+
       {/* Statistics */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={8}>
@@ -536,16 +547,6 @@ export default function RemoteViewerPage() {
           </Card>
         </Col>
       </Row>
-
-      {/* Architecture Info */}
-      <Alert
-        message={t('remote.help.architecture')}
-        description={t('remote.help.advantages')}
-        type="info"
-        showIcon
-        style={{ marginBottom: 24 }}
-        closable
-      />
 
       <Row gutter={24}>
         {/* Left Column: Connection Form / Env Selector / Config Confirmation */}

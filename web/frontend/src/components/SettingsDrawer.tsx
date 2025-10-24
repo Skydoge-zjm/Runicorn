@@ -4,6 +4,7 @@ import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, 
 import { getConfig, setUserRootDir as apiSetUserRootDir, importArchive } from '../api'
 import { useTranslation } from 'react-i18next'
 import SystemInfoPanel from './SystemInfoPanel'
+import DismissedAlertsManager from './DismissedAlertsManager'
 
 export type UiSettings = {
   // Appearance
@@ -345,6 +346,8 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           </div>
         </Space>
       </Card>
+      
+      <DismissedAlertsManager />
     </Space>
   )
 

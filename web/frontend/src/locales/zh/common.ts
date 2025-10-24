@@ -28,6 +28,7 @@ export default {
   'actions': '操作',
   'view': '查看',
   'edit': '编辑',
+  'common.dontShowAgain': '不再提示',
   'delete': '删除',
   'download': '下载',
   'upload': '上传',

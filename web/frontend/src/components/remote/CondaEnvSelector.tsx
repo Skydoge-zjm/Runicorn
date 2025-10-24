@@ -30,6 +30,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { CondaEnv } from '../../types/remote'
 import { getRemoteConfig, getLocalVersion } from '../../api/remote'
+import DismissibleAlert from '../DismissibleAlert'
 
 const { Text, Title } = Typography
 
@@ -331,7 +332,8 @@ export default function CondaEnvSelector({
         </Space>
       }
     >
-      <Alert
+      <DismissibleAlert
+        alertId="remote.env.selectHint"
         message={t('remote.env.selectHint')}
         description={t('remote.env.selectDescription')}
         type="info"
@@ -445,7 +447,8 @@ export default function CondaEnvSelector({
         />
       </Radio.Group>
 
-      <Alert
+      <DismissibleAlert
+        alertId="remote.env.checkRunicorn"
         type="warning"
         message={t('remote.env.checkRunicorn')}
         description={t('remote.env.checkRunicornHint')}

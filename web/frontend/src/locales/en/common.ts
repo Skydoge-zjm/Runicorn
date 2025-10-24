@@ -28,6 +28,7 @@ export default {
   'actions': 'Actions',
   'view': 'View',
   'edit': 'Edit',
+  'common.dontShowAgain': "Don't show again",
   'delete': 'Delete',
   'download': 'Download',
   'upload': 'Upload',

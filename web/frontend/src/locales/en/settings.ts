@@ -165,5 +165,16 @@ export default {
   'remote.msg.started': 'Live sync started',
   'remote.msg.start_failed': 'Failed to start',
   'remote.msg.mirror_configured': 'Mirror mode configured successfully',
+  
+  // Dismissed Alerts
+  'settings.dismissedAlerts': 'Dismissed Alerts',
+  'settings.noDismissedAlerts': 'No dismissed alerts',
+  'settings.restoreAlert': 'Restore',
+  'settings.restoreAll': 'Restore All',
+  'settings.alertRestored': 'Alert restored',
+  'settings.allAlertsRestored': 'All alerts restored',
+  'settings.failedToLoadDismissedAlerts': 'Failed to load dismissed alerts',
+  'settings.failedToRestoreAlert': 'Failed to restore alert',
+  'settings.failedToClearAlerts': 'Failed to clear alerts',
 }
 
