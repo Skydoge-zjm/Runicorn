@@ -101,6 +101,8 @@ def update_status_if_process_dead(run_dir: Path) -> None:
     """
     Update run status to 'failed' if the process is no longer running.
     
+    NOTE: Only checks local processes. Skips remote runs (identified by different hostname).
+    
     Args:
         run_dir: Path to the run directory
     """
@@ -116,6 +118,34 @@ def update_status_if_process_dead(run_dir: Path) -> None:
         
         # Only check if status is currently "running"
         if status.get("status") != "running":
+            return
+        
+        # Skip PID check for remote runs
+        import socket
+        local_hostname = socket.gethostname()
+        run_hostname = meta.get("hostname")
+        
+        # Check if this is a remote/synced run (skip PID check)
+        run_path_str = str(run_dir)
+        run_path_lower = run_path_str.lower()
+        
+        # Check 1: Different hostname (remote machine)
+        if run_hostname and run_hostname != local_hostname:
+            logger.debug(f"Skipping PID check for remote run {run_dir.name} (remote host: {run_hostname})")
+            return
+        
+        # Check 2: In a synced/cached directory
+        is_synced_dir = any(marker in run_path_lower for marker in [
+            '.runicorn_remote_cache',  # Smart mode remote cache
+            'remote_cache',
+            '_remote_',
+            'runicorn_server_syn',     # Mirror mode sync directory
+            '_mirror_',
+            '_sync_',
+        ])
+        
+        if is_synced_dir:
+            logger.debug(f"Skipping PID check for synced run {run_dir.name} (synced from remote)")
             return
         
         pid = meta.get("pid")
@@ -308,8 +338,8 @@ async def periodic_status_check(root: Path) -> None:
                     logger.debug(f"Error checking status for {entry.dir.name}: {entry_error}")
                     continue
             
-            # Wait 30 seconds before next check
-            await asyncio.sleep(30)
+            # Wait 60 seconds before next check (reduced frequency to minimize log noise)
+            await asyncio.sleep(60)
         except asyncio.CancelledError:
             logger.info("Status check task cancelled")
             break

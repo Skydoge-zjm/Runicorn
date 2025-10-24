@@ -11,8 +11,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException, Request, Body
 from pydantic import BaseModel, Field
 
-from ...ssh_connection_manager import UnifiedSSHConnection
-from ...ssh_sync import SSHSession, MirrorTask, list_mirrors
+from ...ssh import UnifiedSSHConnection, SSHSession, MirrorTask, list_mirrors
 from ...remote_storage import RemoteStorageAdapter, RemoteConfig
 from ...remote_storage.models import RemoteConnectionStatus
 
@@ -38,7 +37,7 @@ class ModeConfigRequest(BaseModel):
     # Smart mode config
     remote_root: Optional[str] = Field(None, description="Remote storage root for smart mode")
     auto_sync: Optional[bool] = Field(True, description="Enable auto sync for smart mode")
-    sync_interval_minutes: Optional[int] = Field(10, description="Sync interval for smart mode")
+    sync_interval_seconds: Optional[int] = Field(60, description="Sync interval in seconds for smart mode")
     # Mirror mode config
     mirror_interval: Optional[float] = Field(2.0, description="Mirror interval in seconds")
 
@@ -181,7 +180,17 @@ async def unified_status(request: Request) -> Dict[str, Any]:
             "modes": {
                 "smart": {
                     "active": bool(has_smart),
-                    "remote_root": getattr(request.app.state.remote_adapter, 'config', {}).get('remote_root') if has_smart else None
+                    "remote_root": (
+                        getattr(
+                            getattr(
+                                getattr(request.app.state, 'remote_adapter', None),
+                                'config',
+                                None
+                            ),
+                            'remote_root',
+                            None
+                        ) if has_smart else None
+                    )
                 },
                 "mirror": {
                     "active": bool(has_mirror),
@@ -234,7 +243,7 @@ async def configure_mode(request: Request, payload: ModeConfigRequest) -> Dict[s
                 remote_root=payload.remote_root,
                 cache_dir=cache_dir,
                 auto_sync=payload.auto_sync or True,
-                sync_interval_seconds=(payload.sync_interval_minutes or 10) * 60
+                sync_interval_seconds=payload.sync_interval_seconds or 60
             )
             
             # Store adapter
@@ -245,6 +254,7 @@ async def configure_mode(request: Request, payload: ModeConfigRequest) -> Dict[s
             connection.acquire()
             
             logger.info(f"Smart mode configured with remote_root: {payload.remote_root}")
+            logger.info(f"Storage mode switched to: remote")
             
             # Start initial sync
             adapter.sync_metadata()
@@ -292,9 +302,10 @@ async def configure_mode(request: Request, payload: ModeConfigRequest) -> Dict[s
 @router.get("/unified/listdir")
 async def unified_listdir(request: Request, path: str = "") -> Dict[str, Any]:
     """
-    List remote directory contents using unified SSH connection.
+    List remote directory contents with L1+L6 hardening.
     
-    This endpoint uses the existing unified connection to browse remote directories.
+    L1: Use listdir_attr to avoid N+1 stat calls
+    L6: Rate limiting (0.5 QPS) and caching (5s TTL)
     """
     try:
         connection = getattr(request.app.state, 'current_ssh_connection', None)
@@ -311,68 +322,44 @@ async def unified_listdir(request: Request, path: str = "") -> Dict[str, Any]:
                 detail="SFTP client not available"
             )
         
-        # Handle path resolution
+        # L2: Handle path resolution using sftp.normalize
+        from ...ssh.utils import resolve_sftp_home
         import posixpath
+        
         if not path or path == "~":
-            # Get home directory
-            try:
-                stdin, stdout, stderr = connection.get_ssh_client().exec_command("echo $HOME")
-                home = stdout.read().decode().strip()
-                resolved_path = home if home else "/home/" + connection.username
-            except:
-                resolved_path = "/home/" + connection.username
+            resolved_path = resolve_sftp_home(sftp, "~")
         else:
-            # Expand ~ if present
-            if path.startswith("~"):
-                try:
-                    stdin, stdout, stderr = connection.get_ssh_client().exec_command("echo $HOME")
-                    home = stdout.read().decode().strip()
-                    resolved_path = path.replace("~", home, 1)
-                except:
-                    resolved_path = path.replace("~", "/home/" + connection.username, 1)
-            else:
-                resolved_path = path
+            resolved_path = resolve_sftp_home(sftp, path)
         
-        # List directory
-        items = []
-        import stat as statmod
+        # L6: Use rate limiting and caching
+        from .listdir_cache import rate_limited_listdir
         
-        try:
-            for name in sorted(sftp.listdir(resolved_path)):
-                if name.startswith("."):
-                    continue  # Skip hidden files
-                
-                item_path = posixpath.join(resolved_path, name)
-                
-                try:
-                    st = sftp.stat(item_path)
-                    
-                    item_type = "dir" if statmod.S_ISDIR(st.st_mode) else "file"
-                    
-                    items.append({
-                        "name": name,
-                        "path": item_path,
-                        "type": item_type,
-                        "size": st.st_size,
-                        "mtime": st.st_mtime,
-                    })
-                except Exception as e:
-                    logger.debug(f"Failed to stat {item_path}: {e}")
-                    # Still include the item with minimal info
-                    items.append({
-                        "name": name,
-                        "path": item_path,
-                        "type": "unknown",
-                        "size": 0,
-                        "mtime": 0,
-                    })
+        def _do_listdir():
+            """Actual listdir operation using L1 optimization."""
+            # L1: Use listdir_attr to avoid N+1 stats
+            from ...ssh.utils import sftp_listdir_with_attrs
+            
+            entries = sftp_listdir_with_attrs(sftp, resolved_path, include_hidden=False)
+            
+            items = []
+            for entry in entries:
+                items.append({
+                    "name": entry.name,
+                    "path": posixpath.join(resolved_path, entry.name),
+                    "type": "dir" if entry.is_dir else "file",
+                    "size": entry.size,
+                    "mtime": entry.mtime,
+                })
+            
+            return items
         
-        except Exception as e:
-            logger.error(f"Failed to list directory {resolved_path}: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to list directory: {e}"
-            )
+        # L6: Rate-limited and cached listdir
+        items = await rate_limited_listdir(
+            connection_id=connection.connection_id,
+            path=resolved_path,
+            listdir_func=_do_listdir,
+            use_cache=True
+        )
         
         return {
             "items": items,
@@ -404,8 +391,11 @@ async def deactivate_mode(request: Request, mode: str = Body(..., embed=True)) -
                     # Don't close SSH, just clean up adapter
                     adapter = request.app.state.remote_adapter
                     # Stop auto-sync if running
-                    if hasattr(adapter, '_auto_sync_task'):
-                        adapter._auto_sync_task.cancel()
+                    if hasattr(adapter, 'metadata_sync') and adapter.metadata_sync:
+                        try:
+                            adapter.metadata_sync.stop_background_sync()
+                        except:
+                            pass
                     request.app.state.remote_adapter = None
                     request.app.state.storage_mode = "local"
                     
@@ -423,7 +413,7 @@ async def deactivate_mode(request: Request, mode: str = Body(..., embed=True)) -
             # Deactivate mirror mode
             if hasattr(request.app.state, 'mirror_tasks'):
                 # Stop all mirror tasks
-                from ...ssh_sync import stop_mirror
+                from ...ssh import stop_mirror
                 for task in request.app.state.mirror_tasks:
                     try:
                         stop_mirror(task.id)

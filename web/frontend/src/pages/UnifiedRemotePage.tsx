@@ -29,7 +29,8 @@ import {
   StopOutlined,
   DisconnectOutlined,
   DatabaseOutlined,
-  ThunderboltOutlined
+  ThunderboltOutlined,
+  CloseOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -53,6 +54,7 @@ import {
   sshMirrorStart,
   sshMirrorStop,
   sshMirrorList,
+  sshConnect,
   
   // SSH connection config APIs
   getSavedSSHConnections,
@@ -83,6 +85,63 @@ interface MirrorTask {
   }
   alive: boolean
 }
+
+// Memoized Mirror card component to prevent unnecessary re-renders
+const MirrorTaskCard = React.memo<{ 
+  mirror: MirrorTask
+  onStop: (id: string) => void
+  t: any
+}>(({ mirror, onStop, t }) => (
+  <Card size="small" style={{ background: '#fafafa' }}>
+    <Space direction="vertical" style={{ width: '100%' }}>
+      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+        <Space direction="vertical" size="small">
+          <Text strong>{mirror.remote_root}</Text>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            → {mirror.local_root}
+          </Text>
+        </Space>
+        <Badge 
+          status={mirror.alive ? 'processing' : 'default'} 
+          text={mirror.alive ? t('unified_remote.mirror.status_running') : t('unified_remote.mirror.status_stopped')}
+        />
+      </Space>
+      
+      <Descriptions size="small" column={3}>
+        <Descriptions.Item label={t('unified_remote.mirror.copied')}>
+          {mirror.stats.copied_files || 0}
+        </Descriptions.Item>
+        <Descriptions.Item label={t('unified_remote.mirror.appended')}>
+          {mirror.stats.appended_bytes || 0} B
+        </Descriptions.Item>
+        <Descriptions.Item label={t('unified_remote.mirror.scans')}>
+          {mirror.stats.scans || 0}
+        </Descriptions.Item>
+      </Descriptions>
+      
+      {mirror.alive && (
+        <Button 
+          size="small" 
+          danger 
+          icon={<StopOutlined />}
+          onClick={() => onStop(mirror.id)}
+        >
+          {t('remote.tasks.stop')}
+        </Button>
+      )}
+    </Space>
+  </Card>
+), (prevProps, nextProps) => {
+  // Return true if props are EQUAL (should NOT re-render)
+  // Return false if props are DIFFERENT (should re-render)
+  const mirrorEqual = 
+    prevProps.mirror.id === nextProps.mirror.id &&
+    prevProps.mirror.alive === nextProps.mirror.alive &&
+    prevProps.mirror.stats?.scans === nextProps.mirror.stats?.scans &&
+    prevProps.mirror.stats?.copied_files === nextProps.mirror.stats?.copied_files
+  
+  return mirrorEqual  // true = skip render, false = re-render
+})
 
 export default function UnifiedRemotePage() {
   const { t } = useTranslation()
@@ -123,13 +182,15 @@ export default function UnifiedRemotePage() {
   // ===== Smart Mode State =====
   const [smartActive, setSmartActive] = useState(false)
   const [autoSync, setAutoSync] = useState(true)
-  const [syncInterval, setSyncInterval] = useState(10)
+  const [syncInterval, setSyncInterval] = useState(60)  // Default 60 seconds
   const [syncing, setSyncing] = useState(false)
   const [syncProgress, setSyncProgress] = useState<any>(null)
   
   // ===== Mirror Mode State =====
   const [mirrorInterval, setMirrorInterval] = useState(2)
   const [mirrors, setMirrors] = useState<MirrorTask[]>([])
+  const [mirrorSessionId, setMirrorSessionId] = useState<string>('')
+  const [mirrorPanelVisible, setMirrorPanelVisible] = useState(false)
   
   // ===== Unified Connection Status Polling =====
   useEffect(() => {
@@ -144,8 +205,11 @@ export default function UnifiedRemotePage() {
         if (status.modes?.smart?.active) {
           setSmartActive(true)
         }
-        if (status.modes?.mirror?.tasks) {
-          setMirrors(status.modes.mirror.tasks || [])
+        // Only update mirrors from unified status when there are active tasks.
+        // Do NOT clear existing mirrors on empty arrays to avoid UI flicker.
+        const statusTasks = status.modes?.mirror?.tasks
+        if (Array.isArray(statusTasks) && statusTasks.length > 0) {
+          setMirrors(statusTasks)
         }
       } catch (error) {
         // Ignore polling errors
@@ -205,14 +269,36 @@ export default function UnifiedRemotePage() {
     const loadMirrors = async () => {
       try {
         const res = await sshMirrorList()
-        setMirrors(res.mirrors || [])
+        const newMirrors = res.mirrors || []
+        if (newMirrors.length > 0) setMirrorPanelVisible(true)
+        
+        // Only update if data actually changed (compare by key fields)
+        setMirrors(prev => {
+          // Keep previous list if API returns empty list transiently
+          if (newMirrors.length === 0) return prev
+
+          if (prev.length !== newMirrors.length) return newMirrors
+          
+          // Check if any mirror has meaningful changes
+          const hasChanged = newMirrors.some((newM, idx) => {
+            const oldM = prev[idx]
+            if (!oldM || oldM.id !== newM.id) return true
+            
+            // Only care about scans count (major updates every 10s)
+            // Ignore copied_files to prevent flicker from minor file changes
+            return oldM.stats?.scans !== newM.stats?.scans ||
+                   oldM.alive !== newM.alive
+          })
+          
+          return hasChanged ? newMirrors : prev
+        })
       } catch (error) {
         // Ignore polling errors
       }
     }
     
     loadMirrors()
-    const interval = setInterval(loadMirrors, 3000)
+    const interval = setInterval(loadMirrors, 5000)  // 5s polling interval
     
     return () => clearInterval(interval)
   }, [sshConnected, syncMode])
@@ -299,6 +385,7 @@ export default function UnifiedRemotePage() {
     setSyncProgress(null)
     setItems([])
     setSelectedPath('')
+    setMirrorSessionId('')
   }
   
   // ===== Load Saved Connection =====
@@ -408,7 +495,7 @@ export default function UnifiedRemotePage() {
           mode: 'smart',
           remote_root: selectedPath,
           auto_sync: autoSync,
-          sync_interval_minutes: syncInterval,
+          sync_interval_seconds: syncInterval,
         })
         
         if (result.ok) {
@@ -424,34 +511,46 @@ export default function UnifiedRemotePage() {
       }
     } else {
       // Mirror mode: Start full sync
-    try {
-      await sshMirrorStart({
-          session_id: connectionId,
+      try {
+        let sessionId = mirrorSessionId
+        if (!sessionId) {
+          const res = await sshConnect({
+            host: sshConfig.host,
+            port: sshConfig.port,
+            username: sshConfig.username,
+            password: sshConfig.authMethod === 'password' ? sshConfig.password : undefined,
+            pkey: sshConfig.authMethod === 'key' ? sshConfig.privateKey : undefined,
+            pkey_path: sshConfig.authMethod === 'key' ? sshConfig.privateKeyPath : undefined,
+            passphrase: sshConfig.passphrase,
+            use_agent: sshConfig.authMethod === 'agent',
+          })
+          sessionId = res.session_id
+          setMirrorSessionId(sessionId)
+        }
+        await sshMirrorStart({
+          session_id: sessionId,
           remote_root: selectedPath,
           interval: mirrorInterval,
-      })
-      message.success(t('remote.msg.started'))
-      
-      // Notify runs page to refresh
-      try {
-        window.dispatchEvent(new Event('runicorn:refresh'))
-      } catch (error) {
-        // Ignore
-      }
-    } catch (error: any) {
-      message.error(`${t('remote.msg.start_failed')}: ${error.message}`)
+        })
+        message.success(t('remote.msg.started'))
+        setMirrorPanelVisible(true)
+        try {
+          window.dispatchEvent(new Event('runicorn:refresh'))
+        } catch (error) {}
+      } catch (error: any) {
+        message.error(`${t('remote.msg.start_failed')}: ${error.message}`)
       }
     }
   }
   
-  const handleStopMirror = async (taskId: string) => {
+  const handleStopMirror = useCallback(async (taskId: string) => {
     try {
       await sshMirrorStop(taskId)
+      setMirrors(prev => prev.filter(m => m.id !== taskId))
       message.info(t('remote.tasks.stop'))
     } catch (error) {
-      // Ignore errors
     }
-  }
+  }, [t])
   
   const handleManualSync = async () => {
     setSyncing(true)
@@ -476,6 +575,22 @@ export default function UnifiedRemotePage() {
       }
     } catch (error: any) {
       message.error(`${t('remote_storage.status.verify')}: ${error.message}`)
+    }
+  }
+  
+  const handleDeactivateMode = async (mode: 'smart' | 'mirror') => {
+    try {
+      await unifiedDeactivateMode(mode)
+      
+      if (mode === 'smart') {
+        setSmartActive(false)
+        setSyncing(false)
+        message.success(t('unified_remote.mode.smart_deactivated'))
+      } else if (mode === 'mirror') {
+        message.success(t('unified_remote.mode.mirror_deactivated'))
+      }
+    } catch (error: any) {
+      message.error(`${t('unified_remote.mode.switch_failed')}: ${error.message}`)
     }
   }
   
@@ -619,6 +734,23 @@ export default function UnifiedRemotePage() {
             >
               {t('unified_remote.connect')}
             </Button>
+          </Card>
+        )}
+        
+        {mirrorPanelVisible && (
+          <Card title={t('remote.tasks.title')} size="small">
+            <Space direction="vertical" style={{ width: '100%' }}>
+              {mirrors.length === 0 ? (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('remote.empty')} />
+              ) : mirrors.map(mirror => (
+                <MirrorTaskCard 
+                  key={mirror.id}
+                  mirror={mirror}
+                  onStop={handleStopMirror}
+                  t={t}
+                />
+              ))}
+            </Space>
           </Card>
         )}
         
@@ -777,9 +909,10 @@ export default function UnifiedRemotePage() {
                             <Text>{t('remote_storage.form.auto_sync_interval')}</Text>
                             <InputNumber
                               value={syncInterval}
-                              onChange={(val) => setSyncInterval(val || 10)}
-                              min={1}
-                              max={60}
+                              onChange={(val) => setSyncInterval(val || 60)}
+                              min={10}
+                              max={600}
+                              step={10}
                               style={{ width: 80 }}
                             />
                             <Text>{t('remote_storage.form.auto_sync_interval_suffix')}</Text>
@@ -832,9 +965,21 @@ export default function UnifiedRemotePage() {
                       <Text strong>{t('remote_storage.status.connected')}</Text>
                     </Space>
                     
-                    <Descriptions size="small" column={2}>
+                    <Descriptions size="small" column={1} bordered>
+                      <Descriptions.Item label={t('remote_storage.status.server')}>
+                        {connectionInfo?.host}:{connectionInfo?.port}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('remote_storage.status.user')}>
+                        {connectionInfo?.username}
+                      </Descriptions.Item>
                       <Descriptions.Item label={t('remote_storage.status.remote_dir')}>
-                        {selectedPath}
+                        {connectionInfo?.modes?.smart?.remote_root || selectedPath}
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('remote_storage.status.cache_dir')}>
+                        {connectionInfo?.host && connectionInfo?.username 
+                          ? `~/.runicorn_remote_cache/${connectionInfo.host}_${connectionInfo.username}/metadata/experiments`
+                          : '-'
+                        }
                       </Descriptions.Item>
                     </Descriptions>
                     
@@ -845,59 +990,19 @@ export default function UnifiedRemotePage() {
                       <Button onClick={handleVerify}>
                         {t('remote_storage.status.verify')}
                       </Button>
+                      <Button 
+                        danger 
+                        icon={<CloseOutlined />}
+                        onClick={() => handleDeactivateMode('smart')}
+                      >
+                        {t('unified_remote.smart.stop_button')}
+                      </Button>
                     </Space>
                   </Space>
               </Card>
             )}
             
-              {/* Mirror Mode: Tasks */}
-              {syncMode === 'mirror' && mirrors.length > 0 && (
-                <Card title={t('remote.tasks.title')} size="small">
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    {mirrors.map(mirror => (
-                      <Card key={mirror.id} size="small" style={{ background: '#fafafa' }}>
-                        <Space direction="vertical" style={{ width: '100%' }}>
-                          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-                            <Space direction="vertical" size="small">
-                              <Text strong>{mirror.remote_root}</Text>
-                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                → {mirror.local_root}
-                              </Text>
-                            </Space>
-                            <Badge 
-                              status={mirror.alive ? 'processing' : 'default'} 
-                              text={mirror.alive ? t('unified_remote.mirror.status_running') : t('unified_remote.mirror.status_stopped')}
-            />
-          </Space>
-                          
-                          <Descriptions size="small" column={3}>
-                            <Descriptions.Item label={t('unified_remote.mirror.copied')}>
-                              {mirror.stats.copied_files || 0}
-                            </Descriptions.Item>
-                            <Descriptions.Item label={t('unified_remote.mirror.appended')}>
-                              {mirror.stats.appended_bytes || 0} B
-                            </Descriptions.Item>
-                            <Descriptions.Item label={t('unified_remote.mirror.scans')}>
-                              {mirror.stats.scans || 0}
-                            </Descriptions.Item>
-                          </Descriptions>
-                          
-                          {mirror.alive && (
-                            <Button 
-                              size="small" 
-                              danger 
-                              icon={<StopOutlined />}
-                              onClick={() => handleStopMirror(mirror.id)}
-                            >
-                              {t('remote.tasks.stop')}
-                            </Button>
-                          )}
-                        </Space>
-                      </Card>
-                    ))}
-                  </Space>
-                </Card>
-              )}
+              
             </Space>
               </Card>
             )}

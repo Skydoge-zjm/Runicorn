@@ -205,7 +205,7 @@ export async function unifiedConfigureMode(payload: {
   mode: 'smart' | 'mirror'
   remote_root?: string
   auto_sync?: boolean
-  sync_interval_minutes?: number
+  sync_interval_seconds?: number
   mirror_interval?: number
 }) {
   const res = await fetch(url('/unified/configure_mode'), {
@@ -447,7 +447,7 @@ export interface RemoteConfig {
   use_agent: boolean
   remote_root: string
   auto_sync: boolean
-  sync_interval_minutes: number
+  sync_interval_seconds: number
 }
 
 export async function remoteConnect(config: RemoteConfig) {
@@ -466,7 +466,7 @@ export async function remoteConnect(config: RemoteConfig) {
     cache_dir: string
     structure_verified: Record<string, boolean>
     auto_sync: boolean
-    sync_interval_minutes: number
+    sync_interval_seconds: number
   }>
 }
 

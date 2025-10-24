@@ -20,6 +20,7 @@ from ..services.storage import (
     soft_delete_run,
     restore_run
 )
+from .storage_utils import get_storage_root
 from ..utils.validation import validate_run_id, validate_batch_size
 
 logger = logging.getLogger(__name__)
@@ -46,10 +47,14 @@ async def list_runs(request: Request) -> List[RunListItem]:
     """
     List all experiment runs.
     
+    Supports both local and remote storage modes:
+    - local mode: reads from local storage_root
+    - remote mode: reads from remote cache metadata directory
+    
     Returns:
         List of run information including status and best metrics
     """
-    storage_root = request.app.state.storage_root
+    storage_root = get_storage_root(request)
     items: List[RunListItem] = []
     
     for entry in iter_all_runs(storage_root):
@@ -132,6 +137,8 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     """
     Get detailed information for a specific run.
     
+    Supports both local and remote storage modes.
+    
     Args:
         run_id: The run ID to retrieve
         
@@ -141,7 +148,7 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = request.app.state.storage_root
+    storage_root = get_storage_root(request)
     entry = find_run_dir_by_id(storage_root, run_id)
     
     if not entry:

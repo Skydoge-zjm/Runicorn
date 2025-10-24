@@ -56,6 +56,9 @@ export default {
   'unified_remote.mirror.appended': 'Appended',
   'unified_remote.mirror.scans': 'Scans',
   
+  // Smart Mode Actions
+  'unified_remote.smart.stop_button': 'Stop Sync',
+  
   // Menu
   'remote_storage.menu': 'Remote',
   'remote_storage.title': 'Remote Storage Configuration',
@@ -85,7 +88,7 @@ export default {
   'remote_storage.form.remote_root_placeholder': '/home/user/runicorn_data',
   'remote_storage.form.auto_sync': 'Auto Sync',
   'remote_storage.form.auto_sync_interval': 'Every',
-  'remote_storage.form.auto_sync_interval_suffix': 'minutes, sync metadata automatically',
+  'remote_storage.form.auto_sync_interval_suffix': 'seconds, sync metadata automatically',
   'remote_storage.form.connect_button': 'Connect and Sync Metadata',
   'remote_storage.form.connect_note': '(Only syncs metadata files, not large files)',
   'remote_storage.form.required_fields': 'Please fill required fields: Server Address, Username, Remote Directory',
