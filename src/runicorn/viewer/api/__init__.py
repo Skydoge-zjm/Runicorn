@@ -11,6 +11,7 @@ from .runs import router as runs_router
 from .metrics import router as metrics_router
 from .config import router as config_router
 from .ssh import router as ssh_router
+from .unified_ssh import router as unified_ssh_router
 from .experiments import router as experiments_router
 from .export import router as export_router
 from .projects import router as projects_router
@@ -24,6 +25,7 @@ __all__ = [
     "metrics_router",
     "config_router",
     "ssh_router",
+    "unified_ssh_router",
     "experiments_router", 
     "export_router",
     "projects_router",

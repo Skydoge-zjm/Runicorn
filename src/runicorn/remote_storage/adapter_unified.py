@@ -11,7 +11,7 @@ from typing import Optional
 
 from .adapter import RemoteStorageAdapter
 from .models import RemoteConfig, RemoteConnectionStatus
-from ..ssh_connection_manager import UnifiedSSHConnection
+from ..ssh import UnifiedSSHConnection
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +112,8 @@ class UnifiedRemoteStorageAdapter(RemoteStorageAdapter):
             self._unified_connection.acquire()
             
             # Start auto-sync if enabled
-            if self.auto_sync:
-                self._start_sync_thread()
+            if self.auto_sync and self.metadata_sync:
+                self.metadata_sync.start_background_sync(self.sync_interval)
             
             logger.info(f"Connected via unified connection to {self.config.host}")
             return True
@@ -131,6 +131,7 @@ class UnifiedRemoteStorageAdapter(RemoteStorageAdapter):
         from .remote_executor import RemoteCommandExecutor
         
         self.metadata_sync = MetadataSyncService(
+            self._ssh_client,
             self._sftp_client,
             self.config.remote_root,
             self.cache
@@ -153,7 +154,8 @@ class UnifiedRemoteStorageAdapter(RemoteStorageAdapter):
         Close adapter and release unified connection reference.
         """
         # Stop sync thread first
-        self._stop_sync_thread()
+        if self.metadata_sync:
+            self.metadata_sync.stop_background_sync()
         
         # Release reference to unified connection
         if hasattr(self, '_unified_connection'):

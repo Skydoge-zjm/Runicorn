@@ -72,6 +72,7 @@ Runicorn API 按逻辑模块组织：
 | **V2 API** | 高性能 SQLite 查询 ⚡ | [v2_api.md](./v2_api.md) | 4个端点 |
 | **Config API** | 配置和偏好设置管理 | [config_api.md](./config_api.md) | 6个端点 |
 | **SSH/Remote API** | 通过 SSH 进行远程服务器同步 | [ssh_api.md](./ssh_api.md) | 12个端点 |
+| **Manifest API** | 高性能 Manifest-based 同步 🚀 | [manifest_api.md](./manifest_api.md) | CLI + SDK |
 
 **快速参考**: 查看 [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) 获取常用操作
 

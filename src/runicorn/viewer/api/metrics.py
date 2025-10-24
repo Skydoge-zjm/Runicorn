@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 
 from ..services.storage import find_run_dir_by_id
 from ..utils.cache import get_metrics_cache
+from .storage_utils import get_storage_root
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -140,7 +141,7 @@ async def get_metrics(run_id: str, request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = request.app.state.storage_root
+    storage_root = get_storage_root(request)
     entry = find_run_dir_by_id(storage_root, run_id)
     
     if not entry:
@@ -166,7 +167,7 @@ async def get_metrics_step(run_id: str, request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = request.app.state.storage_root
+    storage_root = get_storage_root(request)
     entry = find_run_dir_by_id(storage_root, run_id)
     
     if not entry:
@@ -214,8 +215,13 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
     """
     await websocket.accept()
     
-    # Get storage root from app state
-    storage_root = websocket.app.state.storage_root
+    # Get storage root based on storage mode
+    storage_mode = getattr(websocket.app.state, 'storage_mode', 'local')
+    if storage_mode == "remote" and hasattr(websocket.app.state, 'remote_adapter'):
+        storage_root = websocket.app.state.remote_adapter.cache.metadata_dir / "experiments"
+    else:
+        storage_root = websocket.app.state.storage_root
+    
     entry = find_run_dir_by_id(storage_root, run_id)
     
     if not entry:

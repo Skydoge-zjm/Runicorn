@@ -83,6 +83,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_rate.add_argument("--no-log-violations", action="store_true", help="Don't log rate limit violations")
     p_rate.add_argument("--whitelist-localhost", action="store_true", help="Whitelist localhost")
     p_rate.add_argument("--no-whitelist-localhost", action="store_true", help="Don't whitelist localhost")
+    
+    # Manifest generation subcommand
+    p_manifest = sub.add_parser("generate-manifest", help="Generate sync manifest (server-side)")
+    p_manifest.add_argument("--root", default=".", help="Root directory of experiments (default: current directory)")
+    p_manifest.add_argument("--output", help="Output path for manifest file")
+    p_manifest.add_argument("--active", action="store_true", help="Generate active manifest (only recent experiments)")
+    p_manifest.add_argument("--full", action="store_true", help="Generate full manifest (all experiments, default)")
+    p_manifest.add_argument("--active-window", type=int, default=3600, help="Time window for active experiments in seconds (default: 3600)")
+    p_manifest.add_argument("--no-incremental", action="store_true", help="Disable incremental generation")
+    p_manifest.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
 
     args = parser.parse_args(argv)
 
@@ -689,6 +699,79 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return 1
             
         return 0
+    
+    if args.cmd == "generate-manifest":
+        # Import manifest CLI
+        try:
+            from .manifest.cli import generate_manifest_cli, setup_logging
+            from .manifest.generator import ManifestGenerator, ManifestType
+        except ImportError:
+            print("Error: Manifest system is not available")
+            print("This may be a module loading issue. Check your installation.")
+            return 1
+        
+        # Setup logging
+        setup_logging(args.verbose)
+        
+        try:
+            # Determine manifest type
+            if args.active:
+                manifest_type = ManifestType.ACTIVE
+            else:
+                manifest_type = ManifestType.FULL
+            
+            # Resolve paths
+            root_path = Path(args.root).resolve()
+            if not root_path.exists():
+                print(f"Error: Root directory does not exist: {root_path}")
+                return 1
+            
+            if not root_path.is_dir():
+                print(f"Error: Root path is not a directory: {root_path}")
+                return 1
+            
+            output_path = Path(args.output).resolve() if args.output else None
+            
+            # Create generator
+            generator = ManifestGenerator(
+                remote_root=root_path,
+                active_window_seconds=args.active_window,
+                incremental=not args.no_incremental
+            )
+            
+            # Generate manifest
+            print(f"Generating {manifest_type.value} manifest...")
+            manifest, output_file = generator.generate(
+                manifest_type=manifest_type,
+                output_path=output_path
+            )
+            
+            # Print summary
+            print("\n" + "=" * 60)
+            print("Manifest Generation Complete")
+            print("=" * 60)
+            print(f"Type:          {manifest_type.value}")
+            print(f"Output:        {output_file}")
+            print(f"Compressed:    {output_file}.gz")
+            print(f"Revision:      {manifest.revision}")
+            print(f"Snapshot ID:   {manifest.snapshot_id}")
+            print(f"Experiments:   {manifest.total_experiments}")
+            print(f"Files:         {manifest.total_files}")
+            print(f"Total Size:    {manifest.total_bytes / (1024*1024):.2f} MB")
+            print("=" * 60)
+            
+            return 0
+        
+        except KeyboardInterrupt:
+            print("\nInterrupted by user")
+            return 130
+        
+        except Exception as e:
+            print(f"Error: Manifest generation failed: {e}")
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+            return 1
     
     parser.print_help()
     return 1

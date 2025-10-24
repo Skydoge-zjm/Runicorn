@@ -74,6 +74,16 @@
 | POST | `/api/unified/configure_mode` | 配置同步 | [📖](./ssh_api.md#配置同步模式) |
 | POST | `/api/unified/deactivate_mode` | 停用同步 | [📖](./ssh_api.md) |
 
+### Manifest API (高性能同步) 🚀
+
+| 类型 | 命令/方法 | 描述 | 文档 |
+|------|-----------|------|------|
+| CLI | `runicorn generate-manifest` | 生成 sync manifest | [📖](./manifest_api.md#cli-命令) |
+| CLI | `runicorn generate-manifest --active` | 生成活跃 manifest | [📖](./manifest_api.md#cli-命令) |
+| Python | `ManifestGenerator.generate()` | 服务端生成 manifest | [📖](./manifest_api.md#服务端manifestgenerator) |
+| Python | `ManifestSyncClient.sync()` | 客户端 manifest sync | [📖](./manifest_api.md#客户端manifestsyncclient) |
+| Python | `MetadataSyncService(..., use_manifest_sync=True)` | 自动集成 | [📖](./manifest_api.md#集成到-metadatasyncservice) |
+
 ### Projects API (层级)
 
 | 方法 | 端点 | 描述 |

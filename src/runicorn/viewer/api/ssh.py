@@ -11,15 +11,14 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, Request, Body
 from pydantic import BaseModel
 
-from ...ssh_sync import (
-    create_session, 
-    close_session,
-    list_sessions,
-    sftp_listdir,
+from ...ssh import (
+    SSHSession,
     start_mirror,
     stop_mirror,
-    list_mirrors
+    list_mirrors,
+    sftp_listdir_with_attrs,
 )
+from ...ssh.session import _global_session_pool
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -76,7 +75,7 @@ async def ssh_connect(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
             raise HTTPException(status_code=400, detail="host and username are required")
         
         port = int(payload.get("port") or 22)
-        session = create_session(
+        session = SSHSession(
             host=host,
             port=port,
             username=username,
@@ -86,6 +85,9 @@ async def ssh_connect(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
             passphrase=payload.get("passphrase"),
             use_agent=bool(payload.get("use_agent", True)),
         )
+        
+        # Add to global session pool
+        _global_session_pool[session.id] = session
         
         return {"ok": True, "session_id": session.id}
         
@@ -103,7 +105,16 @@ async def ssh_sessions() -> Dict[str, Any]:
     Returns:
         List of active SSH sessions
     """
-    return {"sessions": list_sessions()}
+    sessions = [
+        {
+            "id": sid,
+            "host": session.host,
+            "port": session.port,
+            "username": session.username,
+        }
+        for sid, session in _global_session_pool.items()
+    ]
+    return {"sessions": sessions}
 
 
 @router.post("/ssh/close")
@@ -124,8 +135,11 @@ async def ssh_close(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     if not session_id:
         raise HTTPException(status_code=400, detail="session_id required")
     
-    ok = close_session(session_id)
-    return {"ok": bool(ok)}
+    session = _global_session_pool.pop(session_id, None)
+    if session:
+        session.close()
+        return {"ok": True}
+    return {"ok": False}
 
 
 @router.get("/ssh/listdir")
@@ -144,8 +158,22 @@ async def ssh_listdir(session_id: str, path: str = None) -> Dict[str, Any]:
         HTTPException: If operation fails
     """
     try:
-        items = sftp_listdir(session_id, path or "~")
-        return {"items": items}
+        session = _global_session_pool.get(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        
+        items = sftp_listdir_with_attrs(session.sftp, path or "~")
+        return {"items": [
+            {
+                "filename": item.filename,
+                "st_mode": item.st_mode,
+                "st_size": item.st_size,
+                "st_mtime": item.st_mtime,
+            }
+            for item in items
+        ]}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -171,13 +199,27 @@ async def ssh_mirror_start(request: Request, payload: Dict[str, Any] = Body(...)
         if not session_id or not remote_root:
             raise HTTPException(status_code=400, detail="session_id and remote_root are required")
         
+        # Get session from pool
+        session = _global_session_pool.get(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        
         interval = float(payload.get("interval") or 2.0)
         local_root = request.app.state.storage_root
         
+        # Stop existing mirror tasks for this session to prevent duplicates
+        from ...ssh.mirror import list_mirrors, stop_mirror
+        existing_mirrors = list_mirrors()
+        for mirror in existing_mirrors:
+            if mirror.get('session_id') == session_id:
+                logger.info(f"Stopping existing mirror task {mirror.get('id')} for session {session_id}")
+                stop_mirror(mirror.get('id'))
+        
+        from pathlib import Path
         task = start_mirror(
-            session_id=session_id, 
+            session=session, 
             remote_root=remote_root, 
-            local_root=local_root, 
+            local_root=Path(local_root), 
             interval=interval
         )
         
@@ -189,7 +231,7 @@ async def ssh_mirror_start(request: Request, payload: Dict[str, Any] = Body(...)
                 "remote_root": task.remote_root,
                 "local_root": str(task.local_root),
                 "interval": task.interval,
-                "stats": dict(task.stats),
+                "stats": dict(task.stats) if hasattr(task, 'stats') else {},
             }
         }
         

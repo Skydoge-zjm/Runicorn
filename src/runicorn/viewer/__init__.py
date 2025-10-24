@@ -63,7 +63,7 @@ from .api.v2 import (
     v2_analytics_router
 )
 
-__version__ = "0.4.1"
+__version__ = "0.4.2a"
 
 logger = logging.getLogger(__name__)
 

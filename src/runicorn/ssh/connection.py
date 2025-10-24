@@ -1,8 +1,8 @@
 """
-Unified SSH Connection Manager
+SSH Connection Management
 
-Provides a single SSH connection that can be shared between different features.
-This ensures efficient resource usage and seamless mode switching.
+Provides unified SSH/SFTP connection management with singleton pattern,
+keepalive, compression, and reference counting.
 """
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Dict, Optional, Tuple, Any
 
 import paramiko
-from .ssh_host_keys import load_host_keys, get_host_key_policy
+
+from .host_keys import load_host_keys, get_host_key_policy
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,13 @@ class UnifiedSSHConnection:
     - Smart mode (RemoteStorageAdapter)
     - Mirror mode (MirrorTask)
     - Other features that need SSH access
+    
+    Features:
+    - Singleton pattern for connection reuse
+    - Reference counting for safe disconnection
+    - Keepalive for connection stability
+    - Compression for bandwidth efficiency
+    - Thread-safe operations
     """
     
     # Singleton instance storage
@@ -44,12 +52,30 @@ class UnifiedSSHConnection:
         private_key_path: Optional[str] = None,
         passphrase: Optional[str] = None,
         use_agent: bool = True,
-        timeout: float = 15.0
+        timeout: float = 15.0,
+        keepalive_seconds: int = 15,
+        enable_compression: bool = True
     ) -> 'UnifiedSSHConnection':
         """
         Get existing connection or create a new one.
         
         Uses singleton pattern to ensure only one connection per host/user combo.
+        
+        Args:
+            host: SSH server hostname
+            port: SSH server port
+            username: Username for authentication
+            password: Password for authentication (optional)
+            private_key: Private key content as string (optional)
+            private_key_path: Path to private key file (optional)
+            passphrase: Passphrase for encrypted private key (optional)
+            use_agent: Use SSH agent for authentication
+            timeout: Connection timeout in seconds
+            keepalive_seconds: Keepalive interval in seconds (0 to disable)
+            enable_compression: Enable SSH compression
+            
+        Returns:
+            UnifiedSSHConnection instance
         """
         key = f"{username}@{host}:{port}"
         
@@ -61,7 +87,8 @@ class UnifiedSSHConnection:
             logger.info(f"Creating new SSH connection for {key}")
             instance = cls(
                 host, port, username, password, private_key,
-                private_key_path, passphrase, use_agent, timeout
+                private_key_path, passphrase, use_agent, timeout,
+                keepalive_seconds, enable_compression
             )
             cls._instances[key] = instance
             return instance
@@ -76,7 +103,9 @@ class UnifiedSSHConnection:
         private_key_path: Optional[str] = None,
         passphrase: Optional[str] = None,
         use_agent: bool = True,
-        timeout: float = 15.0
+        timeout: float = 15.0,
+        keepalive_seconds: int = 15,
+        enable_compression: bool = True
     ):
         """Initialize SSH connection parameters."""
         self.host = host
@@ -88,6 +117,8 @@ class UnifiedSSHConnection:
         self.passphrase = passphrase
         self.use_agent = use_agent
         self.timeout = timeout
+        self.keepalive_seconds = keepalive_seconds
+        self.enable_compression = enable_compression
         
         # Connection objects
         self._ssh_client: Optional[paramiko.SSHClient] = None
@@ -104,10 +135,16 @@ class UnifiedSSHConnection:
         # Connection info
         self.connection_id = f"{username}@{host}:{port}"
         self.connected_at: Optional[float] = None
+        
+        # Statistics
+        self.stats = {
+            'reconnect_count': 0,
+            'last_error': None,
+        }
     
     def connect(self) -> Tuple[bool, Optional[str]]:
         """
-        Establish SSH connection.
+        Establish SSH connection with keepalive and compression.
         
         Returns:
             (success, error_message)
@@ -120,6 +157,7 @@ class UnifiedSSHConnection:
             try:
                 # Create SSH client
                 client = paramiko.SSHClient()
+                
                 # Load known hosts and set secure policy
                 load_host_keys(client)
                 # Use TOFU (Trust On First Use) policy by default
@@ -133,6 +171,7 @@ class UnifiedSSHConnection:
                     "timeout": self.timeout,
                     "allow_agent": self.use_agent,
                     "look_for_keys": self.use_agent,
+                    "compress": self.enable_compression,  # L3: Enable compression
                 }
                 
                 # Handle authentication
@@ -147,6 +186,13 @@ class UnifiedSSHConnection:
                 # Connect
                 client.connect(**kwargs)
                 
+                # L3: Enable keepalive for connection stability
+                if self.keepalive_seconds > 0:
+                    transport = client.get_transport()
+                    if transport:
+                        transport.set_keepalive(self.keepalive_seconds)
+                        logger.debug(f"Enabled keepalive: {self.keepalive_seconds}s")
+                
                 # Open SFTP channel
                 sftp = client.open_sftp()
                 
@@ -156,20 +202,26 @@ class UnifiedSSHConnection:
                 self._connected = True
                 self.connected_at = time.time()
                 
-                logger.info(f"Successfully connected to {self.connection_id}")
+                logger.info(
+                    f"Successfully connected to {self.connection_id} "
+                    f"(keepalive={self.keepalive_seconds}s, compress={self.enable_compression})"
+                )
                 return True, None
                 
             except paramiko.AuthenticationException as e:
                 error_msg = f"Authentication failed: {e}"
                 logger.error(error_msg)
+                self.stats['last_error'] = error_msg
                 return False, error_msg
             except paramiko.SSHException as e:
                 error_msg = f"SSH connection failed: {e}"
                 logger.error(error_msg)
+                self.stats['last_error'] = error_msg
                 return False, error_msg
             except Exception as e:
                 error_msg = f"Unexpected error: {e}"
                 logger.error(error_msg)
+                self.stats['last_error'] = error_msg
                 return False, error_msg
     
     def disconnect(self, force: bool = False) -> None:
@@ -259,6 +311,23 @@ class UnifiedSSHConnection:
             self._connected = False
             return False
     
+    def reconnect(self) -> Tuple[bool, Optional[str]]:
+        """
+        Reconnect if connection is lost.
+        
+        Returns:
+            (success, error_message)
+        """
+        logger.info(f"Attempting to reconnect to {self.connection_id}")
+        self.disconnect(force=True)
+        success, error = self.connect()
+        
+        if success:
+            self.stats['reconnect_count'] += 1
+            logger.info(f"Reconnected successfully (total: {self.stats['reconnect_count']})")
+        
+        return success, error
+    
     def get_ssh_client(self) -> Optional[paramiko.SSHClient]:
         """Get SSH client for command execution."""
         if self.is_connected():
@@ -338,6 +407,9 @@ class UnifiedSSHConnection:
             "connection_id": self.connection_id,
             "connected_at": self.connected_at,
             "reference_count": self._ref_count,
+            "keepalive_seconds": self.keepalive_seconds,
+            "compression_enabled": self.enable_compression,
+            "stats": self.stats.copy(),
         }
     
     @classmethod
@@ -350,3 +422,81 @@ class UnifiedSSHConnection:
                 except Exception as e:
                     logger.error(f"Error disconnecting {connection.connection_id}: {e}")
             cls._instances.clear()
+
+
+class SSHConnectionPool:
+    """
+    Connection pool for managing multiple SSH connections.
+    
+    Useful when connecting to multiple servers simultaneously.
+    """
+    
+    def __init__(self, max_connections_per_host: int = 3):
+        """
+        Initialize connection pool.
+        
+        Args:
+            max_connections_per_host: Maximum connections per host
+        """
+        self.max_connections_per_host = max_connections_per_host
+        self._connections: Dict[str, List[UnifiedSSHConnection]] = {}
+        self._lock = threading.Lock()
+    
+    def get_connection(
+        self,
+        host: str,
+        port: int,
+        username: str,
+        **kwargs
+    ) -> Optional[UnifiedSSHConnection]:
+        """
+        Get a connection from the pool or create a new one.
+        
+        Args:
+            host: SSH server hostname
+            port: SSH server port
+            username: Username
+            **kwargs: Additional connection parameters
+            
+        Returns:
+            UnifiedSSHConnection instance or None if pool is full
+        """
+        key = f"{username}@{host}:{port}"
+        
+        with self._lock:
+            if key not in self._connections:
+                self._connections[key] = []
+            
+            connections = self._connections[key]
+            
+            # Try to find an available connection
+            for conn in connections:
+                if conn.is_connected():
+                    return conn
+            
+            # Create new connection if under limit
+            if len(connections) < self.max_connections_per_host:
+                conn = UnifiedSSHConnection.get_or_create(
+                    host, port, username, **kwargs
+                )
+                success, error = conn.connect()
+                if success:
+                    connections.append(conn)
+                    return conn
+                else:
+                    logger.error(f"Failed to create connection: {error}")
+                    return None
+            
+            logger.warning(f"Connection pool full for {key}")
+            return None
+    
+    def close_all(self) -> None:
+        """Close all connections in the pool."""
+        with self._lock:
+            for connections in self._connections.values():
+                for conn in connections:
+                    try:
+                        conn.disconnect(force=True)
+                    except Exception as e:
+                        logger.error(f"Error disconnecting: {e}")
+            self._connections.clear()

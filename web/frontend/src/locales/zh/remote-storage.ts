@@ -56,6 +56,9 @@ export default {
   'unified_remote.mirror.appended': '追加',
   'unified_remote.mirror.scans': '扫描',
   
+  // Smart Mode Actions
+  'unified_remote.smart.stop_button': '结束同步',
+  
   // 菜单
   'remote_storage.menu': '远程',
   'remote_storage.title': '远程存储配置',
@@ -85,7 +88,7 @@ export default {
   'remote_storage.form.remote_root_placeholder': '/home/user/runicorn_data',
   'remote_storage.form.auto_sync': '自动同步',
   'remote_storage.form.auto_sync_interval': '每',
-  'remote_storage.form.auto_sync_interval_suffix': '分钟自动同步一次元数据',
+  'remote_storage.form.auto_sync_interval_suffix': '秒自动同步一次元数据',
   'remote_storage.form.connect_button': '连接并同步元数据',
   'remote_storage.form.connect_note': '(仅同步元数据文件，不下载大文件)',
   'remote_storage.form.required_fields': '请填写必填字段：服务器地址、用户名、远程目录',

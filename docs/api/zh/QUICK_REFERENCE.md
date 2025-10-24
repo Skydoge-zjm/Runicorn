@@ -43,6 +43,32 @@ POST /api/runs/soft-delete
 Body: {"run_ids": ["run1", "run2"]}
 ```
 
+### Manifest-Based Sync 🚀
+
+```bash
+# 生成 manifest（服务器端）
+runicorn generate-manifest --verbose
+
+# 生成活跃 manifest（最近 1 小时）
+runicorn generate-manifest --active
+
+# 指定实验目录
+runicorn generate-manifest --root /data/experiments
+
+# 查看 manifest 统计
+jq '.statistics' .runicorn/full_manifest.json
+
+# Python SDK - 服务端
+from runicorn.manifest import ManifestGenerator, ManifestType
+generator = ManifestGenerator(Path("/data/experiments"))
+manifest, path = generator.generate(ManifestType.FULL)
+
+# Python SDK - 客户端（自动集成）
+from runicorn.remote_storage import MetadataSyncService
+service = MetadataSyncService(..., use_manifest_sync=True)
+service.sync_all()  # 自动使用 manifest，失败时回退
+```
+
 ### Artifacts
 
 ```bash
@@ -331,6 +357,7 @@ response = requests.get(
 - **[metrics_api.md](./metrics_api.md)** - 指标和日志
 - **[config_api.md](./config_api.md)** - 配置
 - **[ssh_api.md](./ssh_api.md)** - 远程同步
+- **[manifest_api.md](./manifest_api.md)** - Manifest-based 同步 🚀
 
 ---
 

@@ -118,7 +118,7 @@ def get_known_hosts_file() -> Path:
     Returns:
         Path to known hosts file in user config directory
     """
-    from .config import _config_root_dir
+    from ..config import _config_root_dir
     return _config_root_dir() / "known_hosts"
 
 
