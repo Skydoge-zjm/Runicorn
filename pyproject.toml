@@ -37,7 +37,8 @@ dependencies = [
   "filelock>=3.12",
   "paramiko>=3.3,<4",
   "psutil>=5.8.0",
-  "httpx"
+  "httpx",
+  "cryptography>=41.0.0",
 ]
 
 [project.optional-dependencies]

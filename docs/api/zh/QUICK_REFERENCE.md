@@ -4,12 +4,35 @@
 
 # Runicorn API 快速参考
 
-**版本**: v0.4.0  
+**版本**: v0.4.1  
 **基础 URL**: `http://127.0.0.1:23300/api`
 
 ---
 
-## 快速开始 (30秒)
+## 🐍 Python API Client (推荐)
+
+**最简单的方式**：使用 Python 客户端
+
+```python
+import runicorn.api as api
+
+# 连接
+with api.connect() as client:
+    # 列出实验
+    experiments = client.list_experiments(project="vision")
+    
+    # 获取指标
+    metrics = client.get_metrics(experiments[0]["id"])
+    
+    # Artifacts
+    artifacts = client.artifacts.list_artifacts(type="model")
+```
+
+**文档**: [python_client_api.md](./python_client_api.md)
+
+---
+
+## 🌐 REST API 快速开始 (30秒)
 
 ```bash
 # 1. 启动 Runicorn

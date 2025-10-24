@@ -58,16 +58,28 @@ class RemoteViewerSession:
         self._stop_event.set()
     
     def to_dict(self) -> dict:
-        """Convert session to dict for API response."""
+        """Convert session to dict for API response (frontend-compatible format)."""
+        # Determine status based on session state
+        if not self.is_active:
+            status = "stopped"
+        elif self.tunnel_thread and self.tunnel_thread.is_alive():
+            status = "running"
+        else:
+            status = "connecting"
+        
         return {
-            "session_id": self.session_id,
-            "remote_host": self.remote_host,
-            "remote_port": self.remote_port,
-            "local_port": self.local_port,
-            "remote_root": self.remote_root,
-            "remote_pid": self.remote_pid,
-            "started_at": self.started_at,
-            "uptime_seconds": self.uptime_seconds,
-            "is_active": self.is_active,
+            # Frontend expects camelCase
+            "sessionId": self.session_id,
+            "host": self.remote_host,
+            "sshPort": self.connection.config.port if self.connection else 22,
+            "username": self.connection.config.username if self.connection else "unknown",
+            "localPort": self.local_port,
+            "remotePort": self.remote_port,
+            "remoteRoot": self.remote_root,
+            "remotePid": self.remote_pid,
+            "status": status,
+            "startedAt": int(self.started_at * 1000),  # Convert to milliseconds for JS
+            "uptimeSeconds": self.uptime_seconds,
+            "isActive": self.is_active,
             "url": f"http://localhost:{self.local_port}",
         }

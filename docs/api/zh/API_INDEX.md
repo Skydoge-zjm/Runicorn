@@ -4,13 +4,37 @@
 
 # 完整 API 索引
 
-**版本**: v0.4.0  
-**总端点数**: 40+  
-**最后更新**: 2025-10-14
+**版本**: v0.4.1  
+**总端点数**: 40+ REST + Python Client  
+**最后更新**: 2025-10-24
 
 ---
 
-## 📑 完整端点列表
+## 🐍 Python API Client
+
+**新增**: Python 程序化访问接口
+
+| 组件 | 描述 | 文档 |
+|------|------|------|
+| **RunicornClient** | 主客户端类 | [📖](./python_client_api.md) |
+| **Experiments API** | 实验查询和管理 | [📖](./python_client_api.md#实验管理) |
+| **Metrics API** | 指标数据访问 | [📖](./python_client_api.md#指标数据) |
+| **Artifacts API** | Artifacts 程序化管理 | [📖](./python_client_api.md#artifacts-api) |
+| **Remote API** | 远程 Viewer 控制 | [📖](./python_client_api.md#remote-api) |
+| **Utils** | pandas DataFrame 工具 | [📖](./python_client_api.md#工具函数) |
+
+**快速示例**:
+```python
+import runicorn.api as api
+
+with api.connect() as client:
+    experiments = client.list_experiments(project="vision")
+    metrics = client.get_metrics(experiments[0]["id"])
+```
+
+---
+
+## 📑 REST API 端点列表
 
 ### Runs API (实验管理)
 

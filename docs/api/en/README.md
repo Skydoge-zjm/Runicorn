@@ -60,12 +60,39 @@ Response:
 
 ---
 
-## API Modules
+## API Types
 
-Runicorn API is organized into logical modules:
+Runicorn provides two ways to access the API:
+
+### 🐍 Python API Client (Recommended)
+
+**New**: Programmatic access interface for simplified Python integration
+
+```python
+import runicorn.api as api
+
+with api.connect() as client:
+    experiments = client.list_experiments(project="vision")
+    metrics = client.get_metrics(experiments[0]["id"])
+```
+
+**Features**:
+- ✅ Type safety and auto-completion
+- ✅ Auto-retry and connection management
+- ✅ pandas DataFrame integration
+- ✅ Artifacts and Remote API extensions
+
+**Documentation**: [python_client_api.md](./python_client_api.md)
+
+---
+
+### 🌐 REST API Modules
+
+HTTP REST API endpoints for Web UI and third-party integrations.
 
 | Module | Description | Documentation | Endpoints |
 |--------|-------------|---------------|-----------|
+| **Python Client** 🆕 | Programmatic Python access | [python_client_api.md](./python_client_api.md) | SDK |
 | **Runs API** | Experiment run management (CRUD, soft delete, restore) | [runs_api.md](./runs_api.md) | 6 endpoints |
 | **Artifacts API** | Model and dataset version control | [artifacts_api.md](./artifacts_api.md) | 7 endpoints |
 | **Metrics API** | Real-time metrics queries and visualization data | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |

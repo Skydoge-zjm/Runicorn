@@ -39,6 +39,7 @@ class RemoteViewerManager:
         remote_root: str,
         local_port: Optional[int] = None,
         remote_port: Optional[int] = None,
+        python_cmd: Optional[str] = None,
     ) -> RemoteViewerSession:
         """
         Start a remote viewer session.
@@ -56,6 +57,7 @@ class RemoteViewerManager:
             remote_root: Remote storage root path
             local_port: Local port (auto-detect if None)
             remote_port: Remote port (auto-detect if None)
+            python_cmd: Python command to use (auto-detect if None)
             
         Returns:
             RemoteViewerSession instance
@@ -71,15 +73,16 @@ class RemoteViewerManager:
         try:
             # Step 1: Check Python availability
             logger.info(f"[{session_id}] Checking remote Python...")
-            python_cmd = self._find_python(connection)
             if not python_cmd:
-                raise RuntimeError("Python3 not found on remote server")
+                python_cmd = self._find_python(connection)
+                if not python_cmd:
+                    raise RuntimeError("Python3 not found on remote server")
             logger.info(f"[{session_id}] Using Python: {python_cmd}")
             
             # Step 2: Check runicorn installation
             logger.info(f"[{session_id}] Checking runicorn installation...")
             stdout, stderr, exit_code = connection.exec_command(
-                f"{python_cmd} -c 'import runicorn; print(runicorn.__version__)'"
+                f"{python_cmd} -c 'import runicorn; print(getattr(runicorn, \"__version__\", \"unknown\"))'"
             )
             if exit_code != 0:
                 raise RuntimeError(
@@ -294,14 +297,15 @@ for port in range({start_port}, {end_port}):
         # Build command
         cmd = (
             f"nohup {python_cmd} -m runicorn viewer "
-            f"--root '{remote_root}' "
+            f"--storage '{remote_root}' "
             f"--host 127.0.0.1 "
             f"--port {remote_port} "
             f"--remote-mode "
-            f"--log-level ERROR "
+            f"--log-level INFO "
             f"> /tmp/runicorn_viewer_{session_id}.log 2>&1 & echo $!"
         )
         
+        logger.info(f"Starting remote viewer with command: {cmd}")
         stdout, stderr, exit_code = connection.exec_command(cmd, timeout=5)
         
         if exit_code != 0:
@@ -320,17 +324,29 @@ for port in range({start_port}, {end_port}):
         timeout: int = 10
     ) -> bool:
         """Check if remote viewer is responding."""
+        logger.info(f"Health check: Testing port {remote_port} on remote server")
+        
         # Try to connect to the port
         cmd = f"timeout 5 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/{remote_port}'"
         
-        for _ in range(timeout):
+        for attempt in range(timeout):
             try:
                 stdout, stderr, exit_code = connection.exec_command(cmd, timeout=6)
+                logger.debug(f"Health check attempt {attempt + 1}/{timeout}: exit_code={exit_code}, stderr={stderr[:100]}")
                 if exit_code == 0:
+                    logger.info(f"Health check passed on attempt {attempt + 1}")
                     return True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Health check attempt {attempt + 1} exception: {e}")
             time.sleep(1)
+        
+        # If health check failed, try to get viewer process logs
+        logger.error(f"Health check failed after {timeout} attempts")
+        log_stdout, _, _ = connection.exec_command(
+            f"cat /tmp/runicorn_viewer_*.log 2>/dev/null | tail -20"
+        )
+        if log_stdout.strip():
+            logger.error(f"Remote viewer logs:\n{log_stdout}")
         
         return False
     

@@ -38,6 +38,11 @@ def get_config_file_path() -> Path:
     return _config_root_dir() / "config.json"
 
 
+def get_connections_file_path() -> Path:
+    """Return path to saved connections file."""
+    return _config_root_dir() / "connections.json"
+
+
 def load_user_config() -> Dict[str, Any]:
     path = get_config_file_path()
     try:
@@ -46,6 +51,69 @@ def load_user_config() -> Dict[str, Any]:
     except Exception:
         pass
     return {}
+
+
+def load_saved_connections() -> List[Dict[str, Any]]:
+    """Load saved SSH connections from connections.json and decrypt passwords."""
+    path = get_connections_file_path()
+    try:
+        if path.exists():
+            connections = json.loads(path.read_text(encoding="utf-8"))
+            
+            # Decrypt passwords
+            from .security.encryption import decrypt_password, is_encrypted
+            for conn in connections:
+                if conn.get('password') and is_encrypted(conn['password']):
+                    try:
+                        conn['password'] = decrypt_password(conn['password'])
+                    except Exception as e:
+                        logger.warning(f"Failed to decrypt password for {conn.get('name', 'unknown')}: {e}")
+                        conn['password'] = None  # Clear invalid password
+            
+            return connections
+    except Exception as e:
+        logger.warning(f"Failed to load connections: {e}")
+    return []
+
+
+def save_connections(connections: List[Dict[str, Any]]) -> None:
+    """Save SSH connections to connections.json with encrypted passwords."""
+    path = get_connections_file_path()
+    try:
+        # Ensure directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Debug: log incoming connections
+        for conn in connections:
+            logger.info(f"Processing connection '{conn.get('name')}': has_password={bool(conn.get('password'))}, password_length={len(conn.get('password', ''))}")
+        
+        # Encrypt passwords before saving
+        from .security.encryption import encrypt_password, is_encrypted
+        connections_to_save = []
+        for conn in connections:
+            conn_copy = conn.copy()
+            password = conn_copy.get('password')
+            if password:  # Has password
+                if not is_encrypted(password):
+                    try:
+                        conn_copy['password'] = encrypt_password(password)
+                        logger.info(f"✓ Encrypted password for '{conn.get('name', 'unknown')}'")
+                    except Exception as e:
+                        logger.error(f"Failed to encrypt password for {conn.get('name', 'unknown')}: {e}")
+                        conn_copy['password'] = None  # Don't save unencrypted password
+                else:
+                    logger.info(f"Password for '{conn.get('name', 'unknown')}' is already encrypted")
+            else:
+                logger.warning(f"No password for '{conn.get('name', 'unknown')}'")
+            # Keep password field even if None (for consistency)
+            connections_to_save.append(conn_copy)
+        
+        # Write with pretty formatting
+        path.write_text(json.dumps(connections_to_save, indent=2, ensure_ascii=False), encoding="utf-8")
+        logger.info(f"Saved {len(connections_to_save)} connections to {path}")
+    except Exception as e:
+        logger.error(f"Failed to save connections: {e}")
+        raise
 
 
 def save_user_config(update: Dict[str, Any]) -> None:

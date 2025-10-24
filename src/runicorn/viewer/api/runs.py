@@ -18,9 +18,9 @@ from ..services.storage import (
     update_status_if_process_dead,
     is_run_deleted,
     soft_delete_run,
-    restore_run
+    restore_run,
+    get_storage_root
 )
-from .storage_utils import get_storage_root
 from ..utils.validation import validate_run_id, validate_batch_size
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ async def list_runs(request: Request) -> List[RunListItem]:
     Returns:
         List of run information including status and best metrics
     """
-    storage_root = get_storage_root(request)
+    storage_root = request.app.state.storage_root
     items: List[RunListItem] = []
     
     for entry in iter_all_runs(storage_root):
@@ -148,7 +148,7 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = get_storage_root(request)
+    storage_root = request.app.state.storage_root
     entry = find_run_dir_by_id(storage_root, run_id)
     
     if not entry:

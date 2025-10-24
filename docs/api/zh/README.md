@@ -60,12 +60,39 @@ GET /api/health
 
 ---
 
-## API 模块
+## API 类型
 
-Runicorn API 按逻辑模块组织：
+Runicorn 提供两种 API 访问方式：
+
+### 🐍 Python API Client (推荐)
+
+**新增**: 程序化访问接口，简化 Python 集成
+
+```python
+import runicorn.api as api
+
+with api.connect() as client:
+    experiments = client.list_experiments(project="vision")
+    metrics = client.get_metrics(experiments[0]["id"])
+```
+
+**特性**：
+- ✅ 类型安全和自动补全
+- ✅ 自动重试和连接管理
+- ✅ pandas DataFrame 集成
+- ✅ Artifacts 和 Remote API 扩展
+
+**文档**: [python_client_api.md](./python_client_api.md)
+
+---
+
+### 🌐 REST API 模块
+
+HTTP REST API 端点，用于 Web UI 和第三方集成。
 
 | 模块 | 描述 | 文档 | 端点数 |
 |------|------|------|--------|
+| **Python Client** 🆕 | Python 程序化访问 | [python_client_api.md](./python_client_api.md) | SDK |
 | **Runs API** | 实验运行管理（CRUD、软删除、恢复）| [runs_api.md](./runs_api.md) | 6个端点 |
 | **Artifacts API** | 模型和数据集版本控制 | [artifacts_api.md](./artifacts_api.md) | 7个端点 |
 | **Metrics API** | 实时指标查询和可视化数据 | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |

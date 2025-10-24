@@ -4,13 +4,37 @@
 
 # Complete API Index
 
-**Version**: v0.4.0  
-**Total Endpoints**: 40+  
-**Last Updated**: 2025-10-14
+**Version**: v0.4.1  
+**Total Endpoints**: 40+ REST + Python Client  
+**Last Updated**: 2025-10-24
 
 ---
 
-## 📑 Complete Endpoint List
+## 🐍 Python API Client
+
+**New**: Programmatic Python access interface
+
+| Component | Description | Docs |
+|-----------|-------------|------|
+| **RunicornClient** | Main client class | [📖](./python_client_api.md) |
+| **Experiments API** | Experiment query and management | [📖](./python_client_api.md#experiment-management) |
+| **Metrics API** | Metrics data access | [📖](./python_client_api.md#metrics-data) |
+| **Artifacts API** | Programmatic artifacts management | [📖](./python_client_api.md#artifacts-api) |
+| **Remote API** | Remote Viewer control | [📖](./python_client_api.md#remote-api) |
+| **Utils** | pandas DataFrame tools | [📖](./python_client_api.md#utility-functions) |
+
+**Quick Example**:
+```python
+import runicorn.api as api
+
+with api.connect() as client:
+    experiments = client.list_experiments(project="vision")
+    metrics = client.get_metrics(experiments[0]["id"])
+```
+
+---
+
+## 📑 REST API Endpoint List
 
 ### Runs API (Experiment Management)
 

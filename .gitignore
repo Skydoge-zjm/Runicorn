@@ -83,3 +83,5 @@ examples/
 # --- Tests ---
 tests/client/config.json  # SSH credentials, use config.json.example as template
 
+# --- Backup ---
+.backup/

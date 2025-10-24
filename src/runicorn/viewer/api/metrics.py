@@ -15,9 +15,8 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 import aiofiles
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-from ..services.storage import find_run_dir_by_id
+from ..services.storage import find_run_dir_by_id, get_storage_root
 from ..utils.cache import get_metrics_cache
-from .storage_utils import get_storage_root
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -141,7 +140,7 @@ async def get_metrics(run_id: str, request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = get_storage_root(request)
+    storage_root = request.app.state.storage_root
     entry = find_run_dir_by_id(storage_root, run_id)
     
     if not entry:
@@ -167,7 +166,7 @@ async def get_metrics_step(run_id: str, request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = get_storage_root(request)
+    storage_root = request.app.state.storage_root
     entry = find_run_dir_by_id(storage_root, run_id)
     
     if not entry:

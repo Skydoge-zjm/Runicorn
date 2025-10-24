@@ -3,13 +3,12 @@ import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import { SettingOutlined, CloudSyncOutlined, ExperimentOutlined, DatabaseOutlined, CloudServerOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
-import UnifiedRemotePage from './pages/UnifiedRemotePage'
 import ExperimentPage from './pages/ExperimentPage'
 import ArtifactsPage from './pages/ArtifactsPage'
 import ArtifactDetailPage from './pages/ArtifactDetailPage'
+import RemoteViewerPage from './pages/RemoteViewerPage'
 import { health, getConfig } from './api'
 import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
-import RemoteStorageIndicator from './components/RemoteStorageIndicator'
 import { SettingsProvider } from './contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
 
@@ -210,7 +209,6 @@ export default function App() {
               {apiStatus === 'ok' && <Tag color="green">{t('tag.api_ok')}</Tag>}
               {apiStatus === 'loading' && <Tag color="processing">{t('tag.api_loading')}</Tag>}
               {apiStatus === 'down' && <Tag>{t('tag.api_down')}</Tag>}
-              <RemoteStorageIndicator />
               <Select
                 size="small"
                 value={i18n.language?.startsWith('zh') ? 'zh' : 'en'}
@@ -228,7 +226,7 @@ export default function App() {
                 <Route path="/runs/:id" element={<RunDetailPage />} />
                 <Route path="/artifacts" element={<ArtifactsPage />} />
                 <Route path="/artifacts/:name" element={<ArtifactDetailPage />} />
-                <Route path="/remote" element={<UnifiedRemotePage />} />
+                <Route path="/remote" element={<RemoteViewerPage />} />
               </Routes>
             </div>
           </Content>
