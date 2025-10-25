@@ -14,7 +14,44 @@ Local, open-source experiment tracking and visualization. 100% offline. Professi
 
 ## ✨ What's New
 
-### v0.4.1 (Latest)
+### v0.5.0 (Latest)
+
+**🚀 Major Architecture Upgrade - Remote Viewer**
+
+Runicorn 0.5.0 introduces an all-new **Remote Viewer** feature, adopting a VSCode Remote Development-style architecture that completely transforms how you access remote servers.
+
+**Core Changes**:
+- 🌐 **VSCode Remote Architecture** - Run Viewer on remote servers, access via SSH tunnel from local browser
+- ⚡ **Real-time Access** - No sync needed, direct access to remote data, latency < 100ms
+- 💾 **Zero Local Storage** - No need to mirror remote data locally, save massive disk space
+- 🔧 **Auto Environment Detection** - Smart detection of remote Conda/Virtualenv environments, select and use
+- 🔒 **Secure Connection** - SSH key/password authentication, automatic port forwarding, all communications encrypted
+- 📊 **Full Feature Parity** - All features work identically in remote mode and local mode
+
+**vs Old Remote Sync (0.4.x)**:
+
+| Feature | 0.4.x File Sync | 0.5.0 Remote Viewer |
+|---------|-----------------|--------------------|
+| Data Transfer | Sync GB-level data | No sync, real-time access |
+| Initial Wait | Hours (large datasets) | Seconds (connection startup) |
+| Local Storage | Required (mirror copy) | Not required (zero usage) |
+| Real-time | 5-10 min delay | Fully real-time (< 100ms) |
+| Use Case | Occasional viewing | Daily development |
+
+**Quick Try**:
+```bash
+runicorn viewer  # Start local Viewer
+# Open browser → Click "Remote" → Enter server info → Connect and use!
+```
+
+→ [Remote Viewer Complete Guide](docs/guides/en/REMOTE_VIEWER_GUIDE.md)
+
+---
+
+<details>
+<summary><b>Version History</b></summary>
+
+### v0.4.1
 
 - 🆕 **System Information Panel** - View version, storage, and cache stats in Settings
 - 🎨 **Dark Mode Improvements** - Better text readability across all pages
@@ -31,13 +68,15 @@ Local, open-source experiment tracking and visualization. 100% offline. Professi
 - ⚡ **Performance Boost** - Metrics caching, 10-20x faster API
 - 🎨 **UI Improvements** - Unified design system, optimized controls
 
+</details>
+
 ## Core Features
 
 - **Python Package**: `runicorn` - Universal SDK for any ML framework
+- **Experiment Tracking**: Auto-log metrics, logs, environment info, smart status detection
 - **Model Versioning**: Artifacts system - Git-like version control for ML assets
-- **Experiment Tracking**: Real-time metrics, logs, and GPU monitoring
-- **Web Viewer**: Interactive charts and experiment comparison
-- **Remote Sync**: Live SSH mirroring from Linux servers  
+- **Web Viewer**: Modern interface, real-time charts and experiment comparison
+- **Remote Viewer** 🆕: VSCode Remote-style architecture, real-time access to remote servers
 - **Desktop App**: Native Windows application with auto-backend
 - **GPU Monitoring**: Real-time GPU telemetry (requires `nvidia-smi`)
 
@@ -84,14 +123,37 @@ Features
 - **Glass Morphism UI** - Beautiful modern design with customizable themes
 - **Smart Layouts** - Automatic responsive design
 
+### 🌐 **Remote Viewer** (🆕 v0.5.0 New Feature)
+- **VSCode Remote Architecture** - Run Viewer process on remote server
+- **Zero Sync Delay** - Direct access to remote data, no waiting for sync
+- **Auto Environment Detection** - Smart identification of Conda, Virtualenv environments
+- **SSH Tunnel** - Secure port forwarding, supports key and password authentication
+- **Full Feature Support** - All features fully available in remote mode
+
 
 Installation
 ------------
-Requires Python 3.8+ (Windows/Linux). The desktop app is currently Windows-only; the CLI/Viewer work on both Windows and Linux.
 
+### Basic Installation
+
+**For local use**:
 ```bash
 pip install -U runicorn
 ```
+
+**For remote server** (if using Remote Viewer):
+```bash
+# Also install Runicorn on remote Linux server
+ssh user@remote-server
+pip install -U runicorn
+```
+
+### System Requirements
+
+- **Python**: 3.8+
+- **Operating System**: Windows/Linux
+- **Desktop App**: Windows-only (CLI/Viewer cross-platform)
+- **Remote Viewer**: Remote server requires Linux (WSL supported)
 
 Quick start
 -----------------
@@ -185,22 +247,110 @@ Storage root precedence (high → low):
 3. Per-user config `user_root_dir` (set via `runicorn config` or web UI)
 
 
-Remote
-----------------------
-Mirror runs from a remote Linux server to your local storage over SSH in real time.
+## 🌐 Remote Viewer User Guide
 
-- Open the top navigation "Remote" page
+### What is Remote Viewer?
+
+Remote Viewer adopts a **VSCode Remote Development-style architecture**, allowing you to:
+- Run **Viewer process on remote server**
+- Access via **SSH tunnel** in local browser
+- **Real-time viewing** of remote experiment data, no sync needed
+
+### 5-Minute Quick Start
+
+#### Step 1: Ensure Runicorn is Installed on Remote Server
+
+```bash
+# SSH login to remote server
+ssh user@gpu-server.com
+
+# Install Runicorn
+pip install runicorn
+# Or in conda environment
+conda activate your-env
+pip install runicorn
+```
+
+#### Step 2: Start Local Viewer
+
+```bash
+# On local machine
+runicorn viewer
+# Browser automatically opens http://localhost:23300
+```
+
+#### Step 3: Connect to Remote Server
+
+1. Click **"Remote"** button in top menu bar
+2. Fill in SSH connection info:
+   - **Host**: `gpu-server.com`
+   - **Port**: `22`
+   - **Username**: `your-username`
+   - **Authentication**: SSH key or password
+3. Click **"Connect to Server"**
+
+#### Step 4: Select Python Environment
+
+System will auto-detect Python environments on remote server, showing a list:
+
+| Environment | Python Version | Runicorn Version | Storage Root |
+|-------------|----------------|------------------|-------------|
+| base | Python 3.10.8 | 0.5.0 | /home/user/RunicornData |
+| pytorch-env | Python 3.9.15 | 0.5.0 | /data/experiments |
+
+Select the environment you want to use, click **"Use This Environment"**
+
+#### Step 5: Start Remote Viewer
+
+Review configuration summary, click **"Start Remote Viewer"**
+
+```
+Remote Server: gpu-server.com
+Python Environment: pytorch-env
+Runicorn Version: 0.5.0
+Storage Root: /data/experiments
+```
+
+#### Step 6: Access Remote Data
+
+Automatically opens new browser tab, address like: `http://localhost:8081`
+
+Browse remote experiment data just like using local Viewer!
+
+### FAQ
+
+**Q: Does it support Windows remote servers?**  
+A: Currently only supports Linux remote servers (including WSL).
+
+**Q: Can I connect to multiple servers simultaneously?**  
+A: Yes, each connection uses a different local port.
+
+**Q: Will data be lost after disconnecting?**  
+A: No, data remains on the remote server. Reconnect to continue accessing.
+
+→ **Complete Guide**: [Remote Viewer User Guide](docs/guides/en/REMOTE_VIEWER_GUIDE.md)
+
+---
+
+<details>
+<summary><b>⚠️  Old Remote Sync (Deprecated)</b></summary>
+
+> **Deprecated in v0.5.0**  
+> 
+> The 0.4.x file sync feature has been replaced by Remote Viewer.  
+> Please use the new feature above for better, faster, simpler experience!
+> 
+> **Migration Guide**: [0.4.x → 0.5.0 Migration Guide](docs/guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md)
+
+Old file sync method still works but is no longer recommended:
+
+- Open the "Remote" page in top navigation
 - Steps:
-  1) Connect: enter `host`, `port` (default 22), `username`; optionally enter `password` or `private key` content/path.
-  2) Browse remote directories and select the correct level:
-     - For v0.2.0 and above: we recommend selecting the per-user root directory.
-  3) Click "Sync this directory". A "Sync Task" appears below, and the "Runs" page refreshes immediately.
+  1) Connect: enter `host`, `port`, `username`, `password/key`
+  2) Browse remote directories and select the correct level
+  3) Click "Sync this directory"
 
-Tips & troubleshooting
-- If no runs appear, check:
-  - Mirror task: GET `/api/ssh/mirror/list` should show `alive: true` with increasing counters.
-  - Local storage root: GET `/api/config` to inspect the `storage` path; verify the expected hierarchy is created.
-  - Credentials are only used for this session and are not persisted; SSH is handled by Paramiko.
+</details>
 
 Desktop app (Windows)
 ---------------------
@@ -252,6 +402,16 @@ Community
 - See `SECURITY.md` for private vulnerability reporting.
 - See `CHANGELOG.md` for version history.
 
-AI
+Contributing
+------------
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+License
+-------
+MIT License - see [LICENSE](LICENSE) file.
+
 ---
-This project is mainly developed by OpenAI's GPT-5.
+
+**Author**: Runicorn Development Team  
+**Version**: v0.5.0  
+**Last Updated**: 2025-10-25

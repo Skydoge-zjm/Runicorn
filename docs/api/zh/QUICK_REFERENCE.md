@@ -4,7 +4,7 @@
 
 # Runicorn API 快速参考
 
-**版本**: v0.4.1  
+**版本**: v0.5.0  
 **基础 URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -129,19 +129,28 @@ POST /api/config/user_root_dir
 Body: {"path": "E:\\RunicornData"}
 ```
 
-### 远程同步
+### Remote Viewer API 🆕
 
 ```bash
-# 连接 SSH
-POST /api/unified/connect
-Body: {"host": "192.168.1.100", "username": "user", "password": "secret"}
+# 连接到远程服务器
+POST /api/remote/connect
+Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
 
-# 配置智能同步
-POST /api/unified/configure_mode
-Body: {"mode": "smart", "remote_root": "/data/runicorn"}
+# 列出 Python 环境
+GET /api/remote/environments?connection_id=conn_1a2b3c4d
 
-# 检查状态
-GET /api/unified/status
+# 启动 Remote Viewer
+POST /api/remote/viewer/start
+Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
+
+# 获取 Viewer 状态
+GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
+
+# 健康检查
+GET /api/remote/health?connection_id=conn_1a2b3c4d
+
+# 断开连接
+DELETE /api/remote/connections/conn_1a2b3c4d
 ```
 
 ---
@@ -379,7 +388,7 @@ response = requests.get(
 - **[v2_api.md](./v2_api.md)** - 高性能查询
 - **[metrics_api.md](./metrics_api.md)** - 指标和日志
 - **[config_api.md](./config_api.md)** - 配置
-- **[ssh_api.md](./ssh_api.md)** - 远程同步
+- **[remote_api.md](./remote_api.md)** - Remote Viewer API 🆕
 - **[manifest_api.md](./manifest_api.md)** - Manifest-based 同步 🚀
 
 ---
@@ -388,6 +397,6 @@ response = requests.get(
 
 ---
 
-**最后更新**: 2025-10-14
+**最后更新**: 2025-10-25
 
 

@@ -233,7 +233,81 @@ const runs = await listRuns()
 
 ---
 
-**Related**: [API_DESIGN.md](API_DESIGN.md) | [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md)
+## Remote Viewer Frontend (v0.5.0)
+
+### New Pages and Components
+
+```
+src/pages/
+├── RemoteConnectionPage.tsx   # Remote connection management
+└── RemoteViewerPage.tsx       # Remote Viewer control page
+
+src/components/remote/
+├── ConnectionForm.tsx          # SSH connection form
+├── EnvironmentSelector.tsx    # Environment selector
+├── ViewerStatusIndicator.tsx  # Viewer status indicator
+└── ConnectionList.tsx          # Connection list
+```
+
+### State Management (Remote)
+
+**Connection state**:
+```typescript
+interface RemoteConnection {
+  connection_id: string
+  host: string
+  username: string
+  status: 'connected' | 'disconnected' | 'connecting'
+  has_viewer: boolean
+  viewer_url?: string
+  health?: HealthStatus
+}
+
+// Periodic health polling
+useEffect(() => {
+  const interval = setInterval(async () => {
+    for (const conn of connections) {
+      const health = await checkConnectionHealth(conn.connection_id)
+      updateConnectionHealth(conn.connection_id, health)
+    }
+  }, 30000)  // Every 30 seconds
+  
+  return () => clearInterval(interval)
+}, [connections])
+```
+
+### Remote Connection Flow (UI)
+
+**Step 1: Connection form**, **Step 2: Environment selection**, **Step 3: Start Viewer** - Complete UI flow with loading states, error handling, and success feedback.
+
+### Real-time Health Monitoring
+
+```typescript
+function useConnectionHealth(connectionId: string, interval = 30000) {
+  const [health, setHealth] = useState<HealthStatus | null>(null)
+  
+  useEffect(() => {
+    if (!connectionId) return
+    checkHealth(connectionId).then(setHealth)
+    
+    const timer = setInterval(() => {
+      checkHealth(connectionId).then(setHealth)
+    }, interval)
+    
+    return () => clearInterval(timer)
+  }, [connectionId, interval])
+  
+  return health
+}
+```
+
+### Error Handling (Frontend)
+
+Remote-specific error handlers with contextual messages, suggestions, and recovery actions for SSH auth failures, environment detection issues, and Viewer startup problems.
+
+---
+
+**Related**: [API_DESIGN.md](API_DESIGN.md) | [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) | [REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)
 
 **Back to**: [Architecture Index](README.md)
 

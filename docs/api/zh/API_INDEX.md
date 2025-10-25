@@ -4,9 +4,9 @@
 
 # 完整 API 索引
 
-**版本**: v0.4.1  
-**总端点数**: 40+ REST + Python Client  
-**最后更新**: 2025-10-24
+**版本**: v0.5.0  
+**总端点数**: 52+ REST + Python Client  
+**最后更新**: 2025-10-25
 
 ---
 
@@ -87,16 +87,41 @@ with api.connect() as client:
 | DELETE | `/api/config/ssh_connections/{key}` | 删除连接 | [📖](./config_api.md#删除-ssh-连接) |
 | GET | `/api/config/ssh_connections/{key}/details` | 获取连接详情 | [📖](./config_api.md) |
 
-### SSH/Remote API (同步)
+### Remote Viewer API (远程访问) 🆕
+
+**v0.5.0 新增**: VSCode Remote 风格的远程服务器访问
+
+#### 连接管理
 
 | 方法 | 端点 | 描述 | 文档 |
 |------|------|------|------|
-| POST | `/api/unified/connect` | 连接到服务器 | [📖](./ssh_api.md#连接到远程服务器) |
-| POST | `/api/unified/disconnect` | 断开连接 | [📖](./ssh_api.md) |
-| GET | `/api/unified/status` | 获取状态 | [📖](./ssh_api.md#获取连接状态) |
-| GET | `/api/unified/listdir` | 浏览目录 | [📖](./ssh_api.md#浏览远程目录) |
-| POST | `/api/unified/configure_mode` | 配置同步 | [📖](./ssh_api.md#配置同步模式) |
-| POST | `/api/unified/deactivate_mode` | 停用同步 | [📖](./ssh_api.md) |
+| POST | `/api/remote/connect` | 建立 SSH 连接 | [📖](./remote_api.md#post-apiremoteconnect) |
+| GET | `/api/remote/connections` | 列出所有连接 | [📖](./remote_api.md#get-apiremoteconnections) |
+| DELETE | `/api/remote/connections/{id}` | 断开连接 | [📖](./remote_api.md#delete-apiremoteconnectionsid) |
+
+#### 环境检测
+
+| 方法 | 端点 | 描述 | 文档 |
+|------|------|------|------|
+| GET | `/api/remote/environments` | 列出 Python 环境 | [📖](./remote_api.md#get-apiremoteenvironments) |
+| POST | `/api/remote/environments/detect` | 重新检测环境 | [📖](./remote_api.md#post-apiremoteenvironmentsdetect) |
+| GET | `/api/remote/config` | 获取远程配置 | [📖](./remote_api.md#get-apiremoteconfig) |
+
+#### Remote Viewer 管理
+
+| 方法 | 端点 | 描述 | 文档 |
+|------|------|------|------|
+| POST | `/api/remote/viewer/start` | 启动 Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstart) |
+| POST | `/api/remote/viewer/stop` | 停止 Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstop) |
+| GET | `/api/remote/viewer/status` | 获取 Viewer 状态 | [📖](./remote_api.md#get-apiremoteviewerstatus) |
+| GET | `/api/remote/viewer/logs` | 获取 Viewer 日志 | [📖](./remote_api.md#get-apiremoteviewerlogs) |
+
+#### 健康检查
+
+| 方法 | 端点 | 描述 | 文档 |
+|------|------|------|------|
+| GET | `/api/remote/health` | 连接健康状态 | [📖](./remote_api.md#get-apiremotehealth) |
+| GET | `/api/remote/ping` | 测试连接延迟 | [📖](./remote_api.md#get-apiremoteping) |
 
 ### Manifest API (高性能同步) 🚀
 
@@ -162,25 +187,28 @@ GET /api/artifacts/resnet50-model/v3/lineage
 GET /api/artifacts/resnet50-model/v3/files
 ```
 
-### 用例: 远程同步
+### 用例: Remote Viewer (新)
 
 ```bash
-# 1. 连接到服务器
-POST /api/unified/connect
-Body: {"host": "server", "username": "user", "password": "secret"}
+# 1. 连接到远程服务器
+POST /api/remote/connect
+Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
 
-# 2. 浏览远程
-GET /api/unified/listdir?path=/data/runicorn
+# 2. 检测 Python 环境
+GET /api/remote/environments?connection_id=conn_1a2b3c4d
 
-# 3. 配置同步
-POST /api/unified/configure_mode
-Body: {"mode": "smart", "remote_root": "/data/runicorn"}
+# 3. 启动 Remote Viewer
+POST /api/remote/viewer/start
+Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
 
-# 4. 监控同步
-GET /api/unified/status
+# 4. 监控状态
+GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
 
-# 5. 查询已同步的实验
-GET /api/runs
+# 5. 访问远程数据
+# 浏览器打开: http://localhost:8081
+
+# 6. 断开连接
+DELETE /api/remote/connections/conn_1a2b3c4d
 ```
 
 ### 用例: 分析
@@ -366,7 +394,15 @@ rn.finish()
 
 ## 📝 API 变更日志
 
-### v0.4.0 (当前)
+### v0.5.0 (当前)
+- ✅ **新增 Remote Viewer API**（12个端点）
+- ✅ 弃用旧的 SSH 文件同步 API
+- ✅ 支持 SSH 密钥和密码认证
+- ✅ 自动 Python 环境检测
+- ✅ Remote Viewer 生命周期管理
+- ✅ 连接健康监控
+
+### v0.4.0
 - ✅ 添加 V2 高性能 API
 - ✅ 添加 Artifacts API（版本控制）
 - ✅ 添加统一 SSH API
@@ -380,11 +416,12 @@ rn.finish()
 
 ### 未来版本
 
-**v0.5.0**（计划中）:
+**v0.6.0**（计划中）:
+- Windows 远程服务器支持
 - GraphQL API 支持
-- 批量上传端点
 - Webhook 通知
 - API 密钥认证
+- 批量上传端点
 
 ---
 

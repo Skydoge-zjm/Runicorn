@@ -290,49 +290,117 @@ def build_lineage(artifact_id, max_depth=3):
 
 ---
 
-## 远程同步组件
+## Remote Viewer 组件（v0.5.0）
 
-### 适配器模式
+### Connection Manager
 
-**目的**: 本地/远程存储的统一接口
+**职责**: 管理 SSH 连接生命周期
 
+**组件**:
+- **SSH 客户端**: 基于 Paramiko 的连接管理
+- **连接池**: 支持多个并发连接
+- **认证管理器**: 密码/密钥/Agent 认证
+- **Keep-alive**: 定期心跳保持连接
+
+**关键类**:
 ```python
-class StorageAdapter(ABC):
-    @abstractmethod
-    def list_artifacts(type): pass
-    
-    @abstractmethod
-    def load_artifact(name, type, version): pass
-
-class LocalAdapter(StorageAdapter):
-    # 使用本地文件系统实现
-
-class RemoteAdapter(StorageAdapter):
-    # 使用 SSH + 缓存实现
-```
-
-**使用**:
-```python
-# API 不关心是本地还是远程
-adapter = get_storage_adapter(request)  # 返回 LocalAdapter 或 RemoteAdapter
-artifacts = adapter.list_artifacts(type="model")  # 工作方式相同
+class ConnectionManager:
+    def connect(host, port, username, auth_method) -> Connection
+    def disconnect(connection_id, cleanup=True)
+    def get_connection(connection_id) -> Connection
+    def list_connections() -> List[Connection]
+    def is_alive(connection_id) -> bool
 ```
 
 ---
 
-### 缓存管理器
+### Environment Detector
+
+**职责**: 自动检测远程 Python 环境
 
 **组件**:
-- **元数据缓存**: 远程元数据的 SQLite 索引
-- **文件缓存**: 下载文件的 LRU 缓存
-- **同步调度器**: 定期元数据刷新
+- **环境扫描器**: 检测 conda/virtualenv/system Python
+- **版本验证器**: 检查 Runicorn 安装和版本
+- **兼容性检查**: 验证版本兼容性
 
-**缓存结构**:
+**检测流程**:
+```python
+1. 扫描 conda 环境: `conda env list`
+2. 扫描 virtualenv: ~/.virtualenvs/, ~/venv/
+3. 检查系统 Python: `which python`
+4. 对每个环境验证 Runicorn:
+   python -c "import runicorn; print(runicorn.__version__)"
+5. 返回兼容环境列表
 ```
-~/.runicorn_remote_cache/{host}_{user}/
-├── index.db           # SQLite: 缓存的元数据
-├── metadata/          # 原始 JSON 文件
-└── downloads/         # 下载的 artifacts（LRU）
+
+---
+
+### Viewer Launcher
+
+**职责**: 启动和管理远程 Viewer 进程
+
+**组件**:
+- **进程启动器**: 在远程执行 Viewer 命令
+- **进程监控器**: 跟踪 PID 和状态
+- **日志收集器**: 收集远程 Viewer 日志
+- **清理器**: 优雅关闭和强制终止
+
+**启动命令**:
+```bash
+source /path/to/env/bin/activate && \
+runicorn viewer --host 127.0.0.1 --port 23300 --no-open-browser \
+> /tmp/runicorn_viewer_{id}.log 2>&1 &
+```
+
+---
+
+### Tunnel Manager
+
+**职责**: SSH 端口转发隧道管理
+
+**组件**:
+- **隧道创建器**: 使用 Paramiko 建立端口转发
+- **端口选择器**: 自动选择可用本地端口
+- **转发线程**: 后台线程处理数据转发
+- **健康监控**: 隧道连通性检查
+
+**隧道结构**:
+```python
+@dataclass
+class Tunnel:
+    tunnel_id: str
+    connection_id: str
+    local_port: int          # 例如 8081
+    remote_port: int         # 例如 23300
+    is_active: bool
+    bytes_sent: int
+    bytes_received: int
+```
+
+---
+
+### Health Checker
+
+**职责**: 监控连接和 Viewer 健康状态
+
+**组件**:
+- **连接检查器**: SSH 连接存活性测试
+- **Viewer 检查器**: HTTP 健康检查
+- **隧道检查器**: 端口连通性测试
+- **延迟测试器**: 往返时间测量
+
+**检查周期**: 每 30 秒一次
+
+**健康状态**:
+```python
+@dataclass
+class HealthStatus:
+    is_healthy: bool
+    connection_alive: bool
+    viewer_running: bool
+    tunnel_active: bool
+    latency_ms: float
+    last_check_time: float
 ```
 
 ---

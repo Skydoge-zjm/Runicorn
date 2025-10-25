@@ -4,9 +4,9 @@
 
 # Complete API Index
 
-**Version**: v0.4.1  
-**Total Endpoints**: 40+ REST + Python Client  
-**Last Updated**: 2025-10-24
+**Version**: v0.5.0  
+**Total Endpoints**: 52+ REST + Python Client  
+**Last Updated**: 2025-10-25
 
 ---
 
@@ -87,16 +87,41 @@ with api.connect() as client:
 | DELETE | `/api/config/ssh_connections/{key}` | Delete connection | [📖](./config_api.md#delete-ssh-connection) |
 | GET | `/api/config/ssh_connections/{key}/details` | Get connection details | [📖](./config_api.md) |
 
-### SSH/Remote API (Synchronization)
+### Remote Viewer API (Remote Access) 🆕
+
+**v0.5.0 New**: VSCode Remote-style remote server access
+
+#### Connection Management
 
 | Method | Endpoint | Description | Docs |
 |--------|----------|-------------|------|
-| POST | `/api/unified/connect` | Connect to server | [📖](./ssh_api.md#connect-to-remote-server) |
-| POST | `/api/unified/disconnect` | Disconnect | [📖](./ssh_api.md) |
-| GET | `/api/unified/status` | Get status | [📖](./ssh_api.md#get-connection-status) |
-| GET | `/api/unified/listdir` | Browse directories | [📖](./ssh_api.md#browse-remote-directory) |
-| POST | `/api/unified/configure_mode` | Configure sync | [📖](./ssh_api.md#configure-sync-mode) |
-| POST | `/api/unified/deactivate_mode` | Deactivate sync | [📖](./ssh_api.md) |
+| POST | `/api/remote/connect` | Establish SSH connection | [📖](./remote_api.md#post-apiremoteconnect) |
+| GET | `/api/remote/connections` | List all connections | [📖](./remote_api.md#get-apiremoteconnections) |
+| DELETE | `/api/remote/connections/{id}` | Disconnect | [📖](./remote_api.md#delete-apiremoteconnectionsid) |
+
+#### Environment Detection
+
+| Method | Endpoint | Description | Docs |
+|--------|----------|-------------|------|
+| GET | `/api/remote/environments` | List Python environments | [📖](./remote_api.md#get-apiremoteenvironments) |
+| POST | `/api/remote/environments/detect` | Re-detect environments | [📖](./remote_api.md#post-apiremoteenvironmentsdetect) |
+| GET | `/api/remote/config` | Get remote config | [📖](./remote_api.md#get-apiremoteconfig) |
+
+#### Remote Viewer Management
+
+| Method | Endpoint | Description | Docs |
+|--------|----------|-------------|------|
+| POST | `/api/remote/viewer/start` | Start Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstart) |
+| POST | `/api/remote/viewer/stop` | Stop Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstop) |
+| GET | `/api/remote/viewer/status` | Get Viewer status | [📖](./remote_api.md#get-apiremoteviewerstatus) |
+| GET | `/api/remote/viewer/logs` | Get Viewer logs | [📖](./remote_api.md#get-apiremoteviewerlogs) |
+
+#### Health Checks
+
+| Method | Endpoint | Description | Docs |
+|--------|----------|-------------|------|
+| GET | `/api/remote/health` | Connection health status | [📖](./remote_api.md#get-apiremotehealth) |
+| GET | `/api/remote/ping` | Test connection latency | [📖](./remote_api.md#get-apiremoteping) |
 
 ### Projects API (Hierarchy)
 
@@ -152,25 +177,28 @@ GET /api/artifacts/resnet50-model/v3/lineage
 GET /api/artifacts/resnet50-model/v3/files
 ```
 
-### Use Case: Remote Sync
+### Use Case: Remote Viewer (New)
 
 ```bash
-# 1. Connect to server
-POST /api/unified/connect
-Body: {"host": "server", "username": "user", "password": "secret"}
+# 1. Connect to remote server
+POST /api/remote/connect
+Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
 
-# 2. Browse remote
-GET /api/unified/listdir?path=/data/runicorn
+# 2. Detect Python environments
+GET /api/remote/environments?connection_id=conn_1a2b3c4d
 
-# 3. Configure sync
-POST /api/unified/configure_mode
-Body: {"mode": "smart", "remote_root": "/data/runicorn"}
+# 3. Start Remote Viewer
+POST /api/remote/viewer/start
+Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
 
-# 4. Monitor sync
-GET /api/unified/status
+# 4. Monitor status
+GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
 
-# 5. Query synced experiments
-GET /api/runs
+# 5. Access remote data
+# Browser opens: http://localhost:8081
+
+# 6. Disconnect
+DELETE /api/remote/connections/conn_1a2b3c4d
 ```
 
 ### Use Case: Analytics
@@ -356,7 +384,15 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ## 📝 API Changelog
 
-### v0.4.0 (Current)
+### v0.5.0 (Current)
+- ✅ **Added Remote Viewer API** (12 endpoints)
+- ✅ Deprecated old SSH file sync API
+- ✅ SSH key and password authentication support
+- ✅ Automatic Python environment detection
+- ✅ Remote Viewer lifecycle management
+- ✅ Connection health monitoring
+
+### v0.4.0
 - ✅ Added V2 high-performance API
 - ✅ Added Artifacts API (version control)
 - ✅ Added Unified SSH API
@@ -370,11 +406,12 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ### Future Versions
 
-**v0.5.0** (Planned):
+**v0.6.0** (Planned):
+- Windows remote server support
 - GraphQL API support
-- Batch upload endpoints
 - Webhook notifications
 - API key authentication
+- Batch upload endpoints
 
 ---
 

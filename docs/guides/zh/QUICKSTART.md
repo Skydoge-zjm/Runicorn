@@ -102,15 +102,51 @@ run.finish()
 
 ---
 
-## 🔄 远程同步
+## 🌐 Remote Viewer (v0.5.0 新功能)
 
-在远程服务器训练，本地实时查看结果。
+在远程服务器训练，本地实时查看结果 - **无需同步数据**！
 
-**在 Web 界面**:
-1. 进入"远程"页面
-2. 输入 SSH 凭据
-3. 点击"配置智能模式"
-4. 实验自动同步！
+### 5分钟快速开始
+
+#### 步骤 1: 确保远程服务器已安装 Runicorn
+
+```bash
+# SSH 登录到远程服务器
+ssh user@gpu-server.com
+
+# 安装 Runicorn
+pip install runicorn
+```
+
+#### 步骤 2: 启动本地 Viewer
+
+```bash
+runicorn viewer
+```
+
+#### 步骤 3: 连接远程服务器
+
+1. 在浏览器中点击 **"Remote"** 菜单
+2. 填写 SSH 连接信息:
+   - 主机: `gpu-server.com`
+   - 用户: `your-username`
+   - 认证: SSH 密钥或密码
+3. 点击 **"连接到服务器"**
+
+#### 步骤 4: 选择 Python 环境
+
+系统自动检测远程环境，选择已安装 Runicorn 的环境。
+
+#### 步骤 5: 启动 Remote Viewer
+
+点击 **"启动 Remote Viewer"**，自动打开新标签页访问远程数据！
+
+**优势**:
+- ✅ 实时访问，延迟 < 100ms
+- ✅ 零本地存储占用
+- ✅ 连接启动仅需数秒
+
+**完整指南**: [Remote Viewer 用户指南](REMOTE_VIEWER_GUIDE.md)
 
 ---
 
@@ -129,8 +165,9 @@ runicorn config --set-user-root "E:\RunicornData"
 ## 📚 了解更多
 
 - **[Artifacts 指南](ARTIFACTS_GUIDE.md)** - 模型版本控制
-- **[远程存储指南](REMOTE_STORAGE_USER_GUIDE.md)** - 远程同步设置
+- **[Remote Viewer 指南](REMOTE_VIEWER_GUIDE.md)** - 远程服务器实时访问
 - **[演示示例](DEMO_EXAMPLES_GUIDE.md)** - 示例代码讲解
+- **[迁移指南](MIGRATION_GUIDE_v0.4_to_v0.5.md)** - 从 0.4.x 升级到 0.5.0
 
 ---
 

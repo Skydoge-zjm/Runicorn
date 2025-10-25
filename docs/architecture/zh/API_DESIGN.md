@@ -168,6 +168,169 @@ async def logs_websocket(websocket: WebSocket, run_id: str):
 
 ---
 
-**相关文档**: [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) | [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md)
+## Remote API 设计（v0.5.0）
+
+### 资源层次
+
+```
+/api/remote/
+├── connections           # 连接管理
+│   ├── POST /connect     # 建立连接
+│   ├── GET /connections  # 列出所有连接
+│   └── DELETE /{id}      # 断开连接
+│
+├── environments          # 环境检测
+│   ├── GET /             # 列出环境
+│   ├── POST /detect      # 重新检测
+│   └── GET /config       # 获取配置
+│
+└── viewer/               # Viewer 管理
+    ├── POST /start       # 启动 Viewer
+    ├── POST /stop        # 停止 Viewer
+    ├── GET /status       # 获取状态
+    └── GET /logs         # 获取日志
+```
+
+### RESTful 设计模式
+
+**1. 连接作为资源**:
+```python
+# 创建连接
+POST /api/remote/connect
+→ 返回: {"connection_id": "conn_123", ...}
+
+# 查询连接
+GET /api/remote/connections/{connection_id}
+
+# 删除连接（断开）
+DELETE /api/remote/connections/{connection_id}
+```
+
+**2. 子资源嵌套**:
+```python
+# Viewer 是连接的子资源
+POST /api/remote/viewer/start
+{
+  "connection_id": "conn_123",  # 关联到父资源
+  "env_name": "pytorch-env"
+}
+```
+
+### 异步操作设计
+
+**长时间操作**（如启动 Viewer）:
+```python
+@router.post("/viewer/start")
+async def start_viewer(request: StartViewerRequest):
+    # 1. 立即返回接受状态
+    task_id = uuid.uuid4().hex
+    
+    # 2. 后台异步执行
+    background_tasks.add_task(
+        _start_viewer_task,
+        connection_id=request.connection_id,
+        env_name=request.env_name,
+        task_id=task_id
+    )
+    
+    # 3. 返回任务 ID 供轮询
+    return {
+        "status": "starting",
+        "task_id": task_id,
+        "estimated_time_ms": 5000
+    }
+
+# 客户端轮询状态
+GET /api/remote/viewer/status?connection_id={id}
+→ {"status": "running", "viewer_url": "http://localhost:8081"}
+```
+
+### 错误处理（Remote 特定）
+
+```python
+# Remote 特定错误码
+class RemoteErrorCode(str, Enum):
+    SSH_AUTH_FAILED = "ssh_auth_failed"
+    CONNECTION_TIMEOUT = "connection_timeout"
+    ENVIRONMENT_NOT_FOUND = "environment_not_found"
+    VIEWER_START_FAILED = "viewer_start_failed"
+    TUNNEL_FAILED = "tunnel_failed"
+
+# 标准错误响应
+{
+  "error": "ssh_auth_failed",
+  "message": "SSH authentication failed",
+  "details": "Permission denied (publickey)",
+  "retry_after": null,  # 如果可重试，秒数
+  "suggestions": [
+    "Check SSH key path",
+    "Verify username and host"
+  ]
+}
+```
+
+### 健康检查设计
+
+**分层健康检查**:
+```python
+GET /api/remote/health?connection_id={id}
+
+返回:
+{
+  "is_healthy": true,
+  "checks": {
+    "ssh_connection": {
+      "status": "healthy",
+      "latency_ms": 45.3,
+      "last_check": "2025-10-25T10:30:00Z"
+    },
+    "viewer_process": {
+      "status": "healthy",
+      "pid": 12345,
+      "uptime_seconds": 3600
+    },
+    "ssh_tunnel": {
+      "status": "healthy",
+      "local_port": 8081,
+      "remote_port": 23300,
+      "bytes_transferred": 1048576
+    }
+  }
+}
+```
+
+### 安全设计考虑
+
+**1. SSH 凭据处理**:
+```python
+# 永不存储明文密码
+@router.post("/connect")
+async def connect(request: ConnectRequest):
+    # 密码仅在内存中，立即使用后丢弃
+    ssh_client = paramiko.SSHClient()
+    ssh_client.connect(
+        hostname=request.host,
+        username=request.username,
+        password=request.password  # 用后即焚
+    )
+    
+    # 存储连接对象，不存储凭据
+    connection_manager.add(connection_id, ssh_client)
+```
+
+**2. 端口隔离**:
+```python
+# 远程 Viewer 只监听 127.0.0.1，不对外暴露
+viewer_cmd = (
+    f"runicorn viewer "
+    f"--host 127.0.0.1 "  # 仅本地
+    f"--port {remote_port} "
+    f"--no-open-browser"
+)
+```
+
+---
+
+**相关文档**: [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) | [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | [REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)
 
 **返回**: [架构索引](README.md)

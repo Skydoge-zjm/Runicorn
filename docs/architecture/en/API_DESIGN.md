@@ -352,7 +352,170 @@ function connectWebSocket(url, onReconnect) {
 
 ---
 
-**Related**: [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) | [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md)
+## Remote API Design (v0.5.0)
+
+### Resource Hierarchy
+
+```
+/api/remote/
+├── connections           # Connection management
+│   ├── POST /connect     # Establish connection
+│   ├── GET /connections  # List all connections
+│   └── DELETE /{id}      # Disconnect
+│
+├── environments          # Environment detection
+│   ├── GET /             # List environments
+│   ├── POST /detect      # Re-detect
+│   └── GET /config       # Get config
+│
+└── viewer/               # Viewer management
+    ├── POST /start       # Start Viewer
+    ├── POST /stop        # Stop Viewer
+    ├── GET /status       # Get status
+    └── GET /logs         # Get logs
+```
+
+### RESTful Design Patterns
+
+**1. Connection as Resource**:
+```python
+# Create connection
+POST /api/remote/connect
+→ Returns: {"connection_id": "conn_123", ...}
+
+# Query connection
+GET /api/remote/connections/{connection_id}
+
+# Delete connection (disconnect)
+DELETE /api/remote/connections/{connection_id}
+```
+
+**2. Sub-resource Nesting**:
+```python
+# Viewer is sub-resource of connection
+POST /api/remote/viewer/start
+{
+  "connection_id": "conn_123",  # Links to parent resource
+  "env_name": "pytorch-env"
+}
+```
+
+### Async Operation Design
+
+**Long-running operations** (like starting Viewer):
+```python
+@router.post("/viewer/start")
+async def start_viewer(request: StartViewerRequest):
+    # 1. Immediately return accepted status
+    task_id = uuid.uuid4().hex
+    
+    # 2. Execute asynchronously in background
+    background_tasks.add_task(
+        _start_viewer_task,
+        connection_id=request.connection_id,
+        env_name=request.env_name,
+        task_id=task_id
+    )
+    
+    # 3. Return task ID for polling
+    return {
+        "status": "starting",
+        "task_id": task_id,
+        "estimated_time_ms": 5000
+    }
+
+# Client polls status
+GET /api/remote/viewer/status?connection_id={id}
+→ {"status": "running", "viewer_url": "http://localhost:8081"}
+```
+
+### Error Handling (Remote-specific)
+
+```python
+# Remote-specific error codes
+class RemoteErrorCode(str, Enum):
+    SSH_AUTH_FAILED = "ssh_auth_failed"
+    CONNECTION_TIMEOUT = "connection_timeout"
+    ENVIRONMENT_NOT_FOUND = "environment_not_found"
+    VIEWER_START_FAILED = "viewer_start_failed"
+    TUNNEL_FAILED = "tunnel_failed"
+
+# Standard error response
+{
+  "error": "ssh_auth_failed",
+  "message": "SSH authentication failed",
+  "details": "Permission denied (publickey)",
+  "retry_after": null,  # Seconds if retryable
+  "suggestions": [
+    "Check SSH key path",
+    "Verify username and host"
+  ]
+}
+```
+
+### Health Check Design
+
+**Layered health checks**:
+```python
+GET /api/remote/health?connection_id={id}
+
+Returns:
+{
+  "is_healthy": true,
+  "checks": {
+    "ssh_connection": {
+      "status": "healthy",
+      "latency_ms": 45.3,
+      "last_check": "2025-10-25T10:30:00Z"
+    },
+    "viewer_process": {
+      "status": "healthy",
+      "pid": 12345,
+      "uptime_seconds": 3600
+    },
+    "ssh_tunnel": {
+      "status": "healthy",
+      "local_port": 8081,
+      "remote_port": 23300,
+      "bytes_transferred": 1048576
+    }
+  }
+}
+```
+
+### Security Design Considerations
+
+**1. SSH Credential Handling**:
+```python
+# Never store plaintext passwords
+@router.post("/connect")
+async def connect(request: ConnectRequest):
+    # Password only in memory, discard immediately after use
+    ssh_client = paramiko.SSHClient()
+    ssh_client.connect(
+        hostname=request.host,
+        username=request.username,
+        password=request.password  # Burn after reading
+    )
+    
+    # Store connection object, not credentials
+    connection_manager.add(connection_id, ssh_client)
+```
+
+**2. Port Isolation**:
+```python
+# Remote Viewer only listens on 127.0.0.1, not exposed
+viewer_cmd = (
+    f"runicorn viewer "
+    f"--host 127.0.0.1 "  # Localhost only
+    f"--port {remote_port} "
+    f"--no-open-browser"
+)
+```
+
+---
+
+**Related**: [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) | [FRONTEND_ARCHITECTURE.md](FRONTEND_ARCHITECTURE.md) | [REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)
 
 **Back to**: [Architecture Index](README.md)
 

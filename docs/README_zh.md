@@ -4,8 +4,8 @@
 
 # Runicorn 文档
 
-**版本**: v0.4.0  
-**最后更新**: 2025-10-14
+**版本**: v0.5.0  
+**最后更新**: 2025-10-25
 
 ---
 
@@ -14,7 +14,8 @@
 ```
 docs/
 ├── guides/                 # 用户指南与教程
-├── reference/              # 技术参考
+├── reference/              # 技术参考（配置、CLI、FAQ）
+├── architecture/           # 架构文档
 ├── releases/               # 发布说明与历史
 ├── api/                    # REST API 文档
 ├── user-guide/             # 用户指南网站 (MkDocs)
@@ -67,15 +68,17 @@ docs/
 | 文档 | 描述 | 受众 |
 |------|------|------|
 | [QUICKSTART.md](guides/zh/QUICKSTART.md) | 5分钟快速开始 | 所有用户 |
+| [REMOTE_VIEWER_GUIDE.md](guides/zh/REMOTE_VIEWER_GUIDE.md) | ⭐ Remote Viewer 使用指南（v0.5.0）| 用户 |
 | [ARTIFACTS_GUIDE.md](guides/zh/ARTIFACTS_GUIDE.md) | 模型版本控制指南 | 用户 |
-| [REMOTE_STORAGE_USER_GUIDE.md](guides/zh/REMOTE_STORAGE_USER_GUIDE.md) | 远程同步设置 | 用户 |
+| [MIGRATION_GUIDE_v0.4_to_v0.5.md](guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md) | ⭐ 迁移指南 0.4→0.5 | 用户 |
 | [DEMO_EXAMPLES_GUIDE.md](guides/zh/DEMO_EXAMPLES_GUIDE.md) | 示例代码讲解 | 用户 |
 
 ### 架构文档
 
 | 文档 | 描述 | 受众 |
 |------|------|------|
-| [SYSTEM_OVERVIEW.md](architecture/zh/SYSTEM_OVERVIEW.md) | 系统概述 | 架构师，贡献者 |
+| [SYSTEM_OVERVIEW.md](architecture/zh/SYSTEM_OVERVIEW.md) | 系统概述（含 v0.5.0 架构）| 架构师，贡献者 |
+| [REMOTE_VIEWER_ARCHITECTURE.md](architecture/zh/REMOTE_VIEWER_ARCHITECTURE.md) | ⭐ Remote Viewer 架构（v0.5.0）| 架构师，开发者 |
 | [COMPONENT_ARCHITECTURE.md](architecture/zh/COMPONENT_ARCHITECTURE.md) | 组件架构 | 开发者 |
 | [STORAGE_DESIGN.md](architecture/zh/STORAGE_DESIGN.md) | 存储设计 | 开发者 |
 | [DATA_FLOW.md](architecture/zh/DATA_FLOW.md) | 数据流 | 开发者 |
@@ -88,12 +91,16 @@ docs/
 
 | 文档 | 描述 | 受众 |
 |------|------|------|
+| [CONFIGURATION.md](reference/zh/CONFIGURATION.md) | ⭐ 配置参考（v0.5.0）| 所有用户 |
+| [CLI_REFERENCE.md](reference/zh/CLI_REFERENCE.md) | ⭐ CLI 命令参考（v0.5.0）| 所有用户 |
+| [FAQ.md](reference/zh/FAQ.md) | ⭐ 常见问题（v0.5.0）| 所有用户 |
 | [RATE_LIMIT_CONFIGURATION.md](reference/zh/RATE_LIMIT_CONFIGURATION.md) | 速率限制配置 | 开发者 |
 
 ### 发布 (版本历史)
 
 | 文档 | 描述 |
 |------|------|
+| [RELEASE_NOTES_v0.5.0.md](releases/zh/RELEASE_NOTES_v0.5.0.md) | ⭐ v0.5.0 发布说明（Remote Viewer）|
 | [RELEASE_NOTES_v0.4.0.md](releases/zh/RELEASE_NOTES_v0.4.0.md) | v0.4.0 发布说明 |
 
 ### API 文档
@@ -112,10 +119,11 @@ docs/
 
 | 类别 | 位置 | 文件数 | 用途 |
 |------|------|--------|------|
-| **用户指南** | guides/ | 4 | 快速开始, 教程 |
-| **技术参考** | reference/ | 3 | 架构, 安全, 配置 |
-| **发布信息** | releases/ | 2 | 版本历史, 变更日志 |
-| **API 文档** | api/ | 10 | REST API 参考 |
+| **用户指南** | guides/ | 6 | 快速开始, Remote Viewer, 迁移指南 |
+| **技术参考** | reference/ | 6 | 配置, CLI, FAQ, 速率限制 |
+| **架构文档** | architecture/ | 9 | 系统设计, Remote Viewer 架构 |
+| **发布信息** | releases/ | 3+ | 版本历史, 变更日志 |
+| **API 文档** | api/ | 13 | REST API 参考（含 Remote API）|
 | **用户指南网站** | user-guide/ | 7+ | MkDocs 网站源文件 |
 | **资源** | assets/ | 3+ | 图片和截图 |
 
@@ -178,14 +186,16 @@ docs/
 
 | 类别 | 完成度 | 状态 |
 |------|--------|------|
-| API 文档 | 100% | ✅ 完成 |
-| 用户指南框架 | 100% | ✅ 就绪 |
-| 用户指南内容 | 40% | 🔄 进行中 |
-| 架构文档 | 100% | ✅ 完成 |
+| API 文档（含 Remote）| 100% | ✅ 完成 |
+| 架构文档（含 Remote）| 100% | ✅ 完成 |
+| 参考文档（配置/CLI/FAQ）| 100% | ✅ 完成 |
+| 用户指南（含迁移）| 90% | 🔄 近完成 |
+| 用户指南网站 | 40% | 🔄 进行中 |
 | 教程 | 30% | 🔄 增长中 |
 
 ---
 
-**最后更新**: 2025-10-14  
-**维护者**: Runicorn 文档团队
+**最后更新**: 2025-10-25  
+**维护者**: Runicorn 文档团队  
+**v0.5.0 亮点**: Remote Viewer（VSCode Remote 风格）、完整的配置/CLI/FAQ 参考
 

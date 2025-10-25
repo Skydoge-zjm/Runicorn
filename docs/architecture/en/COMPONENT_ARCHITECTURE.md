@@ -290,49 +290,117 @@ def build_lineage(artifact_id, max_depth=3):
 
 ---
 
-## Remote Sync Components
+## Remote Viewer Components (v0.5.0)
 
-### Adapter Pattern
+### Connection Manager
 
-**Purpose**: Unified interface for local/remote storage
+**Responsibility**: Manage SSH connection lifecycle
 
+**Components**:
+- **SSH Client**: Paramiko-based connection management
+- **Connection Pool**: Support multiple concurrent connections
+- **Authentication Manager**: Password/Key/Agent authentication
+- **Keep-alive**: Periodic heartbeat to maintain connection
+
+**Key Classes**:
 ```python
-class StorageAdapter(ABC):
-    @abstractmethod
-    def list_artifacts(type): pass
-    
-    @abstractmethod
-    def load_artifact(name, type, version): pass
-
-class LocalAdapter(StorageAdapter):
-    # Implements using local filesystem
-
-class RemoteAdapter(StorageAdapter):
-    # Implements using SSH + cache
-```
-
-**Usage**:
-```python
-# API doesn't care if local or remote
-adapter = get_storage_adapter(request)  # Returns LocalAdapter or RemoteAdapter
-artifacts = adapter.list_artifacts(type="model")  # Works the same
+class ConnectionManager:
+    def connect(host, port, username, auth_method) -> Connection
+    def disconnect(connection_id, cleanup=True)
+    def get_connection(connection_id) -> Connection
+    def list_connections() -> List[Connection]
+    def is_alive(connection_id) -> bool
 ```
 
 ---
 
-### Cache Manager
+### Environment Detector
+
+**Responsibility**: Auto-detect remote Python environments
 
 **Components**:
-- **Metadata Cache**: SQLite index of remote metadata
-- **File Cache**: LRU cache for downloaded files
-- **Sync Scheduler**: Periodic metadata refresh
+- **Environment Scanner**: Detect conda/virtualenv/system Python
+- **Version Validator**: Check Runicorn installation and version
+- **Compatibility Checker**: Verify version compatibility
 
-**Cache Structure**:
+**Detection Flow**:
+```python
+1. Scan conda environments: `conda env list`
+2. Scan virtualenv: ~/.virtualenvs/, ~/venv/
+3. Check system Python: `which python`
+4. Validate Runicorn for each environment:
+   python -c "import runicorn; print(runicorn.__version__)"
+5. Return compatible environment list
 ```
-~/.runicorn_remote_cache/{host}_{user}/
-├── index.db           # SQLite: Cached metadata
-├── metadata/          # Raw JSON files
-└── downloads/         # Downloaded artifacts (LRU)
+
+---
+
+### Viewer Launcher
+
+**Responsibility**: Start and manage remote Viewer process
+
+**Components**:
+- **Process Launcher**: Execute Viewer command on remote
+- **Process Monitor**: Track PID and status
+- **Log Collector**: Collect remote Viewer logs
+- **Cleanup Handler**: Graceful shutdown and force terminate
+
+**Startup Command**:
+```bash
+source /path/to/env/bin/activate && \
+runicorn viewer --host 127.0.0.1 --port 23300 --no-open-browser \
+> /tmp/runicorn_viewer_{id}.log 2>&1 &
+```
+
+---
+
+### Tunnel Manager
+
+**Responsibility**: SSH port forwarding tunnel management
+
+**Components**:
+- **Tunnel Creator**: Establish port forwarding using Paramiko
+- **Port Selector**: Auto-select available local port
+- **Forwarding Thread**: Background thread handles data forwarding
+- **Health Monitor**: Tunnel connectivity check
+
+**Tunnel Structure**:
+```python
+@dataclass
+class Tunnel:
+    tunnel_id: str
+    connection_id: str
+    local_port: int          # e.g. 8081
+    remote_port: int         # e.g. 23300
+    is_active: bool
+    bytes_sent: int
+    bytes_received: int
+```
+
+---
+
+### Health Checker
+
+**Responsibility**: Monitor connection and Viewer health status
+
+**Components**:
+- **Connection Checker**: SSH connection aliveness test
+- **Viewer Checker**: HTTP health check
+- **Tunnel Checker**: Port connectivity test
+- **Latency Tester**: Round-trip time measurement
+
+**Check Interval**: Every 30 seconds
+
+**Health Status**:
+```python
+@dataclass
+class HealthStatus:
+    is_healthy: bool
+    connection_alive: bool
+    viewer_running: bool
+    tunnel_active: bool
+    latency_ms: float
+    last_check_time: float
 ```
 
 ---

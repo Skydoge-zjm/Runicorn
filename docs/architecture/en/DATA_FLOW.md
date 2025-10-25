@@ -384,7 +384,150 @@ message.error("实验未找到")
 
 ---
 
-**Related**: [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) | [STORAGE_DESIGN.md](STORAGE_DESIGN.md)
+## Remote Viewer Data Flow (v0.5.0)
+
+### Connection Establishment Flow
+
+```
+User (Browser)
+    ↓
+Click "Connect to Remote Server"
+    ↓
+Local Viewer API
+    ↓
+Connection Manager: Establish SSH connection
+    ├─ Password / SSH key authentication
+    ├─ Keep-alive setup
+    └─ Add to connection pool
+    ↓
+Environment Detector: Scan remote environments
+    ├─ Execute: conda env list
+    ├─ Execute: which python
+    ├─ For each env: import runicorn
+    └─ Return compatible environment list
+    ↓
+Return connection status and environment list to frontend
+```
+
+### Remote Viewer Startup Flow
+
+```
+User selects environment
+    ↓
+POST /api/remote/viewer/start
+    ↓
+Viewer Launcher: Build startup command
+    ↓
+Execute via SSH:
+    source /path/to/env/bin/activate && \
+    runicorn viewer --host 127.0.0.1 --port 23300 --no-open-browser &
+    ↓
+Get process PID
+    ↓
+Tunnel Manager: Create SSH tunnel
+    ├─ Remote: 127.0.0.1:23300
+    └─ Local: 127.0.0.1:8081
+    ↓
+Health Checker: Verify Viewer startup
+    ├─ Test connection: socket.connect(('127.0.0.1', 8081))
+    └─ HTTP check: GET http://localhost:8081/api/health
+    ↓
+Return Viewer URL: http://localhost:8081
+    ↓
+Frontend auto-opens new tab
+```
+
+### Data Access Flow
+
+```
+Browser request
+    ↓
+http://localhost:8081/api/runs
+    ↓
+Local SSH tunnel
+    ↓
+Forward to remote: 127.0.0.1:23300
+    ↓
+Remote Viewer instance (FastAPI)
+    ↓
+Read remote data storage
+    ├─ runicorn.db (SQLite)
+    └─ ~/RunicornData/project/name/runs/
+    ↓
+Return JSON response
+    ↓
+Return through SSH tunnel
+    ↓
+Browser receives and renders
+```
+
+### Real-time Log Streaming (Remote)
+
+```
+Browser establishes WebSocket
+    ↓
+ws://localhost:8081/api/runs/{id}/logs/ws
+    ↓
+Local SSH tunnel (WebSocket upgrade)
+    ↓
+Forward to remote Viewer
+    ↓
+Remote Viewer reads log file
+    ├─ tail -f /path/to/logs.txt
+    └─ Continuous streaming
+    ↓
+Stream back through SSH tunnel
+    ↓
+Browser displays logs in real-time
+```
+
+### Health Check Flow
+
+```
+Timer (every 30 seconds)
+    ↓
+Health Checker performs checks
+    ├─ 1. Connection check
+    │   └─ SSH: echo "ping"
+    ├─ 2. Viewer check
+    │   └─ HTTP: GET http://localhost:8081/api/health
+    └─ 3. Tunnel check
+        └─ socket.connect(('127.0.0.1', 8081))
+    ↓
+If any check fails:
+    ├─ Attempt auto-recovery
+    │   ├─ SSH disconnected: Reconnect (max 3 attempts)
+    │   ├─ Viewer crashed: Notify user
+    │   └─ Tunnel broken: Rebuild tunnel
+    └─ Update health status
+    ↓
+Frontend displays connection status indicator
+```
+
+### Disconnect Cleanup Flow
+
+```
+User clicks disconnect / closes tab
+    ↓
+DELETE /api/remote/connections/{id}?cleanup_viewer=true
+    ↓
+Cleanup steps:
+    ├─ 1. Tunnel Manager: Close SSH tunnel
+    │   └─ Stop forwarding thread
+    ├─ 2. Viewer Launcher: Stop remote Viewer
+    │   ├─ Via SSH: kill {pid}
+    │   └─ Delete log file
+    └─ 3. Connection Manager: Close SSH connection
+        └─ Remove from connection pool
+    ↓
+Return cleanup status
+    ↓
+Frontend updates UI, removes connection
+```
+
+---
+
+**Related**: [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) | [STORAGE_DESIGN.md](STORAGE_DESIGN.md) | [REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)
 
 **Back to**: [Architecture Index](README.md)
 

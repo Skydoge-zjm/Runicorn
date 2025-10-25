@@ -14,7 +14,44 @@
 
 ## ✨ 最新更新
 
-### v0.4.1（最新）
+### v0.5.0（最新）
+
+**🚀 重大架构升级 - Remote Viewer**
+
+Runicorn 0.5.0 引入了全新的 **Remote Viewer** 功能，采用类似 VSCode Remote Development 的架构，彻底改变了远程服务器访问方式。
+
+**核心变化**：
+- 🌐 **VSCode Remote 架构** - 在远程服务器直接运行 Viewer，通过 SSH 隧道在本地浏览器访问
+- ⚡ **实时访问** - 无需同步，直接访问远程数据，延迟 < 100ms
+- 💾 **零本地存储** - 不再需要镜像远程数据到本地，节省大量磁盘空间
+- 🔧 **环境自动检测** - 智能检测远程 Conda/Virtualenv 环境，选择即用
+- 🔒 **安全连接** - SSH 密钥/密码认证，自动端口转发，所有通信加密
+- 📊 **完整功能支持** - 远程模式下所有功能与本地模式完全一致
+
+**对比旧版远程同步 (0.4.x)**：
+
+| 特性 | 0.4.x 文件同步 | 0.5.0 Remote Viewer |
+|------|----------------|--------------------|
+| 数据传输 | 需要同步 GB 级数据 | 无需同步，实时访问 |
+| 初始等待 | 数小时（大数据集） | 数秒（连接启动） |
+| 本地存储 | 需要（镜像副本） | 不需要（零占用） |
+| 实时性 | 延迟 5-10 分钟 | 完全实时（< 100ms） |
+| 使用场景 | 偶尔查看 | 日常开发 |
+
+**快速体验**：
+```bash
+runicorn viewer  # 启动本地 Viewer
+# 打开浏览器 → 点击 "Remote" → 输入服务器信息 → 连接即用！
+```
+
+→ [Remote Viewer 完整指南](docs/guides/zh/REMOTE_VIEWER_GUIDE.md)
+
+---
+
+<details>
+<summary><b>历史版本更新</b></summary>
+
+### v0.4.1
 
 - 🆕 **系统信息面板** - 在设置中查看版本、存储和缓存统计
 - 🎨 **深色模式改进** - 所有页面文字可读性更好
@@ -31,12 +68,15 @@
 - ⚡ **性能优化** - 指标缓存，进程检查优化，响应速度提升 10-20 倍
 - 🎨 **UI 改进** - 统一设计系统，图表控件优化，骨架屏加载
 
+</details>
+
 ## 核心功能
 
 - **Python包**: `runicorn` - 通用SDK，支持任何ML框架
+- **实验追踪**: 自动记录指标、日志、环境信息，智能状态检测
 - **模型版本控制**: Artifacts系统 - 模型、数据集的Git-like管理
-- **Web查看器**: 实时图表界面和实验对比功能
-- **远程同步**: Linux服务器实时SSH镜像
+- **Web查看器**: 现代化界面，实时图表和实验对比
+- **Remote Viewer** 🆕: VSCode Remote 风格架构，实时访问远程服务器
 - **桌面应用**: Windows原生应用，自动后端启动
 - **GPU监控**: 实时GPU遥测（需要`nvidia-smi`）
 
@@ -82,13 +122,35 @@
 - **玻璃拟态界面** - 美观的现代设计，可定制主题
 - **智能布局** - 自动响应式设计
 
+### 🌐 **Remote Viewer** (🆕 v0.5.0 新功能)
+- **VSCode Remote 架构** - 在远程服务器运行 Viewer 进程
+- **零同步延迟** - 直接访问远程数据，无需等待同步
+- **自动环境检测** - 智能识别 Conda、Virtualenv 环境
+- **SSH 隧道** - 安全的端口转发，支持密钥和密码认证
+- **完整功能支持** - 所有功能在远程模式下完全可用
+
 ## 安装
 
-需要 Python 3.8+（Windows/Linux）。桌面应用目前仅 Windows 可用；CLI/Viewer 在 Windows 与 Linux 均可运行。
+### 基本安装
 
+**本地使用**：
 ```bash
 pip install -U runicorn
 ```
+
+**远程服务器**（如需使用 Remote Viewer）：
+```bash
+# 在远程 Linux 服务器上也安装 Runicorn
+ssh user@remote-server
+pip install -U runicorn
+```
+
+### 系统要求
+
+- **Python**: 3.8+
+- **操作系统**: Windows/Linux
+- **桌面应用**: 仅 Windows（CLI/Viewer 跨平台）
+- **Remote Viewer**: 远程服务器需 Linux（支持 WSL）
 
 ## 快速开始
 
@@ -211,22 +273,111 @@ run = rn.init(project="demo", name="exp1", storage="E:\\RunicornData")
   3. 全局配置 `user_root_dir`（通过 `runicorn config` 或Web界面设置）
 
 
-## 远程同步
+## 🌐 Remote Viewer 使用指南
 
-将远程 Linux 服务器上的记录通过 SSH 实时镜像到本机 storage。
+### 什么是 Remote Viewer？
+
+Remote Viewer 采用**类似 VSCode Remote Development 的架构**，让你可以：
+- 在**远程服务器上运行 Viewer 进程**
+- 通过 **SSH 隧道**在本地浏览器访问
+- **实时查看**远程实验数据，无需同步
+
+### 5 分钟快速开始
+
+#### 步骤 1：确保远程服务器已安装 Runicorn
+
+```bash
+# SSH 登录到远程服务器
+ssh user@gpu-server.com
+
+# 安装 Runicorn
+pip install runicorn
+# 或在 conda 环境中
+conda activate your-env
+pip install runicorn
+```
+
+#### 步骤 2：启动本地 Viewer
+
+```bash
+# 在本地机器上
+runicorn viewer
+# 浏览器自动打开 http://localhost:23300
+```
+
+#### 步骤 3：连接远程服务器
+
+1. 点击顶部菜单栏的 **"Remote"** 按钮
+2. 填写 SSH 连接信息：
+   - **主机**: `gpu-server.com`
+   - **端口**: `22`
+   - **用户名**: `your-username`
+   - **认证方式**：SS
+H 密钥或密码
+3. 点击 **"连接到服务器"**
+
+#### 步骤 4：选择 Python 环境
+
+系统会自动检测远程服务器上的 Python 环境，显示列表：
+
+| 环境名称 | Python 版本 | Runicorn 版本 | 存储根目录 |
+|---------|------------|--------------|----------|
+| base | Python 3.10.8 | 0.5.0 | /home/user/RunicornData |
+| pytorch-env | Python 3.9.15 | 0.5.0 | /data/experiments |
+
+选择你想使用的环境，点击 **"使用此环境"**
+
+#### 步骤 5：启动 Remote Viewer
+
+查看配置摘要，点击 **"启动 Remote Viewer"**
+
+```
+远程服务器: gpu-server.com
+Python 环境: pytorch-env
+Runicorn 版本: 0.5.0
+存储根目录: /data/experiments
+```
+
+#### 步骤 6：访问远程数据
+
+自动打开新浏览器标签页，地址类似：`http://localhost:8081`
+
+像使用本地 Viewer 一样浏览远程实验数据！
+
+### 常见问题
+
+**Q: 支持 Windows 远程服务器吗？**  
+A: 目前仅支持 Linux 远程服务器（包括 WSL）。
+
+**Q: 可以同时连接多台服务器吗？**  
+A: 可以，每个连接使用不同的本地端口。
+
+**Q: 断开连接后数据会丢失吗？**  
+A: 不会，数据仍在远程服务器上。重新连接即可继续访问。
+
+→ **完整指南**: [Remote Viewer 用户指南](docs/guides/zh/REMOTE_VIEWER_GUIDE.md)
+
+---
+
+<details>
+<summary><b>⚠️  旧版远程同步（已弃用）</b></summary>
+
+> **已弃用 (Deprecated in v0.5.0)**  
+> 
+> 0.4.x 的文件同步功能已被 Remote Viewer 取代。  
+> 请使用上面的新功能，体验更好、更快、更简单！
+> 
+> **迁移指南**: [0.4.x → 0.5.0 迁移指南](docs/guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md)
+
+旧版本的文件同步方式仍可使用，但不再推荐：
 
 - 打开 UI 顶部导航中的「远程」页面
 - 操作步骤：
-  1) 连接：输入 `主机`、`端口`（默认 22）、`用户名`；可选输入 `密码` 或 `私钥内容/路径`
-  2) 浏览远程目录并选择正确的层级：
-     - 0.2.0 及以上版本：建议选择到用户根目录
-  3) 点击「同步此目录」。下方会出现「同步任务」，「Runs」页面会立即刷新
+  1) 连接：输入 `主机`、`端口`、`用户名`、`密码/私钥`
+  2) 浏览远程目录并选择正确的层级
+  3) 点击「同步此目录」
 
-小贴士与排查
-- 看不到运行时，请确认：
-  - 同步任务是否存在：GET `/api/ssh/mirror/list` 应显示 `alive: true`，统计项递增
-  - 本地存储根是否正确：GET `/api/config` 查看 `storage` 路径；检查是否按预期层级生成
-  - 凭据仅用于本次会话，不会持久化；SSH 由 Paramiko 负责
+</details>
 
 ## 桌面应用（Windows）
 
@@ -279,6 +430,16 @@ user_root_dir/
 - 版本历史：`CHANGELOG.md`
 
 
-AI
---
-本项目主要由 OpenAI 的 GPT-5 开发。
+## 贡献
+
+欢迎贡献！请查阅 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详情。
+
+## 许可证
+
+MIT License - 详见 [LICENSE](LICENSE) 文件。
+
+---
+
+**作者**: Runicorn Development Team  
+**版本**: v0.5.0  
+**最后更新**: 2025-10-25

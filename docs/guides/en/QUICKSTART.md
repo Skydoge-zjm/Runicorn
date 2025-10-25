@@ -102,15 +102,51 @@ rn.finish()
 
 ---
 
-## 🔄 Remote Sync
+## 🌐 Remote Viewer (v0.5.0 New Feature)
 
-Train on remote server, view locally in real-time.
+Train on remote server, view locally in real-time - **No data sync needed**!
 
-**In Web UI**:
-1. Go to "Remote" page
-2. Enter SSH credentials
-3. Click "Configure Smart Mode"
-4. Experiments sync automatically!
+### 5-Minute Quick Start
+
+#### Step 1: Ensure Runicorn is Installed on Remote Server
+
+```bash
+# SSH login to remote server
+ssh user@gpu-server.com
+
+# Install Runicorn
+pip install runicorn
+```
+
+#### Step 2: Start Local Viewer
+
+```bash
+runicorn viewer
+```
+
+#### Step 3: Connect to Remote Server
+
+1. Click **"Remote"** menu in browser
+2. Fill in SSH connection info:
+   - Host: `gpu-server.com`
+   - User: `your-username`
+   - Auth: SSH key or password
+3. Click **"Connect to Server"**
+
+#### Step 4: Select Python Environment
+
+System auto-detects remote environments, select one with Runicorn installed.
+
+#### Step 5: Start Remote Viewer
+
+Click **"Start Remote Viewer"**, automatically opens new tab to access remote data!
+
+**Advantages**:
+- ✅ Real-time access, latency < 100ms
+- ✅ Zero local storage usage
+- ✅ Connection startup in seconds
+
+**Complete Guide**: [Remote Viewer User Guide](REMOTE_VIEWER_GUIDE.md)
 
 ---
 
@@ -129,8 +165,9 @@ Or in Web UI: Settings (⚙️) → Data Directory
 ## 📚 Learn More
 
 - **[Artifacts Guide](ARTIFACTS_GUIDE.md)** - Model version control
-- **[Remote Storage Guide](REMOTE_STORAGE_USER_GUIDE.md)** - Remote sync setup
+- **[Remote Viewer Guide](REMOTE_VIEWER_GUIDE.md)** - Real-time remote server access
 - **[Demo Examples](DEMO_EXAMPLES_GUIDE.md)** - Example code walkthrough
+- **[Migration Guide](MIGRATION_GUIDE_v0.4_to_v0.5.md)** - Upgrade from 0.4.x to 0.5.0
 
 ---
 

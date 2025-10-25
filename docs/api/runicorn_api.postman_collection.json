@@ -2,7 +2,7 @@
   "info": {
     "name": "Runicorn API",
     "description": "Complete API collection for Runicorn experiment tracking platform",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -19,6 +19,16 @@
     {
       "key": "artifact_name",
       "value": "resnet50-model",
+      "type": "string"
+    },
+    {
+      "key": "connection_id",
+      "value": "conn_1a2b3c4d",
+      "type": "string"
+    },
+    {
+      "key": "env_name",
+      "value": "pytorch-env",
       "type": "string"
     }
   ],
@@ -293,7 +303,7 @@
       ]
     },
     {
-      "name": "SSH/Remote API",
+      "name": "SSH/Remote API (Deprecated)",
       "item": [
         {
           "name": "Connect to Remote",
@@ -359,6 +369,168 @@
             },
             "url": "{{baseUrl}}/unified/disconnect"
           }
+        }
+      ]
+    },
+    {
+      "name": "Remote Viewer API",
+      "description": "VSCode Remote-style remote server access (v0.5.0)",
+      "item": [
+        {
+          "name": "Connection Management",
+          "item": [
+            {
+              "name": "Connect to Remote Server",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"host\": \"gpu-server.com\",\n  \"port\": 22,\n  \"username\": \"mluser\",\n  \"auth_method\": \"key\",\n  \"private_key_path\": \"~/.ssh/id_rsa\"\n}"
+                },
+                "url": "{{baseUrl}}/remote/connect",
+                "description": "Establish SSH connection to remote server"
+              }
+            },
+            {
+              "name": "List All Connections",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/connections",
+                "description": "Get list of all active remote connections"
+              }
+            },
+            {
+              "name": "Disconnect",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/remote/connections/{{connection_id}}?cleanup_viewer=true",
+                "description": "Disconnect from remote server and optionally cleanup viewer"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Environment Detection",
+          "item": [
+            {
+              "name": "List Python Environments",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/environments?connection_id={{connection_id}}&filter=runicorn_only",
+                "description": "List available Python environments on remote server"
+              }
+            },
+            {
+              "name": "Re-detect Environments",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"connection_id\": \"{{connection_id}}\",\n  \"force_refresh\": true\n}"
+                },
+                "url": "{{baseUrl}}/remote/environments/detect",
+                "description": "Force re-detection of Python environments"
+              }
+            },
+            {
+              "name": "Get Remote Config",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/config?connection_id={{connection_id}}&env_name={{env_name}}",
+                "description": "Get Runicorn configuration from remote environment"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remote Viewer Management",
+          "item": [
+            {
+              "name": "Start Remote Viewer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"connection_id\": \"{{connection_id}}\",\n  \"env_name\": \"{{env_name}}\",\n  \"auto_open\": true,\n  \"viewer_port\": 8081\n}"
+                },
+                "url": "{{baseUrl}}/remote/viewer/start",
+                "description": "Start Remote Viewer on remote server with SSH tunnel"
+              }
+            },
+            {
+              "name": "Stop Remote Viewer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"connection_id\": \"{{connection_id}}\",\n  \"cleanup\": true\n}"
+                },
+                "url": "{{baseUrl}}/remote/viewer/stop",
+                "description": "Stop running Remote Viewer and close SSH tunnel"
+              }
+            },
+            {
+              "name": "Get Viewer Status",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/viewer/status?connection_id={{connection_id}}",
+                "description": "Get current status of Remote Viewer"
+              }
+            },
+            {
+              "name": "Get Viewer Logs",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/viewer/logs?connection_id={{connection_id}}&lines=100",
+                "description": "Get last N lines of Remote Viewer logs"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health Checks",
+          "item": [
+            {
+              "name": "Connection Health Check",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/health?connection_id={{connection_id}}",
+                "description": "Check if SSH connection is healthy"
+              }
+            },
+            {
+              "name": "Ping Connection",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/ping?connection_id={{connection_id}}",
+                "description": "Test connection latency"
+              }
+            }
+          ]
         }
       ]
     },

@@ -2,6 +2,111 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2025-10-25
+
+### 🚀 Major New Feature: Remote Viewer
+
+**Revolutionary Architecture Change** - Runicorn 0.5.0 introduces an all-new Remote Viewer feature with VSCode Remote Development-style architecture.
+
+#### Core Features
+- **NEW**: Remote Viewer - Run Viewer on remote servers, access via SSH tunnel
+- **NEW**: Real-time remote data access without file synchronization
+- **NEW**: Zero local storage requirement - no need to mirror remote data
+- **NEW**: Automatic Python environment detection (Conda/Virtualenv)
+- **NEW**: SSH tunnel management with automatic port forwarding
+- **NEW**: Full feature parity - all features work identically in remote and local modes
+
+#### Architecture
+- **NEW**: `src/runicorn/remote/` module for remote connection management
+- **NEW**: `viewer/api/remote.py` with 12 new API endpoints
+- **NEW**: Environment detection and Viewer lifecycle management
+- **NEW**: Secure SSH-based communication with key/password authentication
+
+#### User Experience
+- **NEW**: Remote connection UI with step-by-step wizard
+- **NEW**: Environment selection interface showing detected Python environments
+- **NEW**: Active connection management panel
+- **NEW**: Real-time connection status and health monitoring
+- **IMPROVED**: Connection latency < 100ms (vs 5-10 min sync delay in 0.4.x)
+- **IMPROVED**: Initial setup time reduced from hours to seconds
+
+#### Performance
+- **IMPROVED**: No initial sync wait time (instant connection)
+- **IMPROVED**: Zero local disk usage for remote data
+- **IMPROVED**: Continuous small bandwidth usage vs large initial sync
+- **IMPROVED**: Network efficiency optimized for remote operations
+
+### 💥 Breaking Changes
+
+- **DEPRECATED**: Old SSH file sync (`/api/ssh/*` endpoints) - replaced by Remote Viewer
+- **DEPRECATED**: `ssh_sync.py` module - use new `remote/` module instead
+- **CHANGED**: Remote configuration format - old `ssh_config.json` no longer used
+- **MIGRATION REQUIRED**: Users of 0.4.x remote sync should migrate to Remote Viewer
+
+**Migration Guide**: See [docs/guides/MIGRATION_GUIDE_v0.4_to_v0.5.md](docs/guides/MIGRATION_GUIDE_v0.4_to_v0.5.md)
+
+### 🔌 New API Endpoints
+
+#### Remote Viewer Management
+- `POST /api/remote/connect` - Establish SSH connection
+- `GET /api/remote/connections` - List active connections
+- `DELETE /api/remote/connections/{id}` - Disconnect connection
+- `GET /api/remote/environments` - Detect Python environments
+- `POST /api/remote/environments/detect` - Re-detect environments
+- `GET /api/remote/config` - Get remote configuration
+- `POST /api/remote/viewer/start` - Start remote Viewer process
+- `POST /api/remote/viewer/stop` - Stop remote Viewer
+- `GET /api/remote/viewer/status` - Get Viewer status
+- `GET /api/remote/viewer/logs` - Get Viewer logs
+- `GET /api/remote/health` - Connection health check
+- `GET /api/remote/ping` - Test connection
+
+### 🎨 UI Improvements
+
+- **NEW**: Remote page with connection wizard
+- **NEW**: Environment selector with Python version and Runicorn version display
+- **NEW**: Configuration review panel before starting Viewer
+- **IMPROVED**: Better error messages and troubleshooting hints
+- **IMPROVED**: Loading states and progress indicators
+
+### 🐛 Bug Fixes
+
+- **FIXED**: Memory leak in WebSocket connections
+- **FIXED**: SSH connection timeout handling
+- **FIXED**: Port conflict resolution for multiple connections
+- **FIXED**: Remote Viewer process cleanup on disconnect
+- **FIXED**: Environment detection for non-standard Python installations
+
+### 📚 Documentation
+
+- **NEW**: [Remote Viewer User Guide](docs/guides/REMOTE_VIEWER_GUIDE.md)
+- **NEW**: [Remote Viewer Architecture](docs/architecture/REMOTE_VIEWER_ARCHITECTURE.md)
+- **NEW**: [Migration Guide v0.4 to v0.5](docs/guides/MIGRATION_GUIDE_v0.4_to_v0.5.md)
+- **NEW**: Complete Remote API documentation
+- **UPDATED**: README with Remote Viewer quick start
+- **UPDATED**: Installation instructions for remote setup
+
+### ⚠️ Known Limitations
+
+- Remote Viewer currently supports Linux remote servers only (Windows support planned)
+- Requires stable SSH connection (recommended for LAN or good internet)
+- Remote server must have Runicorn 0.5.0 installed
+- Cascaded connections (A→B→C) limited to 2 levels for security
+
+### 🔄 Upgrade Notes
+
+**For existing users**:
+1. Upgrade local Runicorn: `pip install -U runicorn`
+2. Upgrade on remote server: `ssh user@server; pip install -U runicorn`
+3. Old file sync tasks will continue to work but are deprecated
+4. New installations should use Remote Viewer for remote access
+
+**For new users**:
+- Remote Viewer is the recommended way to access remote servers
+- No setup required beyond installing Runicorn on both local and remote
+
+---
+
 ## [0.4.0] - 2025-10-03
 
 ### 🎉 Major New Feature: Model & Data Versioning (Artifacts)

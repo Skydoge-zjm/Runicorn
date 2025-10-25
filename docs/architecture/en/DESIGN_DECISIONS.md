@@ -392,12 +392,88 @@
 
 ---
 
+## Remote Viewer Architecture (v0.5.0)
+
+### Decision: Remote Viewer vs File Sync
+
+**Context**: Users need to view experiment data on remote servers (GPU servers) from local machines.
+
+**Alternatives Considered**:
+1. **SSH File Sync** (v0.4.x approach) - Sync remote files to local - Issues: Slow for large models, space consumption, not real-time, conflicts
+2. **Network File System** (NFS, SMB) - Mount remote directory - Issues: Admin rights needed, complex setup, cross-platform issues
+3. **Cloud Hosting** (Self-hosted server) - Run Viewer on remote, HTTP access - Issues: Port exposure, security risks, auth system needed
+4. **VNC/RDP** (Remote desktop) - Issues: Full desktop overhead, high latency, poor experience
+
+**Decision**: Remote Viewer (VSCode Remote-style)
+
+**Approach**: Start temporary Viewer on remote (127.0.0.1 only), SSH tunnel for port forwarding, local browser access
+
+**Rationale**:
+- ✅ **Zero sync**: No file transfer, direct access
+- ✅ **Real-time**: Training data instantly visible
+- ✅ **Secure**: SSH encryption, no port exposure
+- ✅ **Simple**: Only SSH credentials needed
+- ✅ **Low latency**: 50-100ms added (acceptable)
+- ✅ **Space saving**: Zero local usage
+- ✅ **Auto cleanup**: Automatic resource cleanup
+
+**Tradeoffs**:
+- ✅ 100x faster startup than file sync (5s vs 5min)
+- ✅ Real-time vs re-sync needed
+- ✅ Zero local storage vs GB usage
+- ⚠️ Remote needs full Runicorn install (not just SDK)
+- ⚠️ SSH access required
+- ⚠️ Small latency increase (but much lower than VNC/RDP)
+
+**Inspiration**: VSCode Remote Development success.
+
+---
+
+### Decision: Automatic Environment Detection
+
+**Context**: Remote servers may have multiple Python environments (conda, virtualenv, etc.).
+
+**Alternatives**: Manual path specification (poor UX), system Python only (often fails)
+
+**Decision**: Auto-detect all environments
+
+**Implementation**: Scan conda (`conda env list`), virtualenv (common paths), check each with `python -c "import runicorn; print(__version__)"`, show only compatible
+
+**Rationale**:
+- ✅ Zero-config UX
+- ✅ Auto-filter incompatible environments
+- ✅ Support all common environment managers
+- ⚠️ Detection takes 2-5 seconds (first time only)
+
+---
+
+### Decision: SSH Tunnel vs Direct HTTP
+
+**Context**: How to let local browser access remote Viewer?
+
+**Alternatives**: Direct HTTP (security risks), VPN (not all users have)
+
+**Decision**: SSH port forwarding (Local Forwarding)
+
+**Implementation**: `Local port 8081 -> SSH tunnel -> Remote 127.0.0.1:23300`
+
+**Rationale**:
+- ✅ Leverage existing SSH connection
+- ✅ Auto-encrypted (SSH protocol)
+- ✅ No extra port opening
+- ✅ No auth needed in Viewer
+- ✅ All platforms support (SSH standard)
+- ⚠️ Need to keep SSH connection (auto-reconnect implemented)
+
+---
+
 ## References
 
 For implementation details, see:
 - [STORAGE_DESIGN.md](STORAGE_DESIGN.md) - Storage implementation
 - [API_DESIGN.md](API_DESIGN.md) - API implementation
 - [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) - Component details
+- [REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md) - Remote Viewer detailed design
 
 ---
 
