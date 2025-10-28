@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { SettingOutlined, CloudSyncOutlined, ExperimentOutlined, DatabaseOutlined, CloudServerOutlined } from '@ant-design/icons'
+import { SettingOutlined, CloudSyncOutlined, ExperimentOutlined, DatabaseOutlined, CloudServerOutlined, DashboardOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
 import ExperimentPage from './pages/ExperimentPage'
 import ArtifactsPage from './pages/ArtifactsPage'
 import ArtifactDetailPage from './pages/ArtifactDetailPage'
 import RemoteViewerPage from './pages/RemoteViewerPage'
+import PerformanceMonitorPage from './pages/PerformanceMonitorPage'
+import { PageTransition } from './components/animations/PageTransition'
 import { health, getConfig } from './api'
 import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
 import { SettingsProvider } from './contexts/SettingsContext'
@@ -17,6 +19,7 @@ const { Header, Content, Footer } = Layout
 export default function App() {
   const location = useLocation()
   const getSelectedKey = () => {
+    if (location.pathname.startsWith('/performance')) return 'performance'
     if (location.pathname.startsWith('/remote')) return 'remote'
     if (location.pathname.startsWith('/artifacts')) return 'artifacts'
     if (location.pathname.startsWith('/runs/')) return 'experiments'  // Detail page also under experiments
@@ -51,6 +54,12 @@ export default function App() {
     showGridLines: true,
     enableChartAnimations: true,
     maxDataPoints: 1000,
+    
+    // Performance Monitor Tab Settings
+    showCpuTab: true,
+    showMemoryDiskTab: true,
+    showGpuMetricsTab: true,
+    showGpuTelemetryTab: true,
   }
   const [settings, setSettings] = useState<UiSettings>(() => {
     try {
@@ -201,6 +210,7 @@ export default function App() {
               items={[
                 { key: 'experiments', icon: <ExperimentOutlined />, label: <Link to="/">{t('menu.experiments')}</Link> },
                 { key: 'artifacts', icon: <DatabaseOutlined />, label: <Link to="/artifacts">{t('menu.artifacts')}</Link> },
+                { key: 'performance', icon: <DashboardOutlined />, label: <Link to="/performance">{t('menu.performance')}</Link> },
                 { key: 'remote', icon: <CloudServerOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
               ]}
               style={{ flex: 1, minWidth: 0 }}
@@ -221,13 +231,16 @@ export default function App() {
           </Header>
           <Content style={{ padding: '24px' }}>
             <div style={{ ...wrapperStyle, padding: 24, minHeight: 360 }}>
-              <Routes>
-                <Route path="/" element={<ExperimentPage />} />
-                <Route path="/runs/:id" element={<RunDetailPage />} />
-                <Route path="/artifacts" element={<ArtifactsPage />} />
-                <Route path="/artifacts/:name" element={<ArtifactDetailPage />} />
-                <Route path="/remote" element={<RemoteViewerPage />} />
-              </Routes>
+              <PageTransition>
+                <Routes>
+                  <Route path="/" element={<ExperimentPage />} />
+                  <Route path="/runs/:id" element={<RunDetailPage />} />
+                  <Route path="/artifacts" element={<ArtifactsPage />} />
+                  <Route path="/artifacts/:name" element={<ArtifactDetailPage />} />
+                  <Route path="/performance" element={<PerformanceMonitorPage />} />
+                  <Route path="/remote" element={<RemoteViewerPage />} />
+                </Routes>
+              </PageTransition>
             </div>
           </Content>
           <Footer style={{ textAlign: 'center' }}> {new Date().getFullYear()} {t('app.title')}</Footer>

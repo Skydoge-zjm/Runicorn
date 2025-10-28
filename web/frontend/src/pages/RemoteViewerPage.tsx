@@ -34,6 +34,8 @@ import SavedConnectionsList from '../components/remote/SavedConnectionsList'
 import RemoteConfigCard from '../components/remote/RemoteConfigCard'
 import CondaEnvSelector from '../components/remote/CondaEnvSelector'
 import DismissibleAlert from '../components/DismissibleAlert'
+import FancyStatCard from '../components/fancy/FancyStatCard'
+import { colorConfig } from '../config/animation_config'
 
 import { useRemoteSessions } from '../hooks/useRemoteSessions'
 import { useSavedConnections } from '../hooks/useSavedConnections'
@@ -520,31 +522,28 @@ export default function RemoteViewerPage() {
       {/* Statistics */}
       <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={8}>
-          <Card>
-            <Statistic
-              title={t('remote.stats.activeSessions')}
-              value={activeSessions.length}
-              prefix={<ThunderboltOutlined />}
-            />
-          </Card>
+          <FancyStatCard
+            title={t('remote.stats.activeSessions')}
+            value={activeSessions.length}
+            icon={<ThunderboltOutlined />}
+            gradientColors={colorConfig.gradients.primary}
+          />
         </Col>
         <Col span={8}>
-          <Card>
-            <Statistic
-              title={t('remote.stats.savedConfigs')}
-              value={connections.length}
-              prefix={<SaveOutlined />}
-            />
-          </Card>
+          <FancyStatCard
+            title={t('remote.stats.savedConfigs')}
+            value={connections.length}
+            icon={<SaveOutlined />}
+            gradientColors={colorConfig.gradients.info}
+          />
         </Col>
         <Col span={8}>
-          <Card>
-            <Statistic
-              title={t('remote.stats.connectedServers')}
-              value={connectedServers}
-              prefix={<CloudServerOutlined />}
-            />
-          </Card>
+          <FancyStatCard
+            title={t('remote.stats.connectedServers')}
+            value={connectedServers}
+            icon={<CloudServerOutlined />}
+            gradientColors={colorConfig.gradients.success}
+          />
         </Col>
       </Row>
 

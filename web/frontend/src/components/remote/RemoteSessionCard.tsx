@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import type { RemoteSession } from '../../types/remote'
+import ServerStatusLight from '../fancy/ServerStatusLight'
 
 dayjs.extend(relativeTime)
 
@@ -96,9 +97,13 @@ export default function RemoteSessionCard({
         <Space>
           <CloudServerOutlined />
           <Text strong>{session.host}</Text>
-          <Badge 
-            status={statusColorMap[session.status]} 
-            text={t(`remote.status.${session.status}`)} 
+          <ServerStatusLight 
+            status={
+              session.status === 'running' ? 'online' : 
+              session.status === 'connecting' || session.status === 'stopping' ? 'connecting' : 
+              'offline'
+            } 
+            label={t(`remote.status.${session.status}`)}
           />
         </Space>
       }

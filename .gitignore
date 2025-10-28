@@ -88,3 +88,6 @@ tests/client/config.json  # SSH credentials, use config.json.example as template
 
 # --- Count ---
 count.ps1
+
+# --- Tests ---
+tests/temp/

@@ -1,18 +1,26 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Table, Button, Card, Space, Input, Select, Tag, Statistic, Row, Col, message, Modal, Tooltip, Empty, Dropdown, Badge, Checkbox, notification } from 'antd'
-import { SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, LineChartOutlined, EyeOutlined, DownOutlined, FileExcelOutlined, FileTextOutlined, FilterOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, FilePdfOutlined, HeartOutlined, UndoOutlined } from '@ant-design/icons'
+import { SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, LineChartOutlined, EyeOutlined, DownOutlined, FileExcelOutlined, FileTextOutlined, FilterOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, FilePdfOutlined, HeartOutlined, UndoOutlined, ExperimentOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { useSettings } from '../contexts/SettingsContext'
 import { checkAllStatus, softDeleteRuns } from '../api'
 import RecycleBin from '../components/RecycleBin'
 import { ExperimentListSkeleton } from '../components/LoadingSkeleton'
 import ResizableTitle from '../components/ResizableTitle'
 import { useColumnWidths } from '../hooks/useColumnWidths'
+import FancyStatCard from '../components/fancy/FancyStatCard'
+import FancyEmpty from '../components/fancy/FancyEmpty'
+import AnimatedStatusBadge from '../components/fancy/AnimatedStatusBadge'
+import { useSuccessConfetti } from '../hooks/useSuccessConfetti'
+import { StaggerContainer, StaggerItem } from '../components/animations/PageTransition'
+import { experimentsPageConfig } from '../config/animation_config'
 import logger from '../utils/logger'
 import type { ColumnsType, TableProps } from 'antd/es/table'
 import type { SorterResult } from 'antd/es/table/interface'
 import '../styles/resizable-table.css'
+import '../styles/enhanced-table.css'
 
 // Define ResizeCallbackData type locally
 interface ResizeCallbackData {
@@ -98,6 +106,9 @@ const ExperimentPage: React.FC = () => {
   )
   
   const [recycleBinOpen, setRecycleBinOpen] = useState(false)
+  
+  // Success confetti effect
+  const { trigger: triggerConfetti, ConfettiComponent } = useSuccessConfetti()
 
   // Persist user preferences
   useEffect(() => {
@@ -237,6 +248,7 @@ const ExperimentPage: React.FC = () => {
           setSelectedRowKeys([])
           
           if (result.deleted_count > 0) {
+            triggerConfetti()  // 🎉 Celebration effect!
             message.success(t('experiments.soft_delete_success', { count: result.deleted_count }) || `Moved ${result.deleted_count} runs to recycle bin`)
             await fetchRuns(false) // Refresh list without loading indicator
           } else {
@@ -482,32 +494,7 @@ const ExperimentPage: React.FC = () => {
         onResize: handleResize('status'),
       }),
       render: (status, record) => {
-        let icon = null
-        let color = 'default'
-        
-        switch (status) {
-          case 'running':
-            icon = <SyncOutlined spin />
-            color = 'processing'
-            break
-          case 'finished':
-            icon = <CheckCircleOutlined />
-            color = 'success'
-            break
-          case 'failed':
-            icon = <CloseCircleOutlined />
-            color = 'error'
-            break
-          default:
-            icon = <ClockCircleOutlined />
-            color = 'warning'
-        }
-        
-        return (
-          <Tag icon={icon} color={color}>
-            {status}
-          </Tag>
-        )
+        return <AnimatedStatusBadge status={status} />
       },
     },
     {
@@ -620,51 +607,120 @@ const ExperimentPage: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <h2>{t('menu.experiments')}</h2>
+    <>
+      {ConfettiComponent}
       
-      {/* Statistics Cards */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Card>
-            <Statistic 
-              title={t('experiments.total_runs') || 'Total Runs'} 
-              value={stats.total} 
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic 
-              title={t('experiments.running') || 'Running'} 
-              value={stats.running} 
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic 
-              title={t('experiments.finished') || 'Finished'} 
-              value={stats.finished} 
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card>
-            <Statistic 
-              title={t('experiments.failed') || 'Failed'} 
-              value={stats.failed} 
-              valueStyle={{ color: '#ff4d4f' }}
-            />
-          </Card>
-        </Col>
-      </Row>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        style={{ padding: 24 }}
+      >
+        {/* Fancy page title */}
+        <motion.div
+          initial={experimentsPageConfig.title.initial}
+          animate={experimentsPageConfig.title.animate}
+          transition={experimentsPageConfig.title.transition}
+          style={{ marginBottom: 36 }}
+        >
+          <h1 style={{
+            fontSize: experimentsPageConfig.title.fontSize,
+            fontWeight: experimentsPageConfig.title.fontWeight,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            marginBottom: experimentsPageConfig.title.marginBottom,
+            lineHeight: experimentsPageConfig.title.lineHeight
+          }}>
+            {t('menu.experiments')}
+          </h1>
+          <p style={{
+            color: experimentsPageConfig.subtitle.color,
+            fontSize: experimentsPageConfig.subtitle.fontSize,
+            margin: 0,
+            fontWeight: experimentsPageConfig.subtitle.fontWeight
+          }}>
+            {t('experiments.subtitle')}
+          </p>
+        </motion.div>
+        
+        {/* Fancy Statistics Cards with stagger animation */}
+        <StaggerContainer>
+          <Row gutter={[16, 16]} style={{ marginBottom: 32 }}>
+            <Col xs={24} sm={12} lg={6}>
+              <StaggerItem>
+                <FancyStatCard
+                  title={t('experiments.total_runs') || 'Total Runs'}
+                  value={stats.total}
+                  icon={<ExperimentOutlined />}
+                  gradientColors={experimentsPageConfig.statCards.total.gradientColors}
+                  delay={experimentsPageConfig.statCards.total.delay}
+                  pulse={experimentsPageConfig.statCards.total.pulse}
+                />
+              </StaggerItem>
+            </Col>
+            
+            <Col xs={24} sm={12} lg={6}>
+              <StaggerItem>
+                <FancyStatCard
+                  title={t('experiments.running') || 'Running'}
+                  value={stats.running}
+                  icon={<ThunderboltOutlined />}
+                  gradientColors={experimentsPageConfig.statCards.running.gradientColors}
+                  delay={experimentsPageConfig.statCards.running.delay}
+                  pulse={stats.running > 0}  // Dynamic based on actual running count
+                />
+              </StaggerItem>
+            </Col>
+            
+            <Col xs={24} sm={12} lg={6}>
+              <StaggerItem>
+                <FancyStatCard
+                  title={t('experiments.finished') || 'Finished'}
+                  value={stats.finished}
+                  icon={<CheckCircleOutlined />}
+                  gradientColors={experimentsPageConfig.statCards.finished.gradientColors}
+                  delay={experimentsPageConfig.statCards.finished.delay}
+                  pulse={experimentsPageConfig.statCards.finished.pulse}
+                />
+              </StaggerItem>
+            </Col>
+            
+            <Col xs={24} sm={12} lg={6}>
+              <StaggerItem>
+                <FancyStatCard
+                  title={t('experiments.failed') || 'Failed'}
+                  value={stats.failed}
+                  icon={<CloseCircleOutlined />}
+                  gradientColors={experimentsPageConfig.statCards.failed.gradientColors}
+                  delay={experimentsPageConfig.statCards.failed.delay}
+                  pulse={experimentsPageConfig.statCards.failed.pulse}
+                />
+              </StaggerItem>
+            </Col>
+          </Row>
+        </StaggerContainer>
 
       {/* Filters and Actions */}
-      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
-        <Space>
+      <motion.div
+        initial={experimentsPageConfig.filterCard.animation.initial}
+        animate={experimentsPageConfig.filterCard.animation.animate}
+        transition={experimentsPageConfig.filterCard.animation.transition}
+      >
+        <Card
+          bordered={false}
+          style={{
+            borderRadius: experimentsPageConfig.filterCard.borderRadius,
+            marginBottom: 20,
+            background: experimentsPageConfig.filterCard.background,
+            backdropFilter: experimentsPageConfig.filterCard.backdropFilter,
+            border: experimentsPageConfig.filterCard.border,
+            boxShadow: experimentsPageConfig.filterCard.boxShadow
+          }}
+          bodyStyle={{ padding: experimentsPageConfig.filterCard.padding }}
+        >
+          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+            <Space>
           <Input
             placeholder={t('experiments.search_placeholder') || 'Search runs...'}
             prefix={<SearchOutlined />}
@@ -749,11 +805,28 @@ const ExperimentPage: React.FC = () => {
               </Button>
             </>
           )}
-        </Space>
-      </Space>
+            </Space>
+          </Space>
+        </Card>
+      </motion.div>
 
-      {/* Enhanced Runs Table with better UX and resizable columns */}
-      <Table
+      {/* Enhanced Runs Table with fancy effects */}
+      <motion.div
+        initial={experimentsPageConfig.tableContainer.animation.initial}
+        animate={experimentsPageConfig.tableContainer.animation.animate}
+        transition={experimentsPageConfig.tableContainer.animation.transition}
+      >
+        <Card
+          bordered={false}
+          style={{
+            borderRadius: experimentsPageConfig.tableContainer.borderRadius,
+            overflow: 'hidden',
+            boxShadow: experimentsPageConfig.tableContainer.boxShadow
+          }}
+          bodyStyle={{ padding: 0 }}
+        >
+          <Table
+            className="enhanced-table"
         components={{
           header: {
             cell: ResizableTitle,
@@ -790,24 +863,25 @@ const ExperimentPage: React.FC = () => {
         }}
         locale={{
           emptyText: (
-            <Empty
-              description={t('experiments.no_runs') || 'No experiments found'}
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-            >
-              <Button type="primary" onClick={() => fetchRuns(true)}>
-                {t('runs.refresh')}
-              </Button>
-            </Empty>
+            <FancyEmpty
+              title={t('experiments.no_runs') || 'No experiments yet'}
+              description={t('experiments.no_runs_desc') || 'Start tracking your ML experiments with Runicorn SDK. Check out the quickstart guide to begin.'}
+              actionText={t('experiments.view_quickstart') || 'View Quickstart Guide'}
+              onAction={() => window.open('https://github.com/runicorn/runicorn#quick-start', '_blank')}
+            />
           ),
         }}
       />
+        </Card>
+      </motion.div>
       
-      <RecycleBin
-        open={recycleBinOpen}
-        onClose={() => setRecycleBinOpen(false)}
-        onRestore={() => fetchRuns(false)}
-      />
-    </div>
+        <RecycleBin
+          open={recycleBinOpen}
+          onClose={() => setRecycleBinOpen(false)}
+          onRestore={() => fetchRuns(false)}
+        />
+      </motion.div>
+    </>
   )
 }
 

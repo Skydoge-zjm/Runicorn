@@ -166,6 +166,13 @@ export default {
   'remote.msg.start_failed': '启动失败',
   'remote.msg.mirror_configured': '镜像模式配置成功',
   
+  // Performance Monitor Tab Settings
+  'settings.performance.tabs_title': '性能监控模块',
+  'settings.performance.show_cpu_tab': '显示 CPU 模块',
+  'settings.performance.show_memory_disk_tab': '显示内存与磁盘模块',
+  'settings.performance.show_gpu_metrics_tab': '显示 GPU 指标模块',
+  'settings.performance.show_gpu_telemetry_tab': '显示 GPU 曲线模块',
+  
   // Dismissed Alerts
   'settings.dismissedAlerts': '已关闭的提示',
   'settings.noDismissedAlerts': '暂无已关闭的提示',

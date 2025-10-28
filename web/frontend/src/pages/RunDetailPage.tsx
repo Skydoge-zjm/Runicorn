@@ -1,17 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Card, Descriptions, Space, Alert, Popover, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge } from 'antd'
+import { Card, Descriptions, Space, Alert, Popover, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge, Row, Col, Typography } from 'antd'
 import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined, ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, ReloadOutlined, FullscreenOutlined, RocketOutlined } from '@ant-design/icons'
+import { motion } from 'framer-motion'
 import { getRunDetail, getStepMetrics, getGpuTelemetry, listRunsByName } from '../api'
 import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
-import GpuTelemetry from '../components/GpuTelemetry'
 import MultiRunMetricChart from '../components/MultiRunMetricChart'
 import RunArtifacts from '../components/RunArtifacts'
 import { RunDetailSkeleton } from '../components/LoadingSkeleton'
+import FancyMetricCard from '../components/fancy/FancyMetricCard'
+import CircularProgress from '../components/fancy/CircularProgress'
+import AnimatedStatusBadge from '../components/fancy/AnimatedStatusBadge'
+import GpuMetricsCard from '../components/GpuMetricsCard'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
 import logger from '../utils/logger'
+import designTokens from '../styles/designTokens'
+
+const { Text } = Typography
 
 export default function RunDetailPage() {
   const { id = '' } = useParams()
@@ -364,37 +371,11 @@ export default function RunDetailPage() {
             ]}
           />
         </Spin>
-        <div style={{ height: 12 }} />
-        <div style={{ marginBottom: 8 }}>
-          <Space size="large" wrap>
-            <span><DashboardOutlined style={{ marginRight: 6 }} />{t('gpu.util')} {gpu?.util ?? '-'}% {trendIcon('util')}</span>
-            <span><DatabaseOutlined style={{ marginRight: 6 }} />{t('gpu.mem')} {gpu?.mem ?? '-'}% {trendIcon('mem')}</span>
-            <span><ThunderboltOutlined style={{ marginRight: 6 }} />{t('gpu.power')} {gpu?.power ?? '-'} W {trendIcon('power')}</span>
-            <span><FireOutlined style={{ marginRight: 6 }} />{t('gpu.temp')} {gpu?.temp ?? '-'}°C {trendIcon('temp')}</span>
-            {gpu?.gpus && (
-              <Popover
-                placement="bottom"
-                content={(
-                  <div style={{ minWidth: 220 }}>
-                    {gpu.gpus.map((x: any, i: number) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>{t('gpu.tooltip.item', { index: x.index, name: x.name })}</span>
-                        <span style={{ color: '#555' }}>{t('gpu.tooltip.metrics', {
-                          util: Math.round(x.util_gpu ?? 0),
-                          mem: Math.round(x.mem_used_pct ?? 0),
-                          power: Math.round(x.power_w ?? 0),
-                          temp: Math.round(x.temp_c ?? 0),
-                        })}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              >
-                <Tag color="blue" style={{ cursor: 'pointer' }}>{t('gpu.detail', { count: gpu.gpus.length })}</Tag>
-              </Popover>
-            )}
-          </Space>
-        </div>
+        
+        {/* GPU Metrics Card - only show when run is running */}
+        {detail?.status === 'running' && gpu?.gpus && gpu.gpus.length > 0 && (
+          <GpuMetricsCard gpus={gpu.gpus} loading={detailLoading} />
+        )}
       </Card>
 
       <Card 
@@ -606,24 +587,6 @@ export default function RunDetailPage() {
             ))}
           </div>
         )}
-      </Card>
-
-      <Card 
-        title={
-          <Space>
-            <span>{t('gpu.title')}</span>
-            {gpu && gpu.gpus && (
-              <Badge count={gpu.gpus.length} showZero style={{ backgroundColor: '#52c41a' }} />
-            )}
-          </Space>
-        }
-        extra={
-          <Tooltip title={t('polling.every2s')}>
-            <Tag color="processing">Auto-polling</Tag>
-          </Tooltip>
-        }
-      >
-        <GpuTelemetry />
       </Card>
 
       {/* 关联的模型与数据集 - 只在有artifacts时显示 */}

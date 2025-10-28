@@ -44,6 +44,13 @@ runicorn viewer  # Start local Viewer
 # Open browser → Click "Remote" → Enter server info → Connect and use!
 ```
 
+**UI & Quality Improvements**:
+- 🎨 **Modern UI Animations** - Framer Motion powered components with configurable animations
+- 🖼️ **Brand Identity** - Custom favicon with unicorn logo for better recognition
+- 🌐 **Localization Polish** - Refined Chinese translations for better understanding
+- 🐧 **WSL Compatibility** - Enhanced CPU monitoring for WSL/WSL2 environments
+- 📝 **Persistent Logging** - Rotating log files (~/.runicorn/logs/viewer.log) for diagnostics
+
 → [Remote Viewer Complete Guide](docs/guides/en/REMOTE_VIEWER_GUIDE.md)
 
 ---
@@ -87,7 +94,7 @@ runicorn viewer  # Start local Viewer
     <td width="50%"><img src="docs/assets/p2.png" alt="Experiment detail" width="100%" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/assets/p3.png" alt="Artifacts management" width="100%" /></td>
+    <td width="50%"><img src="docs/assets/p3.png" alt="Performance monitor" width="100%" /></td>
     <td width="50%"><img src="docs/assets/p4.png" alt="Remote connection" width="100%" /></td>
   </tr>
 </table>
@@ -410,8 +417,12 @@ License
 -------
 MIT License - see [LICENSE](LICENSE) file.
 
+AI Use
+-------
+The project is mainly developed by Claude models.
+
 ---
 
 **Author**: Runicorn Development Team  
 **Version**: v0.5.0  
-**Last Updated**: 2025-10-25
+**Last Updated**: 2025-10-28

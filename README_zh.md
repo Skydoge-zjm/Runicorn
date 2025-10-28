@@ -44,6 +44,13 @@ runicorn viewer  # 启动本地 Viewer
 # 打开浏览器 → 点击 "Remote" → 输入服务器信息 → 连接即用！
 ```
 
+**界面与质量改进**：
+- 🎨 **现代化UI动画** - Framer Motion驱动的组件，配置化动画系统
+- 🖼️ **品牌标识** - 独角兽图标favicon，提升品牌识别度
+- 🌐 **本地化优化** - 精确中文翻译，术语更易理解
+- 🐧 **WSL兼容性** - 增强WSL/WSL2环境下的CPU监控
+- 📝 **持久化日志** - 滚动日志文件（~/.runicorn/logs/viewer.log）便于诊断
+
 → [Remote Viewer 完整指南](docs/guides/zh/REMOTE_VIEWER_GUIDE.md)
 
 ---
@@ -86,7 +93,7 @@ runicorn viewer  # 启动本地 Viewer
     <td width="50%"><img src="docs/assets/p2.png" alt="实验详情页面" width="100%" /></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/assets/p3.png" alt="Artifacts管理" width="100%" /></td>
+    <td width="50%"><img src="docs/assets/p3.png" alt="设备监控" width="100%" /></td>
     <td width="50%"><img src="docs/assets/p4.png" alt="远程连接" width="100%" /></td>
   </tr>
 </table>
@@ -438,8 +445,12 @@ user_root_dir/
 
 MIT License - 详见 [LICENSE](LICENSE) 文件。
 
+AI 
+-------
+该项目主要借助 Claude 模型进行开发。
+
 ---
 
 **作者**: Runicorn Development Team  
 **版本**: v0.5.0  
-**最后更新**: 2025-10-25
+**最后更新**: 2025-10-28

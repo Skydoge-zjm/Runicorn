@@ -1,0 +1,139 @@
+/**
+ * Enhanced Table Styles
+ * 
+ * Adds hover glow effects and smooth transitions to tables
+ */
+
+.enhanced-table .ant-table {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Table header styling */
+.enhanced-table .ant-table-thead > tr > th {
+  background: linear-gradient(180deg, #fafafa 0%, #f5f5f5 100%);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  color: #595959;
+  border-bottom: 2px solid #e8e8e8;
+  padding: 16px;
+}
+
+/* Dark mode header */
+.enhanced-table.dark-mode .ant-table-thead > tr > th {
+  background: linear-gradient(180deg, #1f1f1f 0%, #141414 100%);
+  color: rgba(255, 255, 255, 0.85);
+  border-bottom: 2px solid #303030;
+}
+
+/* Table row base style */
+.enhanced-table .ant-table-tbody > tr {
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  position: relative;
+}
+
+/* Hover effect - Glow */
+.enhanced-table .ant-table-tbody > tr:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(22, 119, 255, 0.03),
+    rgba(22, 119, 255, 0.08),
+    rgba(22, 119, 255, 0.03)
+  ) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(22, 119, 255, 0.15),
+    0 4px 12px rgba(22, 119, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.enhanced-table .ant-table-tbody > tr:active {
+  transform: translateY(0);
+}
+
+/* Selected row style */
+.enhanced-table .ant-table-tbody > tr.ant-table-row-selected {
+  background: rgba(22, 119, 255, 0.06) !important;
+}
+
+.enhanced-table .ant-table-tbody > tr.ant-table-row-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #1677ff, #4096ff);
+  box-shadow: 0 0 8px rgba(22, 119, 255, 0.5);
+}
+
+/* Table cell styling */
+.enhanced-table .ant-table-tbody > tr > td {
+  padding: 16px;
+  transition: all 0.3s ease;
+}
+
+/* First column (usually checkbox) styling */
+.enhanced-table .ant-table-tbody > tr > td:first-child {
+  padding-left: 20px;
+}
+
+/* Loading overlay with blur */
+.enhanced-table .ant-spin-container {
+  transition: filter 0.3s ease;
+}
+
+.enhanced-table .ant-spin-blur {
+  filter: blur(2px);
+  opacity: 0.7;
+}
+
+/* Pagination styling */
+.enhanced-table .ant-pagination {
+  margin: 24px 0;
+}
+
+.enhanced-table .ant-pagination-item {
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.enhanced-table .ant-pagination-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.enhanced-table .ant-pagination-item-active {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-color: transparent;
+}
+
+.enhanced-table .ant-pagination-item-active a {
+  color: #fff;
+}
+
+/* Smooth scrollbar */
+.enhanced-table .ant-table-body {
+  scrollbar-width: thin;
+  scrollbar-color: #d9d9d9 transparent;
+}
+
+.enhanced-table .ant-table-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.enhanced-table .ant-table-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.enhanced-table .ant-table-body::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 4px;
+}
+
+.enhanced-table .ant-table-body::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+

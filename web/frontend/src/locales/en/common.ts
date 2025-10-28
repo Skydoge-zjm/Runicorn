@@ -3,6 +3,8 @@ export default {
   'menu.runs': 'Runs',
   'menu.experiments': 'Experiments',
   'menu.comparison': 'Comparison',
+  'menu.artifacts': 'Artifacts',
+  'menu.performance': 'Performance Monitor',
   'menu.remote': 'Remote',
   'tag.api_ok': 'API OK',
   'tag.api_loading': 'API…',

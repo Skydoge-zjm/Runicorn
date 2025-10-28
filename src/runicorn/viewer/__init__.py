@@ -29,6 +29,7 @@ from .api import (
     gpu_router,
     import_router,
     artifacts_router,
+    system_router,
 )
 
 # Import experiment-artifacts integration router
@@ -160,6 +161,7 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     app.include_router(export_router, prefix="/api", tags=["export"])
     app.include_router(projects_router, prefix="/api", tags=["projects"])
     app.include_router(gpu_router, prefix="/api", tags=["gpu"])
+    app.include_router(system_router, prefix="/api", tags=["system"])
     app.include_router(import_router, prefix="/api", tags=["import"])
     
     # Register artifacts router
