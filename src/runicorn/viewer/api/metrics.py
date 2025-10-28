@@ -15,7 +15,7 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 import aiofiles
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
-from ..services.storage import find_run_dir_by_id
+from ..services.storage import find_run_dir_by_id, get_storage_root
 from ..utils.cache import get_metrics_cache
 from .storage_utils import get_storage_root
 

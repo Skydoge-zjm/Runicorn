@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runicorn"
-version = "0.4.2a"
+version = "0.5.0"
 description = "Local experiment tracking with model versioning - self-hosted W&B alternative with Artifacts"
 readme = "README.md"
 authors = [{ name = "Runicorn Authors" }]
@@ -37,7 +37,8 @@ dependencies = [
   "filelock>=3.12",
   "paramiko>=3.3,<4",
   "psutil>=5.8.0",
-  "httpx"
+  "httpx",
+  "cryptography>=41.0.0",
 ]
 
 [project.optional-dependencies]

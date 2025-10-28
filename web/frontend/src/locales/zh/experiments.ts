@@ -1,4 +1,6 @@
 export default {
+  'experiments.title': '实验管理',
+  'experiments.subtitle': '追踪、对比和分析您的实验指标与日志',
   'experiments.total_runs': '总运行数',
   'experiments.running': '运行中',
   'experiments.finished': '已完成',
@@ -92,6 +94,42 @@ export default {
   'gpu.tooltip.item': 'GPU{{index}} {{name}}',
   'gpu.tooltip.metrics': '{{util}}% · {{mem}}% · {{power}}W · {{temp}}°C',
   'polling.every2s': '每 2 秒轮询',
+  
+  // GPU Monitor Page
+  'gpu.monitor_title': 'GPU 监控',
+  'gpu.monitor_desc': '实时 GPU 性能指标与曲线数据',
+  'gpu.telemetry_charts': 'GPU 曲线图表',
+  'gpu.history_2min': '最近 2 分钟',
+  'gpu.no_nvidia_smi': '未找到 nvidia-smi',
+  'gpu.polling_every_2s': '每 2 秒自动轮询',
+  
+  // System Monitoring
+  'system.title': '系统指标',
+  'system.cpu': 'CPU',
+  'system.memory': '内存',
+  'system.disk': '磁盘',
+  'system.cpu_cores': '核心',
+  'system.logical': '逻辑',
+  'system.frequency': '频率',
+  'system.available': '可用',
+  'system.swap': '交换空间',
+  'system.free': '空闲',
+  'system.used_percent': '已用',
+  'system.cpu_overall': 'CPU 总体使用率',
+  'system.cpu_per_core': '各核心使用率',
+  'system.freq_current': '当前频率',
+  'system.freq_min': '最低频率',
+  'system.freq_max': '最高频率',
+  
+  // Performance Monitor Page
+  'performance.title': '性能监控',
+  'performance.desc': '实时系统性能监控（CPU、内存、磁盘、GPU）',
+  'performance.polling_hint': '每 2 秒自动轮询',
+  'performance.tab_cpu': 'CPU',
+  'performance.tab_memory_disk': '内存与磁盘',
+  'performance.tab_gpu_metrics': 'GPU 指标',
+  'performance.tab_gpu_telemetry': 'GPU 曲线',
+  'performance.no_tabs': '没有启用监控模块。请在设置中启用。',
   
   'compare.title': '对比运行（同一实验）',
   'compare.select.runs': '运行：',

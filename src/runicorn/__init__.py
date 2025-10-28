@@ -1,17 +1,22 @@
 from __future__ import annotations
 
-from .sdk import Run, init, log, log_text, log_image, summary, finish, get_active_run, set_primary_metric
+from .sdk import Run, init
+
+# Version information
+try:
+    from pathlib import Path
+    _version_file = Path(__file__).parent.parent.parent / "VERSION.txt"
+    if _version_file.exists():
+        __version__ = _version_file.read_text().strip()
+    else:
+        __version__ = "0.5.0.dev0"
+except Exception:
+    __version__ = "0.5.0.dev0"
 
 __all__ = [
     "Run",
     "init",
-    "log",
-    "log_text",
-    "log_image",
-    "summary",
-    "finish",
-    "get_active_run",
-    "set_primary_metric",
+    "__version__",
 ]
 
 # Optional artifacts import

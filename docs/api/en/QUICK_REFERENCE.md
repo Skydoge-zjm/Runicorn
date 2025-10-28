@@ -4,7 +4,7 @@
 
 # Runicorn API Quick Reference
 
-**Version**: v0.4.0  
+**Version**: v0.5.0  
 **Base URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -80,19 +80,28 @@ POST /api/config/user_root_dir
 Body: {"path": "E:\\RunicornData"}
 ```
 
-### Remote Sync
+### Remote Viewer API 🆕
 
 ```bash
-# Connect to SSH
-POST /api/unified/connect
-Body: {"host": "192.168.1.100", "username": "user", "password": "secret"}
+# Connect to remote server
+POST /api/remote/connect
+Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
 
-# Configure smart sync
-POST /api/unified/configure_mode
-Body: {"mode": "smart", "remote_root": "/data/runicorn"}
+# List Python environments
+GET /api/remote/environments?connection_id=conn_1a2b3c4d
 
-# Check status
-GET /api/unified/status
+# Start Remote Viewer
+POST /api/remote/viewer/start
+Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
+
+# Get Viewer status
+GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
+
+# Health check
+GET /api/remote/health?connection_id=conn_1a2b3c4d
+
+# Disconnect
+DELETE /api/remote/connections/conn_1a2b3c4d
 ```
 
 ---
@@ -330,7 +339,7 @@ For detailed API documentation, see:
 - **[v2_api.md](./v2_api.md)** - High-performance queries
 - **[metrics_api.md](./metrics_api.md)** - Metrics and logs
 - **[config_api.md](./config_api.md)** - Configuration
-- **[ssh_api.md](./ssh_api.md)** - Remote synchronization
+- **[remote_api.md](./remote_api.md)** - Remote Viewer API 🆕
 
 ---
 
@@ -338,5 +347,5 @@ For detailed API documentation, see:
 
 ---
 
-**Last Updated**: 2025-10-14
+**Last Updated**: 2025-10-25
 

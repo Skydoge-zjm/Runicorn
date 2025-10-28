@@ -165,5 +165,23 @@ export default {
   'remote.msg.started': 'Live sync started',
   'remote.msg.start_failed': 'Failed to start',
   'remote.msg.mirror_configured': 'Mirror mode configured successfully',
+  
+  // Performance Monitor Tab Settings
+  'settings.performance.tabs_title': 'Performance Monitor Tabs',
+  'settings.performance.show_cpu_tab': 'Show CPU Tab',
+  'settings.performance.show_memory_disk_tab': 'Show Memory & Disk Tab',
+  'settings.performance.show_gpu_metrics_tab': 'Show GPU Metrics Tab',
+  'settings.performance.show_gpu_telemetry_tab': 'Show GPU Telemetry Tab',
+  
+  // Dismissed Alerts
+  'settings.dismissedAlerts': 'Dismissed Alerts',
+  'settings.noDismissedAlerts': 'No dismissed alerts',
+  'settings.restoreAlert': 'Restore',
+  'settings.restoreAll': 'Restore All',
+  'settings.alertRestored': 'Alert restored',
+  'settings.allAlertsRestored': 'All alerts restored',
+  'settings.failedToLoadDismissedAlerts': 'Failed to load dismissed alerts',
+  'settings.failedToRestoreAlert': 'Failed to restore alert',
+  'settings.failedToClearAlerts': 'Failed to clear alerts',
 }
 

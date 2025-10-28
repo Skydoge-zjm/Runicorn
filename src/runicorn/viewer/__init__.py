@@ -23,13 +23,13 @@ from .api import (
     runs_router, 
     metrics_router,
     config_router,
-    ssh_router,
     experiments_router,
     export_router,
     projects_router,
     gpu_router,
     import_router,
     artifacts_router,
+    system_router,
 )
 
 # Import experiment-artifacts integration router
@@ -41,21 +41,14 @@ from .api.model_lifecycle import router as model_lifecycle_router
 # Import UI preferences router
 from .api.ui_preferences import router as ui_preferences_router
 
-# Import unified SSH router
+# Import new unified remote API
 try:
-    from .api.unified_ssh import router as unified_ssh_router
-    HAS_UNIFIED_SSH = True
-except ImportError:
-    unified_ssh_router = None
-    HAS_UNIFIED_SSH = False
-
-# Import remote storage router (optional)
-try:
-    from .api.remote_storage import router as remote_storage_router
-    HAS_REMOTE_STORAGE_API = True
-except ImportError:
-    remote_storage_router = None
-    HAS_REMOTE_STORAGE_API = False
+    from .api.remote import router as remote_router
+    HAS_REMOTE_API = True
+except ImportError as e:
+    remote_router = None
+    HAS_REMOTE_API = False
+    logger.warning(f"Remote API not available: {e}")
 
 # Import v2 APIs for modern storage
 from .api.v2 import (
@@ -63,7 +56,7 @@ from .api.v2 import (
     v2_analytics_router
 )
 
-__version__ = "0.4.2a"
+__version__ = "0.5.0_dev"
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +118,25 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                 pass
             logger.info("Stopped background process status checker")
         
-        # Close remote adapter if connected
+        # Close Remote Viewer sessions
+        if hasattr(app.state, 'viewer_manager'):
+            try:
+                sessions = app.state.viewer_manager.list_sessions()
+                for session in sessions:
+                    app.state.viewer_manager.stop_remote_viewer(session.session_id)
+                logger.info("Closed all Remote Viewer sessions")
+            except Exception as e:
+                logger.warning(f"Failed to close Remote Viewer sessions: {e}")
+        
+        # Close SSH connection pool
+        if hasattr(app.state, 'connection_pool'):
+            try:
+                app.state.connection_pool.close_all()
+                logger.info("Closed all SSH connections")
+            except Exception as e:
+                logger.warning(f"Failed to close SSH connections: {e}")
+        
+        # Close remote adapter if connected (legacy)
         if hasattr(app.state, 'remote_adapter') and app.state.remote_adapter:
             try:
                 app.state.remote_adapter.close()
@@ -146,11 +157,11 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     app.include_router(runs_router, prefix="/api", tags=["runs"])
     app.include_router(metrics_router, prefix="/api", tags=["metrics"])
     app.include_router(config_router, prefix="/api", tags=["config"])
-    app.include_router(ssh_router, prefix="/api", tags=["ssh"])
     app.include_router(experiments_router, prefix="/api", tags=["experiments"])
     app.include_router(export_router, prefix="/api", tags=["export"])
     app.include_router(projects_router, prefix="/api", tags=["projects"])
     app.include_router(gpu_router, prefix="/api", tags=["gpu"])
+    app.include_router(system_router, prefix="/api", tags=["system"])
     app.include_router(import_router, prefix="/api", tags=["import"])
     
     # Register artifacts router
@@ -165,15 +176,10 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     # Register UI preferences router
     app.include_router(ui_preferences_router, prefix="/api", tags=["ui-preferences"])
     
-    # Register unified SSH router (if available)
-    if HAS_UNIFIED_SSH and unified_ssh_router:
-        app.include_router(unified_ssh_router, prefix="/api", tags=["unified-ssh"])
-        logger.info("Unified SSH API routes registered")
-    
-    # Register remote storage router (if available)
-    if HAS_REMOTE_STORAGE_API and remote_storage_router:
-        app.include_router(remote_storage_router, prefix="/api", tags=["remote-storage"])
-        logger.info("Remote storage API routes registered")
+    # Register new unified remote API
+    if HAS_REMOTE_API and remote_router:
+        app.include_router(remote_router, prefix="/api", tags=["remote"])
+        logger.info("Remote API routes registered (Remote Viewer ready)")
     
     # Register v2 API routers (modern storage)
     app.include_router(v2_experiments_router, prefix="/api/v2", tags=["v2-experiments"])
@@ -182,7 +188,18 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     # Store storage root and mode for access by routers
     app.state.storage_root = root
     app.state.storage_mode = "local"  # Default to local mode
-    app.state.remote_adapter = None   # Will be set when user connects
+    app.state.remote_adapter = None   # Legacy, will be removed
+    
+    # Initialize Remote Viewer components (if available)
+    if HAS_REMOTE_API:
+        try:
+            from ..remote import SSHConnectionPool
+            from ..remote.viewer import RemoteViewerManager
+            app.state.connection_pool = SSHConnectionPool()
+            app.state.viewer_manager = RemoteViewerManager()
+            logger.info("Remote Viewer components initialized")
+        except ImportError as e:
+            logger.warning(f"Could not initialize Remote Viewer: {e}")
     
     # Mount static frontend if available
     _mount_static_frontend(app)

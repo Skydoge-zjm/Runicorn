@@ -5,8 +5,8 @@
 # Runicorn System Overview
 
 **Document Type**: Architecture  
-**Version**: v0.4.0  
-**Last Updated**: 2025-10-14
+**Version**: v0.5.0  
+**Last Updated**: 2025-10-25
 
 ---
 
@@ -17,6 +17,8 @@ This document provides a high-level overview of the Runicorn system architecture
 ---
 
 ## System Architecture Diagram
+
+### Overall Architecture (v0.5.0)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -29,10 +31,10 @@ This document provides a high-level overview of the Runicorn system architecture
         │           │           │                  │
 ┌───────▼───────────▼───────────▼──────────────────▼────────────┐
 │                     API Layer (FastAPI)                         │
-│  ┌──────────┬──────────┬──────────┬──────────┬─────────────┐ │
-│  │ Runs API │ Artifacts│ Metrics  │ Config   │ SSH/Remote  │ │
-│  │ (V1/V2)  │ API      │ API      │ API      │ API         │ │
-│  └────┬─────┴─────┬────┴────┬─────┴────┬─────┴──────┬──────┘ │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────────┐│
+│  │ Runs API │ Artifacts│ Metrics  │ Config   │ Remote       ││
+│  │ (V1/V2)  │ API      │ API      │ API      │ Viewer API   ││
+│  └────┬─────┴─────┬────┴────┬─────┴────┬─────┴──────┬───────┘│
 └───────┼───────────┼─────────┼──────────┼────────────┼────────┘
         │           │         │          │            │
 ┌───────▼───────────▼─────────▼──────────▼────────────▼────────┐
@@ -52,6 +54,43 @@ This document provides a high-level overview of the Runicorn system architecture
 │  │ - indexes          │ - .dedup/ (deduplication pool)  │   │
 │  └────────────────────┴─────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────┘
+```
+
+### Remote Viewer Architecture (v0.5.0 New)
+
+```
+Local Machine                           Remote Server
+┌────────────────────────┐            ┌────────────────────────┐
+│  Local Viewer          │            │  Remote Server         │
+│  (localhost:23300)     │            │  (gpu-server.com)      │
+│                        │            │                        │
+│  ┌──────────────────┐ │            │  ┌──────────────────┐ │
+│  │ Remote API       │ │            │  │ Remote Viewer    │ │
+│  │ /api/remote/*    │ │            │  │ (temp process)   │ │
+│  └────────┬─────────┘ │            │  └────────┬─────────┘ │
+│           │           │            │           │           │
+│           │ SSH Conn  │────────────│           │           │
+│           │ (port 22) │            │           │           │
+│           │           │            │           │           │
+│  ┌────────▼─────────┐ │            │  ┌────────▼─────────┐ │
+│  │ SSH Tunnel       │◄├────────────┤►│  Viewer Instance │ │
+│  │ (localhost:8081) │ │Port Forward│  │  (port 23300)    │ │
+│  └──────────────────┘ │            │  └──────────────────┘ │
+│           │           │            │           │           │
+│  ┌────────▼─────────┐ │            │  ┌────────▼─────────┐ │
+│  │ Browser          │ │            │  │ Data Storage     │
+│  │ http://          │ │            │  │ ~/RunicornData   │ │
+│  │  localhost:8081  │ │            │  └──────────────────┘ │
+│  └──────────────────┘ │            │                        │
+└────────────────────────┘            └────────────────────────┘
+
+Workflow:
+1. User connects to remote server via local Viewer (SSH)
+2. Auto-detect remote Python environments and Runicorn installation
+3. Start temporary Viewer instance on remote server
+4. Port forward via SSH tunnel to local machine
+5. User accesses remote data via local browser
+6. No file sync needed, real-time remote data access
 ```
 
 ---
@@ -261,17 +300,25 @@ This document provides a high-level overview of the Runicorn system architecture
 
 ---
 
-### 6. Remote Sync
+### 6. Remote Viewer System (v0.5.0 New)
 
-**Responsibility**: SSH-based data synchronization
+**Responsibility**: VSCode Remote-style remote access
 
 **Components**:
-- **SSH Client**: Paramiko-based connection
-- **Metadata Sync**: JSON file synchronization
-- **File Fetcher**: On-demand SFTP downloads
-- **Cache Manager**: Local metadata cache
+- **Connection Manager**: SSH connection lifecycle management
+- **Environment Detector**: Auto-discover remote Python environments
+- **Viewer Launcher**: Start temporary Viewer on remote server
+- **SSH Tunnel Manager**: Port forwarding and tunnel maintenance
+- **Health Checker**: Connection and Viewer status monitoring
 
-**Design Pattern**: Adapter pattern, lazy loading
+**Design Pattern**: Proxy pattern, Remote Procedure Call (RPC)
+
+**Benefits**:
+- ✅ No file sync needed, real-time remote data access
+- ✅ Low latency, runs directly in remote environment
+- ✅ Automatic environment detection and management
+- ✅ Secure SSH tunnel communication
+- ✅ Zero configuration, automatic cleanup
 
 ---
 
@@ -469,19 +516,16 @@ user_root_dir/
 
 ---
 
-## Future Architecture Directions
+## Architecture Evolution Achieved
 
-### v0.5.0 (Planned)
+### v0.5.0 (Current) ✅
 
-- **Hyperparameter optimization**: Integrated Optuna/Ray Tune
-- **Model deployment**: Export to ONNX/TorchScript
-- **Advanced analytics**: Automated insights
-
-### v1.0.0 (Vision)
-
-- **Plugin system**: Extensible architecture
-- **Multi-storage**: Optional cloud backends
-- **Advanced collaboration**: Conflict resolution for shared storage
+- **Remote Viewer**: VSCode Remote-style remote access
+  - SSH tunnel + temporary Viewer instance
+  - Automatic environment detection
+  - Real-time data access without sync
+- **Unified Remote API**: `/api/remote/*` endpoints
+- **Connection Lifecycle Management**: Automatic cleanup and health monitoring
 
 ---
 

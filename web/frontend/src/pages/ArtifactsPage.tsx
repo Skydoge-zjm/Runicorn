@@ -9,11 +9,17 @@ import {
   FileOutlined, CodeOutlined, AppstoreOutlined, CloudOutlined,
   EyeOutlined, DownloadOutlined, DeleteOutlined, HistoryOutlined
 } from '@ant-design/icons'
+import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { listArtifacts, getArtifactsStats } from '../api'
 import { GenericLoadingSkeleton } from '../components/LoadingSkeleton'
+import FancyStatCard from '../components/fancy/FancyStatCard'
+import FancyEmpty from '../components/fancy/FancyEmpty'
+import { StaggerContainer, StaggerItem } from '../components/animations/PageTransition'
 import logger from '../utils/logger'
 import designTokens from '../styles/designTokens'
+import { colorConfig } from '../config/animation_config'
+import '../styles/enhanced-table.css'
 
 const { Text, Title } = Typography
 
@@ -260,49 +266,39 @@ const ArtifactsPage: React.FC = () => {
         {stats && (
           <Row gutter={[designTokens.spacing.md, designTokens.spacing.md]}>
             <Col xs={24} sm={12} md={6}>
-              <Card>
-                <Statistic
-                  title={t('artifacts.stats.total')}
-                  value={stats.total_artifacts || 0}
-                  prefix={<DatabaseOutlined />}
-                  valueStyle={{ color: designTokens.colors.primary }}
-                />
-              </Card>
+              <FancyStatCard
+                title={t('artifacts.stats.total')}
+                value={stats.total_artifacts || 0}
+                icon={<DatabaseOutlined />}
+                gradientColors={colorConfig.gradients.primary}
+              />
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card>
-                <Statistic
-                  title={t('artifacts.stats.total_versions')}
-                  value={stats.total_versions || 0}
-                  prefix={<HistoryOutlined />}
-                  valueStyle={{ color: designTokens.colors.info }}
-                />
-              </Card>
+              <FancyStatCard
+                title={t('artifacts.stats.total_versions')}
+                value={stats.total_versions || 0}
+                icon={<HistoryOutlined />}
+                gradientColors={colorConfig.gradients.info}
+              />
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card>
-                <Statistic
-                  title={t('artifacts.stats.total_size')}
-                  value={formatBytes(stats.total_size_bytes || 0)}
-                  prefix={<CloudOutlined />}
-                  valueStyle={{ color: designTokens.colors.success }}
-                />
-              </Card>
+              <FancyStatCard
+                title={t('artifacts.stats.total_size')}
+                value={stats.total_size_bytes || 0}
+                formattedValue={formatBytes(stats.total_size_bytes || 0)}
+                icon={<CloudOutlined />}
+                gradientColors={colorConfig.gradients.success}
+              />
             </Col>
             <Col xs={24} sm={12} md={6}>
-              <Card>
-                <Statistic
-                  title={t('artifacts.stats.dedup_saved')}
-                  value={stats.dedup_enabled ? formatBytes(stats.space_saved_bytes || 0) : 'N/A'}
-                  prefix={<AppstoreOutlined />}
-                  valueStyle={{ color: designTokens.colors.warning }}
-                />
-                {stats.dedup_enabled && stats.dedup_ratio && (
-                  <Text type="secondary" style={{ fontSize: designTokens.typography.fontSize.xs }}>
-                    {(stats.dedup_ratio * 100).toFixed(1)}% saved
-                  </Text>
-                )}
-              </Card>
+              <FancyStatCard
+                title={t('artifacts.stats.dedup_saved')}
+                value={stats.space_saved_bytes || 0}
+                formattedValue={stats.dedup_enabled ? formatBytes(stats.space_saved_bytes || 0) : 'N/A'}
+                subtitle={stats.dedup_enabled && stats.dedup_ratio ? `${(stats.dedup_ratio * 100).toFixed(1)}% saved` : undefined}
+                icon={<AppstoreOutlined />}
+                gradientColors={colorConfig.gradients.warning}
+              />
             </Col>
           </Row>
         )}

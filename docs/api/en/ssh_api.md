@@ -4,7 +4,16 @@
 
 # SSH/Remote API - Remote Server Synchronization
 
-**Module**: SSH/Remote API  
+> ⚠️ **Deprecated in v0.5.0**
+> 
+> This API has been replaced by **Remote Viewer API**, which provides better performance and user experience.
+> 
+> - **New API**: [Remote API Documentation](./remote_api.md)
+> - **Migration Guide**: [v0.4.x → v0.5.0 Migration Guide](../../guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md)
+> - **Maintenance Status**: This API will be removed in v0.6.0
+> - **Recommendation**: Migrate to Remote Viewer API immediately
+
+**Module**: SSH/Remote API (**Deprecated**)  
 **Base Path**: `/api/unified` (Unified API), `/api/ssh` (Legacy)  
 **Version**: v1.0  
 **Description**: Connect to remote Linux servers via SSH and synchronize experiment data in real-time.

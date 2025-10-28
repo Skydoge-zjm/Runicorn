@@ -220,30 +220,40 @@ desktop/tauri/src-tauri/target/release/bundle/nsis/
 
 ---
 
-## Remote Training + Local Viewing
+## Remote Viewer Deployment (v0.5.0)
 
 ### Architecture
 
 ```
-┌──────────────────────┐      SSH       ┌─────────────────────┐
-│   Remote Server      │ ◄──────────────│   Local Machine     │
+┌──────────────────────┐   SSH Tunnel   ┌─────────────────────┐
+│   Remote Server      │◄──────────────►│   Local Machine     │
 │   (Linux, GPU)       │                │   (Windows/Mac)     │
 │                      │                │                     │
-│  Training Processes  │                │  Runicorn Viewer    │
-│  - Write to storage  │                │  - SSH connects     │
-│  - /data/runicorn    │                │  - Syncs metadata   │
-│                      │                │  - Views locally    │
+│  Training Processes  │                │  Local Viewer       │
+│  - Write to storage  │                │  - Initiates conn   │
+│  - ~/RunicornData    │                │  - Port forwarding  │
 │                      │                │                     │
-│  Runicorn SDK only   │                │  Full installation  │
-│  (no viewer needed)  │                │                     │
+│  Remote Viewer       │                │  Browser            │
+│  - Temporary process │                │  - localhost:8081   │
+│  - 127.0.0.1:23300   │◄───tunnel──────│  - Real-time access │
+│  - Reads local data  │                │                     │
+│                      │                │                     │
+│  Full Runicorn       │                │  Full installation  │
 └──────────────────────┘                └─────────────────────┘
+
+Workflow:
+1. User configures SSH connection in local Viewer
+2. Auto-detect remote Python environments
+3. Start temporary Viewer on remote server
+4. Forward port through SSH tunnel
+5. User browser accesses remote data (transparently)
 ```
 
 ### Setup
 
 **On remote server** (training):
 ```bash
-# Install SDK only
+# Install full Runicorn (required)
 pip install runicorn
 
 # In training script
@@ -251,7 +261,7 @@ import runicorn as rn
 
 run = rn.init(
     project="training",
-    storage="/data/runicorn"  # Shared location
+    storage="~/RunicornData"  # Or any path
 )
 
 # Training code...
@@ -261,28 +271,56 @@ rn.finish()
 
 **On local machine** (viewing):
 ```bash
-# Install full Runicorn
+# 1. Install Runicorn
 pip install runicorn
 
-# Start viewer
+# 2. Start local viewer
 runicorn viewer
 
-# In Web UI: Remote → Configure SSH
-# - Host: gpu-server.university.edu
-# - Username: researcher
-# - SSH key or password
-# - Remote root: /data/runicorn
-
-# View experiments in real-time!
+# 3. Connect to remote server in Web UI:
+#    - Click "Remote" button
+#    - Enter SSH credentials:
+#      * Host: gpu-server.university.edu
+#      * Port: 22
+#      * Username: researcher
+#      * Auth: SSH key or password
+#    
+# 4. System automatically:
+#    ✓ Detects remote Python environments
+#    ✓ Selects environment with Runicorn
+#    ✓ Starts remote Viewer
+#    ✓ Establishes SSH tunnel
+#    ✓ Opens new browser tab
+#
+# 5. Access remote data in real-time!
+#    - No file sync needed
+#    - View experiments live
+#    - Low latency (~50-100ms)
 ```
+
+### Comparison with Old Approach (SSH File Sync)
+
+| Feature | Old (SSH Sync) | Remote Viewer (v0.5.0) |
+|---------|----------------|------------------------|
+| **Data Transfer** | Sync large files | No sync, direct access |
+| **Wait Time** | Minutes for first sync | Instant connect (5-10s) |
+| **Local Storage** | High usage | Zero usage |
+| **Real-time** | Need re-sync | Fully real-time |
+| **Network Bandwidth** | High (models, etc.) | Low (metadata only) |
+| **Multi-user** | Conflict-prone | No conflicts |
+| **Experience** | Local-like | Local-like |
 
 ### Characteristics
 
-- ✅ **Bandwidth efficient**: Only sync metadata (~MB)
-- ✅ **Fast**: View results in seconds, not hours
-- ✅ **Flexible**: Download files on-demand
-- ✅ **Secure**: SSH encryption
+- ✅ **Zero sync**: No file transfer, direct access
+- ✅ **Instant connect**: Ready in 5-10 seconds
+- ✅ **Low latency**: Adds 50-100ms (acceptable)
+- ✅ **Space saving**: No local storage needed
+- ✅ **Real-time**: Training data instantly visible
+- ✅ **Auto cleanup**: Automatic cleanup on disconnect
+- ✅ **Secure**: SSH encryption, no extra port exposure
 - ⚠️ **Requires SSH**: Server must allow SSH access
+- ⚠️ **Full install needed**: Remote must have full Runicorn (not just SDK)
 
 ---
 

@@ -56,6 +56,12 @@ export async function getGpuTelemetry() {
   return res.json()
 }
 
+export async function getSystemMonitor() {
+  const res = await fetch(url('/system/monitor'))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
 // ----- New hierarchy helpers -----
 export async function listProjects() {
   const res = await fetch(url('/projects'))

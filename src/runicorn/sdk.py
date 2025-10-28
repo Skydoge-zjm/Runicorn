@@ -855,61 +855,30 @@ class Run:
                 f.write(json.dumps(obj, ensure_ascii=False) + "\n")
 
 
-# --------------- module-level convenience APIs ---------------
+# --------------- module-level API ---------------
 
 def init(project: str = "default", storage: Optional[str] = None, run_id: Optional[str] = None, name: Optional[str] = None, capture_env: bool = True) -> Run:
+    """
+    Initialize a new experiment run.
+    
+    Args:
+        project: Project name
+        storage: Storage directory path (optional, uses config if not specified)
+        run_id: Run ID (optional, auto-generated if not specified)
+        name: Experiment name (optional, defaults to "default")
+        capture_env: Whether to capture environment information
+        
+    Returns:
+        Run object for logging metrics and managing the experiment
+        
+    Example:
+        >>> import runicorn as rn
+        >>> run = rn.init(project="vision", name="resnet50")
+        >>> run.log({"loss": 0.5}, step=0)
+        >>> run.finish()
+    """
     global _active_run
     with _active_run_lock:
         r = Run(project=project, storage=storage, run_id=run_id, name=name, capture_env=capture_env)
         _active_run = r
     return r
-
-
-def _require_run() -> Run:
-    r = get_active_run()
-    if r is None:
-        raise RuntimeError("runicorn.init() must be called before logging")
-    return r
-
-
-def log(data: Optional[Dict[str, Any]] = None, **kwargs: Any) -> None:
-    # Support rn.log({...}, step=..., stage=..., key=value...)
-    # Pull out recognized kwargs to keep type hints simple at module level
-    step = kwargs.pop("step", None)
-    stage = kwargs.pop("stage", None)
-    _require_run().log(data, step=step, stage=stage, **kwargs)
-
-
-def log_text(text: str) -> None:
-    """
-    Log text message to the logs file.
-    
-    This provides a consistent module-level API for text logging,
-    matching the pattern of other module-level functions like log().
-    
-    Args:
-        text: Text message to log
-    """
-    _require_run().log_text(text)
-
-
-def log_image(key: str, image: Any, step: Optional[int] = None, caption: Optional[str] = None, format: str = "png", quality: int = 90) -> str:
-    return _require_run().log_image(key=key, image=image, step=step, caption=caption, format=format, quality=quality)
-
-
-def summary(update: Dict[str, Any]) -> None:
-    _require_run().summary(update)
-
-
-def finish(status: str = "finished") -> None:
-    _require_run().finish(status)
-
-
-def set_primary_metric(metric_name: str, mode: str = "max") -> None:
-    """Set the primary metric to track for best value display.
-    
-    Args:
-        metric_name: Name of the metric to track (e.g., "accuracy", "loss")
-        mode: Optimization direction, either "max" or "min"
-    """
-    _require_run().set_primary_metric(metric_name, mode)

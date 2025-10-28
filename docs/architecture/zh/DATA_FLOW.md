@@ -384,7 +384,150 @@ message.error("实验未找到")
 
 ---
 
-**相关文档**: [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) | [STORAGE_DESIGN.md](STORAGE_DESIGN.md)
+## Remote Viewer 数据流（v0.5.0）
+
+### 连接建立流程
+
+```
+用户（浏览器）
+    ↓
+点击"连接远程服务器"
+    ↓
+本地 Viewer API
+    ↓
+Connection Manager: 建立 SSH 连接
+    ├─ 密码认证 / SSH 密钥
+    ├─ Keep-alive 设置
+    └─ 连接池添加
+    ↓
+Environment Detector: 扫描远程环境
+    ├─ 执行: conda env list
+    ├─ 执行: which python
+    ├─ 对每个环境: import runicorn
+    └─ 返回兼容环境列表
+    ↓
+返回连接状态和环境列表给前端
+```
+
+### Remote Viewer 启动流程
+
+```
+用户选择环境
+    ↓
+POST /api/remote/viewer/start
+    ↓
+Viewer Launcher: 构建启动命令
+    ↓
+通过 SSH 执行:
+    source /path/to/env/bin/activate && \
+    runicorn viewer --host 127.0.0.1 --port 23300 --no-open-browser &
+    ↓
+获取进程 PID
+    ↓
+Tunnel Manager: 创建 SSH 隧道
+    ├─ 远程: 127.0.0.1:23300
+    └─ 本地: 127.0.0.1:8081
+    ↓
+Health Checker: 验证 Viewer 启动
+    ├─ 测试连接: socket.connect(('127.0.0.1', 8081))
+    └─ HTTP 检查: GET http://localhost:8081/api/health
+    ↓
+返回 Viewer URL: http://localhost:8081
+    ↓
+前端自动打开新标签页
+```
+
+### 数据访问流程
+
+```
+浏览器请求
+    ↓
+http://localhost:8081/api/runs
+    ↓
+本地 SSH 隧道
+    ↓
+转发到远程: 127.0.0.1:23300
+    ↓
+远程 Viewer 实例（FastAPI）
+    ↓
+读取远程数据存储
+    ├─ runicorn.db (SQLite)
+    └─ ~/RunicornData/project/name/runs/
+    ↓
+返回 JSON 响应
+    ↓
+通过 SSH 隧道返回
+    ↓
+浏览器接收并渲染
+```
+
+### 实时日志流（Remote）
+
+```
+浏览器建立 WebSocket
+    ↓
+ws://localhost:8081/api/runs/{id}/logs/ws
+    ↓
+本地 SSH 隧道（WebSocket 升级）
+    ↓
+转发到远程 Viewer
+    ↓
+远程 Viewer 读取日志文件
+    ├─ tail -f /path/to/logs.txt
+    └─ 持续流式传输
+    ↓
+通过 SSH 隧道流式返回
+    ↓
+浏览器实时显示日志
+```
+
+### 健康检查流程
+
+```
+定时器（每 30 秒）
+    ↓
+Health Checker 执行检查
+    ├─ 1. 连接检查
+    │   └─ SSH: echo "ping"
+    ├─ 2. Viewer 检查
+    │   └─ HTTP: GET http://localhost:8081/api/health
+    └─ 3. 隧道检查
+        └─ socket.connect(('127.0.0.1', 8081))
+    ↓
+如果任何检查失败:
+    ├─ 尝试自动恢复
+    │   ├─ SSH 断开: 重连（最多 3 次）
+    │   ├─ Viewer 崩溃: 通知用户
+    │   └─ 隧道断开: 重建隧道
+    └─ 更新健康状态
+    ↓
+前端显示连接状态指示器
+```
+
+### 断开连接清理流程
+
+```
+用户点击断开 / 关闭标签页
+    ↓
+DELETE /api/remote/connections/{id}?cleanup_viewer=true
+    ↓
+清理步骤:
+    ├─ 1. Tunnel Manager: 关闭 SSH 隧道
+    │   └─ 停止转发线程
+    ├─ 2. Viewer Launcher: 停止远程 Viewer
+    │   ├─ 通过 SSH: kill {pid}
+    │   └─ 删除日志文件
+    └─ 3. Connection Manager: 关闭 SSH 连接
+        └─ 从连接池移除
+    ↓
+返回清理状态
+    ↓
+前端更新 UI，移除连接
+```
+
+---
+
+**相关文档**: [COMPONENT_ARCHITECTURE.md](COMPONENT_ARCHITECTURE.md) | [STORAGE_DESIGN.md](STORAGE_DESIGN.md) | [REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)
 
 **返回**: [架构索引](README.md)
 

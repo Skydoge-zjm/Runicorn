@@ -4,7 +4,7 @@
 
 # Runicorn API 文档
 
-**版本**: v0.4.0  
+**版本**: v0.5.0  
 **基础 URL**: `http://127.0.0.1:23300/api`  
 **协议**: HTTP/1.1  
 **格式**: JSON  
@@ -43,7 +43,7 @@ GET /api/health
 响应:
 {
   "status": "ok",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "timestamp": 1704067200.0
 }
 ```
@@ -60,19 +60,48 @@ GET /api/health
 
 ---
 
-## API 模块
+## API 类型
 
-Runicorn API 按逻辑模块组织：
+Runicorn 提供两种 API 访问方式：
+
+### 🐍 Python API Client (推荐)
+
+**新增**: 程序化访问接口，简化 Python 集成
+
+```python
+import runicorn.api as api
+
+with api.connect() as client:
+    experiments = client.list_experiments(project="vision")
+    metrics = client.get_metrics(experiments[0]["id"])
+```
+
+**特性**：
+- ✅ 类型安全和自动补全
+- ✅ 自动重试和连接管理
+- ✅ pandas DataFrame 集成
+- ✅ Artifacts 和 Remote API 扩展
+
+**文档**: [python_client_api.md](./python_client_api.md)
+
+---
+
+### 🌐 REST API 模块
+
+HTTP REST API 端点，用于 Web UI 和第三方集成。
 
 | 模块 | 描述 | 文档 | 端点数 |
 |------|------|------|--------|
+| **Python Client** 🆕 | Python 程序化访问 | [python_client_api.md](./python_client_api.md) | SDK |
 | **Runs API** | 实验运行管理（CRUD、软删除、恢复）| [runs_api.md](./runs_api.md) | 6个端点 |
 | **Artifacts API** | 模型和数据集版本控制 | [artifacts_api.md](./artifacts_api.md) | 7个端点 |
 | **Metrics API** | 实时指标查询和可视化数据 | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |
 | **V2 API** | 高性能 SQLite 查询 ⚡ | [v2_api.md](./v2_api.md) | 4个端点 |
 | **Config API** | 配置和偏好设置管理 | [config_api.md](./config_api.md) | 6个端点 |
-| **SSH/Remote API** | 通过 SSH 进行远程服务器同步 | [ssh_api.md](./ssh_api.md) | 12个端点 |
+| **Remote Viewer API** 🆕 | VSCode Remote 风格的远程访问 | [remote_api.md](./remote_api.md) | 12个端点 |
 | **Manifest API** | 高性能 Manifest-based 同步 🚀 | [manifest_api.md](./manifest_api.md) | CLI + SDK |
+
+> ⚠️ **弃用**: 旧的 SSH 文件同步 API (`/api/unified/*`) 已被 Remote Viewer API 替代。查看 [迁移指南](./MIGRATION_GUIDE_v0.4_to_v0.5.md)
 
 **快速参考**: 查看 [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) 获取常用操作
 
@@ -205,6 +234,12 @@ GET /api/artifacts?type=model
 # 获取 artifact 版本
 GET /api/artifacts/{name}/versions
 
+# 连接到远程服务器 (新)
+POST /api/remote/connect
+
+# 启动 Remote Viewer (新)
+POST /api/remote/viewer/start
+
 # 健康检查
 GET /api/health
 ```
@@ -235,7 +270,7 @@ ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 
 ---
 
-**最后更新**: 2025-10-14  
+**最后更新**: 2025-10-25  
 **维护者**: Runicorn 开发团队
 
 

@@ -75,10 +75,13 @@ def get_gpu_telemetry() -> Dict[str, Any]:
         return {"available": False, "reason": "nvidia-smi not found in PATH"}
     
     # Fields to query from nvidia-smi
+    # Note: Using enforced.power.limit instead of power.limit because:
+    # - power.limit: software-set limit (often N/A on laptop GPUs)
+    # - enforced.power.limit: actual power ceiling used by power management
     fields = [
         "index", "name", "utilization.gpu", "utilization.memory", 
         "memory.total", "memory.used", "temperature.gpu", "power.draw", 
-        "power.limit", "clocks.sm", "clocks.mem", "pstate", "fan.speed",
+        "enforced.power.limit", "clocks.sm", "clocks.mem", "pstate", "fan.speed",
     ]
     
     cmd = [nvidia_smi_path, f"--query-gpu={','.join(fields)}", "--format=csv,noheader,nounits"]

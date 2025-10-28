@@ -1,4 +1,6 @@
 export default {
+  'experiments.title': 'Experiments',
+  'experiments.subtitle': 'Track, compare, and analyze your experiments with metrics and logs',
   'experiments.total_runs': 'Total Runs',
   'experiments.running': 'Running',
   'experiments.finished': 'Finished',
@@ -91,6 +93,42 @@ export default {
   'gpu.tooltip.item': 'GPU{{index}} {{name}}',
   'gpu.tooltip.metrics': '{{util}}% · {{mem}}% · {{power}}W · {{temp}}°C',
   'polling.every2s': 'Polling every 2s',
+  
+  // GPU Monitor Page
+  'gpu.monitor_title': 'GPU Monitor',
+  'gpu.monitor_desc': 'Real-time GPU metrics and performance telemetry',
+  'gpu.telemetry_charts': 'GPU Telemetry',
+  'gpu.history_2min': 'Last 2 minutes',
+  'gpu.no_nvidia_smi': 'nvidia-smi not found',
+  'gpu.polling_every_2s': 'Auto-polling every 2 seconds',
+  
+  // System Monitoring
+  'system.title': 'System Metrics',
+  'system.cpu': 'CPU',
+  'system.memory': 'Memory',
+  'system.disk': 'Disk',
+  'system.cpu_cores': 'Cores',
+  'system.logical': 'logical',
+  'system.frequency': 'Freq',
+  'system.available': 'Available',
+  'system.swap': 'Swap',
+  'system.free': 'Free',
+  'system.used_percent': 'Used',
+  'system.cpu_overall': 'Overall CPU Usage',
+  'system.cpu_per_core': 'Per-Core Utilization',
+  'system.freq_current': 'Current Freq',
+  'system.freq_min': 'Min Freq',
+  'system.freq_max': 'Max Freq',
+  
+  // Performance Monitor Page
+  'performance.title': 'Performance Monitor',
+  'performance.desc': 'Real-time system performance monitoring (CPU, Memory, Disk, GPU)',
+  'performance.polling_hint': 'Auto-polling every 2 seconds',
+  'performance.tab_cpu': 'CPU',
+  'performance.tab_memory_disk': 'Memory & Disk',
+  'performance.tab_gpu_metrics': 'GPU Metrics',
+  'performance.tab_gpu_telemetry': 'GPU Telemetry',
+  'performance.no_tabs': 'No monitoring tabs enabled. Please enable tabs in Settings.',
   
   'compare.title': 'Compare Runs (Same Experiment)',
   'compare.select.runs': 'Runs:',

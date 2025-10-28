@@ -1,0 +1,12 @@
+{
+  "wsl_host": "localhost",
+  "wsl_port": 22,
+  "wsl_username": "your_wsl_username",
+  "wsl_password": null,
+  "wsl_key_path": "C:/Users/YourName/.ssh/id_rsa",
+  "wsl_passphrase": null,
+  "remote_root": "/home/your_wsl_username/runicorn_test_data",
+  "remote_port": 8080,
+  "local_port": 18080,
+  "notes": "Copy this file to config.json and fill in your WSL credentials"
+}

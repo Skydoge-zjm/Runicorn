@@ -4,6 +4,7 @@ import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, 
 import { getConfig, setUserRootDir as apiSetUserRootDir, importArchive } from '../api'
 import { useTranslation } from 'react-i18next'
 import SystemInfoPanel from './SystemInfoPanel'
+import DismissedAlertsManager from './DismissedAlertsManager'
 
 export type UiSettings = {
   // Appearance
@@ -31,6 +32,12 @@ export type UiSettings = {
   showGridLines: boolean
   enableChartAnimations: boolean
   maxDataPoints: number
+  
+  // Performance Monitor Tab Settings
+  showCpuTab: boolean
+  showMemoryDiskTab: boolean
+  showGpuMetricsTab: boolean
+  showGpuTelemetryTab: boolean
 }
 
 const gradientPresets: { label: string; value: string }[] = [
@@ -345,6 +352,8 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           </div>
         </Space>
       </Card>
+      
+      <DismissedAlertsManager />
     </Space>
   )
 
@@ -436,6 +445,47 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
               onChange={(checked) => set({ enableSounds: checked })} 
             />
           </div>
+          
+          <Divider style={{ margin: '16px 0' }} />
+          
+          {/* Performance Monitor Tab Controls */}
+          <Typography.Text strong style={{ display: 'block', marginBottom: 12 }}>
+            {t('settings.performance.tabs_title', 'Performance Monitor Tabs')}
+          </Typography.Text>
+          
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography.Text>{t('settings.performance.show_cpu_tab', 'Show CPU Tab')}</Typography.Text>
+              <Switch 
+                checked={value.showCpuTab} 
+                onChange={(checked) => set({ showCpuTab: checked })} 
+              />
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography.Text>{t('settings.performance.show_memory_disk_tab', 'Show Memory & Disk Tab')}</Typography.Text>
+              <Switch 
+                checked={value.showMemoryDiskTab} 
+                onChange={(checked) => set({ showMemoryDiskTab: checked })} 
+              />
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography.Text>{t('settings.performance.show_gpu_metrics_tab', 'Show GPU Metrics Tab')}</Typography.Text>
+              <Switch 
+                checked={value.showGpuMetricsTab} 
+                onChange={(checked) => set({ showGpuMetricsTab: checked })} 
+              />
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography.Text>{t('settings.performance.show_gpu_telemetry_tab', 'Show GPU Telemetry Tab')}</Typography.Text>
+              <Switch 
+                checked={value.showGpuTelemetryTab} 
+                onChange={(checked) => set({ showGpuTelemetryTab: checked })} 
+              />
+            </div>
+          </Space>
         </Space>
       </Card>
     </Space>

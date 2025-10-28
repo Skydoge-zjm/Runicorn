@@ -2,7 +2,24 @@
 
 ---
 
-# Runicorn Remote Storage User Guide
+> ⚠️  **Deprecated in v0.5.0**  
+> 
+> The remote sync feature (based on file transfer) described in this document has been deprecated in v0.5.0.  
+> Please use the new **Remote Viewer** feature for a better experience:
+> 
+> - ✅ No sync needed, real-time access to remote data
+> - ✅ Zero local storage usage
+> - ✅ Connection startup in seconds, not hours
+> - ✅ Fully real-time (< 100ms) vs 5-10 min delay
+> 
+> **New Feature Guide**: [Remote Viewer User Guide](REMOTE_VIEWER_GUIDE.md)  
+> **Migration Guide**: [0.4.x → 0.5.0 Migration Guide](MIGRATION_GUIDE_v0.4_to_v0.5.md)
+> 
+> The content below is for reference only. The feature still works but is no longer recommended.
+
+---
+
+# Runicorn Remote Storage User Guide (Deprecated)
 
 ## 📖 Quick Start (5 minutes)
 

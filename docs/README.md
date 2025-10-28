@@ -4,8 +4,8 @@
 
 # Runicorn Documentation
 
-**Version**: v0.4.0  
-**Last Updated**: 2025-10-14
+**Version**: v0.5.0  
+**Last Updated**: 2025-10-25
 
 ---
 
@@ -13,19 +13,13 @@
 
 ```
 docs/
-├── api/                    # REST API Technical Reference (for developers)
-├── user-guide/             # User Guide Website (for end users)
-├── ARCHITECTURE.md         # System architecture overview
-├── ARTIFACTS_GUIDE.md      # Artifacts system guide
-├── QUICKSTART.md           # Quick start guide
-├── SECURITY_AUDIT_REPORT.md# Security audit and best practices
-├── REMOTE_STORAGE_USER_GUIDE.md # Remote sync user guide
-├── RATE_LIMIT_CONFIGURATION.md  # Rate limiting configuration
-├── DEMO_EXAMPLES_GUIDE.md  # Example code guide
-├── RELEASE_NOTES_v0.4.0.md # Release notes
-├── CHANGELOG_ARCHIVE.md    # Development history archive
-├── DOCUMENTATION_OVERVIEW.md # Complete documentation system overview
-└── picture/                # Screenshots and images
+├── guides/                 # User guides and tutorials
+├── reference/              # Technical reference (config, CLI, FAQ)
+├── architecture/           # Architecture documentation
+├── releases/               # Release notes and history
+├── api/                    # REST API documentation
+├── user-guide/             # User guide website (MkDocs)
+└── assets/                 # Images and screenshots
 ```
 
 ---
@@ -77,15 +71,17 @@ docs/
 
 - **[guides/](guides/)** - User guides and tutorials
   - [QUICKSTART.md](guides/en/QUICKSTART.md) - 5-minute quick start
+  - [REMOTE_VIEWER_GUIDE.md](guides/en/REMOTE_VIEWER_GUIDE.md) - ⭐ Remote Viewer guide (v0.5.0)
   - [ARTIFACTS_GUIDE.md](guides/en/ARTIFACTS_GUIDE.md) - Model versioning
-  - [REMOTE_STORAGE_USER_GUIDE.md](guides/en/REMOTE_STORAGE_USER_GUIDE.md) - Remote sync
+  - [MIGRATION_GUIDE_v0.4_to_v0.5.md](guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md) - ⭐ Migration guide 0.4→0.5
   - [DEMO_EXAMPLES_GUIDE.md](guides/en/DEMO_EXAMPLES_GUIDE.md) - Examples
 - **[user-guide/](user-guide/)** - Complete user documentation website (MkDocs)
 
 ### Architecture
 
 - **[architecture/](architecture/)** - System architecture documentation
-  - [SYSTEM_OVERVIEW.md](architecture/en/SYSTEM_OVERVIEW.md) - High-level architecture
+  - [SYSTEM_OVERVIEW.md](architecture/en/SYSTEM_OVERVIEW.md) - System overview (with v0.5.0 arch)
+  - [REMOTE_VIEWER_ARCHITECTURE.md](architecture/en/REMOTE_VIEWER_ARCHITECTURE.md) - ⭐ Remote Viewer architecture (v0.5.0)
   - [COMPONENT_ARCHITECTURE.md](architecture/en/COMPONENT_ARCHITECTURE.md) - Component design
   - [STORAGE_DESIGN.md](architecture/en/STORAGE_DESIGN.md) - Storage architecture
   - [DATA_FLOW.md](architecture/en/DATA_FLOW.md) - Data processing pipeline
@@ -105,11 +101,15 @@ docs/
 ### Reference
 
 - **[reference/](reference/)** - Technical reference materials
+  - [CONFIGURATION.md](reference/en/CONFIGURATION.md) - ⭐ Configuration reference (v0.5.0)
+  - [CLI_REFERENCE.md](reference/en/CLI_REFERENCE.md) - ⭐ CLI command reference (v0.5.0)
+  - [FAQ.md](reference/en/FAQ.md) - ⭐ Frequently asked questions (v0.5.0)
   - [RATE_LIMIT_CONFIGURATION.md](reference/en/RATE_LIMIT_CONFIGURATION.md) - Rate limiting config
 
 ### Releases
 
 - **[releases/](releases/)** - Release information
+  - [RELEASE_NOTES_v0.5.0.md](releases/en/RELEASE_NOTES_v0.5.0.md) - ⭐ v0.5.0 notes (Remote Viewer)
   - [RELEASE_NOTES_v0.4.0.md](releases/en/RELEASE_NOTES_v0.4.0.md) - v0.4.0 notes
 
 ---
@@ -188,16 +188,18 @@ For version history, see:
 
 ## 📊 Documentation Status
 
-| Category | Status | Files | Coverage |
-|----------|--------|-------|----------|
-| User Guide | ✅ Ready | 7+ core | 60% |
-| API Docs | ✅ Complete | 10 | 100% |
-| Architecture | ✅ Complete | 3 | 100% |
-| Security | ✅ Complete | 1 | 100% |
-| Examples | ✅ Complete | Guide | 100% |
+| Category | Completion | Status |
+|----------|------------|--------|
+| API Docs (with Remote) | 100% | ✅ Complete |
+| Architecture (with Remote) | 100% | ✅ Complete |
+| Reference (Config/CLI/FAQ) | 100% | ✅ Complete |
+| User Guides (with Migration) | 90% | 🔄 Near complete |
+| User Guide Website | 40% | 🔄 In progress |
+| Tutorials | 30% | 🔄 Growing |
 
 ---
 
-**Last Updated**: 2025-10-14  
-**Maintained By**: Runicorn Documentation Team
+**Last Updated**: 2025-10-25  
+**Maintained By**: Runicorn Documentation Team  
+**v0.5.0 Highlights**: Remote Viewer (VSCode Remote-style), Complete Config/CLI/FAQ Reference
 

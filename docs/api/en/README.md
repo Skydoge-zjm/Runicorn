@@ -4,7 +4,7 @@
 
 # Runicorn API Documentation
 
-**Version**: v0.4.0  
+**Version**: v0.5.0  
 **Base URL**: `http://127.0.0.1:23300/api`  
 **Protocol**: HTTP/1.1  
 **Format**: JSON  
@@ -43,7 +43,7 @@ GET /api/health
 Response:
 {
   "status": "ok",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "timestamp": 1704067200.0
 }
 ```
@@ -60,18 +60,48 @@ Response:
 
 ---
 
-## API Modules
+## API Types
 
-Runicorn API is organized into logical modules:
+Runicorn provides two ways to access the API:
+
+### 🐍 Python API Client (Recommended)
+
+**New**: Programmatic access interface for simplified Python integration
+
+```python
+import runicorn.api as api
+
+with api.connect() as client:
+    experiments = client.list_experiments(project="vision")
+    metrics = client.get_metrics(experiments[0]["id"])
+```
+
+**Features**:
+- ✅ Type safety and auto-completion
+- ✅ Auto-retry and connection management
+- ✅ pandas DataFrame integration
+- ✅ Artifacts and Remote API extensions
+
+**Documentation**: [python_client_api.md](./python_client_api.md)
+
+---
+
+### 🌐 REST API Modules
+
+HTTP REST API endpoints for Web UI and third-party integrations.
 
 | Module | Description | Documentation | Endpoints |
 |--------|-------------|---------------|-----------|
+| **Python Client** 🆕 | Programmatic Python access | [python_client_api.md](./python_client_api.md) | SDK |
 | **Runs API** | Experiment run management (CRUD, soft delete, restore) | [runs_api.md](./runs_api.md) | 6 endpoints |
 | **Artifacts API** | Model and dataset version control | [artifacts_api.md](./artifacts_api.md) | 7 endpoints |
 | **Metrics API** | Real-time metrics queries and visualization data | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |
 | **V2 API** | High-performance SQLite-based queries ⚡ | [v2_api.md](./v2_api.md) | 4 endpoints |
 | **Config API** | Configuration and preferences management | [config_api.md](./config_api.md) | 6 endpoints |
-| **SSH/Remote API** | Remote server synchronization via SSH | [ssh_api.md](./ssh_api.md) | 12 endpoints |
+| **Remote Viewer API** 🆕 | VSCode Remote-style remote access | [remote_api.md](./remote_api.md) | 12 endpoints |
+| **Manifest API** | High-performance Manifest-based sync 🚀 | [manifest_api.md](./manifest_api.md) | CLI + SDK |
+
+> ⚠️ **Deprecated**: Old SSH file sync API (`/api/unified/*`) has been replaced by Remote Viewer API. See [Migration Guide](./MIGRATION_GUIDE_v0.4_to_v0.5.md)
 
 **Quick Reference**: See [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) for common operations
 
@@ -204,6 +234,12 @@ GET /api/artifacts?type=model
 # Get artifact versions
 GET /api/artifacts/{name}/versions
 
+# Connect to remote server (new)
+POST /api/remote/connect
+
+# Start Remote Viewer (new)
+POST /api/remote/viewer/start
+
 # Health check
 GET /api/health
 ```
@@ -234,6 +270,6 @@ ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 
 ---
 
-**Last Updated**: 2025-10-14  
+**Last Updated**: 2025-10-25  
 **Maintained By**: Runicorn Development Team
 

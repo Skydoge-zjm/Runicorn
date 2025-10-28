@@ -4,7 +4,16 @@
 
 # SSH/Remote API - 远程服务器同步
 
-**模块**: SSH/Remote API  
+> ⚠️ **已弃用于 v0.5.0**
+> 
+> 该 API 已被 **Remote Viewer API** 替代，后者提供更好的性能和用户体验。
+> 
+> - **新 API**: [Remote API 文档](./remote_api.md)
+> - **迁移指南**: [v0.4.x → v0.5.0 迁移指南](../../guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md)
+> - **维护状态**: 该 API 将在 v0.6.0 中移除
+> - **推荐**: 立即迁移到 Remote Viewer API
+
+**模块**: SSH/Remote API (**已弃用**)  
 **基础路径**: `/api/unified` (统一 API), `/api/ssh` (遗留)  
 **版本**: v1.0  
 **描述**: 通过 SSH 连接到远程 Linux 服务器并实时同步实验数据。
