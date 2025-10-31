@@ -146,7 +146,7 @@ const MetricChart = memo(function MetricChart({
         connectNulls: true,
         sampling: 'lttb',
         large: true,
-        data: dataVals.slice(0, settings.maxDataPoints), // Limit data points
+        data: dataVals, // Show all data points for experiment metrics
         markPoint: bp ? { data: [{ type: bp, name: bp === 'max' ? 'Best (max)' : 'Best (min)' }], symbolSize: 60 } : undefined,
       }
       if (k === yKeys[0]) {

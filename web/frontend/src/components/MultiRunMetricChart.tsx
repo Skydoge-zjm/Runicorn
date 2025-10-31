@@ -105,7 +105,7 @@ const MultiRunMetricChart = memo(function MultiRunMetricChart({
         connectNulls: true,
         sampling: 'lttb',
         large: true,
-        data: points.slice(0, settings.maxDataPoints), // Limit data points
+        data: points, // Show all data points for experiment comparison
       } as any
     })
 
