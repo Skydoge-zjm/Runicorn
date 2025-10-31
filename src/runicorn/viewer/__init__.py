@@ -56,7 +56,8 @@ from .api.v2 import (
     v2_analytics_router
 )
 
-__version__ = "0.5.0_dev"
+# Import version from main package
+from .. import __version__
 
 logger = logging.getLogger(__name__)
 

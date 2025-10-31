@@ -5,7 +5,13 @@ from .sdk import Run, init
 # Version information
 try:
     from pathlib import Path
+    # Try multiple locations for VERSION.txt
+    # 1. For installed package: same level as package root
     _version_file = Path(__file__).parent.parent.parent / "VERSION.txt"
+    if not _version_file.exists():
+        # 2. For editable install or package data
+        _version_file = Path(__file__).parent / "VERSION.txt"
+    
     if _version_file.exists():
         __version__ = _version_file.read_text().strip()
     else:

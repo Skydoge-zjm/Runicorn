@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runicorn"
-version = "0.5.1"
+version = "0.5.2"
 description = "Local experiment tracking with model versioning - self-hosted W&B alternative with Artifacts"
 readme = "README.md"
 authors = [{ name = "Runicorn Authors" }]
@@ -68,6 +68,7 @@ include = ["runicorn*"]
 [tool.setuptools.package-data]
 # Include prebuilt frontend if present
 runicorn = [
+  "VERSION.txt",
   "webui/**",
 ]
 
