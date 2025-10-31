@@ -16,15 +16,15 @@ if hasattr(run, 'MetricsExporter'):
 import random
 import math
 import time
-for epoch in range(200):
+for epoch in range(2000):
     # 模拟指标
-    time.sleep(1)
+    #time.sleep(0.01)
     
     # 测试异常处理：取消注释下行来模拟程序崩溃
     # if epoch == 50: raise ValueError("Test crash")
     
-    loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1 if epoch < 500 else float('nan')
-    #loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1
+    #loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1 if epoch < 500 else float('nan')
+    loss = 2.0 * math.exp(-epoch/20) + random.random() * 0.1
     acc = 100 * (1 - math.exp(-epoch/30)) + random.random() * 2
     
     # 记录指标
@@ -34,7 +34,7 @@ for epoch in range(200):
         "learning_rate_": 0.001 * (0.95 ** epoch),
     }, stage=f"epoch {epoch // 10}")
     run.log_text(f"epoch {epoch // 10} | loss {loss:.4f} | accuracy {acc:.2f}")
-    print(f"epoch {epoch // 10} | loss {loss:.4f} | accuracy {acc:.2f}")
+    #print(f"epoch {epoch // 10} | loss {loss:.4f} | accuracy {acc:.2f}")
 
 
 
