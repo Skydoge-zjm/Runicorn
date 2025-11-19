@@ -82,14 +82,27 @@ const MetricChart = memo(function MetricChart({
     return undefined
   }
 
-  const ema = (vals: Array<number | null>, alpha: number) => {
-    if (!alpha) return vals
+  const ema = (vals: Array<number | null>, smoothingFactor: number) => {
+    if (smoothingFactor <= 0) return vals
     let s: number | null = null
     return vals.map((v) => {
       if (v == null) {
-        s = null
+        // If current value is null, we can either keep last s or nullify.
+        // ECharts connectNulls: true handles nulls visually.
+        // Let's reset s to null to break interpolation over long gaps?
+        // Or keep s? Standard TensorBoard EMA behavior ignores steps with missing values
+        // but here we are mapping 1-to-1.
+        // Let's return null and keep s as is (carry forward) or nullify?
+        // Simpler: if v is null, result is null, state s preserves last valid EMA?
+        // Or s becomes null?
+        // Let's stick to: if input is null, output is null. s is unchanged.
         return null
       }
+      // Standard EMA: S_t = alpha * Y_t + (1 - alpha) * S_{t-1}
+      // Where alpha is weight of NEW value.
+      // SmoothingFactor usually means weight of OLD value.
+      // So alpha = 1 - smoothingFactor.
+      const alpha = 1 - smoothingFactor
       s = s == null ? v : alpha * v + (1 - alpha) * s
       return s
     })
@@ -133,14 +146,14 @@ const MetricChart = memo(function MetricChart({
         if (useLog && (n == null || n <= 0)) return null
         return n
       })
-      const dataVals = ema(rawVals, Math.min(0.95, Math.max(0, smoothing)))
+      const dataVals = ema(rawVals, Math.min(0.999, Math.max(0, smoothing)))
       const nnz = dataVals.filter((v) => v != null).length
       const isSparse = nnz <= 12 || nnz <= Math.ceil(((metrics?.rows?.length || 0) as number) * 0.2)
       const bp = bestTypeFor(k)
       const s: any = {
         name: k,
         type: 'line',
-        smooth: true,
+        smooth: 0.2, // Visual spline smoothing (ECharts), not data smoothing
         showSymbol: isSparse,
         symbolSize: isSparse ? 6 : 4,
         connectNulls: true,

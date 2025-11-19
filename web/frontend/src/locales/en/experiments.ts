@@ -59,6 +59,17 @@ export default {
   'run.descriptions.metrics': 'Metrics Events',
   'run.load_failed': 'Failed to load run details',
   'run.metrics_failed': 'Failed to load metrics',
+  'run.stats.duration': 'Duration',
+  'run.stats.total_steps': 'Total Steps',
+  'run.stats.artifacts': 'Artifacts',
+  'run.more_details': 'More Details (Paths, Logs)',
+  
+  'run.descriptions.run_id': 'Run ID',
+  'run.descriptions.run_dir': 'Run Dir',
+  'run.descriptions.log_file': 'Log File',
+  'run.updated': 'Updated: {{time}}',
+  'run.refresh': 'Refresh',
+  'run.refreshed': 'Refreshed',
   
   'metrics.title': 'Metrics',
   'metrics.more_columns': 'More Columns',

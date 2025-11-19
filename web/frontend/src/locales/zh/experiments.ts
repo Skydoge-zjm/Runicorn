@@ -60,7 +60,18 @@ export default {
   'run.descriptions.metrics': '指标事件',
   'run.load_failed': '加载运行详情失败',
   'run.metrics_failed': '加载指标失败',
+  'run.stats.duration': '运行时长',
+  'run.stats.total_steps': '总步数',
+  'run.stats.artifacts': '产出物',
+  'run.more_details': '更多详情（路径、日志）',
   
+  'run.descriptions.run_id': '运行 ID',
+  'run.descriptions.run_dir': '运行目录',
+  'run.descriptions.log_file': '日志文件',
+  'run.updated': '更新于：{{time}}',
+  'run.refresh': '刷新',
+  'run.refreshed': '已刷新',
+
   'metrics.title': '指标',
   'metrics.more_columns': '多列布局',
   'metrics.more_columns_tooltip': '多列显示图表以便更好地对比',
