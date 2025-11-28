@@ -336,12 +336,32 @@ const MetricChart = memo(function MetricChart({
     </div>
   )
 }, (prevProps, nextProps) => {
-  // Custom comparison for performance optimization
-  // Only re-render if data or key props actually changed
+  // Custom deep comparison for performance optimization
+  // Uses data fingerprint (row count + last step) instead of reference equality
+  // This prevents unnecessary re-renders when the same data is fetched
+  
+  const prevRows = prevProps.metrics?.rows
+  const nextRows = nextProps.metrics?.rows
+  
+  // Compare data by fingerprint: row count and last global_step
+  const sameRowCount = (prevRows?.length ?? 0) === (nextRows?.length ?? 0)
+  const prevLastStep = prevRows?.length ? prevRows[prevRows.length - 1]?.global_step : undefined
+  const nextLastStep = nextRows?.length ? nextRows[nextRows.length - 1]?.global_step : undefined
+  const sameLastStep = prevLastStep === nextLastStep
+  
+  // Also compare column count to detect schema changes
+  const sameColumns = (prevProps.metrics?.columns?.length ?? 0) === (nextProps.metrics?.columns?.length ?? 0)
+  
+  const sameData = sameRowCount && sameLastStep && sameColumns
+  
+  // Compare yKeys array content
+  const sameYKeys = prevProps.yKeys.length === nextProps.yKeys.length &&
+    prevProps.yKeys.every((key, idx) => key === nextProps.yKeys[idx])
+  
   return (
-    prevProps.metrics === nextProps.metrics &&
+    sameData &&
     prevProps.xKey === nextProps.xKey &&
-    JSON.stringify(prevProps.yKeys) === JSON.stringify(nextProps.yKeys) &&
+    sameYKeys &&
     prevProps.title === nextProps.title &&
     prevProps.height === nextProps.height &&
     prevProps.persistKey === nextProps.persistKey &&

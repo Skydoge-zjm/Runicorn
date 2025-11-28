@@ -2,60 +2,49 @@
 Metrics API Routes
 
 Handles experiment metrics data retrieval and progress monitoring.
+
+Performance Optimizations:
+- Uses thread pool executor to prevent blocking the event loop during I/O
+- Employs incremental caching to efficiently handle growing event files
+- Supports optional downsampling for large datasets
 """
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import math
-import os
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+import time as time_module
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import aiofiles
-from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 
-from ..services.storage import find_run_dir_by_id, get_storage_root
-from ..utils.cache import get_metrics_cache
+from ..services.storage import find_run_dir_by_id
+from ..utils.incremental_cache import get_incremental_metrics_cache
 from .storage_utils import get_storage_root
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Global metrics cache instance
-metrics_cache = get_metrics_cache()
+# Thread pool for blocking I/O operations
+# Using a dedicated pool prevents blocking the main event loop
+_metrics_executor = ThreadPoolExecutor(
+    max_workers=4,
+    thread_name_prefix="metrics_io"
+)
+
+# Global incremental cache instance
+_incremental_cache = get_incremental_metrics_cache()
 
 
-def iter_events(events_path) -> Iterator[Dict[str, Any]]:
+def _get_metrics_sync(events_path: Path) -> Tuple[List[str], List[Dict[str, Any]]]:
     """
-    Iterate over events in a JSONL file.
+    Synchronous function to get metrics using incremental cache.
     
-    Args:
-        events_path: Path to events.jsonl file
-        
-    Yields:
-        Event dictionaries
-    """
-    if not events_path.exists():
-        return
-    
-    try:
-        with open(events_path, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    yield json.loads(line)
-                except Exception:
-                    continue
-    except Exception:
-        return
-
-
-def aggregate_step_metrics(events_path) -> Tuple[List[str], List[Dict[str, Any]]]:
-    """
-    Aggregate step metrics from events file with caching, handling NaN and Inf values.
+    This function is designed to be run in a thread pool to avoid
+    blocking the async event loop.
     
     Args:
         events_path: Path to events.jsonl file
@@ -63,80 +52,127 @@ def aggregate_step_metrics(events_path) -> Tuple[List[str], List[Dict[str, Any]]
     Returns:
         Tuple of (column_names, rows)
     """
-    # Check cache first
-    cached_result = metrics_cache.get(events_path)
-    if cached_result is not None:
-        return cached_result
+    return _incremental_cache.get_or_update(events_path)
+
+
+def _downsample_lttb(
+    rows: List[Dict[str, Any]], 
+    target_points: int,
+    x_key: str = "global_step"
+) -> List[Dict[str, Any]]:
+    """
+    Downsample data using Largest Triangle Three Buckets (LTTB) algorithm.
     
-    def sanitize_value(v):
-        """Convert NaN/Inf to None for JSON compatibility."""
-        if isinstance(v, float):
-            if math.isnan(v) or math.isinf(v):
-                return None
-        return v
+    LTTB is a time-series aware downsampling algorithm that preserves
+    visual characteristics of the data while reducing point count.
     
-    # Use 'global_step' if present; otherwise fall back to 'step'.
-    # Merge multiple events at the same step into a single row to avoid duplicate x-axis
-    # categories (which can cause apparent "jumps" for dense series when sparse series are interleaved).
-    step_rows: Dict[int, Dict[str, Any]] = {}
-    keys: set[str] = set()
-    
-    for evt in iter_events(events_path):
-        if not isinstance(evt, dict) or evt.get("type") != "metrics":
-            continue
-        data = evt.get("data") or {}
-        if not isinstance(data, dict):
-            continue
+    Args:
+        rows: List of row dictionaries
+        target_points: Target number of points after downsampling
+        x_key: Key to use for x-axis values
         
-        k = "global_step" if "global_step" in data else ("step" if "step" in data else None)
-        if k is None:
-            continue
-            
-        try:
-            step_val = int(data[k])
-        except Exception:
-            continue
-            
-        row = step_rows.get(step_val)
-        if row is None:
-            row = {"global_step": step_val}
-            step_rows[step_val] = row
-            
-        for kk, vv in data.items():
-            if kk in ("global_step", "step", "epoch"):
-                continue
-            if isinstance(vv, (int, float, str)) or vv is None:
-                row[kk] = sanitize_value(vv)  # Sanitize NaN/Inf values
-                keys.add(kk)
+    Returns:
+        Downsampled list of rows
+    """
+    n = len(rows)
+    if n <= target_points:
+        return rows
     
-    if not step_rows:
-        result = ([], [])
-    else:
-        rows = [step_rows[s] for s in sorted(step_rows.keys())]
-        cols = ["global_step"] + sorted(list(keys))
+    # Get numeric columns for downsampling
+    numeric_cols = set()
+    for row in rows[:min(100, n)]:  # Sample first 100 rows
+        for key, val in row.items():
+            if key != x_key and isinstance(val, (int, float)) and val is not None:
+                numeric_cols.add(key)
+    
+    if not numeric_cols:
+        # No numeric columns, use simple uniform sampling
+        step = n / target_points
+        indices = [int(i * step) for i in range(target_points)]
+        indices[-1] = n - 1  # Ensure last point is included
+        return [rows[i] for i in indices]
+    
+    # Use first numeric column for LTTB selection
+    y_key = sorted(numeric_cols)[0]
+    
+    # Build (x, y) data for LTTB
+    data = []
+    for i, row in enumerate(rows):
+        x_val = row.get(x_key, i)
+        y_val = row.get(y_key)
+        if y_val is None:
+            y_val = 0
+        data.append((float(x_val) if x_val is not None else float(i), float(y_val)))
+    
+    # LTTB algorithm
+    sampled_indices = [0]  # Always keep first point
+    bucket_size = (n - 2) / (target_points - 2)
+    
+    a = 0  # Index of previously selected point
+    
+    for i in range(target_points - 2):
+        # Calculate bucket boundaries
+        bucket_start = int((i + 1) * bucket_size) + 1
+        bucket_end = int((i + 2) * bucket_size) + 1
+        bucket_end = min(bucket_end, n)
         
-        for r in rows:
-            for c in cols:
-                r.setdefault(c, None)
+        # Calculate average point of next bucket
+        next_bucket_start = bucket_end
+        next_bucket_end = int((i + 3) * bucket_size) + 1
+        next_bucket_end = min(next_bucket_end, n)
         
-        result = (cols, rows)
+        if next_bucket_end > next_bucket_start:
+            avg_x = sum(data[j][0] for j in range(next_bucket_start, next_bucket_end)) / (next_bucket_end - next_bucket_start)
+            avg_y = sum(data[j][1] for j in range(next_bucket_start, next_bucket_end)) / (next_bucket_end - next_bucket_start)
+        else:
+            avg_x, avg_y = data[-1]
+        
+        # Find point in current bucket with largest triangle area
+        max_area = -1.0
+        max_idx = bucket_start
+        
+        for j in range(bucket_start, bucket_end):
+            # Triangle area formula (simplified)
+            area = abs(
+                (data[a][0] - avg_x) * (data[j][1] - data[a][1]) -
+                (data[a][0] - data[j][0]) * (avg_y - data[a][1])
+            )
+            if area > max_area:
+                max_area = area
+                max_idx = j
+        
+        sampled_indices.append(max_idx)
+        a = max_idx
     
-    # Cache the result
-    metrics_cache.set(events_path, result)
+    sampled_indices.append(n - 1)  # Always keep last point
     
-    return result
+    return [rows[i] for i in sampled_indices]
 
 
 @router.get("/runs/{run_id}/metrics")
-async def get_metrics(run_id: str, request: Request) -> Dict[str, Any]:
+async def get_metrics(
+    run_id: str, 
+    request: Request,
+    downsample: Optional[int] = Query(
+        default=None,
+        ge=100,
+        le=50000,
+        description="Target number of data points after downsampling. None means no downsampling."
+    )
+) -> JSONResponse:
     """
     Get metrics data for a specific run.
     
+    This endpoint uses a thread pool executor to avoid blocking the event loop
+    during file I/O operations, and employs incremental caching for efficient
+    handling of growing event files.
+    
     Args:
         run_id: The run ID to retrieve metrics for
+        downsample: Optional target point count for LTTB downsampling
         
     Returns:
-        Dictionary with columns and rows of metrics data
+        JSONResponse with columns, rows, total count, and metadata headers
         
     Raises:
         HTTPException: If run is not found
@@ -148,21 +184,63 @@ async def get_metrics(run_id: str, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Run not found")
     
     events_path = entry.dir / "events.jsonl"
-    cols, rows = aggregate_step_metrics(events_path)
     
-    return {"columns": cols, "rows": rows}
+    # Execute blocking I/O in thread pool to prevent event loop blocking
+    loop = asyncio.get_event_loop()
+    cols, rows = await loop.run_in_executor(
+        _metrics_executor,
+        _get_metrics_sync,
+        events_path
+    )
+    
+    total_count = len(rows)
+    
+    # Apply downsampling if requested and data is large enough
+    if downsample is not None and total_count > downsample:
+        rows = _downsample_lttb(rows, downsample)
+    
+    # Build response with metadata headers for client-side optimization
+    response_data = {
+        "columns": cols,
+        "rows": rows,
+        "total": total_count,
+        "sampled": len(rows) if downsample else total_count
+    }
+    
+    response = JSONResponse(content=response_data)
+    
+    # Add headers for client-side cache validation
+    response.headers["X-Row-Count"] = str(len(rows))
+    response.headers["X-Total-Count"] = str(total_count)
+    if rows:
+        response.headers["X-Last-Step"] = str(rows[-1].get("global_step", 0))
+    
+    return response
 
 
 @router.get("/runs/{run_id}/metrics_step")
-async def get_metrics_step(run_id: str, request: Request) -> Dict[str, Any]:
+async def get_metrics_step(
+    run_id: str, 
+    request: Request,
+    downsample: Optional[int] = Query(
+        default=None,
+        ge=100,
+        le=50000,
+        description="Target number of data points after downsampling. None means no downsampling."
+    )
+) -> JSONResponse:
     """
     Get step-based metrics data for a specific run.
     
+    This is the primary endpoint used by the frontend for chart rendering.
+    It supports optional LTTB downsampling to improve performance with large datasets.
+    
     Args:
         run_id: The run ID to retrieve metrics for
+        downsample: Optional target point count for LTTB downsampling
         
     Returns:
-        Dictionary with columns and rows of step metrics data
+        JSONResponse with columns, rows, total count, and metadata headers
         
     Raises:
         HTTPException: If run is not found
@@ -174,9 +252,49 @@ async def get_metrics_step(run_id: str, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail="Run not found")
     
     events_path = entry.dir / "events.jsonl"
-    cols, rows = aggregate_step_metrics(events_path)
     
-    return {"columns": cols, "rows": rows}
+    # Execute blocking I/O in thread pool to prevent event loop blocking
+    loop = asyncio.get_event_loop()
+    cols, rows = await loop.run_in_executor(
+        _metrics_executor,
+        _get_metrics_sync,
+        events_path
+    )
+    
+    total_count = len(rows)
+    
+    # Apply downsampling if requested and data is large enough
+    if downsample is not None and total_count > downsample:
+        rows = _downsample_lttb(rows, downsample)
+    
+    # Build response with metadata headers
+    response_data = {
+        "columns": cols,
+        "rows": rows,
+        "total": total_count,
+        "sampled": len(rows) if downsample else total_count
+    }
+    
+    response = JSONResponse(content=response_data)
+    
+    # Add headers for client-side cache validation
+    response.headers["X-Row-Count"] = str(len(rows))
+    response.headers["X-Total-Count"] = str(total_count)
+    if rows:
+        response.headers["X-Last-Step"] = str(rows[-1].get("global_step", 0))
+    
+    return response
+
+
+@router.get("/metrics/cache/stats")
+async def get_cache_stats() -> Dict[str, Any]:
+    """
+    Get metrics cache statistics for monitoring and debugging.
+    
+    Returns:
+        Dictionary with cache statistics including hit rate and entry count
+    """
+    return _incremental_cache.stats()
 
 
 @router.get("/runs/{run_id}/progress")
@@ -269,8 +387,6 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
             return
     
     try:
-        import time as time_module
-        
         # Stream the log file content without loading all into memory
         async with aiofiles.open(log_file, mode="r", encoding="utf-8", errors="ignore") as f:
             # Send existing content line by line (streaming)

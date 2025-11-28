@@ -13,14 +13,16 @@ export async function getRunDetail(id: string) {
   return res.json()
 }
 
-export async function getMetrics(id: string) {
-  const res = await fetch(url(`/runs/${id}/metrics`))
+export async function getMetrics(id: string, downsample?: number) {
+  const params = downsample ? `?downsample=${downsample}` : ''
+  const res = await fetch(url(`/runs/${id}/metrics${params}`))
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
 
-export async function getStepMetrics(id: string) {
-  const res = await fetch(url(`/runs/${id}/metrics_step`))
+export async function getStepMetrics(id: string, downsample?: number) {
+  const params = downsample ? `?downsample=${downsample}` : ''
+  const res = await fetch(url(`/runs/${id}/metrics_step${params}`))
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }

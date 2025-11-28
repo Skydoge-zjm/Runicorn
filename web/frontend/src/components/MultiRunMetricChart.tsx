@@ -246,9 +246,38 @@ const MultiRunMetricChart = memo(function MultiRunMetricChart({
     </div>
   )
 }, (prevProps, nextProps) => {
-  // Custom comparison for performance optimization
+  // Custom deep comparison for performance optimization
+  // Avoids expensive JSON.stringify by using data fingerprints
+  
+  // Compare runs array length first (fast check)
+  if (prevProps.runs.length !== nextProps.runs.length) return false
+  
+  // Compare each run by fingerprint (id + row count + last step)
+  for (let i = 0; i < prevProps.runs.length; i++) {
+    const prevRun = prevProps.runs[i]
+    const nextRun = nextProps.runs[i]
+    
+    // Check run identity
+    if (prevRun.id !== nextRun.id) return false
+    if (prevRun.label !== nextRun.label) return false
+    
+    // Check data fingerprint
+    const prevRows = prevRun.metrics?.rows
+    const nextRows = nextRun.metrics?.rows
+    const prevRowCount = prevRows?.length ?? 0
+    const nextRowCount = nextRows?.length ?? 0
+    
+    if (prevRowCount !== nextRowCount) return false
+    
+    // Compare last step if rows exist
+    if (prevRowCount > 0) {
+      const prevLastStep = prevRows[prevRowCount - 1]?.global_step
+      const nextLastStep = nextRows[nextRowCount - 1]?.global_step
+      if (prevLastStep !== nextLastStep) return false
+    }
+  }
+  
   return (
-    JSON.stringify(prevProps.runs) === JSON.stringify(nextProps.runs) &&
     prevProps.xKey === nextProps.xKey &&
     prevProps.yKey === nextProps.yKey &&
     prevProps.title === nextProps.title &&

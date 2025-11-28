@@ -4,9 +4,9 @@
 
 # Complete API Index
 
-**Version**: v0.5.0  
-**Total Endpoints**: 52+ REST + Python Client  
-**Last Updated**: 2025-10-25
+**Version**: v0.5.x  
+**Total Endpoints**: 53+ REST + Python Client  
+**Last Updated**: 2025-11-28
 
 ---
 
@@ -51,8 +51,9 @@ with api.connect() as client:
 
 | Method | Endpoint | Description | Docs |
 |--------|----------|-------------|------|
-| GET | `/api/runs/{run_id}/metrics` | Get time-based metrics | [📖](./metrics_api.md#get-metrics-time-based) |
-| GET | `/api/runs/{run_id}/metrics_step` | Get step-based metrics | [📖](./metrics_api.md#get-step-metrics) |
+| GET | `/api/runs/{run_id}/metrics` | Get time-based metrics (supports LTTB downsampling) | [📖](./metrics_api.md#get-metrics-time-based) |
+| GET | `/api/runs/{run_id}/metrics_step` | Get step-based metrics (supports LTTB downsampling) | [📖](./metrics_api.md#get-step-metrics) |
+| GET | `/api/metrics/cache/stats` | Get incremental cache statistics | [📖](./metrics_api.md#cache-statistics) |
 | WS | `/api/runs/{run_id}/logs/ws` | Real-time log stream | [📖](./metrics_api.md#real-time-log-streaming) |
 
 ### Artifacts API (Version Control)
@@ -384,7 +385,14 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ## 📝 API Changelog
 
-### v0.5.0 (Current)
+### v0.5.x (Current)
+- ✅ **Added LTTB downsampling** for metrics endpoints (`?downsample=N`)
+- ✅ **Added incremental caching** for metrics (file-size based invalidation)
+- ✅ Added `/metrics/cache/stats` endpoint for cache monitoring
+- ✅ Added response headers (`X-Row-Count`, `X-Total-Count`, `X-Last-Step`)
+- ✅ Added `total` and `sampled` fields to metrics response
+
+### v0.5.0
 - ✅ **Added Remote Viewer API** (12 endpoints)
 - ✅ Deprecated old SSH file sync API
 - ✅ SSH key and password authentication support

@@ -23,15 +23,37 @@ import designTokens from '../styles/designTokens'
 const { Text, Title } = Typography
 const { Panel } = Collapse
 
+/**
+ * Refresh interval configuration based on run status.
+ * Running experiments need frequent updates, while completed ones rarely change.
+ */
+const REFRESH_INTERVALS = {
+  running: 3000,    // 3 seconds - active experiment needs frequent updates
+  finished: 60000,  // 60 seconds - completed experiment rarely changes
+  failed: 30000,    // 30 seconds - failed experiment might be restarted
+  default: 10000,   // 10 seconds - fallback for unknown status
+} as const
+
+/**
+ * Data version tracking interface for preventing unnecessary re-renders.
+ */
+interface MetricsVersion {
+  rowCount: number
+  lastStep: number
+}
+
 export default function RunDetailPage() {
   const { id = '' } = useParams()
   const { t } = useTranslation()
   const { settings } = useSettings()
   const [detail, setDetail] = useState<any>(null)
-  const [stepMetrics, setStepMetrics] = useState<{ columns: string[]; rows: any[] }>({ columns: [], rows: [] })
+  const [stepMetrics, setStepMetrics] = useState<{ columns: string[]; rows: any[]; total?: number; sampled?: number }>({ columns: [], rows: [] })
   const [detailLoading, setDetailLoading] = useState(false)
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null)
+  
+  // Track metrics data version to prevent unnecessary re-renders
+  const metricsVersionRef = useRef<MetricsVersion>({ rowCount: 0, lastStep: 0 })
   const [stepXAxis, setStepXAxis] = useState<'global_step' | 'time'>(() => {
     try { return (localStorage.getItem(`run:${id}:step:xAxis`) as any) || 'global_step' } catch { return 'global_step' }
   })
@@ -85,26 +107,56 @@ export default function RunDetailPage() {
   const loadStepMetrics = async (showLoading = true) => {
     if (showLoading) setMetricsLoading(true)
     try {
-      const result = await getStepMetrics(id)
-      setStepMetrics(result)
+      // Pass maxDataPoints setting as downsample parameter to backend
+      const downsample = settings.maxDataPoints > 0 ? settings.maxDataPoints : undefined
+      const result = await getStepMetrics(id, downsample)
+      
+      // Extract data version from response
+      const rows = result.rows || []
+      const newRowCount = rows.length
+      const newLastStep = rows.length > 0 ? (rows[rows.length - 1]?.global_step ?? 0) : 0
+      
+      // Only update state if data actually changed (prevents unnecessary re-renders)
+      const prev = metricsVersionRef.current
+      if (newRowCount !== prev.rowCount || newLastStep !== prev.lastStep) {
+        setStepMetrics(result)
+        metricsVersionRef.current = { rowCount: newRowCount, lastStep: newLastStep }
+        logger.debug(`Metrics updated: ${prev.rowCount} -> ${newRowCount} rows, step ${prev.lastStep} -> ${newLastStep}`)
+      }
     } catch (error) {
       logger.error('Failed to load step metrics:', error)
-      message.error(t('run.metrics_failed') || 'Failed to load metrics')
+      if (showLoading) {
+        message.error(t('run.metrics_failed') || 'Failed to load metrics')
+      }
     } finally {
       if (showLoading) setMetricsLoading(false)
     }
   }
 
+  // Compute refresh interval based on run status
+  const refreshInterval = useMemo(() => {
+    if (!detail) return REFRESH_INTERVALS.default
+    const status = detail.status as keyof typeof REFRESH_INTERVALS
+    return REFRESH_INTERVALS[status] ?? REFRESH_INTERVALS.default
+  }, [detail?.status])
+
+  // Initial data load and refresh interval setup
   useEffect(() => {
+    // Reset metrics version tracking on run change
+    metricsVersionRef.current = { rowCount: 0, lastStep: 0 }
+    
     loadDetail()
     loadStepMetrics()
-    const t = setInterval(() => {
+    
+    // Dynamic interval based on run status
+    const intervalId = setInterval(() => {
       // Silent refresh without loading indicators
-      loadDetail(false);
-      loadStepMetrics(false);
-    }, 3000)
-    return () => clearInterval(t)
-  }, [id])
+      loadDetail(false)
+      loadStepMetrics(false)
+    }, refreshInterval)
+    
+    return () => clearInterval(intervalId)
+  }, [id, refreshInterval, settings.maxDataPoints])
 
   // Initialize comparison state when detail is loaded
   useEffect(() => {
@@ -157,25 +209,76 @@ export default function RunDetailPage() {
     
   }, [selectedProject, selectedExperiment])
 
-  // Fetch overlay metrics for selected runs
+  // Track overlay metrics version for each run (similar to main metrics)
+  const overlayVersionRef = useRef<Record<string, { rowCount: number; lastStep: number }>>({})
+  
+  // Refresh overlay metrics for comparison runs
+  const refreshOverlayMetrics = async () => {
+    if (selectedRunIds.length <= 1) return // No comparison runs
+    
+    const downsample = settings.maxDataPoints > 0 ? settings.maxDataPoints : undefined
+    const next: Record<string, { columns: string[]; rows: any[] }> = { ...overlayMetricsMap }
+    let hasChanges = false
+    
+    for (const rid of selectedRunIds) {
+      if (rid === id) continue // Skip main run (already handled by loadStepMetrics)
+      
+      try {
+        const m = await getStepMetrics(rid, downsample)
+        const rows = m.rows || []
+        const newRowCount = rows.length
+        const newLastStep = rows.length > 0 ? (rows[rows.length - 1]?.global_step ?? 0) : 0
+        
+        const prev = overlayVersionRef.current[rid] || { rowCount: 0, lastStep: 0 }
+        if (newRowCount !== prev.rowCount || newLastStep !== prev.lastStep) {
+          next[rid] = m
+          overlayVersionRef.current[rid] = { rowCount: newRowCount, lastStep: newLastStep }
+          hasChanges = true
+        }
+      } catch {}
+    }
+    
+    if (hasChanges) {
+      setOverlayMetricsMap(next)
+    }
+  }
+
+  // Initial fetch overlay metrics when selectedRunIds changes
   useEffect(() => {
     let aborted = false
+    const downsample = settings.maxDataPoints > 0 ? settings.maxDataPoints : undefined
     ;(async () => {
       const next: Record<string, { columns: string[]; rows: any[] }> = { ...overlayMetricsMap }
-      // Remove unselected keys to save memory? Optional. 
-      // For now just add missing ones.
       for (const rid of selectedRunIds) {
         if (!next[rid]) {
           try {
-            const m = await getStepMetrics(rid)
-            if (!aborted) next[rid] = m
+            const m = await getStepMetrics(rid, downsample)
+            if (!aborted) {
+              next[rid] = m
+              const rows = m.rows || []
+              overlayVersionRef.current[rid] = {
+                rowCount: rows.length,
+                lastStep: rows.length > 0 ? (rows[rows.length - 1]?.global_step ?? 0) : 0
+              }
+            }
           } catch {}
         }
       }
-      setOverlayMetricsMap(next)
+      if (!aborted) setOverlayMetricsMap(next)
     })()
     return () => { aborted = true }
-  }, [selectedRunIds])
+  }, [selectedRunIds, settings.maxDataPoints])
+  
+  // Refresh overlay metrics along with main metrics (only for running experiments)
+  useEffect(() => {
+    if (detail?.status !== 'running' || selectedRunIds.length <= 1) return
+    
+    const intervalId = setInterval(() => {
+      refreshOverlayMetrics()
+    }, refreshInterval)
+    
+    return () => clearInterval(intervalId)
+  }, [detail?.status, selectedRunIds, refreshInterval])
 
   useEffect(() => {
     try { localStorage.setItem(`run:${id}:step:xAxis`, stepXAxis) } catch {}
@@ -316,7 +419,7 @@ export default function RunDetailPage() {
           <Col xs={24} sm={12} md={8}>
             <Statistic 
               title={t('run.stats.total_steps') || "Total Steps"} 
-              value={stepMetrics.rows?.length || 0} 
+              value={stepMetrics.total ?? stepMetrics.rows?.length ?? 0} 
               prefix={<ThunderboltOutlined />} 
             />
           </Col>
@@ -498,9 +601,10 @@ export default function RunDetailPage() {
                 />
               </div>
               <Button onClick={async () => {
+                const downsample = settings.maxDataPoints > 0 ? settings.maxDataPoints : undefined
                 const next: Record<string, { columns: string[]; rows: any[] }> = {}
                 for (const rid of selectedRunIds) {
-                  try { next[rid] = await getStepMetrics(rid) } catch {}
+                  try { next[rid] = await getStepMetrics(rid, downsample) } catch {}
                 }
                 setOverlayMetricsMap(next)
               }}>{t('compare.refresh')}</Button>

@@ -18,6 +18,7 @@
 | GET | `/runs/{run_id}/metrics` | Get metrics aggregated by timestamp |
 | GET | `/runs/{run_id}/metrics_step` | Get metrics aggregated by step |
 | GET | `/runs/{run_id}/progress` | Get training progress (deprecated) |
+| GET | `/metrics/cache/stats` | Get cache statistics |
 | WS | `/runs/{run_id}/logs/ws` | Real-time log streaming via WebSocket |
 
 ---
@@ -29,7 +30,7 @@ Retrieve metrics aggregated by timestamp.
 ### Request
 
 ```http
-GET /api/runs/{run_id}/metrics
+GET /api/runs/{run_id}/metrics?downsample=2000
 ```
 
 **Path Parameters**:
@@ -37,9 +38,21 @@ GET /api/runs/{run_id}/metrics
 |-----------|------|----------|-------------|
 | `run_id` | string | Yes | Run identifier |
 
+**Query Parameters**:
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `downsample` | integer | No | Target number of data points (100-50000). Uses LTTB algorithm. |
+
 ### Response
 
 **Status Code**: `200 OK`
+
+**Response Headers**:
+| Header | Description |
+|--------|-------------|
+| `X-Row-Count` | Number of rows in response |
+| `X-Total-Count` | Total rows before downsampling |
+| `X-Last-Step` | Last step number in data |
 
 **Response Body**:
 ```json
@@ -64,7 +77,9 @@ GET /api/runs/{run_id}/metrics
       "accuracy": 0.6789,
       "learning_rate": 0.001
     }
-  ]
+  ],
+  "total": 100000,
+  "sampled": 2000
 }
 ```
 
@@ -120,13 +135,18 @@ Retrieve metrics aggregated by training step (recommended for ML).
 ### Request
 
 ```http
-GET /api/runs/{run_id}/metrics_step
+GET /api/runs/{run_id}/metrics_step?downsample=2000
 ```
 
 **Path Parameters**:
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `run_id` | string | Yes | Run identifier |
+
+**Query Parameters**:
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `downsample` | integer | No | Target number of data points (100-50000). Uses LTTB algorithm for intelligent downsampling. |
 
 ### Response
 
@@ -164,6 +184,14 @@ GET /api/runs/{run_id}/metrics_step
 
 ### Response Fields
 
+| Field | Type | Description |
+|-------|------|-------------|
+| `columns` | array[string] | Metric column names |
+| `rows` | array[object] | Metric data points |
+| `total` | number | Total data points before downsampling |
+| `sampled` | number | Data points in response (after downsampling) |
+
+**Row Structure**:
 | Field | Type | Description |
 |-------|------|-------------|
 | `global_step` | number | Training step number |
@@ -523,19 +551,39 @@ import requests
 
 run_id = "long_training_run"
 
-# This may be slow and return large response
-response = requests.get(f'http://127.0.0.1:23300/api/runs/{run_id}/metrics_step')
+# Use downsample parameter to reduce response size
+# The LTTB algorithm preserves visual characteristics while reducing points
+response = requests.get(
+    f'http://127.0.0.1:23300/api/runs/{run_id}/metrics_step',
+    params={'downsample': 2000}  # Reduce to 2000 points
+)
 
-# Better: Use V2 API with downsampling
+data = response.json()
+print(f"Total points: {data['total']}, Sampled: {data['sampled']}")
+
+# Alternative: Use V2 API for even faster queries
 response = requests.get(
     f'http://127.0.0.1:23300/api/v2/experiments/{run_id}/metrics/fast',
-    params={'downsample': 1000}  # Reduce to 1000 points
+    params={'downsample': 1000}
 )
 ```
 
+**LTTB Downsampling**:
+
+The Largest Triangle Three Buckets (LTTB) algorithm is used for downsampling:
+- Preserves peaks and valleys in the data
+- Maintains visual fidelity of charts
+- O(n) time complexity
+- Works with any numeric metric column
+
 ### Caching
 
-The API caches metrics for 60 seconds:
+The API uses an **incremental caching** system optimized for continuously growing files:
+
+**Cache Behavior**:
+- **File unchanged**: O(1) instant response from cache
+- **File grew (new data appended)**: O(n) reads only new data and merges
+- **File truncated/reset**: O(N) full re-parse
 
 ```python
 import requests
@@ -543,21 +591,57 @@ import time
 
 run_id = "20250114_153045_a1b2c3"
 
-# First request: Reads from file
+# First request: Full file parse
 start = time.time()
 response1 = requests.get(f'http://127.0.0.1:23300/api/runs/{run_id}/metrics_step')
 time1 = time.time() - start
 print(f"First request: {time1:.3f}s")
 
-# Second request: Cached
+# Second request: Cache hit (file unchanged)
 start = time.time()
 response2 = requests.get(f'http://127.0.0.1:23300/api/runs/{run_id}/metrics_step')
 time2 = time.time() - start
-print(f"Second request: {time2:.3f}s (cached)")
+print(f"Second request (cached): {time2:.3f}s")
+
+# Third request: Incremental update (file grew during training)
+start = time.time()
+response3 = requests.get(f'http://127.0.0.1:23300/api/runs/{run_id}/metrics_step')
+time3 = time.time() - start
+print(f"Third request (incremental): {time3:.3f}s")
 
 # Typical results:
 # First request: 0.345s
-# Second request: 0.012s (29x faster)
+# Second request (cached): 0.008s (43x faster)
+# Third request (incremental): 0.015s (23x faster than full parse)
+```
+
+### Cache Statistics
+
+Monitor cache performance via the `/metrics/cache/stats` endpoint:
+
+```python
+import requests
+
+response = requests.get('http://127.0.0.1:23300/api/metrics/cache/stats')
+stats = response.json()
+
+print(f"Cache size: {stats['size']}/{stats['max_size']}")
+print(f"Hit rate: {stats['hit_rate']:.1%}")
+print(f"Hits: {stats['hits']}, Misses: {stats['misses']}")
+print(f"Incremental updates: {stats['incremental_updates']}")
+```
+
+**Response**:
+```json
+{
+  "size": 15,
+  "max_size": 100,
+  "hits": 1250,
+  "misses": 45,
+  "incremental_updates": 320,
+  "hit_rate": 0.77,
+  "incremental_rate": 0.20
+}
 ```
 
 ---
@@ -767,5 +851,5 @@ print("Migration to W&B completed")
 
 ---
 
-**Last Updated**: 2025-10-14
+**Last Updated**: 2025-11-28
 

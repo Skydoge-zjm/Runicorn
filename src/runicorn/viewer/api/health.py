@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Request, HTTPException
 from ..services.storage import iter_all_runs, read_json, update_status_if_process_dead
-from ..utils.cache import get_metrics_cache
+from ..utils.incremental_cache import get_incremental_metrics_cache
 
 router = APIRouter()
 
@@ -23,7 +23,7 @@ async def health(request: Request) -> Dict[str, Any]:
         System health information including storage path and cache stats
     """
     storage_root = request.app.state.storage_root
-    cache = get_metrics_cache()
+    cache = get_incremental_metrics_cache()
     cache_stats = cache.stats()
     
     # Get version from viewer module
@@ -35,9 +35,11 @@ async def health(request: Request) -> Dict[str, Any]:
         "version": __version__,
         "cache": {
             "enabled": True,
+            "type": "incremental",
             "hit_rate": f"{cache_stats['hit_rate']:.1%}",
             "hits": cache_stats['hits'],
             "misses": cache_stats['misses'],
+            "incremental_updates": cache_stats.get('incremental_updates', 0),
             "size": cache_stats['size'],
             "max_size": cache_stats['max_size'],
         }
