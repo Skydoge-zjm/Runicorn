@@ -1,3 +1,10 @@
+/**
+ * Unified MetricChart Component
+ * 
+ * Handles both single-run and multi-run (comparison) scenarios:
+ * - Single run (runs.length === 1): Shows best point markers and stage separators
+ * - Multi-run (runs.length > 1): Shows multiple series for comparison overlay
+ */
 import React, { useEffect, useMemo, useRef, useState, memo } from 'react'
 import { Space, Switch, Tooltip, Slider, Select, Button, Card, Typography, Divider, theme } from 'antd'
 import { ExportOutlined } from '@ant-design/icons'
@@ -8,50 +15,87 @@ import designTokens from '../styles/designTokens'
 
 const { Text } = Typography
 
+/** Metrics data structure from API */
+export interface MetricsData {
+  columns: string[]
+  rows: any[]
+  total?: number
+  sampled?: number
+}
+
+/** Single run with its metrics data */
+export interface RunMetric {
+  id: string
+  label?: string
+  metrics: MetricsData
+}
+
+/** Unified MetricChart props */
+export interface MetricChartProps {
+  runs: RunMetric[]
+  xKey: string
+  yKey: string
+  title: string
+  height?: number | string
+  persistKey?: string
+  group?: string
+}
+
+/** EMA smoothing function */
+function ema(vals: Array<number | null>, factor: number): Array<number | null> {
+  if (factor <= 0) return vals
+  const alpha = 1 - factor
+  let s: number | null = null
+  return vals.map(v => {
+    if (v == null) return null
+    s = s == null ? v : alpha * v + (1 - alpha) * s
+    return s
+  })
+}
+
+/** Determine best value type based on metric name */
+function getBestType(key: string): 'max' | 'min' | undefined {
+  const k = key.toLowerCase()
+  if (k.includes('loss') || k.includes('error')) return 'min'
+  if (k.includes('acc') || k.includes('f1') || k.includes('auc') || k.includes('map') || k.includes('precision') || k.includes('recall')) return 'max'
+  return undefined
+}
+
 const MetricChart = memo(function MetricChart({ 
-  metrics, 
-  xKey, 
-  yKeys, 
-  title, 
-  height, 
-  persistKey, 
-  group 
-}: { 
-  metrics: { columns: string[]; rows: any[] }, 
-  xKey: string, 
-  yKeys: string[], 
-  title: string, 
-  height?: number | string, 
-  persistKey?: string, 
-  group?: string 
-}) {
+  runs, xKey, yKey, title, height, persistKey, group 
+}: MetricChartProps) {
   const { t } = useTranslation()
   const { settings } = useSettings()
   const { token } = theme.useToken()
   
-  // Use settings-based height if not explicitly provided
+  // Mode detection
+  const isSingleRun = runs.length === 1
+  const primaryRun = runs[0]
+  const presentCols = primaryRun?.metrics?.columns || []
+  
+  // Chart controls
   const effectiveHeight = height ?? settings.defaultChartHeight
   const [useLog, setUseLog] = useState(false)
   const [dynamicScale, setDynamicScale] = useState(true)
-  const [smoothing, setSmoothing] = useState(0) // EMA alpha in [0, 0.95]
+  const [smoothing, setSmoothing] = useState(0)
+  
+  // X-axis selection (for single run mode)
   const xCandidatesPref = ['iter', 'step', 'batch', 'global_step', 'time']
-  const presentCols = metrics?.columns || []
   const xCandidates = useMemo(() => xCandidatesPref.filter(k => presentCols.includes(k)), [presentCols])
   const [xAxisKey, setXAxisKey] = useState<string>(xKey)
   const loadedPersistRef = useRef(false)
 
-  // keep xAxisKey synced to prop or available candidates
+  // Sync xAxisKey with prop
   useEffect(() => {
     if (xKey && presentCols.includes(xKey)) {
       setXAxisKey(xKey)
     } else if (!presentCols.includes(xAxisKey)) {
-      // fallback to first available candidate or keep current
       const cand = xCandidates.find(Boolean)
       if (cand) setXAxisKey(cand)
     }
   }, [xKey, presentCols, xCandidates, xAxisKey])
 
-  // load persisted controls
+  // Load persisted controls
   useEffect(() => {
     if (!persistKey || loadedPersistRef.current) return
     try {
@@ -67,7 +111,7 @@ const MetricChart = memo(function MetricChart({
     loadedPersistRef.current = true
   }, [persistKey, presentCols])
 
-  // persist controls
+  // Persist controls
   useEffect(() => {
     if (!persistKey) return
     try {
@@ -75,166 +119,152 @@ const MetricChart = memo(function MetricChart({
     } catch {}
   }, [persistKey, useLog, dynamicScale, smoothing, xAxisKey])
 
-  const bestTypeFor = (k: string): 'max' | 'min' | undefined => {
-    const key = String(k).toLowerCase()
-    if (key.includes('loss') || key.includes('error')) return 'min'
-    if (key.includes('acc') || key.includes('f1') || key.includes('auc') || key.includes('map') || key.includes('precision') || key.includes('recall')) return 'max'
-    return undefined
-  }
-
-  const ema = (vals: Array<number | null>, smoothingFactor: number) => {
-    if (smoothingFactor <= 0) return vals
-    let s: number | null = null
-    return vals.map((v) => {
-      if (v == null) {
-        // If current value is null, we can either keep last s or nullify.
-        // ECharts connectNulls: true handles nulls visually.
-        // Let's reset s to null to break interpolation over long gaps?
-        // Or keep s? Standard TensorBoard EMA behavior ignores steps with missing values
-        // but here we are mapping 1-to-1.
-        // Let's return null and keep s as is (carry forward) or nullify?
-        // Simpler: if v is null, result is null, state s preserves last valid EMA?
-        // Or s becomes null?
-        // Let's stick to: if input is null, output is null. s is unchanged.
-        return null
-      }
-      // Standard EMA: S_t = alpha * Y_t + (1 - alpha) * S_{t-1}
-      // Where alpha is weight of NEW value.
-      // SmoothingFactor usually means weight of OLD value.
-      // So alpha = 1 - smoothingFactor.
-      const alpha = 1 - smoothingFactor
-      s = s == null ? v : alpha * v + (1 - alpha) * s
-      return s
-    })
-  }
-
+  // Build ECharts option
   const option = useMemo(() => {
-    const xKeyUsed = presentCols.includes(xAxisKey) ? xAxisKey : xKey
-    // Build raw x-axis values
-    const xRaw: Array<number | null> = metrics.rows.map((r: any) => {
-      const v = r[xKeyUsed]
-      const n = v === '' || v == null ? null : Number(v)
-      return n == null || Number.isNaN(n) ? null : n
-    })
-    // Normalize time axis to start from 0 for readability
-    let x = xRaw
-    if (xKeyUsed === 'time') {
-      const base = xRaw.find(v => v != null) ?? 0
-      x = xRaw.map(v => (v == null ? null : v - base))
-    }
-    // stage separators: draw dashed lines on stage changes when stage column exists
-    const canDecorateStage = presentCols.includes('stage') && (xKeyUsed === 'global_step' || xKeyUsed === 'time')
-    const stageLines: any[] = []
-    if (canDecorateStage) {
-      const rows = metrics.rows as any[]
-      // Forward-fill stage so missing values don't cause false toggles
-      let prevStage: any = rows.length ? (rows[0]?.stage ?? null) : null
-      for (let i = 1; i < rows.length; i++) {
-        const raw = rows[i]?.stage
-        const st = (raw === undefined || raw === null || raw === '') ? prevStage : raw
-        if (st !== prevStage) {
-          const pos = x[i]
-          if (pos != null) stageLines.push({ xAxis: pos })
-          prevStage = st
-        }
+    const xKeyUsed = isSingleRun && presentCols.includes(xAxisKey) ? xAxisKey : xKey
+    
+    // Build series for each run
+    const series = runs.map((run, runIndex) => {
+      const rows = run.metrics?.rows || []
+      
+      // Extract and normalize x values
+      const xVals = rows.map((r: any) => {
+        const v = r[xKeyUsed]
+        const n = v === '' || v == null ? null : Number(v)
+        return n == null || Number.isNaN(n) ? null : n
+      })
+      let xNorm = xVals
+      if (xKeyUsed === 'time') {
+        const base = xVals.find((v: number | null) => v != null) ?? 0
+        xNorm = xVals.map((v: number | null) => (v == null ? null : v - base))
       }
-    }
-    const series = yKeys.map((k) => {
-      const rawVals: Array<number | null> = metrics.rows.map((r: any) => {
-        const v = r[k] === '' || r[k] == null ? null : Number(r[k])
+      
+      // Extract y values
+      const yVals = rows.map((r: any) => {
+        const v = r[yKey] === '' || r[yKey] == null ? null : Number(r[yKey])
         const n = v == null || Number.isNaN(v) ? null : v
         if (useLog && (n == null || n <= 0)) return null
         return n
       })
-      const dataVals = ema(rawVals, Math.min(0.999, Math.max(0, smoothing)))
-      const nnz = dataVals.filter((v) => v != null).length
-      const isSparse = nnz <= 12 || nnz <= Math.ceil(((metrics?.rows?.length || 0) as number) * 0.2)
-      const bp = bestTypeFor(k)
+      const smoothedY = ema(yVals, Math.min(0.99, Math.max(0, smoothing)))
+      
+      // Build data: category axis for single run, value axis for multi-run
+      let data: any
+      if (isSingleRun) {
+        data = smoothedY
+      } else {
+        const points: Array<[number, number]> = []
+        for (let i = 0; i < smoothedY.length; i++) {
+          const xv = xNorm[i], yv = smoothedY[i]
+          if (xv != null && yv != null) points.push([xv, yv])
+        }
+        data = points
+      }
+      
+      const nnz = smoothedY.filter(v => v != null).length
+      const isSparse = nnz <= 12 || nnz <= Math.ceil(rows.length * 0.2)
+      
       const s: any = {
-        name: k,
+        name: isSingleRun ? yKey : (run.label || run.id),
         type: 'line',
-        smooth: 0.2, // Visual spline smoothing (ECharts), not data smoothing
+        smooth: 0.2,
         showSymbol: isSparse,
         symbolSize: isSparse ? 6 : 4,
         connectNulls: true,
         sampling: 'lttb',
         large: true,
-        data: dataVals, // Show all data points for experiment metrics
-        markPoint: bp ? { data: [{ type: bp, name: bp === 'max' ? 'Best (max)' : 'Best (min)' }], symbolSize: 60 } : undefined,
+        data,
       }
-      if (k === yKeys[0]) {
-        const allLines = stageLines
-        if (allLines.length) {
-          s.markLine = { 
-            silent: true, 
-            symbol: 'none', 
-            lineStyle: { type: 'dashed', color: token.colorBorder, width: 1 }, 
-            label: { show: false }, // Hide labels to prevent overlap with legend
-            data: allLines 
+      
+      // Single run extras: best point marker and stage separators
+      if (isSingleRun && runIndex === 0) {
+        const bp = getBestType(yKey)
+        if (bp) {
+          s.markPoint = { data: [{ type: bp, name: bp === 'max' ? 'Best (max)' : 'Best (min)' }], symbolSize: 60 }
+        }
+        
+        // Stage separators
+        if (presentCols.includes('stage') && (xKeyUsed === 'global_step' || xKeyUsed === 'time')) {
+          const stageLines: any[] = []
+          let prevStage: any = rows.length ? (rows[0]?.stage ?? null) : null
+          for (let i = 1; i < rows.length; i++) {
+            const raw = rows[i]?.stage
+            const st = (raw === undefined || raw === null || raw === '') ? prevStage : raw
+            if (st !== prevStage) {
+              const pos = xNorm[i]
+              if (pos != null) stageLines.push({ xAxis: pos })
+              prevStage = st
+            }
+          }
+          if (stageLines.length) {
+            s.markLine = { 
+              silent: true, symbol: 'none', 
+              lineStyle: { type: 'dashed', color: token.colorBorder, width: 1 }, 
+              label: { show: false }, data: stageLines 
+            }
           }
         }
       }
       return s
     })
+    
+    // X-axis data for single run (category axis)
+    let xAxisData: any[] | undefined
+    if (isSingleRun) {
+      const rows = primaryRun?.metrics?.rows || []
+      const xKeyUsed2 = presentCols.includes(xAxisKey) ? xAxisKey : xKey
+      const xRaw = rows.map((r: any) => {
+        const v = r[xKeyUsed2]
+        const n = v === '' || v == null ? null : Number(v)
+        return n == null || Number.isNaN(n) ? null : n
+      })
+      xAxisData = xKeyUsed2 === 'time' 
+        ? xRaw.map((v: any) => (v == null ? null : v - (xRaw.find((x: any) => x != null) ?? 0)))
+        : xRaw
+    }
+    
+    const legendData = isSingleRun ? [yKey] : runs.map(r => r.label || r.id)
+    
     return {
-      title: { 
-        text: title,
-        left: 'center',
-        top: designTokens.spacing.xs,
-        textStyle: {
-          fontSize: designTokens.typography.fontSize.md,
-          fontWeight: designTokens.typography.fontWeight.semibold
-        }
+      title: { text: title, left: 'center', top: designTokens.spacing.xs,
+        textStyle: { fontSize: designTokens.typography.fontSize.md, fontWeight: designTokens.typography.fontWeight.semibold }
       },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
-      legend: { 
-        data: yKeys, 
-        top: designTokens.spacing.xl,
-        padding: [5, 10],
-      },
-      xAxis: { type: 'category', data: x },
+      legend: { data: legendData, top: designTokens.spacing.xl, type: runs.length > 3 ? 'scroll' : 'plain', padding: [5, 10] },
+      xAxis: isSingleRun ? { type: 'category', data: xAxisData } : { type: 'value', name: xKey },
       yAxis: { type: useLog ? 'log' : 'value', scale: dynamicScale, min: dynamicScale ? 'dataMin' : 0 },
-      grid: { 
-        left: 50, 
-        right: 30, 
-        // Increase top spacing to give more room for legend, especially with multiple metrics
-        top: yKeys.length > 3 ? 70 : (yKeys.length > 1 ? 60 : 50), 
-        bottom: 80,
-        show: settings.showGridLines
-      },
-      dataZoom: [
-        { type: 'inside', throttle: 50 },
-        { type: 'slider', height: 18, bottom: 40 }
-      ],
-      toolbox: {
-        feature: {
-          restore: {},
-          saveAsImage: {},
-        },
-        right: 10
-      },
+      grid: { left: 50, right: 30, top: runs.length > 3 ? 70 : (runs.length > 1 ? 60 : 50), bottom: 80, show: settings.showGridLines },
+      dataZoom: [{ type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 40 }],
+      toolbox: { feature: { restore: {}, saveAsImage: {} }, right: 10 },
       series,
       animation: settings.enableChartAnimations,
       animationDuration: settings.enableChartAnimations ? 1000 : 0,
     }
-  }, [metrics, xKey, xAxisKey, yKeys, title, useLog, dynamicScale, smoothing, presentCols, settings.enableChartAnimations, settings.maxDataPoints, settings.showGridLines])
+  }, [runs, xKey, xAxisKey, yKey, title, useLog, dynamicScale, smoothing, presentCols, isSingleRun, primaryRun, settings, token.colorBorder])
 
   const exportCsv = () => {
     try {
-      const xKeyUsed = presentCols.includes(xAxisKey) ? xAxisKey : xKey
-      const header = [xKeyUsed, ...yKeys]
+      const xKeyUsed = isSingleRun && presentCols.includes(xAxisKey) ? xAxisKey : xKey
       const lines: string[] = []
-      lines.push(header.join(','))
-      for (const r of metrics.rows) {
-        const row: any[] = []
-        const xv = r[xKeyUsed]
-        row.push(xv == null ? '' : String(xv))
-        for (const y of yKeys) {
-          const v = r[y]
-          row.push(v == null ? '' : String(v))
+      
+      if (isSingleRun) {
+        // Single run: simple format [x, y]
+        lines.push([xKeyUsed, yKey].join(','))
+        for (const r of (primaryRun?.metrics?.rows || [])) {
+          const xv = r[xKeyUsed], yv = r[yKey]
+          lines.push([xv == null ? '' : String(xv), yv == null ? '' : String(yv)].join(','))
         }
-        lines.push(row.join(','))
+      } else {
+        // Multi-run: include run_id column
+        lines.push(['run_id', xKeyUsed, yKey].join(','))
+        for (const run of runs) {
+          for (const r of (run.metrics?.rows || [])) {
+            const xv = r[xKeyUsed], yv = r[yKey]
+            lines.push([run.id, xv == null ? '' : String(xv), yv == null ? '' : String(yv)].join(','))
+          }
+        }
       }
+      
       const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -251,117 +281,65 @@ const MetricChart = memo(function MetricChart({
     <div>
       <Card 
         size="small"
-        style={{ 
-          marginBottom: designTokens.spacing.md,
-          borderRadius: designTokens.borderRadius.md,
-        }}
-        bodyStyle={{ padding: `${designTokens.spacing.sm}px ${designTokens.spacing.md}px` }}
+        style={{ marginBottom: designTokens.spacing.md, borderRadius: designTokens.borderRadius.md }}
+        styles={{ body: { padding: `${designTokens.spacing.sm}px ${designTokens.spacing.md}px` } }}
       >
-        {/* Use simple Space wrap layout - prevents overlap in narrow columns */}
         <Space wrap size="small" style={{ width: '100%' }}>
-          {/* Y-Axis Toggles */}
           <Tooltip title={t('chart.log_y_tooltip')}>
-            <Switch 
-              checkedChildren={t('chart.log')} 
-              unCheckedChildren={t('chart.linear')} 
-              checked={useLog} 
-              onChange={setUseLog} 
-              size="small"
-            />
+            <Switch checkedChildren={t('chart.log')} unCheckedChildren={t('chart.linear')} checked={useLog} onChange={setUseLog} size="small" />
           </Tooltip>
-
           <Tooltip title={t('chart.auto_scale_tooltip')}>
-            <Switch 
-              checkedChildren={t('chart.auto')} 
-              unCheckedChildren={t('chart.fixed')} 
-              checked={dynamicScale} 
-              onChange={setDynamicScale} 
-              size="small"
-            />
+            <Switch checkedChildren={t('chart.auto')} unCheckedChildren={t('chart.fixed')} checked={dynamicScale} onChange={setDynamicScale} size="small" />
           </Tooltip>
-
           <Divider type="vertical" style={{ margin: '0 4px' }} />
-
-          {/* Smoothing Control */}
           <Space size="small" style={{ minWidth: 140, maxWidth: 200 }}>
-            <Text type="secondary" style={{ fontSize: designTokens.typography.fontSize.xs, whiteSpace: 'nowrap' }}>
-              {t('chart.smooth')}:
-            </Text>
-            <Slider 
-              min={0} 
-              max={0.95} 
-              step={0.05} 
-              value={smoothing} 
-              onChange={(v) => setSmoothing(Array.isArray(v) ? v[0] : v)} 
-              style={{ width: 90 }} 
-              tooltip={{ 
-                formatter: (v) => v ? `${(v * 100).toFixed(0)}%` : t('chart.off')
-              }}
-            />
+            <Text type="secondary" style={{ fontSize: designTokens.typography.fontSize.xs, whiteSpace: 'nowrap' }}>{t('chart.smooth')}:</Text>
+            <Slider min={0} max={0.95} step={0.05} value={smoothing} onChange={(v) => setSmoothing(Array.isArray(v) ? v[0] : v)} style={{ width: 90 }} tooltip={{ formatter: (v) => v ? `${(v * 100).toFixed(0)}%` : t('chart.off') }} />
           </Space>
-
+          {isSingleRun && (
+            <>
+              <Divider type="vertical" style={{ margin: '0 4px' }} />
+              <Select size="small" value={presentCols.includes(xAxisKey) ? xAxisKey : xKey} style={{ minWidth: 100 }} onChange={setXAxisKey} options={(xCandidates.length ? xCandidates : [xKey]).map(k => ({ value: k, label: `${t('chart.x_axis')}: ${k}` }))} />
+            </>
+          )}
           <Divider type="vertical" style={{ margin: '0 4px' }} />
-
-          {/* X-Axis Selector */}
-          <Select 
-            size="small" 
-            value={presentCols.includes(xAxisKey) ? xAxisKey : xKey} 
-            style={{ minWidth: 100 }} 
-            onChange={setXAxisKey}
-            options={(xCandidates.length ? xCandidates : [xKey]).map(k => ({ 
-              value: k, 
-              label: `${t('chart.x_axis')}: ${k}` 
-            }))}
-          />
-
-          <Divider type="vertical" style={{ margin: '0 4px' }} />
-
-          {/* Export Button */}
-          <Button 
-            size="small" 
-            icon={<ExportOutlined />} 
-            onClick={exportCsv}
-          >
-            {t('chart.export_csv')}
-          </Button>
+          <Button size="small" icon={<ExportOutlined />} onClick={exportCsv}>{t('chart.export_csv')}</Button>
         </Space>
       </Card>
-
       <div style={{ height: effectiveHeight as any, width: '100%' }}>
-        <AutoResizeEChart 
-          option={option as any} 
-          group={group} 
-        />
+        <AutoResizeEChart option={option as any} group={group} />
       </div>
     </div>
   )
+
 }, (prevProps, nextProps) => {
-  // Custom deep comparison for performance optimization
-  // Uses data fingerprint (row count + last step) instead of reference equality
-  // This prevents unnecessary re-renders when the same data is fetched
+  // Custom comparison using data fingerprints for each run
+  if (prevProps.runs.length !== nextProps.runs.length) return false
   
-  const prevRows = prevProps.metrics?.rows
-  const nextRows = nextProps.metrics?.rows
-  
-  // Compare data by fingerprint: row count and last global_step
-  const sameRowCount = (prevRows?.length ?? 0) === (nextRows?.length ?? 0)
-  const prevLastStep = prevRows?.length ? prevRows[prevRows.length - 1]?.global_step : undefined
-  const nextLastStep = nextRows?.length ? nextRows[nextRows.length - 1]?.global_step : undefined
-  const sameLastStep = prevLastStep === nextLastStep
-  
-  // Also compare column count to detect schema changes
-  const sameColumns = (prevProps.metrics?.columns?.length ?? 0) === (nextProps.metrics?.columns?.length ?? 0)
-  
-  const sameData = sameRowCount && sameLastStep && sameColumns
-  
-  // Compare yKeys array content
-  const sameYKeys = prevProps.yKeys.length === nextProps.yKeys.length &&
-    prevProps.yKeys.every((key, idx) => key === nextProps.yKeys[idx])
+  for (let i = 0; i < prevProps.runs.length; i++) {
+    const prevRun = prevProps.runs[i]
+    const nextRun = nextProps.runs[i]
+    
+    if (prevRun.id !== nextRun.id) return false
+    if (prevRun.label !== nextRun.label) return false
+    
+    const prevRows = prevRun.metrics?.rows
+    const nextRows = nextRun.metrics?.rows
+    const prevRowCount = prevRows?.length ?? 0
+    const nextRowCount = nextRows?.length ?? 0
+    
+    if (prevRowCount !== nextRowCount) return false
+    
+    if (prevRowCount > 0) {
+      const prevLastStep = prevRows[prevRowCount - 1]?.global_step
+      const nextLastStep = nextRows[nextRowCount - 1]?.global_step
+      if (prevLastStep !== nextLastStep) return false
+    }
+  }
   
   return (
-    sameData &&
     prevProps.xKey === nextProps.xKey &&
-    sameYKeys &&
+    prevProps.yKey === nextProps.yKey &&
     prevProps.title === nextProps.title &&
     prevProps.height === nextProps.height &&
     prevProps.persistKey === nextProps.persistKey &&

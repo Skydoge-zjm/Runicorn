@@ -6,7 +6,6 @@ import { motion } from 'framer-motion'
 import { getRunDetail, getStepMetrics, getGpuTelemetry, listRunsByName, listNames, listProjects } from '../api'
 import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
-import MultiRunMetricChart from '../components/MultiRunMetricChart'
 import RunArtifacts from '../components/RunArtifacts'
 import { RunDetailSkeleton } from '../components/LoadingSkeleton'
 import FancyMetricCard from '../components/fancy/FancyMetricCard'
@@ -626,11 +625,11 @@ export default function RunDetailPage() {
                   backgroundColor: '#fff'
                 }}>
                   <LazyChartWrapper height={chartHeight}>
-                    <MultiRunMetricChart
-                      title={k}
+                    <MetricChart
+                      runs={selectedRunIds.map((rid) => ({ id: rid, metrics: overlayMetricsMap[rid] || { columns: [], rows: [] } }))}
                       xKey={stepXAxis}
                       yKey={k}
-                      runs={selectedRunIds.map((rid) => ({ id: rid, metrics: overlayMetricsMap[rid] || { columns: [], rows: [] } }))}
+                      title={k}
                       height={chartHeight}
                       group={`overlay-group-${id}`}
                       persistKey={`run:${id}:overlay:${k}`}
@@ -689,9 +688,9 @@ export default function RunDetailPage() {
               }}>
                 <LazyChartWrapper height={chartHeight}>
                   <MetricChart 
-                    metrics={stepMetrics} 
+                    runs={[{ id, metrics: stepMetrics }]}
                     xKey={stepXAxis} 
-                    yKeys={[k]} 
+                    yKey={k} 
                     title={k} 
                     height={chartHeight}
                     group={`step-group-${id}`} 
