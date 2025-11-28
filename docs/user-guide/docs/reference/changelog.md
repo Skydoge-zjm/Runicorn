@@ -170,8 +170,6 @@ All notable changes to Runicorn.
    - `/api/ssh/*` endpoints are deprecated
    - Use `/api/remote/*` endpoints instead
 
-See [Migration Guide](../../guides/MIGRATION_GUIDE_v0.4_to_v0.5.md) for details.
-
 ---
 
 <div align="center">
