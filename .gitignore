@@ -48,6 +48,7 @@ web/frontend/*.tsbuildinfo
 .idea/
 .vscode/
 .cursor/
+.windsurf/
 .DS_Store
 Thumbs.db
 
