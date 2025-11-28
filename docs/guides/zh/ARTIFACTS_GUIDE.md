@@ -46,7 +46,7 @@ model.add_metadata({
 version = run.log_artifact(model)  # → v1
 print(f"Saved model: resnet50-model:v{version}")
 
-rn.finish()
+run.finish()
 ```
 
 ### 2. 使用模型
@@ -64,7 +64,7 @@ model_path = artifact.download()
 # 使用模型
 # model.load_state_dict(torch.load(model_path / "model.pth"))
 
-rn.finish()
+run.finish()
 ```
 
 ---
@@ -190,7 +190,7 @@ run1 = rn.init(project="training", name="data_prep")
 dataset = rn.Artifact("my-dataset", type="dataset")
 dataset.add_dir("data/")
 run1.log_artifact(dataset)  # → my-dataset:v1
-rn.finish()
+run.finish()
 
 # Run 2: 使用数据集训练模型
 run2 = rn.init(project="training", name="model_train")
@@ -199,7 +199,7 @@ dataset = run2.use_artifact("my-dataset:v1")  # 自动记录使用
 model = rn.Artifact("my-model", type="model")
 model.add_file("model.pth")
 run2.log_artifact(model)  # → my-model:v1
-rn.finish()
+run.finish()
 
 # 系统自动记录血缘关系：
 # my-dataset:v1 → run2 → my-model:v1
@@ -480,7 +480,7 @@ dataset = rn.Artifact("processed-data", type="dataset")
 dataset.add_dir("processed_data/")
 dataset.add_metadata({"num_samples": 10000})
 run_data.log_artifact(dataset)  # → processed-data:v1
-rn.finish()
+run.finish()
 
 # Step 2: 训练模型
 run_train = rn.init(project="ml_pipeline", name="training")
@@ -492,13 +492,13 @@ model = rn.Artifact("trained-model", type="model")
 model.add_file("model.pth")
 model.add_metadata({"trained_with": "processed-data:v1"})
 run_train.log_artifact(model)  # → trained-model:v1
-rn.finish()
+run.finish()
 
 # Step 3: 模型评估
 run_eval = rn.init(project="ml_pipeline", name="evaluation")
 model = run_eval.use_artifact("trained-model:v1")  # 自动追踪
 # 评估...
-rn.finish()
+run.finish()
 
 # 血缘关系（自动生成）：
 # processed-data:v1 → run_train → trained-model:v1 → run_eval

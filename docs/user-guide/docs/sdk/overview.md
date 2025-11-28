@@ -10,10 +10,10 @@ The Runicorn Python SDK provides a simple, intuitive API for tracking ML experim
 
 ```mermaid
 graph LR
-    A[rn.init] --> B[rn.log]
+    A[rn.init] --> B[run.log]
     B --> B
-    B --> C[rn.summary]
-    C --> D[rn.finish]
+    B --> C[run.summary]
+    C --> D[run.finish]
     
     style A fill:#52c41a
     style D fill:#52c41a
@@ -76,7 +76,7 @@ run = rn.init(project="demo", capture_env=False)
 
 ---
 
-### `rn.log()` - Log Metrics
+### `run.log()` - Log Metrics
 
 Record training metrics at each step.
 
@@ -106,28 +106,28 @@ import runicorn as rn
 run = rn.init(project="demo")
 
 # Simple logging
-rn.log({"loss": 0.5, "accuracy": 0.8}, step=10)
+run.log({"loss": 0.5, "accuracy": 0.8}, step=10)
 
 # Auto-incrementing step
-rn.log({"loss": 0.4})  # step=1
-rn.log({"loss": 0.3})  # step=2
+run.log({"loss": 0.4})  # step=1
+run.log({"loss": 0.3})  # step=2
 
 # With stage
-rn.log({"loss": 0.2}, stage="train")
-rn.log({"val_loss": 0.3}, stage="eval")
+run.log({"loss": 0.2}, stage="train")
+run.log({"val_loss": 0.3}, stage="eval")
 
 # Using kwargs
-rn.log(loss=0.1, accuracy=0.95, lr=0.001, step=100)
+run.log(loss=0.1, accuracy=0.95, lr=0.001, step=100)
 
 # Mixed
-rn.log({"loss": 0.1}, accuracy=0.95, step=100)
+run.log({"loss": 0.1}, accuracy=0.95, step=100)
 
-rn.finish()
+run.finish()
 ```
 
 ---
 
-### `rn.log_text()` - Log Text Messages
+### `run.log_text()` - Log Text Messages
 
 Log text messages and progress updates.
 
@@ -142,16 +142,16 @@ import runicorn as rn
 
 run = rn.init(project="demo")
 
-rn.log_text("Starting training...")
-rn.log_text(f"Epoch 1/100, loss=0.5")
-rn.log_text("✓ Training completed")
+run.log_text("Starting training...")
+run.log_text(f"Epoch 1/100, loss=0.5")
+run.log_text("✓ Training completed")
 
-rn.finish()
+run.finish()
 ```
 
 ---
 
-### `rn.log_image()` - Log Images
+### `run.log_image()` - Log Images
 
 Log images for visualization.
 
@@ -188,21 +188,21 @@ run = rn.init(project="demo")
 
 # From PIL Image
 img = Image.open("prediction.png")
-rn.log_image("prediction", img, step=100, caption="Model prediction")
+run.log_image("prediction", img, step=100, caption="Model prediction")
 
 # From numpy array
 array = np.random.rand(224, 224, 3) * 255
-rn.log_image("sample", array.astype(np.uint8), step=100)
+run.log_image("sample", array.astype(np.uint8), step=100)
 
 # From file path
-rn.log_image("result", "output.jpg", step=100)
+run.log_image("result", "output.jpg", step=100)
 
-rn.finish()
+run.finish()
 ```
 
 ---
 
-### `rn.set_primary_metric()` - Track Best Value
+### `run.set_primary_metric()` - Track Best Value
 
 Set which metric to track automatically.
 
@@ -228,22 +228,22 @@ import runicorn as rn
 run = rn.init(project="demo")
 
 # Track best accuracy
-rn.set_primary_metric("accuracy", mode="max")
+run.set_primary_metric("accuracy", mode="max")
 
 # Training loop
 for step in range(100):
     acc = train_step()  # Your training code
-    rn.log({"accuracy": acc}, step=step)
+    run.log({"accuracy": acc}, step=step)
 
 # Best accuracy is automatically saved to summary
-rn.finish()
+run.finish()
 ```
 
 **Automatic tracking**: The best value and its step are automatically saved to `summary.json`.
 
 ---
 
-### `rn.summary()` - Save Summary
+### `run.summary()` - Save Summary
 
 Record final results and metadata.
 
@@ -260,10 +260,10 @@ run = rn.init(project="demo")
 
 # Training...
 for step in range(100):
-    rn.log({"loss": 0.1}, step=step)
+    run.log({"loss": 0.1}, step=step)
 
 # Save final results
-rn.summary({
+run.summary({
     "final_accuracy": 0.95,
     "final_loss": 0.05,
     "total_epochs": 100,
@@ -272,12 +272,12 @@ rn.summary({
     "notes": "Baseline experiment with default hyperparameters"
 })
 
-rn.finish()
+run.finish()
 ```
 
 ---
 
-### `rn.finish()` - Complete Experiment
+### `run.finish()` - Complete Experiment
 
 Mark experiment as finished.
 
@@ -301,19 +301,19 @@ run = rn.init(project="demo")
 try:
     # Training code
     for step in range(100):
-        rn.log({"loss": 0.1}, step=step)
+        run.log({"loss": 0.1}, step=step)
     
     # Success
-    rn.finish(status="finished")
+    run.finish(status="finished")
     
 except KeyboardInterrupt:
     # User interrupted
-    rn.finish(status="interrupted")
+    run.finish(status="interrupted")
     
 except Exception as e:
     # Training failed
-    rn.log_text(f"Error: {e}")
-    rn.finish(status="failed")
+    run.log_text(f"Error: {e}")
+    run.finish(status="failed")
 ```
 
 ---
@@ -336,8 +336,8 @@ run = rn.init(
     capture_env=True  # Capture Git, pip packages, system info
 )
 
-rn.log_text("Starting MNIST training...")
-rn.set_primary_metric("test_accuracy", mode="max")
+run.log_text("Starting MNIST training...")
+run.set_primary_metric("test_accuracy", mode="max")
 
 # Define model
 model = nn.Sequential(
@@ -374,15 +374,15 @@ for epoch in range(10):
         
         # Log every 100 batches
         if batch_idx % 100 == 0:
-            rn.log({
+            run.log({
                 "train_loss": loss.item(),
                 "learning_rate": optimizer.param_groups[0]['lr']
             }, stage="train")
     
     # Log epoch metrics
     avg_loss = total_loss / len(train_loader)
-    rn.log({"epoch_loss": avg_loss}, step=epoch)
-    rn.log_text(f"Epoch {epoch+1}/10, loss={avg_loss:.4f}")
+    run.log({"epoch_loss": avg_loss}, step=epoch)
+    run.log_text(f"Epoch {epoch+1}/10, loss={avg_loss:.4f}")
 
 # Save model
 torch.save(model.state_dict(), "mnist_model.pth")
@@ -398,16 +398,16 @@ artifact.add_metadata({
 })
 
 version = run.log_artifact(artifact)
-rn.log_text(f"Model saved as v{version}")
+run.log_text(f"Model saved as v{version}")
 
 # Summary
-rn.summary({
+run.summary({
     "final_loss": avg_loss,
     "total_epochs": 10,
     "model_path": "mnist_model.pth"
 })
 
-rn.finish()
+run.finish()
 print(f"✓ Experiment completed: {run.id}")
 ```
 
@@ -423,16 +423,16 @@ print(f"✓ Experiment completed: {run.id}")
 import runicorn as rn
 
 run = rn.init(project="demo", name="simple_training")
-rn.set_primary_metric("accuracy", mode="max")
+run.set_primary_metric("accuracy", mode="max")
 
 for epoch in range(100):
     # Your training code
     loss, acc = train_one_epoch(model)
     
     # Log metrics
-    rn.log({"loss": loss, "accuracy": acc}, step=epoch)
+    run.log({"loss": loss, "accuracy": acc}, step=epoch)
 
-rn.finish()
+run.finish()
 ```
 
 ### Pattern 2: Multi-Stage Training
@@ -444,17 +444,17 @@ run = rn.init(project="demo")
 
 # Warmup stage
 for step in range(10):
-    rn.log({"loss": 1.0}, step=step, stage="warmup")
+    run.log({"loss": 1.0}, step=step, stage="warmup")
 
 # Training stage
 for step in range(10, 100):
-    rn.log({"loss": 0.5}, step=step, stage="train")
+    run.log({"loss": 0.5}, step=step, stage="train")
 
 # Evaluation stage
 for step in range(100, 110):
-    rn.log({"val_loss": 0.3}, step=step, stage="eval")
+    run.log({"val_loss": 0.3}, step=step, stage="eval")
 
-rn.finish()
+run.finish()
 ```
 
 ### Pattern 3: Checkpoint Saving
@@ -480,9 +480,9 @@ for epoch in range(100):
         artifact.add_metadata({"epoch": epoch})
         
         version = run.log_artifact(artifact)
-        rn.log_text(f"Checkpoint saved as v{version}")
+        run.log_text(f"Checkpoint saved as v{version}")
 
-rn.finish()
+run.finish()
 ```
 
 ---
@@ -508,21 +508,21 @@ rn.finish()
     Always set a primary metric for easy comparison:
     
     ```python
-    rn.set_primary_metric("accuracy", mode="max")
+    run.set_primary_metric("accuracy", mode="max")
     # Now best accuracy is automatically tracked
     ```
 
 !!! warning "Remember to call finish()"
 
-    Always call `rn.finish()` at the end to ensure data is saved:
+    Always call `run.finish()` at the end to ensure data is saved:
     
     ```python
     run = rn.init(project="demo")
     try:
         # Training code
-        rn.log({"loss": 0.1})
+        run.log({"loss": 0.1})
     finally:
-        rn.finish()  # Always called, even if error occurs
+        run.finish()  # Always called, even if error occurs
     ```
 
 ---
@@ -544,16 +544,16 @@ import runicorn as rn
 run = rn.init(project="demo", name="exp1")
 
 # Set primary metric
-rn.set_primary_metric("accuracy", mode="max")
+run.set_primary_metric("accuracy", mode="max")
 
 # Log metrics
-rn.log({"loss": 0.1, "accuracy": 0.95}, step=100, stage="train")
+run.log({"loss": 0.1, "accuracy": 0.95}, step=100, stage="train")
 
 # Log text
-rn.log_text("Training started")
+run.log_text("Training started")
 
 # Log image
-rn.log_image("prediction", image_array, step=100)
+run.log_image("prediction", image_array, step=100)
 
 # Save artifact
 artifact = rn.Artifact("my-model", type="model")
@@ -561,10 +561,10 @@ artifact.add_file("model.pth")
 run.log_artifact(artifact)
 
 # Summary
-rn.summary({"final_accuracy": 0.95})
+run.summary({"final_accuracy": 0.95})
 
 # Finish
-rn.finish()
+run.finish()
 ```
 
 ---

@@ -25,12 +25,12 @@ sequenceDiagram
     SDK->>SQLite: INSERT INTO experiments
     
     loop 训练
-        用户->>SDK: rn.log({loss: 0.1})
+        用户->>SDK: run.log({loss: 0.1})
         SDK->>文件系统: 追加到 events.jsonl
         SDK->>SQLite: INSERT INTO metrics
     end
     
-    用户->>SDK: rn.finish()
+    用户->>SDK: run.finish()
     SDK->>文件系统: 更新 summary.json
     SDK->>SQLite: UPDATE experiments SET status='finished'
     
@@ -49,7 +49,7 @@ sequenceDiagram
 
 **1. 用户记录指标**:
 ```python
-rn.log({"loss": 0.5, "accuracy": 0.9}, step=100)
+run.log({"loss": 0.5, "accuracy": 0.9}, step=100)
 ```
 
 **2. SDK 处理**:

@@ -86,8 +86,8 @@ Minimal changes required:
 import runicorn as rn
 
 run = rn.init(project="demo")           # Line 1: Initialize
-rn.log({"loss": 0.1}, step=1)           # Line 2: Log metrics
-rn.finish()                             # Line 3: Finish
+run.log({"loss": 0.1}, step=1)          # Line 2: Log metrics
+run.finish()                            # Line 3: Finish
 ```
 
 ### Can I use Runicorn with TensorFlow?
@@ -108,12 +108,12 @@ for epoch in range(10):
     history = model.fit(x_train, y_train)
     
     # Log TensorFlow metrics
-    rn.log({
+    run.log({
         "loss": history.history['loss'][0],
         "accuracy": history.history['accuracy'][0]
     }, step=epoch)
 
-rn.finish()
+run.finish()
 ```
 
 ### Can I use Runicorn with scikit-learn?
@@ -133,10 +133,10 @@ model.fit(X_train, y_train)
 
 # Evaluate and log
 accuracy = accuracy_score(y_test, model.predict(X_test))
-rn.log({"accuracy": accuracy})
+run.log({"accuracy": accuracy})
 
-rn.summary({"model": "RandomForest", "final_accuracy": accuracy})
-rn.finish()
+run.summary({"model": "RandomForest", "final_accuracy": accuracy})
+run.finish()
 ```
 
 ### How do I view my experiments?
@@ -189,7 +189,7 @@ artifact.add_metadata({"accuracy": 0.95})
 version = run.log_artifact(artifact)  # Returns v1, v2, v3...
 print(f"Model saved as v{version}")
 
-rn.finish()
+run.finish()
 ```
 
 ### How do I load a saved model?
@@ -208,7 +208,7 @@ import torch
 state_dict = torch.load(model_path / "model.pth")
 model.load_state_dict(state_dict)
 
-rn.finish()
+run.finish()
 ```
 
 ### How much storage does Runicorn use?
@@ -240,25 +240,30 @@ runicorn artifacts --action delete --name old-model --version 1 --permanent
 
 ---
 
-## Remote Sync
+## Remote Viewer (v0.5.0+)
 
-### How do I sync from a remote server?
+### How do I view experiments on a remote server?
 
-**Step 1**: Start viewer
+**v0.5.0** introduces **Remote Viewer** — a VSCode-style remote access feature:
+
+**Step 1**: Start local viewer
 ```bash
 runicorn viewer
 ```
 
-**Step 2**: Open web UI and go to "Remote" page
+**Step 2**: Open web UI → **Remote** page
 
 **Step 3**: Enter SSH credentials:
-- Host: `192.168.1.100`
+- Host: `gpu-server.lab.com`
 - Username: `your_username`
 - Password or SSH key
 
-**Step 4**: Browse remote directories and click "Configure Smart Mode"
+**Step 4**: Select Python environment with Runicorn installed
 
-**Step 5**: Experiments sync automatically!
+**Step 5**: Click **Start Viewer** → Done!
+
+!!! tip "No File Sync Needed"
+    Remote Viewer runs directly on your server. Data never leaves the remote machine — only the UI is tunneled to your browser. Latency < 100ms!
 
 ### Do I need to install Runicorn on the remote server?
 
@@ -276,25 +281,27 @@ import runicorn as rn
 
 run = rn.init(
     project="training",
-    storage="/data/runicorn"  # Shared storage path
+    storage="/data/runicorn"  # Consistent storage path
 )
 
 # Training code...
-rn.log({"loss": 0.1})
-rn.finish()
+run.log({"loss": 0.1})
+run.finish()
 ```
 
-### What's the difference between Smart Mode and Mirror Mode?
+### What's the difference between Remote Viewer and File Sync?
 
-**Smart Mode** (recommended):
-- Syncs metadata only
-- Downloads files on-demand
-- Fast, low bandwidth
+| Feature | Remote Viewer (v0.5.0+) | File Sync (deprecated) |
+|---------|------------------------|------------------------|
+| **Data Location** | Stays on server | Copied to local |
+| **Initial Wait** | None (instant) | Minutes to hours |
+| **Bandwidth** | Low (UI only) | High (all files) |
+| **Privacy** | Data never leaves server | Data copied locally |
+| **Real-time** | ✅ Yes | ⚠️ Delayed |
 
-**Mirror Mode**:
-- Syncs all files
-- Real-time updates (2-second interval)
-- Higher bandwidth usage
+### Can I connect to multiple remote servers?
+
+Yes! The Remote page supports multiple concurrent connections. Each connection can have its own Viewer instance.
 
 ---
 
@@ -310,6 +317,29 @@ If you have 1000+ experiments, use the **V2 API** for 100x faster queries.
 - If `/api/runs` takes >5s, you need V2
 
 **Solution**: Frontend automatically uses V2 API when available.
+
+### How do I handle experiments with 100k+ data points? (v0.5.2+)
+
+Use **LTTB downsampling**:
+
+1. Go to **Settings** → **Charts**
+2. Set **Max Data Points** (default: 2000)
+3. Charts will automatically downsample while preserving visual accuracy
+
+```bash
+# API also supports explicit downsampling
+GET /api/runs/{run_id}/metrics_step?downsample=2000
+```
+
+### Why are charts loading faster in v0.5.3?
+
+v0.5.3 introduces several optimizations:
+
+- **Lazy loading** — Charts only render when visible
+- **Memo optimization** — Fewer unnecessary re-renders
+- **Incremental cache** — Backend parses only new data
+
+See [Performance Tips](../ui/performance.md) for details.
 
 ### How many experiments can Runicorn handle?
 
@@ -331,10 +361,10 @@ if dist.get_rank() == 0:
     run = rn.init(project="distributed_training")
     
     # Log from master process
-    rn.log({"train_loss": loss})
+    run.log({"train_loss": loss})
     
     # Finish on master process
-    rn.finish()
+    run.finish()
 ```
 
 ---
@@ -367,8 +397,8 @@ run = rn.init(project="notebook_demo")
 # Your notebook code
 # ...
 
-rn.log({"accuracy": 0.95})
-rn.finish()
+run.log({"accuracy": 0.95})
+run.finish()
 
 print(f"View results: http://127.0.0.1:23300/runs/{run.id}")
 ```
@@ -510,11 +540,11 @@ wandb.init(project="demo")
 
 # Log to both
 metrics = {"loss": 0.1, "accuracy": 0.95}
-rn.log(metrics)
+run.log(metrics)
 wandb.log(metrics)
 
 # Finish both
-rn.finish()
+run.finish()
 wandb.finish()
 ```
 

@@ -4,7 +4,7 @@
 
 # Complete API Index
 
-**Version**: v0.5.x  
+**Version**: v0.5.3  
 **Total Endpoints**: 53+ REST + Python Client  
 **Last Updated**: 2025-11-28
 
@@ -342,19 +342,18 @@ import runicorn as rn
 run = rn.init(project="demo", name="exp1")
 
 # Log metrics
-rn.log({"loss": 0.1, "accuracy": 0.95}, step=100)
+run.log({"loss": 0.1, "accuracy": 0.95}, step=100)
 
 # Save artifact
 artifact = rn.Artifact("my-model", type="model")
 artifact.add_file("model.pth")
-run.log_artifact(artifact)
-
-rn.finish()
+run.log_artifact(artifact)\nrun.finish()
 ```
 
 See main [README.md](../../README.md) for full SDK documentation.
 
 ### Community Libraries
+> Note: Community libraries for other languages (JavaScript, R, Julia) are welcome. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 > 🔔 **Note**: Community libraries for other languages (JavaScript, R, Julia) are welcome. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
@@ -385,12 +384,25 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ## 📝 API Changelog
 
-### v0.5.x (Current)
+### v0.5.3 (Current) ⚡
+**Performance & UI Improvements**
+- ✅ **Unified MetricChart**: Single component for single-run and multi-run views
+- ✅ **Lazy chart loading**: IntersectionObserver-based chart rendering
+- ✅ **Advanced memo optimization**: Data fingerprint comparison for re-render prevention
+- ✅ Frontend beautification: Fancy metric cards, animated status badges
+
+### v0.5.2
+**Backend Performance**
 - ✅ **Added LTTB downsampling** for metrics endpoints (`?downsample=N`)
 - ✅ **Added incremental caching** for metrics (file-size based invalidation)
 - ✅ Added `/metrics/cache/stats` endpoint for cache monitoring
 - ✅ Added response headers (`X-Row-Count`, `X-Total-Count`, `X-Last-Step`)
 - ✅ Added `total` and `sampled` fields to metrics response
+
+### v0.5.1
+**Frontend Detail Page Optimizations**
+- ✅ Minor UI improvements for experiment detail page
+- ✅ Bug fixes for chart rendering
 
 ### v0.5.0
 - ✅ **Added Remote Viewer API** (12 endpoints)

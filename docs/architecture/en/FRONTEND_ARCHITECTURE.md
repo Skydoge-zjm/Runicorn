@@ -5,7 +5,9 @@
 # Frontend Architecture
 
 **Document Type**: Architecture  
-**Purpose**: React application design and patterns
+**Purpose**: React application design and patterns  
+**Version**: v0.5.3  
+**Last Updated**: 2025-11-28
 
 ---
 
@@ -230,6 +232,152 @@ const runs = await listRuns()
 - Consistent error handling
 - Easy to mock for testing
 - Type-safe with TypeScript
+
+---
+
+## Performance Optimizations (v0.5.3) ⚡
+
+### Unified MetricChart Component
+
+**v0.5.3** introduces a unified `MetricChart` component that handles both single-run and multi-run (comparison) scenarios:
+
+```typescript
+// Unified interface for single and multi-run charts
+interface MetricChartProps {
+  runs: RunMetric[]      // Single run: [{ id, metrics }], Multi-run: multiple entries
+  xKey: string           // X-axis key (global_step, time, etc.)
+  yKey: string           // Y-axis metric key
+  title: string
+  height?: number | string
+  persistKey?: string    // localStorage key for control persistence
+  group?: string         // ECharts group for synchronized zoom
+}
+
+// Usage - Single run
+<MetricChart 
+  runs={[{ id: runId, metrics: stepMetrics }]} 
+  xKey="global_step" 
+  yKey="loss" 
+  title="Training Loss" 
+/>
+
+// Usage - Multi-run comparison
+<MetricChart 
+  runs={selectedRuns.map(r => ({ id: r.id, label: r.name, metrics: r.metrics }))}
+  xKey="global_step" 
+  yKey="loss" 
+  title="Loss Comparison" 
+/>
+```
+
+**Benefits**:
+- Single codebase for all metric visualizations
+- Consistent behavior across single and comparison views
+- Reduced bundle size (removed `MultiRunMetricChart.tsx`)
+- Easier maintenance and feature additions
+
+### Lazy Chart Loading
+
+Charts are lazily loaded using `IntersectionObserver`:
+
+```typescript
+function LazyChartWrapper({ children, height = 320, threshold = 0.1 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [hasLoaded, setHasLoaded] = useState(false)
+
+  useEffect(() => {
+    if (hasLoaded) return
+    
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasLoaded(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '200px', threshold }  // Pre-load 200px before viewport
+    )
+
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [hasLoaded, threshold])
+
+  return (
+    <div ref={ref} style={{ minHeight: height }}>
+      {hasLoaded ? children : <Skeleton />}
+    </div>
+  )
+}
+```
+
+**Benefits**:
+- Faster initial page load (charts outside viewport are not rendered)
+- Reduced memory usage for pages with many charts
+- Pre-loading (200px) ensures smooth scrolling experience
+
+### Advanced Memo Optimization
+
+Custom memo comparison using data fingerprints:
+
+```typescript
+const MetricChart = memo(function MetricChart({ runs, xKey, yKey, ... }) {
+  // Component implementation
+}, (prevProps, nextProps) => {
+  // Compare runs array by fingerprint, not reference
+  if (prevProps.runs.length !== nextProps.runs.length) return false
+  
+  for (let i = 0; i < prevProps.runs.length; i++) {
+    const prevRun = prevProps.runs[i]
+    const nextRun = nextProps.runs[i]
+    
+    if (prevRun.id !== nextRun.id) return false
+    if (prevRun.label !== nextRun.label) return false
+    
+    // Compare by row count and last step (fingerprint)
+    const prevRowCount = prevRun.metrics?.rows?.length ?? 0
+    const nextRowCount = nextRun.metrics?.rows?.length ?? 0
+    if (prevRowCount !== nextRowCount) return false
+    
+    if (prevRowCount > 0) {
+      const prevLastStep = prevRun.metrics.rows[prevRowCount - 1]?.global_step
+      const nextLastStep = nextRun.metrics.rows[nextRowCount - 1]?.global_step
+      if (prevLastStep !== nextLastStep) return false
+    }
+  }
+  
+  return prevProps.xKey === nextProps.xKey && prevProps.yKey === nextProps.yKey
+})
+```
+
+**Benefits**:
+- Prevents unnecessary re-renders when data reference changes but content is same
+- O(1) comparison instead of deep equality check
+- Significant performance improvement for real-time updates
+
+### Backend Integration: LTTB Downsampling
+
+Frontend integrates with backend LTTB (Largest-Triangle-Three-Buckets) downsampling:
+
+```typescript
+// api.ts - Pass maxDataPoints from settings
+export async function getStepMetrics(runId: string, downsample?: number) {
+  const params = downsample ? `?downsample=${downsample}` : ''
+  const res = await fetch(`${BASE_URL}/runs/${runId}/metrics_step${params}`)
+  return res.json()
+}
+
+// RunDetailPage.tsx - Use settings.maxDataPoints
+const { settings } = useSettings()
+const metrics = await getStepMetrics(runId, settings.maxDataPoints)
+
+// Response includes total before downsampling
+// { columns: [...], rows: [...], total: 100000, sampled: 2000 }
+```
+
+**Benefits**:
+- Reduces data transfer for large experiments (100k+ points → 2k points)
+- LTTB preserves visual characteristics of the data
+- Configurable via UI settings
 
 ---
 

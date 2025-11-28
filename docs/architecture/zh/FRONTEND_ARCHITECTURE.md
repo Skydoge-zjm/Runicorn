@@ -5,7 +5,9 @@
 # 前端架构
 
 **文档类型**: 架构  
-**目的**: React 应用设计和模式
+**目的**: React 应用设计和模式  
+**版本**: v0.5.3  
+**最后更新**: 2025-11-28
 
 ---
 
@@ -230,6 +232,152 @@ const runs = await listRuns()
 - 一致的错误处理
 - 易于模拟测试
 - TypeScript 类型安全
+
+---
+
+## 性能优化 (v0.5.3) ⚡
+
+### 统一的 MetricChart 组件
+
+**v0.5.3** 引入了统一的 `MetricChart` 组件，同时处理单实验和多实验（对比）场景：
+
+```typescript
+// 统一的单实验和多实验图表接口
+interface MetricChartProps {
+  runs: RunMetric[]      // 单实验: [{ id, metrics }], 多实验: 多个条目
+  xKey: string           // X 轴键 (global_step, time 等)
+  yKey: string           // Y 轴指标键
+  title: string
+  height?: number | string
+  persistKey?: string    // localStorage 键用于控件持久化
+  group?: string         // ECharts 组用于同步缩放
+}
+
+// 使用方式 - 单实验
+<MetricChart 
+  runs={[{ id: runId, metrics: stepMetrics }]} 
+  xKey="global_step" 
+  yKey="loss" 
+  title="训练损失" 
+/>
+
+// 使用方式 - 多实验对比
+<MetricChart 
+  runs={selectedRuns.map(r => ({ id: r.id, label: r.name, metrics: r.metrics }))}
+  xKey="global_step" 
+  yKey="loss" 
+  title="损失对比" 
+/>
+```
+
+**优势**：
+- 所有指标可视化共用单一代码库
+- 单实验和对比视图行为一致
+- 减小打包体积（移除 `MultiRunMetricChart.tsx`）
+- 更易维护和添加新功能
+
+### 图表懒加载
+
+使用 `IntersectionObserver` 懒加载图表：
+
+```typescript
+function LazyChartWrapper({ children, height = 320, threshold = 0.1 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [hasLoaded, setHasLoaded] = useState(false)
+
+  useEffect(() => {
+    if (hasLoaded) return
+    
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasLoaded(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '200px', threshold }  // 进入视口前 200px 预加载
+    )
+
+    if (ref.current) observer.observe(ref.current)
+    return () => observer.disconnect()
+  }, [hasLoaded, threshold])
+
+  return (
+    <div ref={ref} style={{ minHeight: height }}>
+      {hasLoaded ? children : <Skeleton />}
+    </div>
+  )
+}
+```
+
+**优势**：
+- 更快的初始页面加载（视口外的图表不渲染）
+- 减少多图表页面的内存使用
+- 预加载（200px）确保流畅的滚动体验
+
+### 高级 Memo 优化
+
+使用数据指纹进行自定义 memo 比较：
+
+```typescript
+const MetricChart = memo(function MetricChart({ runs, xKey, yKey, ... }) {
+  // 组件实现
+}, (prevProps, nextProps) => {
+  // 通过指纹比较 runs 数组，而非引用
+  if (prevProps.runs.length !== nextProps.runs.length) return false
+  
+  for (let i = 0; i < prevProps.runs.length; i++) {
+    const prevRun = prevProps.runs[i]
+    const nextRun = nextProps.runs[i]
+    
+    if (prevRun.id !== nextRun.id) return false
+    if (prevRun.label !== nextRun.label) return false
+    
+    // 通过行数和最后步数比较（指纹）
+    const prevRowCount = prevRun.metrics?.rows?.length ?? 0
+    const nextRowCount = nextRun.metrics?.rows?.length ?? 0
+    if (prevRowCount !== nextRowCount) return false
+    
+    if (prevRowCount > 0) {
+      const prevLastStep = prevRun.metrics.rows[prevRowCount - 1]?.global_step
+      const nextLastStep = nextRun.metrics.rows[nextRowCount - 1]?.global_step
+      if (prevLastStep !== nextLastStep) return false
+    }
+  }
+  
+  return prevProps.xKey === nextProps.xKey && prevProps.yKey === nextProps.yKey
+})
+```
+
+**优势**：
+- 当数据引用改变但内容相同时防止不必要的重渲染
+- O(1) 比较代替深度相等检查
+- 实时更新场景下显著的性能提升
+
+### 后端集成：LTTB 降采样
+
+前端与后端 LTTB（最大三角形三桶）降采样集成：
+
+```typescript
+// api.ts - 从设置传递 maxDataPoints
+export async function getStepMetrics(runId: string, downsample?: number) {
+  const params = downsample ? `?downsample=${downsample}` : ''
+  const res = await fetch(`${BASE_URL}/runs/${runId}/metrics_step${params}`)
+  return res.json()
+}
+
+// RunDetailPage.tsx - 使用 settings.maxDataPoints
+const { settings } = useSettings()
+const metrics = await getStepMetrics(runId, settings.maxDataPoints)
+
+// 响应包含降采样前的总数
+// { columns: [...], rows: [...], total: 100000, sampled: 2000 }
+```
+
+**优势**：
+- 减少大型实验的数据传输（100k+ 点 → 2k 点）
+- LTTB 保留数据的视觉特征
+- 可通过 UI 设置配置
 
 ---
 

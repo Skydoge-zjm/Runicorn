@@ -33,13 +33,13 @@ for epoch in range(10):
     loss = 1.0 / (1 + epoch)
     accuracy = 0.5 + epoch * 0.05
     
-    rn.log({
+    run.log({
         "loss": loss,
         "accuracy": accuracy
     }, step=epoch)
 
 # Finish
-rn.finish()
+run.finish()
 print(f"Experiment ID: {run.id}")
 ```
 
@@ -82,7 +82,7 @@ artifact.add_file("model.pth")
 artifact.add_metadata({"accuracy": 0.95})
 
 version = run.log_artifact(artifact)  # v1, v2, v3...
-rn.finish()
+run.finish()
 ```
 
 ### Load Model
@@ -97,7 +97,7 @@ artifact = run.use_artifact("my-model:latest")
 model_path = artifact.download()
 
 # Use model...
-rn.finish()
+run.finish()
 ```
 
 ---

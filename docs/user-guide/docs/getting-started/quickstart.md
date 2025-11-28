@@ -27,7 +27,7 @@ pip install -U runicorn
 runicorn --version
 ```
 
-You should see: `runicorn 0.4.0` (or later)
+You should see: `runicorn 0.5.3` (or later)
 
 ---
 
@@ -47,7 +47,7 @@ run = rn.init(project="quickstart", name="demo_experiment")
 print(f"✓ Created experiment: {run.id}")
 
 # Set primary metric (optional)
-rn.set_primary_metric("accuracy", mode="max")
+run.set_primary_metric("accuracy", mode="max")
 
 # Training loop
 for step in range(1, 51):
@@ -56,7 +56,7 @@ for step in range(1, 51):
     accuracy = min(0.98, 0.5 + step * 0.01 + random.uniform(-0.02, 0.02))
     
     # Log metrics
-    rn.log({
+    run.log({
         "loss": round(loss, 4),
         "accuracy": round(accuracy, 4),
         "learning_rate": 0.001
@@ -70,14 +70,14 @@ for step in range(1, 51):
         print(f"Step {step}/50: loss={loss:.4f}, acc={accuracy:.4f}")
 
 # Save summary
-rn.summary({
+run.summary({
     "final_accuracy": 0.95,
     "total_steps": 50,
     "notes": "Demo experiment from quickstart guide"
 })
 
 # Finish experiment
-rn.finish()
+run.finish()
 print("✓ Experiment completed!")
 ```
 

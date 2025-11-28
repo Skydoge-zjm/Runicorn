@@ -265,8 +265,8 @@ run = rn.init(
 )
 
 # Training code...
-rn.log({"loss": 0.1})
-rn.finish()
+run.log({"loss": 0.1})
+run.finish()
 ```
 
 **On local machine** (viewing):

@@ -643,7 +643,7 @@ artifact.add_tags("baseline", "production-ready")
 version = run.log_artifact(artifact)
 print(f"Saved as v{version}")
 
-rn.finish()
+run.finish()
 ```
 
 **API Client** (querying artifacts):
@@ -708,7 +708,7 @@ artifact = run.use_artifact("resnet50-model:v2")
 model_path = artifact.download()
 print(f"Model downloaded to: {model_path}")
 
-rn.finish()
+run.finish()
 ```
 
 ### Managing Aliases (API)

@@ -643,7 +643,7 @@ artifact.add_tags("baseline", "production-ready")
 version = run.log_artifact(artifact)
 print(f"保存为 v{version}")
 
-rn.finish()
+run.finish()
 ```
 
 **API 客户端** (查询 artifacts):
@@ -708,7 +708,7 @@ artifact = run.use_artifact("resnet50-model:v2")
 model_path = artifact.download()
 print(f"模型已下载到: {model_path}")
 
-rn.finish()
+run.finish()
 ```
 
 ### 管理别名（API）

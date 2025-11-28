@@ -25,12 +25,12 @@ sequenceDiagram
     SDK->>SQLite: INSERT INTO experiments
     
     loop Training
-        User->>SDK: rn.log({loss: 0.1})
+        User->>SDK: run.log({loss: 0.1})
         SDK->>FileSystem: Append to events.jsonl
         SDK->>SQLite: INSERT INTO metrics
     end
     
-    User->>SDK: rn.finish()
+    User->>SDK: run.finish()
     SDK->>FileSystem: Update summary.json
     SDK->>SQLite: UPDATE experiments SET status='finished'
     
@@ -49,7 +49,7 @@ sequenceDiagram
 
 **1. User logs metrics**:
 ```python
-rn.log({"loss": 0.5, "accuracy": 0.9}, step=100)
+run.log({"loss": 0.5, "accuracy": 0.9}, step=100)
 ```
 
 **2. SDK processes**:

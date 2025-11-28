@@ -1,10 +1,10 @@
 # Runicorn Documentation System Overview
 
-**Version**: v0.5.0  
-**Last Updated**: 2025-10-25  
+**Version**: v0.5.3  
+**Last Updated**: 2025-11-28  
 **Purpose**: Complete overview of all documentation in the Runicorn project
 
-**v0.5.0 Highlights**: Remote Viewer documentation, comprehensive reference docs (Config/CLI/FAQ), migration guide
+**v0.5.3 Highlights**: Frontend performance optimization, unified MetricChart, backend incremental caching, LTTB downsampling
 
 ---
 
@@ -471,11 +471,11 @@ mkdocs gh-deploy --force
 import runicorn as rn
 
 run = rn.init(project="demo")
-rn.log({"loss": 0.1}, step=1)
-rn.finish()
+run.log({"loss": 0.1}, step=1)
+run.finish()
 
 # ❌ Bad: Incomplete, won't run
-rn.log(loss)  # Where does 'loss' come from?
+run.log(loss)  # Where does 'loss' come from?
 ```
 
 ### Navigation
@@ -514,6 +514,14 @@ Each system serves its audience with appropriate depth, language, and format.
 - 📣 Share documentation URL with users
 
 ---
+
+**v0.5.3 Documentation Additions**:
+- ⭐ Frontend performance optimization documentation
+- ⭐ Unified MetricChart component design (single-run + multi-run)
+- ⭐ Backend incremental cache system documentation
+- ⭐ LTTB downsampling API documentation
+- ⭐ Lazy chart loading with IntersectionObserver
+- ⭐ Cache statistics endpoint documentation
 
 **v0.5.0 Documentation Additions**:
 - ⭐ Remote Viewer complete documentation (user guide + architecture)

@@ -5,8 +5,8 @@
 # Runicorn Frequently Asked Questions (FAQ)
 
 **Document Type**: Reference  
-**Version**: v0.5.0  
-**Last Updated**: 2025-10-25
+**Version**: v0.5.3  
+**Last Updated**: 2025-11-28
 
 ---
 
@@ -403,13 +403,13 @@ import runicorn as rn
 run = rn.init(project="research", name="experiment-1")
 
 # Log metrics
-rn.log({"loss": 0.5, "accuracy": 0.9})
+run.log({"loss": 0.5, "accuracy": 0.9})
 
 # Log image
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
 ax.plot([1, 2, 3], [4, 5, 6])
-rn.log_image("plot", fig)
+run.log_image("plot", fig)
 
 # Finish
 run.finish()

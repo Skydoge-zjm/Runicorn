@@ -2,8 +2,39 @@
 
 <div align="center">
   <img src="assets/logo.png" alt="Runicorn Logo" width="200">
-  <p><strong>Local ML Experiment Tracking & Model Versioning</strong></p>
-  <p>100% Offline • Privacy-First • Self-Hosted</p>
+  <h3>🦄 Local ML Experiment Tracking & Model Versioning</h3>
+  <p><strong>v0.5.3</strong> • 100% Offline • Privacy-First • Self-Hosted</p>
+  
+  <p>
+    <a href="https://pypi.org/project/runicorn/"><img src="https://img.shields.io/pypi/v/runicorn?color=blue&label=PyPI" alt="PyPI"></a>
+    <a href="https://github.com/Skydoge-zjm/Runicorn"><img src="https://img.shields.io/github/stars/Skydoge-zjm/Runicorn?style=social" alt="GitHub"></a>
+  </p>
+</div>
+
+---
+
+## ✨ What's New in v0.5.x
+
+<div class="grid cards" markdown>
+
+-   :material-remote-desktop:{ .lg .middle } __Remote Viewer (v0.5.0)__
+
+    ---
+
+    VSCode-style remote access via SSH tunnel. View experiments on remote GPU servers without file sync!
+
+-   :material-lightning-bolt:{ .lg .middle } __Performance (v0.5.2)__
+
+    ---
+
+    LTTB downsampling & incremental caching. Handle 100k+ data points smoothly.
+
+-   :material-palette:{ .lg .middle } __UI Beautification (v0.5.3)__
+
+    ---
+
+    Unified chart component, lazy loading, fancy metric cards, and animated status badges.
+
 </div>
 
 ---
@@ -16,10 +47,10 @@
 
 - 🏠 **100% Local** - All data stays on your machine, complete privacy
 - 📦 **Model Versioning** - Git-like version control for ML models and datasets
-- 📊 **Beautiful Visualization** - Interactive charts and experiment comparison
-- 🔄 **Remote Sync** - Mirror experiments from remote training servers via SSH
+- 📊 **Beautiful Visualization** - Interactive charts with EMA smoothing and comparison
+- 🌐 **Remote Viewer** - VSCode-style remote access via SSH tunnel (v0.5.0+)
+- ⚡ **High Performance** - LTTB downsampling, incremental caching (v0.5.2+)
 - 💻 **Cross-Platform** - Python SDK + Web UI + Desktop App (Windows)
-- ⚡ **High Performance** - SQLite backend, handles 10,000+ experiments
 
 ---
 
@@ -152,7 +183,7 @@ import random
 run = rn.init(project="demo", name="my_first_run")
 
 # Set primary metric
-rn.set_primary_metric("accuracy", mode="max")
+run.set_primary_metric("accuracy", mode="max")
 
 # Training loop
 for step in range(1, 101):
@@ -160,13 +191,13 @@ for step in range(1, 101):
     acc = min(0.99, 0.5 + step * 0.005 + random.uniform(-0.02, 0.02))
     
     # Log metrics
-    rn.log({
+    run.log({
         "loss": round(loss, 4),
         "accuracy": round(acc, 4)
     }, step=step)
 
 # Finish
-rn.finish()
+run.finish()
 print(f"✓ Experiment saved: {run.id}")
 ```
 
@@ -204,13 +235,13 @@ for epoch in range(100):
     val_acc = validate(model, val_loader)
     
     # Log metrics
-    rn.log({
+    run.log({
         "train_loss": train_loss,
         "val_accuracy": val_acc,
         "learning_rate": optimizer.param_groups[0]['lr']
     }, step=epoch)
 
-rn.finish()
+run.finish()
 ```
 
 ### Model Versioning
@@ -228,7 +259,7 @@ artifact.add_metadata({"accuracy": 0.95, "f1_score": 0.93})
 version = run.log_artifact(artifact)  # → v1, v2, v3...
 print(f"Model saved as v{version}")
 
-rn.finish()
+run.finish()
 
 # Later: Load the model
 run2 = rn.init(project="inference")
@@ -236,9 +267,9 @@ model_artifact = run2.use_artifact("production-model:latest")
 model_path = model_artifact.download()
 ```
 
-### Remote Synchronization
+### Remote Viewer (v0.5.0+) 🌐
 
-Train on a powerful remote server, view results locally in real-time:
+Train on remote GPU servers, view results locally in real-time with **zero file sync**:
 
 ```python
 # On remote server (Linux)
@@ -246,15 +277,24 @@ import runicorn as rn
 
 run = rn.init(
     project="training",
-    storage="/data/runicorn"  # Shared storage
+    storage="/data/runicorn"
 )
 
 # Training code...
-rn.log({"loss": 0.1})
-rn.finish()
+run.log({"loss": 0.1})
+run.finish()
 ```
 
-**On your local machine**: Use the Web UI to connect via SSH and sync experiments automatically. No need to copy files manually!
+**On your local machine**:
+
+1. Open Web UI → **Remote** page
+2. Enter SSH credentials (host, username, key/password)
+3. Select Python environment with Runicorn installed
+4. Click **Start Viewer** → Remote Viewer launches on server
+5. View experiments instantly via SSH tunnel!
+
+!!! tip "VSCode Remote-style Architecture"
+    Unlike file sync, Remote Viewer runs directly on your remote server. Data never leaves the server — only the UI is tunneled to your local browser. Latency < 100ms!
 
 ---
 

@@ -5,8 +5,8 @@
 # Runicorn 常见问题（FAQ）
 
 **文档类型**: 参考  
-**版本**: v0.5.0  
-**最后更新**: 2025-10-25
+**版本**: v0.5.3  
+**最后更新**: 2025-11-28
 
 ---
 
@@ -78,7 +78,7 @@ for epoch in range(10):
     loss = train_one_epoch()
     
     # 记录指标
-    rn.log({"loss": loss, "epoch": epoch})
+    run.log({"loss": loss, "epoch": epoch})
 
 run.finish()
 ```
@@ -622,13 +622,13 @@ import runicorn as rn
 run = rn.init(project="research", name="experiment-1")
 
 # 记录指标（任意单元格）
-rn.log({"loss": 0.5, "accuracy": 0.9})
+run.log({"loss": 0.5, "accuracy": 0.9})
 
 # 记录图片
 import matplotlib.pyplot as plt
 fig, ax = plt.subplots()
 ax.plot([1, 2, 3], [4, 5, 6])
-rn.log_image("plot", fig)
+run.log_image("plot", fig)
 
 # 完成（最后一个单元格）
 run.finish()
@@ -668,7 +668,7 @@ def train():
             val_loss = validate()
             
             # 记录指标
-            rn.log({
+            run.log({
                 "train/loss": train_loss,
                 "val/loss": val_loss,
                 "epoch": epoch

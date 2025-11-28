@@ -4,8 +4,8 @@
 
 # Runicorn Documentation
 
-**Version**: v0.5.0  
-**Last Updated**: 2025-10-25
+**Version**: v0.5.3  
+**Last Updated**: 2025-11-28
 
 ---
 

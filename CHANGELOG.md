@@ -2,6 +2,65 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.3] - 2025-11-28
+
+### ⚡ Frontend Performance & UI Improvements
+
+#### Unified MetricChart Component
+- **NEW**: Single `MetricChart` component handles both single-run and multi-run scenarios
+- **REMOVED**: Separate `MultiRunMetricChart.tsx` (merged into unified component)
+- **IMPROVED**: Consistent behavior across experiment detail and comparison views
+- **IMPROVED**: Reduced bundle size through component consolidation
+
+#### Performance Optimizations
+- **NEW**: `LazyChartWrapper` with IntersectionObserver for lazy chart loading
+- **NEW**: Pre-loading (200px) for smooth scrolling experience
+- **NEW**: Advanced memo optimization using data fingerprints
+- **IMPROVED**: O(1) comparison instead of deep equality for re-render prevention
+- **IMPROVED**: Faster initial page load for pages with many charts
+
+#### UI Beautification
+- **NEW**: Fancy metric cards with enhanced styling
+- **NEW**: Animated status badges for run status
+- **NEW**: Circular progress components
+- **IMPROVED**: Design tokens system for consistent styling
+
+---
+
+## [0.5.2] - 2025-11-25
+
+### ⚡ Backend Performance Improvements
+
+#### LTTB Downsampling
+- **NEW**: LTTB (Largest-Triangle-Three-Buckets) algorithm for metrics downsampling
+- **NEW**: `?downsample=N` parameter for `/metrics` and `/metrics_step` endpoints
+- **IMPROVED**: Reduces large datasets (100k+ points → configurable target)
+- **IMPROVED**: Preserves visual characteristics of data
+
+#### Incremental Metrics Cache
+- **NEW**: `IncrementalMetricsCache` for efficient metrics file parsing
+- **NEW**: File-size based cache invalidation (vs mtime)
+- **NEW**: Incremental reading from last known position
+- **NEW**: LRU eviction strategy with configurable capacity
+- **NEW**: `/metrics/cache/stats` endpoint for cache monitoring
+
+#### Response Improvements
+- **NEW**: Response headers (`X-Row-Count`, `X-Total-Count`, `X-Last-Step`)
+- **NEW**: `total` and `sampled` fields in metrics response
+- **IMPROVED**: Thread-safe operations for concurrent access
+
+---
+
+## [0.5.1] - 2025-11-20
+
+### 🐛 Bug Fixes & Minor Improvements
+
+- **FIXED**: Chart rendering issues on experiment detail page
+- **FIXED**: UI alignment problems in metric cards
+- **IMPROVED**: Minor performance optimizations for frontend
+
+---
+
 ## [0.5.0] - 2025-10-25
 
 ### 🚀 Major New Feature: Remote Viewer

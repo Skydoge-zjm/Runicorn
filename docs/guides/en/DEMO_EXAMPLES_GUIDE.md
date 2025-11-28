@@ -25,7 +25,7 @@ python examples/quickstart_demo.py
 - ✅ Automatic association between experiments and models
 
 **Code characteristics**:
-- Uses correct APIs: `rn.init()`, `rn.summary()`, `rn.finish()`
+- Uses correct APIs: `rn.init()`, `run.summary()`, `run.finish()`
 - Concise and clear, suitable for first-time users
 - Complete minimal workflow
 
@@ -89,7 +89,7 @@ run = rn.init(project="my_project", name="experiment_1")
 # ... experiment code ...
 
 # Finish experiment
-rn.finish()
+run.finish()
 ```
 
 **❌ Incorrect usage**:
@@ -101,10 +101,10 @@ run.finish()  # Don't use this
 
 ```python
 # Record single step metrics
-rn.log(step=1, loss=0.5, accuracy=0.8)
+run.log(step=1, loss=0.5, accuracy=0.8)
 
 # Record summary information
-rn.summary({
+run.summary({
     "final_accuracy": 0.95,
     "training_time": 120
 })
@@ -261,8 +261,8 @@ run.log_summary({...})  # Method doesn't exist
 
 **✅ Correct**:
 ```python
-rn.summary({"hyperparameters": params})
-rn.summary({...})
+run.summary({"hyperparameters": params})
+run.summary({...})
 ```
 
 ### 2. File Cleanup

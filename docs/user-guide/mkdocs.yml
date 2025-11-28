@@ -85,14 +85,19 @@ nav:
   - Home: index.md
   - Getting Started:
     - Quick Start: getting-started/quickstart.md
+    - Remote Viewer: getting-started/remote-viewer.md
   - Python SDK:
     - Overview: sdk/overview.md
   - Command Line:
     - CLI Overview: cli/overview.md
+  - Web UI:
+    - Overview: ui/overview.md
+    - Performance Tips: ui/performance.md
   - Tutorials:
     - Image Classification: tutorials/image-classification.md
   - Reference:
     - FAQ: reference/faq.md
+    - Changelog: reference/changelog.md
 
 # Plugins
 plugins:

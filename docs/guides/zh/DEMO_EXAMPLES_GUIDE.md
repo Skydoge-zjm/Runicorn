@@ -25,7 +25,7 @@ python examples/quickstart_demo.py
 - ✅ 实验与模型的自动关联
 
 **代码特点**：
-- 使用正确的API：`rn.init()`, `rn.summary()`, `rn.finish()`
+- 使用正确的API：`rn.init()`, `run.summary()`, `run.finish()`
 - 简洁明了，适合首次使用者
 - 完整展示最小工作流
 
@@ -89,7 +89,7 @@ run = rn.init(project="my_project", name="experiment_1")
 # ... 实验代码 ...
 
 # 结束实验
-rn.finish()
+run.finish()
 ```
 
 **❌ 错误用法**：
@@ -101,10 +101,10 @@ run.finish()  # 不要这样用
 
 ```python
 # 记录单步指标
-rn.log(step=1, loss=0.5, accuracy=0.8)
+run.log(step=1, loss=0.5, accuracy=0.8)
 
 # 记录汇总信息
-rn.summary({
+run.summary({
     "final_accuracy": 0.95,
     "training_time": 120
 })
@@ -261,8 +261,8 @@ run.log_summary({...})  # 方法不存在
 
 **✅ 正确**：
 ```python
-rn.summary({"hyperparameters": params})
-rn.summary({...})
+run.summary({"hyperparameters": params})
+run.summary({...})
 ```
 
 ### 2. 文件清理

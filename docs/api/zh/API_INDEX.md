@@ -4,7 +4,7 @@
 
 # 完整 API 索引
 
-**版本**: v0.5.x  
+**版本**: v0.5.3  
 **总端点数**: 53+ REST + Python Client  
 **最后更新**: 2025-11-28
 
@@ -362,20 +362,6 @@ import runicorn as rn
 run = rn.init(project="demo", name="exp1")
 
 # 记录指标
-rn.log({"loss": 0.1, "accuracy": 0.95}, step=100)
-
-# 保存 artifact
-artifact = rn.Artifact("my-model", type="model")
-artifact.add_file("model.pth")
-run.log_artifact(artifact)
-
-rn.finish()
-```
-
-查看主 [README.md](../../README.md) 获取完整 SDK 文档。
-
-### 社区库
-
 > 🔔 **注意**: 欢迎为其他语言（JavaScript、R、Julia）贡献社区库。查看 [CONTRIBUTING.md](../../CONTRIBUTING.md)。
 
 ---
@@ -405,12 +391,25 @@ rn.finish()
 
 ## 📝 API 变更日志
 
-### v0.5.x (当前)
+### v0.5.3 (当前) ⚡
+**性能与 UI 改进**
+- ✅ **统一 MetricChart**：单组件支持单实验和多实验视图
+- ✅ **图表懒加载**：基于 IntersectionObserver 的图表渲染
+- ✅ **高级 memo 优化**：数据指纹比较防止不必要的重渲染
+- ✅ 前端美化：精美的指标卡片、动画状态徽章
+
+### v0.5.2
+**后端性能**
 - ✅ **新增 LTTB 降采样** 用于指标端点（`?downsample=N`）
 - ✅ **新增增量缓存** 用于指标（基于文件大小的失效机制）
 - ✅ 新增 `/metrics/cache/stats` 端点用于缓存监控
 - ✅ 新增响应头（`X-Row-Count`, `X-Total-Count`, `X-Last-Step`）
 - ✅ 新增指标响应中的 `total` 和 `sampled` 字段
+
+### v0.5.1
+**前端详情页优化**
+- ✅ 实验详情页的小型 UI 改进
+- ✅ 图表渲染的 Bug 修复
 
 ### v0.5.0
 - ✅ **新增 Remote Viewer API**（12个端点）

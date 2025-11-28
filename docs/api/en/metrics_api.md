@@ -6,8 +6,13 @@
 
 **Module**: Metrics API  
 **Base Path**: `/api/runs/{run_id}`  
-**Version**: v1.0  
+**Version**: v1.0 (Updated v0.5.3)  
 **Description**: Query training metrics, progress, and real-time logs via HTTP and WebSocket.
+
+**v0.5.x Improvements**:
+- ⚡ **LTTB Downsampling**: Reduce large datasets (100k+ points → configurable)
+- ⚡ **Incremental Caching**: File-size based cache invalidation for efficient updates
+- ⚡ **Response Headers**: `X-Row-Count`, `X-Total-Count`, `X-Last-Step` for monitoring
 
 ---
 

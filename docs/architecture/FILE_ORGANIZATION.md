@@ -17,8 +17,8 @@
 ```python
 import runicorn as rn
 run = rn.init(project="test")
-rn.log({"loss": 0.5})
-rn.finish()
+run.log({"loss": 0.5})
+run.finish()
 ```
 
 ---

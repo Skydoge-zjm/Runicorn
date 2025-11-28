@@ -44,12 +44,12 @@ run = rn.init(
 )
 
 # Log configuration
-rn.log_text("="*50)
-rn.log_text("CIFAR-10 Classification with ResNet18")
-rn.log_text("="*50)
+run.log_text("="*50)
+run.log_text("CIFAR-10 Classification with ResNet18")
+run.log_text("="*50)
 
 # Set primary metric
-rn.set_primary_metric("test_accuracy", mode="max")
+run.set_primary_metric("test_accuracy", mode="max")
 
 # Log hyperparameters
 hyperparams = {
@@ -61,8 +61,8 @@ hyperparams = {
     "epochs": 50
 }
 
-rn.summary(hyperparams)
-rn.log_text(f"Hyperparameters: {hyperparams}")
+run.summary(hyperparams)
+run.log_text(f"Hyperparameters: {hyperparams}")
 ```
 
 ---
@@ -98,8 +98,8 @@ testloader = torch.utils.data.DataLoader(
     testset, batch_size=128, shuffle=False, num_workers=2
 )
 
-rn.log_text(f"Training samples: {len(trainset)}")
-rn.log_text(f"Test samples: {len(testset)}")
+run.log_text(f"Training samples: {len(trainset)}")
+run.log_text(f"Test samples: {len(testset)}")
 ```
 
 ---
@@ -118,10 +118,10 @@ model = model.to(device)
 total_params = sum(p.numel() for p in model.parameters())
 trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-rn.log_text(f"Model: ResNet18")
-rn.log_text(f"Total parameters: {total_params:,}")
-rn.log_text(f"Trainable parameters: {trainable_params:,}")
-rn.log_text(f"Device: {device}")
+run.log_text(f"Model: ResNet18")
+run.log_text(f"Total parameters: {total_params:,}")
+run.log_text(f"Trainable parameters: {trainable_params:,}")
+run.log_text(f"Device: {device}")
 
 # Criterion and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -163,7 +163,7 @@ for epoch in range(50):
         
         # Log every 50 batches
         if batch_idx % 50 == 0:
-            rn.log({
+            run.log({
                 "batch_loss": loss.item(),
                 "batch_acc": 100.0 * predicted.eq(targets).sum().item() / targets.size(0)
             }, stage="train")
@@ -195,7 +195,7 @@ for epoch in range(50):
     epoch_time = time.time() - epoch_start
     current_lr = optimizer.param_groups[0]['lr']
     
-    rn.log({
+    run.log({
         "train_loss": train_loss,
         "train_accuracy": train_acc,
         "test_loss": test_loss,
@@ -205,7 +205,7 @@ for epoch in range(50):
     }, step=epoch + 1, stage="epoch")
     
     # Log progress
-    rn.log_text(
+    run.log_text(
         f"Epoch {epoch+1}/50: "
         f"train_loss={train_loss:.4f}, train_acc={train_acc:.2f}%, "
         f"test_loss={test_loss:.4f}, test_acc={test_acc:.2f}%, "
@@ -225,12 +225,12 @@ for epoch in range(50):
             'test_accuracy': test_acc,
         }, checkpoint_path)
         
-        rn.log_text(f"✓ New best accuracy: {test_acc:.2f}%")
+        run.log_text(f"✓ New best accuracy: {test_acc:.2f}%")
     
     # Update learning rate
     scheduler.step()
 
-rn.log_text("Training completed!")
+run.log_text("Training completed!")
 ```
 
 ---
@@ -259,10 +259,10 @@ artifact.add_metadata({
 artifact.add_tags("baseline", "resnet18", "cifar10")
 
 version = run.log_artifact(artifact)
-rn.log_text(f"✓ Model saved as artifact v{version}")
+run.log_text(f"✓ Model saved as artifact v{version}")
 
 # Save final summary
-rn.summary({
+run.summary({
     "final_test_accuracy": test_acc,
     "best_test_accuracy": best_test_acc,
     "total_epochs": 50,
@@ -270,7 +270,7 @@ rn.summary({
     "model_artifact": f"cifar10-resnet18:v{version}"
 })
 
-rn.finish()
+run.finish()
 print(f"\n✓ Experiment completed: {run.id}")
 print(f"✓ View results: http://127.0.0.1:23300/runs/{run.id}")
 ```
@@ -328,7 +328,7 @@ print(f"  Accuracy: {artifact.get_metadata().metadata['final_test_accuracy']:.2f
 # Run inference
 # ... your inference code ...
 
-rn.finish()
+run.finish()
 ```
 
 ---
