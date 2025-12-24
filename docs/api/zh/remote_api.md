@@ -1,8 +1,8 @@
 # Remote Viewer API 参考文档
 
-> **版本**: v0.5.0  
-> **最后更新**: 2025-10-25  
-> **Base URL**: `http://localhost:23300`
+> **版本**: v0.5.4  
+> **最后更新**: 2025-12-22  
+> **Base URL**: `http://127.0.0.1:23300`
 
 [English](../en/remote_api.md) | [简体中文](remote_api.md)
 
@@ -11,14 +11,15 @@
 ## 📖 目录
 
 - [概述](#概述)
+- [Host Key 校验（HTTP 409）](#host-key-校验http-409)
 - [认证](#认证)
 - [连接管理](#连接管理)
-  - [POST /api/remote/connect](#post-apiremoteconnect)
-  - [GET /api/remote/connections](#get-apiremoteconnections)
-  - [DELETE /api/remote/connections/{id}](#delete-apiremoteconnectionsid)
-- [环境检测](#环境检测)
+- [Known Hosts 管理](#known-hosts-管理)
+- [环境与配置](#环境与配置)
 - [Remote Viewer 管理](#remote-viewer-管理)
-- [健康检查](#健康检查)
+- [远程文件系统](#远程文件系统)
+- [状态](#状态)
+- [已保存连接](#已保存连接)
 - [错误处理](#错误处理)
 
 ---
@@ -38,12 +39,46 @@ Remote Viewer API 提供了通过 SSH 连接远程服务器并启动 Remote View
 ### 工作流程
 
 ```
-1. POST /api/remote/connect          # 建立 SSH 连接
-2. GET /api/remote/environments      # 检测 Python 环境
-3. POST /api/remote/viewer/start     # 启动 Remote Viewer
-4. GET /api/remote/viewer/status     # 监控状态
-5. DELETE /api/remote/connections/id # 断开连接
+1. POST /api/remote/connect               # 建立 SSH 连接
+2. （可选）GET /api/remote/conda-envs     # 列出远端环境供 UI 选择
+3. POST /api/remote/viewer/start          # 启动 Remote Viewer + 建立 SSH 隧道
+4. GET /api/remote/viewer/status/{id}     # 查询某个会话状态
+5. POST /api/remote/disconnect            # 断开 SSH 连接
 ```
+
+---
+
+## Host Key 校验（HTTP 409）
+
+当 SSH Host Key 校验失败（unknown / changed）时，API 会返回：
+
+- HTTP 状态码：`409 Conflict`
+- 响应体（FastAPI 会包在 `detail` 内）：
+
+```json
+{
+  "detail": {
+    "code": "HOST_KEY_CONFIRMATION_REQUIRED",
+    "message": "Host key verification failed",
+    "host_key": {
+      "host": "example.com",
+      "port": 22,
+      "known_hosts_host": "example.com",
+      "key_type": "ssh-ed25519",
+      "fingerprint_sha256": "SHA256:...",
+      "public_key": "ssh-ed25519 AAAA...",
+      "reason": "unknown"
+    }
+  }
+}
+```
+
+当 `reason == "changed"` 时，可能额外包含：
+
+- `expected_fingerprint_sha256`
+- `expected_public_key`
+
+客户端应调用 `POST /api/remote/known-hosts/accept` 写入 Runicorn 管理的 `known_hosts`，然后重试原请求。
 
 ---
 
@@ -77,12 +112,11 @@ Content-Type: application/json
 | `host` | string | ✅ | 远程服务器地址（域名或IP） |
 | `port` | integer | ❌ | SSH 端口（默认: 22） |
 | `username` | string | ✅ | SSH 用户名 |
-| `auth_method` | string | ✅ | 认证方式: `"key"`, `"password"`, `"agent"` |
-| `private_key_path` | string | ⚠️ | 私钥路径（auth_method="key" 时必需） |
-| `private_key_content` | string | ⚠️ | 私钥内容（替代 private_key_path） |
-| `key_passphrase` | string | ❌ | 私钥密码（如果私钥有密码保护） |
-| `password` | string | ⚠️ | SSH 密码（auth_method="password" 时必需） |
-| `timeout` | integer | ❌ | 连接超时（秒，默认: 30） |
+| `password` | string / null | ❌ | SSH 密码（可选） |
+| `private_key` | string / null | ❌ | 私钥内容（可选） |
+| `private_key_path` | string / null | ❌ | 私钥路径（可选） |
+| `passphrase` | string / null | ❌ | 私钥密码（可选） |
+| `use_agent` | boolean | ❌ | 使用 SSH Agent（默认: true） |
 
 #### 请求示例
 
@@ -94,8 +128,11 @@ curl -X POST http://localhost:23300/api/remote/connect \
     "host": "gpu-server.com",
     "port": 22,
     "username": "mluser",
-    "auth_method": "key",
-    "private_key_path": "~/.ssh/id_rsa"
+    "password": null,
+    "private_key": null,
+    "private_key_path": "~/.ssh/id_rsa",
+    "passphrase": null,
+    "use_agent": true
   }'
 ```
 
@@ -109,8 +146,11 @@ response = requests.post(
         "host": "gpu-server.com",
         "port": 22,
         "username": "mluser",
-        "auth_method": "key",
-        "private_key_path": "~/.ssh/id_rsa"
+        "password": None,
+        "private_key": None,
+        "private_key_path": "~/.ssh/id_rsa",
+        "passphrase": None,
+        "use_agent": True,
     }
 )
 
@@ -127,8 +167,11 @@ const response = await fetch('http://localhost:23300/api/remote/connect', {
     host: 'gpu-server.com',
     port: 22,
     username: 'mluser',
-    auth_method: 'key',
-    private_key_path: '~/.ssh/id_rsa'
+    password: null,
+    private_key: null,
+    private_key_path: '~/.ssh/id_rsa',
+    passphrase: null,
+    use_agent: true
   })
 });
 
@@ -141,45 +184,30 @@ const connectionId = result.connection_id;
 **成功响应** (200 OK):
 ```json
 {
-  "success": true,
-  "connection_id": "conn_1a2b3c4d",
+  "ok": true,
+  "connection_id": "mluser@gpu-server.com:22",
   "host": "gpu-server.com",
   "port": 22,
   "username": "mluser",
-  "status": "connected",
-  "server_info": {
-    "hostname": "gpu-server-01",
-    "os": "Linux",
-    "kernel": "5.15.0-76-generic",
-    "python_version": "3.10.8"
-  },
-  "created_at": "2025-10-25T10:30:00Z"
+  "connected": true
 }
 ```
 
-**错误响应** (400/401/500):
+**错误响应** (500/503/422):
 ```json
 {
-  "success": false,
-  "error": "authentication_failed",
-  "message": "SSH authentication failed: Invalid private key",
-  "details": {
-    "host": "gpu-server.com",
-    "username": "mluser",
-    "auth_method": "key"
-  }
+  "detail": "Connection failed: <reason>"
 }
 ```
 
-#### 错误码
+#### 状态码
 
-| 状态码 | 错误码 | 描述 |
-|--------|--------|------|
-| 400 | `invalid_parameters` | 缺少必需参数或参数格式错误 |
-| 401 | `authentication_failed` | SSH 认证失败 |
-| 408 | `connection_timeout` | 连接超时 |
-| 500 | `ssh_error` | SSH 连接错误 |
-| 503 | `service_unavailable` | SSH 服务不可用 |
+| 状态码 | 含义 |
+|--------|------|
+| 409 | Host key 需要用户确认（见上方 409 协议） |
+| 500 | 连接失败（`detail` 为错误信息） |
+| 503 | Remote 模块不可用 |
+| 422 | 参数校验失败（FastAPI / Pydantic） |
 
 #### 注意事项
 
@@ -190,13 +218,13 @@ const connectionId = result.connection_id;
 
 ---
 
-### GET /api/remote/connections
+### GET /api/remote/sessions
 
 获取所有活动的远程连接列表。
 
 #### 请求
 
-**URL**: `GET /api/remote/connections`
+**URL**: `GET /api/remote/sessions`
 
 **Query Parameters**: 无
 
@@ -204,21 +232,21 @@ const connectionId = result.connection_id;
 
 **cURL**:
 ```bash
-curl http://localhost:23300/api/remote/connections
+curl http://localhost:23300/api/remote/sessions
 ```
 
 **Python**:
 ```python
 import requests
 
-response = requests.get("http://localhost:23300/api/remote/connections")
-connections = response.json()["connections"]
+response = requests.get("http://localhost:23300/api/remote/sessions")
+sessions = response.json()["sessions"]
 ```
 
 **JavaScript**:
 ```javascript
-const response = await fetch('http://localhost:23300/api/remote/connections');
-const { connections } = await response.json();
+const response = await fetch('http://localhost:23300/api/remote/sessions');
+const { sessions } = await response.json();
 ```
 
 #### 响应
@@ -226,258 +254,43 @@ const { connections } = await response.json();
 **成功响应** (200 OK):
 ```json
 {
-  "success": true,
-  "connections": [
+  "sessions": [
     {
-      "connection_id": "conn_1a2b3c4d",
+      "key": "mluser@gpu-server.com:22",
       "host": "gpu-server.com",
       "port": 22,
       "username": "mluser",
-      "status": "connected",
-      "created_at": "2025-10-25T10:30:00Z",
-      "last_ping": "2025-10-25T10:35:00Z",
-      "viewer": {
-        "status": "running",
-        "local_port": 8081,
-        "remote_port": 45342,
-        "url": "http://localhost:8081"
-      }
+      "connected": true
     }
-  ],
-  "total": 1
+  ]
 }
 ```
 
 ---
 
-### DELETE /api/remote/connections/{id}
+### POST /api/remote/disconnect
 
 断开指定的远程连接。
 
 #### 请求
 
-**URL**: `DELETE /api/remote/connections/{connection_id}`
-
-**Path Parameters**:
-
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
-
-**Query Parameters**:
-
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `force` | boolean | ❌ | 强制断开（默认: false） |
-| `cleanup_viewer` | boolean | ❌ | 同时清理 Remote Viewer（默认: true） |
-
-#### 请求示例
-
-**cURL**:
-```bash
-curl -X DELETE "http://localhost:23300/api/remote/connections/conn_1a2b3c4d?cleanup_viewer=true"
-```
-
-**Python**:
-```python
-import requests
-
-response = requests.delete(
-    "http://localhost:23300/api/remote/connections/conn_1a2b3c4d",
-    params={"cleanup_viewer": True}
-)
-```
-
-#### 响应
-
-**成功响应** (200 OK):
-```json
-{
-  "success": true,
-  "message": "Connection disconnected successfully",
-  "connection_id": "conn_1a2b3c4d",
-  "cleanup_performed": {
-    "ssh_tunnel": true,
-    "remote_viewer": true,
-    "temp_files": true
-  }
-}
-```
-
----
-
-## 环境检测
-
-### GET /api/remote/environments
-
-列出远程服务器上检测到的 Python 环境。
-
-#### 请求
-
-**URL**: `GET /api/remote/environments`
-
-**Query Parameters**:
-
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
-| `filter` | string | ❌ | 过滤条件: `"all"`, `"runicorn_only"` (默认: "all") |
-
-#### 请求示例
-
-**cURL**:
-```bash
-curl "http://localhost:23300/api/remote/environments?connection_id=conn_1a2b3c4d"
-```
-
-**Python**:
-```python
-import requests
-
-response = requests.get(
-    "http://localhost:23300/api/remote/environments",
-    params={"connection_id": "conn_1a2b3c4d"}
-)
-
-environments = response.json()["environments"]
-```
-
-#### 响应
-
-**成功响应** (200 OK):
-```json
-{
-  "success": true,
-  "connection_id": "conn_1a2b3c4d",
-  "environments": [
-    {
-      "name": "pytorch-env",
-      "type": "conda",
-      "python_version": "3.9.15",
-      "python_path": "/home/mluser/miniconda3/envs/pytorch-env/bin/python",
-      "runicorn_installed": true,
-      "runicorn_version": "0.5.0",
-      "storage_root": "/data/experiments",
-      "is_active": true
-    }
-  ],
-  "total": 1
-}
-```
-
----
-
-### POST /api/remote/environments/detect
-
-重新检测远程服务器上的 Python 环境。
-
-#### 请求
-
-**URL**: `POST /api/remote/environments/detect`
+**URL**: `POST /api/remote/disconnect`
 
 **Body Parameters**:
 
 | 参数 | 类型 | 必需 | 描述 |
 |------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
-| `force_refresh` | boolean | ❌ | 强制刷新缓存（默认: false） |
+| `host` | string | ✅ | 远程主机 |
+| `port` | integer | ❌ | SSH 端口（默认: 22） |
+| `username` | string | ✅ | SSH 用户名 |
 
 #### 请求示例
 
 **cURL**:
 ```bash
-curl -X POST http://localhost:23300/api/remote/environments/detect \
+curl -X POST http://localhost:23300/api/remote/disconnect \
   -H "Content-Type: application/json" \
-  -d '{"connection_id": "conn_1a2b3c4d", "force_refresh": true}'
-```
-
-#### 响应
-
-**成功响应** (200 OK):
-```json
-{
-  "success": true,
-  "message": "Environments detected successfully",
-  "connection_id": "conn_1a2b3c4d",
-  "environments_found": 3,
-  "detection_time": "2025-10-25T10:35:00Z"
-}
-```
-
----
-
-### GET /api/remote/config
-
-获取远程服务器的 Runicorn 配置。
-
-#### 请求
-
-**URL**: `GET /api/remote/config`
-
-**Query Parameters**:
-
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
-| `env_name` | string | ✅ | 环境名称 |
-
-#### 请求示例
-
-**cURL**:
-```bash
-curl "http://localhost:23300/api/remote/config?connection_id=conn_1a2b3c4d&env_name=pytorch-env"
-```
-
-#### 响应
-
-**成功响应** (200 OK):
-```json
-{
-  "success": true,
-  "connection_id": "conn_1a2b3c4d",
-  "env_name": "pytorch-env",
-  "config": {
-    "user_root_dir": "/data/experiments",
-    "viewer_port": 23300,
-    "log_level": "INFO"
-  },
-  "runicorn_version": "0.5.0"
-}
-```
-
----
-
-## Remote Viewer 管理
-
-### POST /api/remote/viewer/start
-
-在远程服务器上启动 Remote Viewer。
-
-#### 请求
-
-**URL**: `POST /api/remote/viewer/start`
-
-**Body Parameters**:
-
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
-| `env_name` | string | ✅ | Python 环境名称 |
-| `remote_root` | string | ❌ | 远程存储根目录（默认: 自动检测） |
-| `local_port` | integer | ❌ | 本地转发端口（默认: 自动分配） |
-| `auto_open` | boolean | ❌ | 是否自动打开浏览器（默认: true） |
-
-#### 请求示例
-
-**cURL**:
-```bash
-curl -X POST http://localhost:23300/api/remote/viewer/start \
-  -H "Content-Type: application/json" \
-  -d '{
-    "connection_id": "conn_1a2b3c4d",
-    "env_name": "pytorch-env",
-    "auto_open": true
-  }'
+  -d '{"host": "gpu-server.com", "port": 22, "username": "mluser"}'
 ```
 
 **Python**:
@@ -485,16 +298,9 @@ curl -X POST http://localhost:23300/api/remote/viewer/start \
 import requests
 
 response = requests.post(
-    "http://localhost:23300/api/remote/viewer/start",
-    json={
-        "connection_id": "conn_1a2b3c4d",
-        "env_name": "pytorch-env",
-        "auto_open": True
-    }
+    "http://localhost:23300/api/remote/disconnect",
+    json={"host": "gpu-server.com", "port": 22, "username": "mluser"}
 )
-
-viewer_info = response.json()
-print(f"Viewer URL: {viewer_info['url']}")
 ```
 
 #### 响应
@@ -502,244 +308,154 @@ print(f"Viewer URL: {viewer_info['url']}")
 **成功响应** (200 OK):
 ```json
 {
-  "success": true,
-  "message": "Remote Viewer started successfully",
-  "connection_id": "conn_1a2b3c4d",
-  "viewer": {
-    "status": "running",
-    "local_port": 8081,
-    "remote_port": 45342,
-    "url": "http://localhost:8081",
-    "remote_root": "/data/experiments",
-    "env_name": "pytorch-env",
-    "started_at": "2025-10-25T10:40:00Z"
-  }
+  "ok": true,
+  "message": "Connection removed"
 }
 ```
 
 ---
 
-### POST /api/remote/viewer/stop
+## Known Hosts 管理
 
-停止远程服务器上的 Remote Viewer。
+### POST /api/remote/known-hosts/accept
 
-#### 请求
+接受 host key 并写入 Runicorn 管理的 `known_hosts`。
 
-**URL**: `POST /api/remote/viewer/stop`
+**URL**: `POST /api/remote/known-hosts/accept`
 
 **Body Parameters**:
 
 | 参数 | 类型 | 必需 | 描述 |
 |------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
-| `cleanup` | boolean | ❌ | 清理临时文件（默认: true） |
+| `host` | string | ✅ | 远程主机 |
+| `port` | integer | ✅ | SSH 端口 |
+| `key_type` | string | ✅ | 公钥类型（如 `ssh-ed25519`） |
+| `public_key` | string | ✅ | OpenSSH 公钥（`<type> <base64>`） |
+| `fingerprint_sha256` | string | ✅ | 与 409 返回一致的指纹 |
 
-#### 请求示例
+**响应**:
 
-**cURL**:
-```bash
-curl -X POST http://localhost:23300/api/remote/viewer/stop \
-  -H "Content-Type: application/json" \
-  -d '{"connection_id": "conn_1a2b3c4d"}'
-```
-
-#### 响应
-
-**成功响应** (200 OK):
 ```json
-{
-  "success": true,
-  "message": "Remote Viewer stopped successfully",
-  "connection_id": "conn_1a2b3c4d",
-  "stopped_at": "2025-10-25T11:00:00Z"
-}
+{"ok": true}
 ```
+
+### GET /api/remote/known-hosts/list
+
+列出 `known_hosts` 中的条目。
+
+**URL**: `GET /api/remote/known-hosts/list`
+
+### POST /api/remote/known-hosts/remove
+
+删除 `known_hosts` 中的一个条目。
+
+**URL**: `POST /api/remote/known-hosts/remove`
 
 ---
 
-### GET /api/remote/viewer/status
+## 环境与配置
 
-获取 Remote Viewer 的当前状态。
+### GET /api/remote/conda-envs
 
-#### 请求
+列出远端 Python 环境。
 
-**URL**: `GET /api/remote/viewer/status`
+**URL**: `GET /api/remote/conda-envs`
 
 **Query Parameters**:
 
 | 参数 | 类型 | 必需 | 描述 |
 |------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
+| `connection_id` | string | ✅ | 连接ID（`user@host:port`） |
 
-#### 请求示例
+### GET /api/remote/config
 
-**cURL**:
-```bash
-curl "http://localhost:23300/api/remote/viewer/status?connection_id=conn_1a2b3c4d"
-```
+获取远端运行环境信息与建议配置。
 
-#### 响应
-
-**成功响应** (200 OK):
-```json
-{
-  "success": true,
-  "connection_id": "conn_1a2b3c4d",
-  "viewer": {
-    "status": "running",
-    "local_port": 8081,
-    "url": "http://localhost:8081",
-    "uptime_seconds": 3600,
-    "health": "healthy"
-  }
-}
-```
-
----
-
-### GET /api/remote/viewer/logs
-
-获取 Remote Viewer 的日志输出。
-
-#### 请求
-
-**URL**: `GET /api/remote/viewer/logs`
+**URL**: `GET /api/remote/config`
 
 **Query Parameters**:
 
 | 参数 | 类型 | 必需 | 描述 |
 |------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
-| `lines` | integer | ❌ | 返回的日志行数（默认: 100） |
-| `level` | string | ❌ | 日志级别过滤 |
-
-#### 请求示例
-
-**cURL**:
-```bash
-curl "http://localhost:23300/api/remote/viewer/logs?connection_id=conn_1a2b3c4d&lines=50"
-```
-
-#### 响应
-
-**成功响应** (200 OK):
-```json
-{
-  "success": true,
-  "connection_id": "conn_1a2b3c4d",
-  "logs": [
-    "[2025-10-25 10:40:00] INFO: Starting Remote Viewer",
-    "[2025-10-25 10:40:01] INFO: Viewer listening on port 45342"
-  ],
-  "total_lines": 2
-}
-```
+| `connection_id` | string | ✅ | 连接ID（`user@host:port`） |
+| `conda_env` | string | ❌ | Conda 环境名（默认: `system`） |
 
 ---
 
-## 健康检查
+## Remote Viewer 管理
 
-### GET /api/remote/health
+### POST /api/remote/viewer/start
 
-获取连接的健康状态。
+启动 Remote Viewer 会话并建立 SSH 隧道。
 
-#### 请求
+**URL**: `POST /api/remote/viewer/start`
 
-**URL**: `GET /api/remote/health`
+### POST /api/remote/viewer/stop
 
-**Query Parameters**:
+停止一个 Remote Viewer 会话。
 
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
+**URL**: `POST /api/remote/viewer/stop`
 
-#### 响应
+### GET /api/remote/viewer/sessions
 
-**成功响应** (200 OK):
-```json
-{
-  "success": true,
-  "connection_id": "conn_1a2b3c4d",
-  "health": "healthy",
-  "checks": {
-    "ssh_connection": "pass",
-    "viewer_process": "pass",
-    "tunnel_active": "pass"
-  },
-  "last_check": "2025-10-25T11:00:00Z"
-}
-```
+列出所有 Remote Viewer 会话。
+
+**URL**: `GET /api/remote/viewer/sessions`
+
+### GET /api/remote/viewer/status/{session_id}
+
+查询某个会话状态。
+
+**URL**: `GET /api/remote/viewer/status/{session_id}`
 
 ---
 
-### GET /api/remote/ping
+## 远程文件系统
 
-测试远程连接。
+### GET /api/remote/fs/list
 
-#### 请求
+通过 SFTP 列出远端目录。
 
-**URL**: `GET /api/remote/ping`
+### GET /api/remote/fs/exists
 
-**Query Parameters**:
+检查远端路径是否存在。
 
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID |
+---
 
-#### 响应
+## 状态
 
-**成功响应** (200 OK):
-```json
-{
-  "success": true,
-  "connection_id": "conn_1a2b3c4d",
-  "latency_ms": 45,
-  "timestamp": "2025-10-25T11:00:00Z"
-}
-```
+### GET /api/remote/status
+
+获取 remote 总体状态（连接池 + viewer sessions）。
+
+---
+
+## 已保存连接
+
+### GET /api/remote/connections/saved
+
+读取已保存的 SSH 连接配置。
+
+### POST /api/remote/connections/saved
+
+保存 SSH 连接配置。
 
 ---
 
 ## 错误处理
 
-所有 API 端点在发生错误时返回统一格式的错误响应。
-
-### 错误响应格式
+Runicorn Viewer 使用 FastAPI 的标准错误响应：
 
 ```json
-{
-  "success": false,
-  "error": "error_code",
-  "message": "Human-readable error message",
-  "details": {
-    "additional": "context"
-  }
-}
+{"detail": "<message>"}
 ```
 
-### 常见错误码
-
-| HTTP状态码 | 错误码 | 描述 |
-|-----------|--------|------|
-| 400 | `invalid_parameters` | 请求参数无效 |
-| 401 | `authentication_failed` | SSH 认证失败 |
-| 404 | `connection_not_found` | 连接不存在 |
-| 404 | `environment_not_found` | 环境不存在 |
-| 408 | `connection_timeout` | 连接超时 |
-| 409 | `viewer_already_running` | Viewer 已在运行 |
-| 500 | `internal_error` | 内部服务器错误 |
-| 503 | `service_unavailable` | 服务不可用 |
-
----
-
-## 速率限制
-
-Remote API 目前不实施速率限制。
+部分错误（如 host key 校验）会返回结构化的 `detail`（见 HTTP 409 协议）。
 
 ---
 
 **作者**: Runicorn Development Team  
-**版本**: v0.5.0  
-**最后更新**: 2025-10-25
+**版本**: v0.5.4  
+**最后更新**: 2025-12-22
 
 **[返回 API 索引](API_INDEX.md)** | **[查看快速参考](QUICK_REFERENCE.md)**

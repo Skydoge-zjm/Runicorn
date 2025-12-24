@@ -4,7 +4,7 @@
 
 # Runicorn API Documentation
 
-**Version**: v0.5.0  
+**Version**: v0.5.4  
 **Base URL**: `http://127.0.0.1:23300/api`  
 **Protocol**: HTTP/1.1  
 **Format**: JSON  
@@ -43,7 +43,7 @@ GET /api/health
 Response:
 {
   "status": "ok",
-  "version": "0.5.0",
+  "version": "0.5.4",
   "timestamp": 1704067200.0
 }
 ```

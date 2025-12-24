@@ -4,7 +4,7 @@
 
 # Runicorn API Quick Reference
 
-**Version**: v0.5.0  
+**Version**: v0.5.4  
 **Base URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -85,23 +85,24 @@ Body: {"path": "E:\\RunicornData"}
 ```bash
 # Connect to remote server
 POST /api/remote/connect
-Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
+Body: {"host": "gpu-server.com", "port": 22, "username": "user", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true}
 
 # List Python environments
-GET /api/remote/environments?connection_id=conn_1a2b3c4d
+GET /api/remote/conda-envs?connection_id=user@gpu-server.com:22
 
 # Start Remote Viewer
 POST /api/remote/viewer/start
-Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
+Body: {"host": "gpu-server.com", "port": 22, "username": "user", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true, "remote_root": "/data/experiments", "local_port": null, "remote_port": null, "conda_env": null}
 
 # Get Viewer status
-GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
+GET /api/remote/viewer/status/{session_id}
 
-# Health check
-GET /api/remote/health?connection_id=conn_1a2b3c4d
+# List SSH sessions
+GET /api/remote/sessions
 
 # Disconnect
-DELETE /api/remote/connections/conn_1a2b3c4d
+POST /api/remote/disconnect
+Body: {"host": "gpu-server.com", "port": 22, "username": "user"}
 ```
 
 ---

@@ -1,7 +1,7 @@
 # Remote Viewer API Code Examples
 
-> **Version**: v0.5.0  
-> **Last Updated**: 2025-10-25
+> **Version**: v0.5.4  
+> **Last Updated**: 2025-12-22
 
 [English](REMOTE_API_EXAMPLES.md) | [简体中文](../zh/REMOTE_API_EXAMPLES.md)
 
@@ -28,7 +28,7 @@ from typing import Optional, Dict, List, Any
 class RunicornRemoteClient:
     """Runicorn Remote Viewer API Client"""
     
-    def __init__(self, base_url: str = "http://localhost:23300"):
+    def __init__(self, base_url: str = "http://127.0.0.1:23300"):
         self.base_url = base_url
         self.session = requests.Session()
     
@@ -36,24 +36,26 @@ class RunicornRemoteClient:
         self,
         host: str,
         username: str,
-        auth_method: str = "key",
         port: int = 22,
-        **kwargs
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        private_key_path: Optional[str] = None,
+        passphrase: Optional[str] = None,
+        use_agent: bool = True,
     ) -> Dict[str, Any]:
         """
-        Connect to remote server
-        
+        Establish SSH connection.
+
         Args:
             host: Remote server address
             username: SSH username
-            auth_method: Authentication method ("key", "password", "agent")
             port: SSH port
-            **kwargs: Additional parameters
-                private_key_path: Private key path (auth_method="key")
-                password: Password (auth_method="password")
-                key_passphrase: Private key passphrase
-                timeout: Connection timeout
-        
+            password: SSH password (optional)
+            private_key: Private key content (optional)
+            private_key_path: Private key path (optional)
+            passphrase: Private key passphrase (optional)
+            use_agent: Use SSH agent (default: True)
+
         Returns:
             Response dictionary containing connection_id
         """
@@ -61,166 +63,93 @@ class RunicornRemoteClient:
             "host": host,
             "port": port,
             "username": username,
-            "auth_method": auth_method,
+            "password": password,
+            "private_key": private_key,
+            "private_key_path": private_key_path,
+            "passphrase": passphrase,
+            "use_agent": use_agent,
         }
-        
-        # Add authentication info
-        if auth_method == "key":
-            if "private_key_path" in kwargs:
-                payload["private_key_path"] = kwargs["private_key_path"]
-            if "key_passphrase" in kwargs:
-                payload["key_passphrase"] = kwargs["key_passphrase"]
-        elif auth_method == "password":
-            if "password" not in kwargs:
-                raise ValueError("Password required for password authentication")
-            payload["password"] = kwargs["password"]
-        
-        # Optional parameters
-        if "timeout" in kwargs:
-            payload["timeout"] = kwargs["timeout"]
-        
+
         response = self.session.post(
             f"{self.base_url}/api/remote/connect",
             json=payload
         )
         response.raise_for_status()
         return response.json()
-    
-    def list_connections(self) -> List[Dict[str, Any]]:
-        """List all active connections"""
-        response = self.session.get(f"{self.base_url}/api/remote/connections")
+
+    def list_sessions(self) -> List[Dict[str, Any]]:
+        response = self.session.get(f"{self.base_url}/api/remote/sessions")
         response.raise_for_status()
-        return response.json()["connections"]
-    
-    def disconnect(self, connection_id: str, cleanup_viewer: bool = True) -> Dict[str, Any]:
-        """Disconnect connection"""
-        response = self.session.delete(
-            f"{self.base_url}/api/remote/connections/{connection_id}",
-            params={"cleanup_viewer": cleanup_viewer}
-        )
-        response.raise_for_status()
-        return response.json()
-    
-    def list_environments(
-        self,
-        connection_id: str,
-        filter_type: str = "all"
-    ) -> List[Dict[str, Any]]:
-        """List Python environments"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/environments",
-            params={
-                "connection_id": connection_id,
-                "filter": filter_type
-            }
-        )
-        response.raise_for_status()
-        return response.json()["environments"]
-    
-    def detect_environments(
-        self,
-        connection_id: str,
-        force_refresh: bool = False
-    ) -> Dict[str, Any]:
-        """Re-detect environments"""
+        return response.json()["sessions"]
+
+    def disconnect(self, *, host: str, port: int, username: str) -> Dict[str, Any]:
         response = self.session.post(
-            f"{self.base_url}/api/remote/environments/detect",
-            json={
-                "connection_id": connection_id,
-                "force_refresh": force_refresh
-            }
+            f"{self.base_url}/api/remote/disconnect",
+            json={"host": host, "port": port, "username": username},
         )
         response.raise_for_status()
         return response.json()
-    
-    def get_remote_config(self, connection_id: str, env_name: str) -> Dict[str, Any]:
-        """Get remote configuration"""
+
+    def list_conda_envs(self, *, connection_id: str) -> List[Dict[str, Any]]:
+        response = self.session.get(
+            f"{self.base_url}/api/remote/conda-envs",
+            params={"connection_id": connection_id},
+        )
+        response.raise_for_status()
+        return response.json()["envs"]
+
+    def get_remote_config(self, *, connection_id: str, conda_env: str = "system") -> Dict[str, Any]:
         response = self.session.get(
             f"{self.base_url}/api/remote/config",
-            params={
-                "connection_id": connection_id,
-                "env_name": env_name
-            }
+            params={"connection_id": connection_id, "conda_env": conda_env},
         )
         response.raise_for_status()
         return response.json()
-    
+
     def start_viewer(
         self,
-        connection_id: str,
-        env_name: str,
-        remote_root: Optional[str] = None,
-        auto_open: bool = True
+        *,
+        host: str,
+        username: str,
+        remote_root: str,
+        port: int = 22,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        private_key_path: Optional[str] = None,
+        passphrase: Optional[str] = None,
+        use_agent: bool = True,
+        local_port: Optional[int] = None,
+        remote_port: Optional[int] = None,
+        conda_env: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Start Remote Viewer"""
         payload = {
-            "connection_id": connection_id,
-            "env_name": env_name,
-            "auto_open": auto_open
+            "host": host,
+            "port": port,
+            "username": username,
+            "password": password,
+            "private_key": private_key,
+            "private_key_path": private_key_path,
+            "passphrase": passphrase,
+            "use_agent": use_agent,
+            "remote_root": remote_root,
+            "local_port": local_port,
+            "remote_port": remote_port,
+            "conda_env": conda_env,
         }
-        
-        if remote_root:
-            payload["remote_root"] = remote_root
-        
-        response = self.session.post(
-            f"{self.base_url}/api/remote/viewer/start",
-            json=payload
-        )
+        response = self.session.post(f"{self.base_url}/api/remote/viewer/start", json=payload)
         response.raise_for_status()
         return response.json()
-    
-    def stop_viewer(self, connection_id: str, cleanup: bool = True) -> Dict[str, Any]:
-        """Stop Remote Viewer"""
+
+    def stop_viewer(self, *, session_id: str) -> Dict[str, Any]:
         response = self.session.post(
             f"{self.base_url}/api/remote/viewer/stop",
-            json={
-                "connection_id": connection_id,
-                "cleanup": cleanup
-            }
+            json={"session_id": session_id},
         )
         response.raise_for_status()
         return response.json()
-    
-    def get_viewer_status(self, connection_id: str) -> Dict[str, Any]:
-        """Get Viewer status"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/viewer/status",
-            params={"connection_id": connection_id}
-        )
-        response.raise_for_status()
-        return response.json()
-    
-    def get_viewer_logs(
-        self,
-        connection_id: str,
-        lines: int = 100
-    ) -> List[str]:
-        """Get Viewer logs"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/viewer/logs",
-            params={
-                "connection_id": connection_id,
-                "lines": lines
-            }
-        )
-        response.raise_for_status()
-        return response.json()["logs"]
-    
-    def health_check(self, connection_id: str) -> Dict[str, Any]:
-        """Health check"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/health",
-            params={"connection_id": connection_id}
-        )
-        response.raise_for_status()
-        return response.json()
-    
-    def ping(self, connection_id: str) -> Dict[str, Any]:
-        """Test connection latency"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/ping",
-            params={"connection_id": connection_id}
-        )
+
+    def get_viewer_session(self, *, session_id: str) -> Dict[str, Any]:
+        response = self.session.get(f"{self.base_url}/api/remote/viewer/status/{session_id}")
         response.raise_for_status()
         return response.json()
     
@@ -233,7 +162,6 @@ class RunicornRemoteClient:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
-```
 
 ### Basic Usage Example
 
@@ -243,46 +171,28 @@ from runicorn_remote_client import RunicornRemoteClient
 # Create client
 with RunicornRemoteClient() as client:
     # 1. Connect to remote server
-    result = client.connect(
-        host="gpu-server.com",
-        username="mluser",
-        auth_method="key",
-        private_key_path="~/.ssh/id_rsa"
-    )
+    result = client.connect(host="gpu-server.com", username="mluser", private_key_path="~/.ssh/id_rsa")
     
     connection_id = result["connection_id"]
     print(f"✓ Connected: {connection_id}")
     
-    # 2. List Python environments
-    environments = client.list_environments(
-        connection_id=connection_id,
-        filter_type="runicorn_only"
-    )
-    
-    print(f"✓ Found {len(environments)} environments")
-    for env in environments:
-        print(f"  - {env['name']}: Python {env['python_version']}, Runicorn {env['runicorn_version']}")
-    
+    # 2. (optional) List Python environments
+    envs = client.list_conda_envs(connection_id=connection_id)
+    print(f"✓ Found {len(envs)} env(s)")
+
     # 3. Start Remote Viewer
-    viewer = client.start_viewer(
-        connection_id=connection_id,
-        env_name=environments[0]["name"],
-        auto_open=True
-    )
-    
-    print(f"✓ Viewer started: {viewer['viewer']['url']}")
-    
+    viewer = client.start_viewer(host="gpu-server.com", username="mluser", remote_root="/data/experiments")
+    session_id = viewer["session"]["sessionId"]
+    print(f"✓ Viewer started: {viewer['session']['url']}")
+
     # 4. Monitor status
-    status = client.get_viewer_status(connection_id)
-    print(f"✓ Viewer status: {status['viewer']['status']}")
-    
-    # 5. Health check
-    health = client.health_check(connection_id)
-    print(f"✓ Connection health: {health['health']}")
-    
-    # 6. Cleanup when done
+    status = client.get_viewer_session(session_id=session_id)
+    print(f"✓ Viewer status: {status['status']}")
+
+    # 5. Cleanup when done
     input("Press Enter to disconnect...")
-    client.disconnect(connection_id)
+    client.stop_viewer(session_id=session_id)
+    client.disconnect(host="gpu-server.com", port=22, username="mluser")
     print("✓ Disconnected")
 ```
 
@@ -309,31 +219,24 @@ class RunicornRemoteClient {
     const {
       host,
       username,
-      authMethod = 'key',
       port = 22,
-      privateKeyPath,
-      password,
-      keyPassphrase,
-      timeout
+      password = null,
+      privateKey = null,
+      privateKeyPath = null,
+      passphrase = null,
+      useAgent = true
     } = options;
 
     const payload = {
       host,
       port,
       username,
-      auth_method: authMethod,
+      password,
+      private_key: privateKey,
+      private_key_path: privateKeyPath,
+      passphrase,
+      use_agent: useAgent,
     };
-
-    // Add authentication info
-    if (authMethod === 'key') {
-      if (privateKeyPath) payload.private_key_path = privateKeyPath;
-      if (keyPassphrase) payload.key_passphrase = keyPassphrase;
-    } else if (authMethod === 'password') {
-      if (!password) throw new Error('Password required');
-      payload.password = password;
-    }
-
-    if (timeout) payload.timeout = timeout;
 
     const response = await fetch(`${this.baseUrl}/api/remote/connect`, {
       method: 'POST',
@@ -349,27 +252,28 @@ class RunicornRemoteClient {
   }
 
   /**
-   * List all active connections
+   * List all active SSH sessions
    */
-  async listConnections() {
-    const response = await fetch(`${this.baseUrl}/api/remote/connections`);
+  async listSessions() {
+    const response = await fetch(`${this.baseUrl}/api/remote/sessions`);
     
     if (!response.ok) {
-      throw new Error(`Failed to list connections: ${response.statusText}`);
+      throw new Error(`Failed to list sessions: ${response.statusText}`);
     }
 
     const data = await response.json();
-    return data.connections;
+    return data.sessions;
   }
 
   /**
-   * Disconnect connection
+   * Disconnect an SSH session
    */
-  async disconnect(connectionId, cleanupViewer = true) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/connections/${connectionId}?cleanup_viewer=${cleanupViewer}`,
-      { method: 'DELETE' }
-    );
+  async disconnect({ host, username, port = 22 }) {
+    const response = await fetch(`${this.baseUrl}/api/remote/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host, port, username }),
+    });
 
     if (!response.ok) {
       throw new Error(`Disconnect failed: ${response.statusText}`);
@@ -381,52 +285,50 @@ class RunicornRemoteClient {
   /**
    * List Python environments
    */
-  async listEnvironments(connectionId, filterType = 'all') {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/environments?connection_id=${connectionId}&filter=${filterType}`
-    );
+  async listCondaEnvs(connectionId) {
+    const response = await fetch(`${this.baseUrl}/api/remote/conda-envs?connection_id=${connectionId}`);
 
     if (!response.ok) {
       throw new Error(`Failed to list environments: ${response.statusText}`);
     }
 
     const data = await response.json();
-    return data.environments;
-  }
-
-  /**
-   * Re-detect environments
-   */
-  async detectEnvironments(connectionId, forceRefresh = false) {
-    const response = await fetch(`${this.baseUrl}/api/remote/environments/detect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        connection_id: connectionId,
-        force_refresh: forceRefresh,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Detection failed: ${response.statusText}`);
-    }
-
-    return response.json();
+    return data.envs;
   }
 
   /**
    * Start Remote Viewer
    */
-  async startViewer(connectionId, envName, options = {}) {
-    const { remoteRoot, autoOpen = true } = options;
+  async startViewer(options) {
+    const {
+      host,
+      username,
+      remoteRoot,
+      port = 22,
+      password = null,
+      privateKey = null,
+      privateKeyPath = null,
+      passphrase = null,
+      useAgent = true,
+      localPort = null,
+      remotePort = null,
+      condaEnv = null,
+    } = options;
 
     const payload = {
-      connection_id: connectionId,
-      env_name: envName,
-      auto_open: autoOpen,
+      host,
+      port,
+      username,
+      password,
+      private_key: privateKey,
+      private_key_path: privateKeyPath,
+      passphrase,
+      use_agent: useAgent,
+      remote_root: remoteRoot,
+      local_port: localPort,
+      remote_port: remotePort,
+      conda_env: condaEnv,
     };
-
-    if (remoteRoot) payload.remote_root = remoteRoot;
 
     const response = await fetch(`${this.baseUrl}/api/remote/viewer/start`, {
       method: 'POST',
@@ -444,13 +346,12 @@ class RunicornRemoteClient {
   /**
    * Stop Remote Viewer
    */
-  async stopViewer(connectionId, cleanup = true) {
+  async stopViewer(sessionId) {
     const response = await fetch(`${this.baseUrl}/api/remote/viewer/stop`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        connection_id: connectionId,
-        cleanup,
+        session_id: sessionId,
       }),
     });
 
@@ -462,61 +363,13 @@ class RunicornRemoteClient {
   }
 
   /**
-   * Get Viewer status
+   * Get Viewer session status
    */
-  async getViewerStatus(connectionId) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/viewer/status?connection_id=${connectionId}`
-    );
+  async getViewerSession(sessionId) {
+    const response = await fetch(`${this.baseUrl}/api/remote/viewer/status/${sessionId}`);
 
     if (!response.ok) {
       throw new Error(`Failed to get status: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  /**
-   * Get Viewer logs
-   */
-  async getViewerLogs(connectionId, lines = 100) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/viewer/logs?connection_id=${connectionId}&lines=${lines}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to get logs: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.logs;
-  }
-
-  /**
-   * Health check
-   */
-  async healthCheck(connectionId) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/health?connection_id=${connectionId}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Health check failed: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  /**
-   * Test connection latency
-   */
-  async ping(connectionId) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/ping?connection_id=${connectionId}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Ping failed: ${response.statusText}`);
     }
 
     return response.json();
@@ -539,40 +392,42 @@ const client = new RunicornRemoteClient();
     const { connection_id } = await client.connect({
       host: 'gpu-server.com',
       username: 'mluser',
-      authMethod: 'key',
       privateKeyPath: '~/.ssh/id_rsa',
+      useAgent: true,
     });
 
     console.log(`✓ Connected: ${connection_id}`);
 
     // 2. List environments
-    const environments = await client.listEnvironments(connection_id, 'runicorn_only');
+    const envs = await client.listCondaEnvs(connection_id);
     
-    console.log(`✓ Found ${environments.length} environments`);
-    environments.forEach(env => {
-      console.log(`  - ${env.name}: Python ${env.python_version}, Runicorn ${env.runicorn_version}`);
+    console.log(`✓ Found ${envs.length} env(s)`);
+    envs.forEach(env => {
+      console.log(`  - ${env.name}: Python ${env.python_version} (${env.type})`);
     });
 
     // 3. Start Viewer
-    const viewer = await client.startViewer(
-      connection_id,
-      environments[0].name,
-      { autoOpen: true }
-    );
+    const viewer = await client.startViewer({
+      host: 'gpu-server.com',
+      port: 22,
+      username: 'mluser',
+      privateKeyPath: '~/.ssh/id_rsa',
+      useAgent: true,
+      remoteRoot: '~/runicorn_data',
+      condaEnv: null,
+    });
 
-    console.log(`✓ Viewer started: ${viewer.viewer.url}`);
+    const sessionId = viewer.session.sessionId;
+    console.log(`✓ Viewer started: ${viewer.session.url}`);
 
     // 4. Monitor status
-    const status = await client.getViewerStatus(connection_id);
-    console.log(`✓ Viewer status: ${status.viewer.status}`);
+    const status = await client.getViewerSession(sessionId);
+    console.log(`✓ Viewer status: ${status.status}`);
 
-    // 5. Health check
-    const health = await client.healthCheck(connection_id);
-    console.log(`✓ Connection health: ${health.health}`);
-
-    // 6. Cleanup when done
-    // await client.disconnect(connection_id);
-    // console.log('✓ Disconnected');
+    // 5. Cleanup when done
+    await client.stopViewer(sessionId);
+    await client.disconnect({ host: 'gpu-server.com', port: 22, username: 'mluser' });
+    console.log('✓ Disconnected');
 
   } catch (error) {
     console.error('Error:', error.message);
@@ -595,33 +450,22 @@ def monitor_training(host, username, key_path, env_name):
     
     with RunicornRemoteClient() as client:
         # Connect
-        result = client.connect(
+        result = client.connect(host=host, username=username, private_key_path=key_path)
+        
+        viewer = client.start_viewer(
             host=host,
             username=username,
-            auth_method="key",
-            private_key_path=key_path
+            remote_root="~/runicorn_data",
+            private_key_path=key_path,
+            conda_env=env_name,
         )
-        conn_id = result["connection_id"]
-        
-        # Start Viewer
-        viewer = client.start_viewer(
-            connection_id=conn_id,
-            env_name=env_name,
-            auto_open=False  # Don't auto-open browser
-        )
-        
-        print(f"Viewer URL: {viewer['viewer']['url']}")
+        session_id = viewer["session"]["sessionId"]
+        print(f"Viewer URL: {viewer['session']['url']}")
         
         # Monitoring loop
         while True:
-            status = client.get_viewer_status(conn_id)
-            health = client.health_check(conn_id)
-            
-            if health["health"] != "healthy":
-                print(f"Warning: Connection unhealthy - {health}")
-                break
-            
-            print(f"Status: {status['viewer']['status']}, Uptime: {status['viewer']['uptime_seconds']}s")
+            status = client.get_viewer_session(session_id=session_id)
+            print(f"Status: {status['status']}, Uptime: {status['uptimeSeconds']}s")
             time.sleep(30)  # Check every 30 seconds
 
 # Usage
@@ -653,40 +497,33 @@ def manage_multiple_servers(servers):
             
             print(f"✓ Connected to {server['host']}: {conn_id}")
         
-        # List all connections
-        all_connections = client.list_connections()
-        print(f"\nTotal {len(all_connections)} active connections:")
+        # List all sessions
+        all_sessions = client.list_sessions()
+        print(f"\nTotal {len(all_sessions)} active session(s):")
         
-        for conn in all_connections:
-            print(f"  - {conn['host']}: {conn['status']}")
-            if conn.get('viewer'):
-                print(f"    Viewer: {conn['viewer']['url']}")
+        for sess in all_sessions:
+            print(f"  - {sess['key']}: connected={sess['connected']}")
         
         # Interactive management
         while True:
-            print("\nOptions: (l)ist, (h)ealth, (q)uit")
+            print("\nOptions: (l)ist, (q)uit")
             choice = input("> ").lower()
             
             if choice == 'l':
-                for conn in client.list_connections():
-                    print(f"{conn['connection_id']}: {conn['host']} - {conn['status']}")
-            
-            elif choice == 'h':
-                for conn_id in connections:
-                    health = client.health_check(conn_id)
-                    print(f"{conn_id}: {health['health']}")
+                for sess in client.list_sessions():
+                    print(f"{sess['key']}: connected={sess['connected']}")
             
             elif choice == 'q':
                 break
     
     finally:
         # Cleanup all connections
-        for conn_id in connections:
+        for server in servers:
             try:
-                client.disconnect(conn_id)
-                print(f"✓ Disconnected: {conn_id}")
+                client.disconnect(host=server["host"], port=server.get("port", 22), username=server["username"])
+                print(f"✓ Disconnected: {server['host']}")
             except Exception as e:
-                print(f"✗ Failed to disconnect: {conn_id} - {e}")
+                print(f"✗ Failed to disconnect: {server['host']} - {e}")
         
         client.close()
 
@@ -695,13 +532,11 @@ servers = [
     {
         "host": "gpu-server-01.com",
         "username": "mluser",
-        "auth_method": "key",
         "private_key_path": "~/.ssh/id_rsa"
     },
     {
         "host": "gpu-server-02.com",
         "username": "mluser",
-        "auth_method": "key",
         "private_key_path": "~/.ssh/id_rsa"
     },
 ]
@@ -719,36 +554,30 @@ def select_best_environment(host, username, key_path):
     
     with RunicornRemoteClient() as client:
         # Connect
-        result = client.connect(
-            host=host,
-            username=username,
-            auth_method="key",
-            private_key_path=key_path
-        )
+        result = client.connect(host=host, username=username, private_key_path=key_path)
         conn_id = result["connection_id"]
         
-        # Get all environments
-        envs = client.list_environments(conn_id, filter_type="runicorn_only")
+        envs = client.list_conda_envs(connection_id=conn_id)
         
         if not envs:
             print("Error: No environments with Runicorn found")
             return None
-        
-        # Select latest Runicorn version
-        best_env = max(envs, key=lambda e: e["runicorn_version"])
-        
+
+        best_env = next((e for e in envs if e.get("is_default")), envs[0])
         print(f"Selected environment: {best_env['name']}")
         print(f"  Python: {best_env['python_version']}")
-        print(f"  Runicorn: {best_env['runicorn_version']}")
-        print(f"  Storage: {best_env['storage_root']}")
+        print(f"  Type: {best_env['type']}")
         
         # Start Viewer
         viewer = client.start_viewer(
-            connection_id=conn_id,
-            env_name=best_env["name"]
+            host=host,
+            username=username,
+            remote_root="~/runicorn_data",
+            private_key_path=key_path,
+            conda_env=best_env["name"],
         )
         
-        return viewer["viewer"]["url"]
+        return viewer["session"]["url"]
 
 # Usage
 url = select_best_environment(
@@ -779,13 +608,7 @@ def safe_connect_and_start():
     
     try:
         # Connect
-        result = client.connect(
-            host="gpu-server.com",
-            username="mluser",
-            auth_method="key",
-            private_key_path="~/.ssh/id_rsa",
-            timeout=30
-        )
+        result = client.connect(host="gpu-server.com", username="mluser", private_key_path="~/.ssh/id_rsa")
         conn_id = result["connection_id"]
         
     except requests.exceptions.Timeout:
@@ -793,8 +616,8 @@ def safe_connect_and_start():
         return
     
     except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 401:
-            print("Error: SSH authentication failed, check key")
+        if e.response.status_code == 409:
+            print("Error: Host key confirmation required")
         elif e.response.status_code == 503:
             print("Error: SSH service unavailable")
         else:
@@ -806,31 +629,19 @@ def safe_connect_and_start():
         return
     
     try:
-        # Get environments
-        envs = client.list_environments(conn_id, "runicorn_only")
-        
-        if not envs:
-            print("Error: No environments with Runicorn found")
-            print("Hint: Run 'pip install runicorn' on remote server")
-            return
-        
-        # Start Viewer
         viewer = client.start_viewer(
-            connection_id=conn_id,
-            env_name=envs[0]["name"]
+            host="gpu-server.com",
+            username="mluser",
+            remote_root="~/runicorn_data",
+            private_key_path="~/.ssh/id_rsa",
+            conda_env=None,
         )
-        
-        print(f"✓ Success: {viewer['viewer']['url']}")
+        print(f"✓ Success: {viewer['session']['url']}")
         
     except requests.exceptions.HTTPError as e:
         error_data = e.response.json()
         
-        if error_data.get("error") == "environment_not_found":
-            print(f"Error: Environment not found - {error_data['message']}")
-        elif error_data.get("error") == "viewer_already_running":
-            print("Warning: Viewer already running")
-        else:
-            print(f"Error: {error_data.get('message', str(e))}")
+        print(f"Error: {error_data.get('detail', str(e))}")
     
     except Exception as e:
         print(f"Error: Start failed - {e}")
@@ -839,7 +650,7 @@ def safe_connect_and_start():
         # Ensure cleanup
         if conn_id:
             try:
-                client.disconnect(conn_id)
+                client.disconnect(host="gpu-server.com", port=22, username="mluser")
             except:
                 pass
         
@@ -873,9 +684,8 @@ client.close()  # Easy to forget
 result = client.connect(
     host="remote-server.com",
     username="user",
-    auth_method="key",
     private_key_path="~/.ssh/id_rsa",
-    timeout=60  # Increase timeout
+    port=22,
 )
 ```
 
@@ -891,29 +701,11 @@ key_path = os.getenv("SSH_KEY_PATH")
 client.connect(
     host=host,
     username=username,
-    auth_method="key",
     private_key_path=key_path
 )
 ```
 
-### 4. Regular Health Checks
-
-```python
-import time
-
-def keep_alive(client, conn_id, interval=30):
-    """Periodically ping to keep connection alive"""
-    while True:
-        try:
-            result = client.ping(conn_id)
-            print(f"Ping: {result['latency_ms']}ms")
-            time.sleep(interval)
-        except Exception as e:
-            print(f"Connection lost: {e}")
-            break
-```
-
-### 5. Logging
+### 4. Logging
 
 ```python
 import logging
@@ -931,7 +723,7 @@ except Exception as e:
 ---
 
 **Author**: Runicorn Development Team  
-**Version**: v0.5.0  
-**Last Updated**: 2025-10-25
+**Version**: v0.5.4  
+**Last Updated**: 2025-12-22
 
 **[Back to API Docs](README.md)** | **[View API Reference](remote_api.md)**

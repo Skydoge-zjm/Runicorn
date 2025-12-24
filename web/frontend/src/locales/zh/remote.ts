@@ -94,6 +94,31 @@ export default {
   'remote.error.connectionTimeout': '连接超时',
   'remote.error.invalidConfig': '配置无效',
   'remote.error.unknown': '未知错误',
+
+  // Host Key Confirmation
+  'remote.hostKey.title': '主机密钥确认',
+  'remote.hostKey.reasonUnknown': '该主机的密钥尚未被信任，是否信任并继续？',
+  'remote.hostKey.reasonChanged': '警告：该主机的密钥已发生变化，可能存在安全风险。',
+  'remote.hostKey.target': '目标',
+  'remote.hostKey.keyType': '密钥类型',
+  'remote.hostKey.fingerprint': '指纹 (SHA256)',
+  'remote.hostKey.publicKey': '公钥',
+  'remote.hostKey.expectedFingerprint': '期望指纹 (SHA256)',
+  'remote.hostKey.expectedPublicKey': '期望公钥',
+  'remote.hostKey.trustAndContinue': '信任并继续',
+  'remote.hostKey.cancel': '取消',
+  'remote.hostKey.expand': '展开',
+  
+  // Known Hosts Management
+  'remote.knownHosts.title': '已知主机',
+  'remote.knownHosts.refresh': '刷新',
+  'remote.knownHosts.empty': '暂无已知主机',
+  'remote.knownHosts.actions': '操作',
+  'remote.knownHosts.remove': '移除',
+  'remote.knownHosts.removeConfirm': '确认移除此主机密钥？',
+  'remote.knownHosts.removeSuccess': '已移除主机密钥',
+  'remote.knownHosts.removeFailed': '移除主机密钥失败',
+  'remote.knownHosts.loadFailed': '加载已知主机失败',
   
   // 使用帮助
   'remote.help.title': '使用帮助',

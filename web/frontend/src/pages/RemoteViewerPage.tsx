@@ -4,21 +4,22 @@
  * Main page for managing Remote Viewer sessions (VSCode Remote-like architecture)
  */
 
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   Card,
   Space,
   Typography,
   Row,
   Col,
-  Statistic,
-  Divider,
   Alert,
   Empty,
   message,
   Spin,
   Modal,
-  Input
+  Input,
+  Table,
+  Button,
+  Popconfirm
 } from 'antd'
 import {
   CloudServerOutlined,
@@ -33,6 +34,7 @@ import RemoteSessionCard from '../components/remote/RemoteSessionCard'
 import SavedConnectionsList from '../components/remote/SavedConnectionsList'
 import RemoteConfigCard from '../components/remote/RemoteConfigCard'
 import CondaEnvSelector from '../components/remote/CondaEnvSelector'
+import HostKeyModal from '../components/remote/HostKeyModal'
 import DismissibleAlert from '../components/DismissibleAlert'
 import FancyStatCard from '../components/fancy/FancyStatCard'
 import { colorConfig } from '../config/animation_config'
@@ -47,10 +49,21 @@ import {
   startRemoteViewer,
   stopRemoteViewer,
   disconnectRemote,
-  testConnection
+  testConnection,
+  acceptKnownHost,
+  listKnownHosts,
+  removeKnownHost
 } from '../api/remote'
 
-import type { SSHConnectionConfig, SavedConnection, SSHConnectionState } from '../types/remote'
+import { ApiError } from '../types/remote'
+import type {
+  HostKeyConfirmationRequiredDetail,
+  HostKeyInfo,
+  SavedConnection,
+  SSHConnectionConfig,
+  SSHConnectionState,
+  KnownHostsEntry
+} from '../types/remote'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -72,6 +85,14 @@ export default function RemoteViewerPage() {
   const [passwordDialogAction, setPasswordDialogAction] = useState<'connect' | 'quickstart'>('connect')
   const [tempPassword, setTempPassword] = useState('')
 
+  const [hostKeyModalOpen, setHostKeyModalOpen] = useState(false)
+  const [hostKeyModalLoading, setHostKeyModalLoading] = useState(false)
+  const [hostKeyModalTarget, setHostKeyModalTarget] = useState<string | undefined>(undefined)
+  const [hostKeyModalHostKey, setHostKeyModalHostKey] = useState<HostKeyInfo | undefined>(undefined)
+  const hostKeyDecisionResolverRef = useRef<((decision: 'confirm' | 'cancel') => void) | null>(null)
+  const [knownHosts, setKnownHosts] = useState<KnownHostsEntry[]>([])
+  const [knownHostsLoading, setKnownHostsLoading] = useState(false)
+
   // Hooks
   const { sessions, refetch: refetchSessions } = useRemoteSessions()
   const {
@@ -81,6 +102,126 @@ export default function RemoteViewerPage() {
     deleteConnection
   } = useSavedConnections()
 
+  const isHostKeyConfirmationRequiredError = (
+    error: unknown
+  ): error is ApiError<HostKeyConfirmationRequiredDetail> => {
+    if (!(error instanceof ApiError)) {
+      return false
+    }
+
+    if (error.status !== 409) {
+      return false
+    }
+
+    const detail = error.detail
+    if (!detail || typeof detail !== 'object') {
+      return false
+    }
+
+    return (detail as { code?: unknown }).code === 'HOST_KEY_CONFIRMATION_REQUIRED'
+  }
+
+  const waitForHostKeyDecision = async (): Promise<'confirm' | 'cancel'> => {
+    return new Promise((resolve) => {
+      hostKeyDecisionResolverRef.current = resolve
+    })
+  }
+
+  const handleHostKeyConfirm = () => {
+    hostKeyDecisionResolverRef.current?.('confirm')
+    hostKeyDecisionResolverRef.current = null
+  }
+
+  const handleHostKeyCancel = () => {
+    hostKeyDecisionResolverRef.current?.('cancel')
+    hostKeyDecisionResolverRef.current = null
+    setHostKeyModalOpen(false)
+    setHostKeyModalTarget(undefined)
+    setHostKeyModalHostKey(undefined)
+  }
+
+  const loadKnownHosts = async () => {
+    setKnownHostsLoading(true)
+    try {
+      const entries = await listKnownHosts()
+      setKnownHosts(entries)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('remote.knownHosts.loadFailed'))
+    } finally {
+      setKnownHostsLoading(false)
+    }
+  }
+
+  const handleRemoveKnownHost = async (entry: KnownHostsEntry) => {
+    setKnownHostsLoading(true)
+    try {
+      await removeKnownHost({
+        host: entry.host,
+        port: entry.port,
+        key_type: entry.key_type
+      })
+      message.success(t('remote.knownHosts.removeSuccess'))
+      await loadKnownHosts()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t('remote.knownHosts.removeFailed'))
+    } finally {
+      setKnownHostsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadKnownHosts()
+  }, [])
+
+  const runWithHostKeyConfirmation = async <T,>(
+    action: () => Promise<T>,
+    target: string
+  ): Promise<T> => {
+    while (true) {
+      try {
+        return await action()
+      } catch (error) {
+        if (!isHostKeyConfirmationRequiredError(error)) {
+          throw error
+        }
+
+        const detail = error.detail
+        const hostKey = detail?.host_key
+        if (!hostKey) {
+          throw error
+        }
+
+        setHostKeyModalTarget(target)
+        setHostKeyModalHostKey(hostKey)
+        setHostKeyModalOpen(true)
+
+        const decision = await waitForHostKeyDecision()
+        if (decision !== 'confirm') {
+          setHostKeyModalOpen(false)
+          setHostKeyModalTarget(undefined)
+          setHostKeyModalHostKey(undefined)
+          throw new Error(t('remote.message.cancelled'))
+        }
+
+        setHostKeyModalLoading(true)
+        try {
+          await acceptKnownHost({
+            host: hostKey.host,
+            port: hostKey.port,
+            key_type: hostKey.key_type,
+            public_key: hostKey.public_key,
+            fingerprint_sha256: hostKey.fingerprint_sha256
+          })
+        } finally {
+          setHostKeyModalLoading(false)
+          setHostKeyModalOpen(false)
+          setHostKeyModalTarget(undefined)
+          setHostKeyModalHostKey(undefined)
+        }
+      }
+    }
+  }
+
   /**
    * Step 1: Connect to SSH server and list conda environments
    */
@@ -89,16 +230,15 @@ export default function RemoteViewerPage() {
     setSSHConnected(false)
     
     try {
+      const connectionId = `${config.username}@${config.host}:${config.port}`
+
       // 1. Connect via SSH
-      await connectRemote(config)
+      await runWithHostKeyConfirmation(() => connectRemote(config), connectionId)
       
       // 2. SSH connected, show success and start fetching environments
       setConnecting(false)
       setSSHConnected(true)
-      message.success(t('remote.message.connectSuccess'))
       setFetchingEnvs(true)
-      
-      const connectionId = `${config.username}@${config.host}:${config.port}`
       
       // 3. List conda environments (show loading state)
       const envsResult = await listCondaEnvs(connectionId)
@@ -134,10 +274,10 @@ export default function RemoteViewerPage() {
       }
       
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('remote.message.connectFailed'))
       setSSHConnected(false)
       // Clean up on error
       await disconnectRemote(config.host, config.port, config.username).catch(() => {})
+      throw error
     } finally {
       setConnecting(false)
       setFetchingEnvs(false)
@@ -173,7 +313,6 @@ export default function RemoteViewerPage() {
       
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('remote.config.fetchFailed'))
-      throw error
     } finally {
       setFetchingConfig(false)
     }
@@ -194,6 +333,8 @@ export default function RemoteViewerPage() {
         remotePort: sshConnection.remoteConfig.suggestedRemotePort,
         condaEnv: sshConnection.selectedEnv
       }
+
+      const target = `${config.username}@${config.host}:${config.port}`
       
       // Update saved connection with complete info before starting
       if (savedConnectionId) {
@@ -204,7 +345,7 @@ export default function RemoteViewerPage() {
         })
       }
       
-      await startRemoteViewer(config)
+      await runWithHostKeyConfirmation(() => startRemoteViewer(config), target)
       await refetchSessions()
       message.success(t('remote.message.viewerStarted'))
       
@@ -215,7 +356,6 @@ export default function RemoteViewerPage() {
       
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('remote.message.viewerStartFailed'))
-      throw error
     } finally {
       setStarting(false)
     }
@@ -244,8 +384,9 @@ export default function RemoteViewerPage() {
    * Handle connection test
    */
   const handleTest = async (config: SSHConnectionConfig) => {
+    const target = `${config.username}@${config.host}:${config.port}`
     try {
-      const result = await testConnection(config)
+      const result = await runWithHostKeyConfirmation(() => testConnection(config), target)
       if (result.success) {
         message.success({
           content: (
@@ -303,15 +444,15 @@ export default function RemoteViewerPage() {
         localPort: conn.localPort,
         remotePort: conn.remotePort
       }
+
+      const connectionId = `${config.username}@${config.host}:${config.port}`
       
       // Connect via SSH
-      await connectRemote(config)
+      await runWithHostKeyConfirmation(() => connectRemote(config), connectionId)
       setConnecting(false)
       setSSHConnected(true)
       message.success(t('remote.message.connectSuccess'))
       setFetchingEnvs(true)
-      
-      const connectionId = `${config.username}@${config.host}:${config.port}`
       
       // List conda environments
       const envsResult = await listCondaEnvs(connectionId)
@@ -379,9 +520,11 @@ export default function RemoteViewerPage() {
         localPort: conn.localPort,
         remotePort: conn.remotePort
       }
+
+      const target = `${config.username}@${config.host}:${config.port}`
       
       // 1. Connect via SSH
-      await connectRemote(config)
+      await runWithHostKeyConfirmation(() => connectRemote(config), target)
       setConnecting(false)
       setSSHConnected(true)
       message.success(t('remote.message.connectSuccess'))
@@ -398,7 +541,7 @@ export default function RemoteViewerPage() {
         condaEnv: conn.condaEnv
       }
       
-      await startRemoteViewer(viewerConfig)
+      await runWithHostKeyConfirmation(() => startRemoteViewer(viewerConfig), target)
       await refetchSessions()
       message.success(t('remote.message.viewerStarted'))
       
@@ -653,6 +796,66 @@ export default function RemoteViewerPage() {
         </Col>
       </Row>
 
+      {/* Known Hosts Management */}
+      <Card
+        title={t('remote.knownHosts.title')}
+        style={{ marginTop: 24 }}
+        extra={
+          <Button onClick={() => loadKnownHosts()} loading={knownHostsLoading}>
+            {t('remote.knownHosts.refresh')}
+          </Button>
+        }
+      >
+        <Table
+          dataSource={knownHosts}
+          loading={knownHostsLoading}
+          rowKey={record => `${record.known_hosts_host}-${record.key_type}`}
+          pagination={false}
+          locale={{ emptyText: t('remote.knownHosts.empty') }}
+          columns={[
+            {
+              title: t('remote.form.host'),
+              dataIndex: 'host',
+              key: 'host',
+              render: (text: string, record: KnownHostsEntry) => (
+                <Text code>{record.known_hosts_host || `${text}:${record.port}`}</Text>
+              )
+            },
+            {
+              title: t('remote.hostKey.keyType'),
+              dataIndex: 'key_type',
+              key: 'key_type',
+              render: (text: string) => <Text code>{text}</Text>
+            },
+            {
+              title: t('remote.hostKey.fingerprint'),
+              dataIndex: 'fingerprint_sha256',
+              key: 'fingerprint_sha256',
+              render: (text: string) => (
+                <Text code copyable>
+                  {text}
+                </Text>
+              )
+            },
+            {
+              title: t('remote.knownHosts.actions'),
+              key: 'actions',
+              render: (_: unknown, record: KnownHostsEntry) => (
+                <Popconfirm
+                  title={t('remote.knownHosts.removeConfirm')}
+                  onConfirm={() => handleRemoveKnownHost(record)}
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button danger size="small">
+                    {t('remote.knownHosts.remove')}
+                  </Button>
+                </Popconfirm>
+              )
+            }
+          ]}
+        />
+      </Card>
+
       {/* Help Section */}
       <Card title={t('remote.help.title')} style={{ marginTop: 24 }}>
         <Space direction="vertical">
@@ -694,6 +897,15 @@ export default function RemoteViewerPage() {
           />
         </Space>
       </Modal>
+
+      <HostKeyModal
+        open={hostKeyModalOpen}
+        loading={hostKeyModalLoading}
+        target={hostKeyModalTarget}
+        hostKey={hostKeyModalHostKey}
+        onConfirm={handleHostKeyConfirm}
+        onCancel={handleHostKeyCancel}
+      />
     </div>
   )
 }

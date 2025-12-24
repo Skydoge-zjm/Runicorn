@@ -232,3 +232,59 @@ export interface SSHConnectionState {
   /** Remote config (after selecting environment) */
   remoteConfig?: RemoteConfig
 }
+
+export type HostKeyVerificationReason = 'unknown' | 'changed'
+
+export interface HostKeyInfo {
+  host: string
+  port: number
+  known_hosts_host: string
+  key_type: string
+  fingerprint_sha256: string
+  public_key: string
+  reason: HostKeyVerificationReason
+  expected_fingerprint_sha256?: string
+  expected_public_key?: string
+}
+
+export interface HostKeyConfirmationRequiredDetail {
+  code: 'HOST_KEY_CONFIRMATION_REQUIRED'
+  message: string
+  host_key: HostKeyInfo
+}
+
+export interface KnownHostsAcceptRequest {
+  host: string
+  port: number
+  key_type: string
+  public_key: string
+  fingerprint_sha256: string
+}
+
+export interface KnownHostsEntry {
+  host: string
+  port: number
+  known_hosts_host: string
+  key_type: string
+  key_base64: string
+  fingerprint_sha256: string
+}
+
+export interface KnownHostsRemoveRequest {
+  host: string
+  port: number
+  key_type: string
+}
+
+export class ApiError<TDetail = unknown> extends Error {
+  status: number
+  detail?: TDetail
+
+  constructor(status: number, message: string, detail?: TDetail) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+    Object.setPrototypeOf(this, new.target.prototype)
+  }
+}

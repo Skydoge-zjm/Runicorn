@@ -4,7 +4,7 @@
 
 # Runicorn API 文档
 
-**版本**: v0.5.0  
+**版本**: v0.5.4  
 **基础 URL**: `http://127.0.0.1:23300/api`  
 **协议**: HTTP/1.1  
 **格式**: JSON  
@@ -43,7 +43,7 @@ GET /api/health
 响应:
 {
   "status": "ok",
-  "version": "0.5.0",
+  "version": "0.5.4",
   "timestamp": 1704067200.0
 }
 ```

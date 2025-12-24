@@ -4,7 +4,7 @@
 
 # Runicorn API 快速参考
 
-**版本**: v0.5.0  
+**版本**: v0.5.4  
 **基础 URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -134,23 +134,24 @@ Body: {"path": "E:\\RunicornData"}
 ```bash
 # 连接到远程服务器
 POST /api/remote/connect
-Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
+Body: {"host": "gpu-server.com", "port": 22, "username": "user", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true}
 
 # 列出 Python 环境
-GET /api/remote/environments?connection_id=conn_1a2b3c4d
+GET /api/remote/conda-envs?connection_id=user@gpu-server.com:22
 
 # 启动 Remote Viewer
 POST /api/remote/viewer/start
-Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
+Body: {"host": "gpu-server.com", "port": 22, "username": "user", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true, "remote_root": "/data/experiments", "local_port": null, "remote_port": null, "conda_env": null}
 
 # 获取 Viewer 状态
-GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
+GET /api/remote/viewer/status/{session_id}
 
-# 健康检查
-GET /api/remote/health?connection_id=conn_1a2b3c4d
+# 列出 SSH sessions
+GET /api/remote/sessions
 
 # 断开连接
-DELETE /api/remote/connections/conn_1a2b3c4d
+POST /api/remote/disconnect
+Body: {"host": "gpu-server.com", "port": 22, "username": "user"}
 ```
 
 ---

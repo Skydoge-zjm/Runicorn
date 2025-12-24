@@ -10,19 +10,73 @@ import type {
   RemoteSession,
   RemoteFileEntry,
   ConnectionTestResult,
-  ApiResponse
+  KnownHostsAcceptRequest,
+  KnownHostsEntry,
+  KnownHostsRemoveRequest
 } from '../types/remote'
 
+import { ApiError } from '../types/remote'
+
 const API_BASE = '/api/remote'
+
+async function parseResponsePayload(response: Response): Promise<unknown> {
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    try {
+      return await response.json()
+    } catch {
+      return undefined
+    }
+  }
+
+  try {
+    const text = await response.text()
+    return text || undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function parseResponseDetail(response: Response): Promise<unknown> {
+  const payload = await parseResponsePayload(response)
+
+  if (payload && typeof payload === 'object' && 'detail' in payload) {
+    return (payload as { detail?: unknown }).detail
+  }
+
+  return payload
+}
+
+function getErrorMessage(detail: unknown, fallbackMessage: string): string {
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail
+  }
+
+  if (detail && typeof detail === 'object') {
+    const maybeMessage = (detail as { message?: unknown }).message
+    if (typeof maybeMessage === 'string' && maybeMessage.trim()) {
+      return maybeMessage
+    }
+  }
+
+  return fallbackMessage
+}
+
+async function ensureOk(response: Response, fallbackMessage: string): Promise<void> {
+  if (response.ok) {
+    return
+  }
+
+  const detail = await parseResponseDetail(response)
+  throw new ApiError(response.status, getErrorMessage(detail, fallbackMessage), detail)
+}
 
 /**
  * Get local runicorn version
  */
 export async function getLocalVersion(): Promise<string> {
   const response = await fetch('/api/health')
-  if (!response.ok) {
-    throw new Error('Failed to get local version')
-  }
+  await ensureOk(response, 'Failed to get local version')
   const data = await response.json()
   return data.version || 'unknown'
 }
@@ -45,11 +99,7 @@ export async function connectRemote(config: SSHConnectionConfig): Promise<SSHSes
     })
   })
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to connect to remote server')
-  }
-
+  await ensureOk(response, 'Failed to connect to remote server')
   return response.json()
 }
 
@@ -63,10 +113,7 @@ export async function disconnectRemote(host: string, port: number = 22, username
     body: JSON.stringify({ host, port, username })
   })
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to disconnect')
-  }
+  await ensureOk(response, 'Failed to disconnect')
 }
 
 /**
@@ -74,9 +121,7 @@ export async function disconnectRemote(host: string, port: number = 22, username
  */
 export async function listSSHSessions(): Promise<SSHSession[]> {
   const response = await fetch(`${API_BASE}/sessions`)
-  if (!response.ok) {
-    throw new Error('Failed to list SSH sessions')
-  }
+  await ensureOk(response, 'Failed to list SSH sessions')
   const data = await response.json()
   return data.sessions || data
 }
@@ -105,11 +150,7 @@ export async function startRemoteViewer(
     })
   })
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to start Remote Viewer')
-  }
-
+  await ensureOk(response, 'Failed to start Remote Viewer')
   return response.json()
 }
 
@@ -123,10 +164,7 @@ export async function stopRemoteViewer(sessionId: string): Promise<void> {
     body: JSON.stringify({ session_id: sessionId })
   })
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to stop Remote Viewer')
-  }
+  await ensureOk(response, 'Failed to stop Remote Viewer')
 }
 
 /**
@@ -134,9 +172,7 @@ export async function stopRemoteViewer(sessionId: string): Promise<void> {
  */
 export async function listRemoteSessions(): Promise<RemoteSession[]> {
   const response = await fetch(`${API_BASE}/viewer/sessions`)
-  if (!response.ok) {
-    throw new Error('Failed to list Remote Viewer sessions')
-  }
+  await ensureOk(response, 'Failed to list Remote Viewer sessions')
   const data = await response.json()
   return data.sessions || data
 }
@@ -146,9 +182,7 @@ export async function listRemoteSessions(): Promise<RemoteSession[]> {
  */
 export async function getSessionStatus(sessionId: string): Promise<RemoteSession> {
   const response = await fetch(`${API_BASE}/viewer/status/${sessionId}`)
-  if (!response.ok) {
-    throw new Error('Failed to get session status')
-  }
+  await ensureOk(response, 'Failed to get session status')
   return response.json()
 }
 
@@ -162,12 +196,9 @@ export async function browseRemoteDirectory(
   const response = await fetch(
     `${API_BASE}/fs/list?connection_id=${encodeURIComponent(connectionId)}&path=${encodeURIComponent(path)}`
   )
-  
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to list directory')
-  }
-  
+
+  await ensureOk(response, 'Failed to list directory')
+
   return response.json()
 }
 
@@ -187,11 +218,39 @@ export async function testConnection(config: SSHConnectionConfig): Promise<Conne
       responseTime: 0
     }
   } catch (error) {
+    if (error instanceof ApiError) {
+      // Propagate structured errors (e.g., host key confirmation)
+      throw error
+    }
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Connection test failed'
     }
   }
+}
+
+/**
+ * List Runicorn-managed known hosts
+ */
+export async function listKnownHosts(): Promise<KnownHostsEntry[]> {
+  const response = await fetch(`${API_BASE}/known-hosts/list`)
+  await ensureOk(response, 'Failed to list known hosts')
+  const data = await response.json()
+  return (data.entries as KnownHostsEntry[]) || []
+}
+
+/**
+ * Remove a specific host key entry from Runicorn known_hosts
+ */
+export async function removeKnownHost(payload: KnownHostsRemoveRequest): Promise<{ ok: boolean; changed: boolean }> {
+  const response = await fetch(`${API_BASE}/known-hosts/remove`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+
+  await ensureOk(response, 'Failed to remove known host')
+  return response.json()
 }
 
 /**
@@ -201,12 +260,9 @@ export async function listCondaEnvs(connectionId: string): Promise<any> {
   const response = await fetch(
     `${API_BASE}/conda-envs?connection_id=${encodeURIComponent(connectionId)}`
   )
-  
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to list conda environments')
-  }
-  
+
+  await ensureOk(response, 'Failed to list conda environments')
+
   return response.json()
 }
 
@@ -217,12 +273,20 @@ export async function getRemoteConfig(connectionId: string, condaEnv: string = '
   const response = await fetch(
     `${API_BASE}/config?connection_id=${encodeURIComponent(connectionId)}&conda_env=${encodeURIComponent(condaEnv)}`
   )
-  
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to get remote configuration')
-  }
-  
+
+  await ensureOk(response, 'Failed to get remote configuration')
+
+  return response.json()
+}
+
+export async function acceptKnownHost(payload: KnownHostsAcceptRequest): Promise<{ ok: boolean }> {
+  const response = await fetch(`${API_BASE}/known-hosts/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+
+  await ensureOk(response, 'Failed to accept host key')
   return response.json()
 }
 

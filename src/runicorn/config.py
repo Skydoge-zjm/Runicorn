@@ -43,6 +43,16 @@ def get_connections_file_path() -> Path:
     return _config_root_dir() / "connections.json"
 
 
+def get_known_hosts_file_path() -> Path:
+    """Return path to the Runicorn-managed OpenSSH known_hosts file."""
+    path = _config_root_dir() / "known_hosts"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return path
+
+
 def load_user_config() -> Dict[str, Any]:
     path = get_config_file_path()
     try:

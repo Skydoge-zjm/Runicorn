@@ -4,9 +4,9 @@
 
 # 完整 API 索引
 
-**版本**: v0.5.3  
+**版本**: v0.5.4  
 **总端点数**: 53+ REST + Python Client  
-**最后更新**: 2025-11-28
+**最后更新**: 2025-12-22
 
 ---
 
@@ -90,22 +90,22 @@ with api.connect() as client:
 
 ### Remote Viewer API (远程访问) 🆕
 
-**v0.5.0 新增**: VSCode Remote 风格的远程服务器访问
+**v0.5.4**: VSCode Remote 风格的远程服务器访问
 
 #### 连接管理
 
 | 方法 | 端点 | 描述 | 文档 |
 |------|------|------|------|
 | POST | `/api/remote/connect` | 建立 SSH 连接 | [📖](./remote_api.md#post-apiremoteconnect) |
-| GET | `/api/remote/connections` | 列出所有连接 | [📖](./remote_api.md#get-apiremoteconnections) |
-| DELETE | `/api/remote/connections/{id}` | 断开连接 | [📖](./remote_api.md#delete-apiremoteconnectionsid) |
+| GET | `/api/remote/sessions` | 列出 SSH 会话 | [📖](./remote_api.md#get-apiremotesessions) |
+| POST | `/api/remote/disconnect` | 断开会话 | [📖](./remote_api.md#post-apiremotedisconnect) |
+| GET | `/api/remote/status` | 远程状态 | [📖](./remote_api.md#get-apiremotestatus) |
 
 #### 环境检测
 
 | 方法 | 端点 | 描述 | 文档 |
 |------|------|------|------|
-| GET | `/api/remote/environments` | 列出 Python 环境 | [📖](./remote_api.md#get-apiremoteenvironments) |
-| POST | `/api/remote/environments/detect` | 重新检测环境 | [📖](./remote_api.md#post-apiremoteenvironmentsdetect) |
+| GET | `/api/remote/conda-envs` | 列出 Python 环境 | [📖](./remote_api.md#get-apiremoteconda-envs) |
 | GET | `/api/remote/config` | 获取远程配置 | [📖](./remote_api.md#get-apiremoteconfig) |
 
 #### Remote Viewer 管理
@@ -114,15 +114,8 @@ with api.connect() as client:
 |------|------|------|------|
 | POST | `/api/remote/viewer/start` | 启动 Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstart) |
 | POST | `/api/remote/viewer/stop` | 停止 Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstop) |
-| GET | `/api/remote/viewer/status` | 获取 Viewer 状态 | [📖](./remote_api.md#get-apiremoteviewerstatus) |
-| GET | `/api/remote/viewer/logs` | 获取 Viewer 日志 | [📖](./remote_api.md#get-apiremoteviewerlogs) |
-
-#### 健康检查
-
-| 方法 | 端点 | 描述 | 文档 |
-|------|------|------|------|
-| GET | `/api/remote/health` | 连接健康状态 | [📖](./remote_api.md#get-apiremotehealth) |
-| GET | `/api/remote/ping` | 测试连接延迟 | [📖](./remote_api.md#get-apiremoteping) |
+| GET | `/api/remote/viewer/sessions` | 列出 Viewer 会话 | [📖](./remote_api.md#get-apiremoteviewersessions) |
+| GET | `/api/remote/viewer/status/{session_id}` | 按 session_id 获取 Viewer 状态 | [📖](./remote_api.md#get-apiremoteviewerstatussession_id) |
 
 ### Manifest API (高性能同步) 🚀
 
@@ -203,23 +196,24 @@ GET /api/artifacts/resnet50-model/v3/files
 ```bash
 # 1. 连接到远程服务器
 POST /api/remote/connect
-Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
+Body: {"host": "gpu-server.com", "port": 22, "username": "mluser", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true}
 
 # 2. 检测 Python 环境
-GET /api/remote/environments?connection_id=conn_1a2b3c4d
+GET /api/remote/conda-envs?connection_id=user@host:port
 
 # 3. 启动 Remote Viewer
 POST /api/remote/viewer/start
-Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
+Body: {"host": "gpu-server.com", "port": 22, "username": "mluser", "private_key_path": "~/.ssh/id_rsa", "use_agent": true, "remote_root": "~/runicorn_data", "local_port": null, "remote_port": null, "conda_env": "system"}
 
 # 4. 监控状态
-GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
+GET /api/remote/viewer/status/{session_id}
 
 # 5. 访问远程数据
 # 浏览器打开: http://localhost:8081
 
 # 6. 断开连接
-DELETE /api/remote/connections/conn_1a2b3c4d
+POST /api/remote/disconnect
+Body: {"host": "gpu-server.com", "port": 22, "username": "mluser"}
 ```
 
 ### 用例: 分析
@@ -389,13 +383,13 @@ run = rn.init(project="demo", name="exp1")
 
 ---
 
-## 📝 API 变更日志
+## API 变更日志
 
-### v0.5.3 (当前) ⚡
-**性能与 UI 改进**
-- ✅ **统一 MetricChart**：单组件支持单实验和多实验视图
-- ✅ **图表懒加载**：基于 IntersectionObserver 的图表渲染
-- ✅ **高级 memo 优化**：数据指纹比较防止不必要的重渲染
+### v0.5.4 (当前) 
+ **性能与 UI 改进**
+ - ✅ **统一 MetricChart**：单组件支持单实验和多实验视图
+ - ✅ **图表懒加载**：基于 IntersectionObserver 的图表渲染
+ - ✅ **高级 memo 优化**：数据指纹比较防止不必要的重渲染
 - ✅ 前端美化：精美的指标卡片、动画状态徽章
 
 ### v0.5.2

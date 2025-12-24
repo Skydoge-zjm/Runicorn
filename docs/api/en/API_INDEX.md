@@ -4,9 +4,9 @@
 
 # Complete API Index
 
-**Version**: v0.5.3  
+**Version**: v0.5.4  
 **Total Endpoints**: 53+ REST + Python Client  
-**Last Updated**: 2025-11-28
+**Last Updated**: 2025-12-22
 
 ---
 
@@ -90,22 +90,22 @@ with api.connect() as client:
 
 ### Remote Viewer API (Remote Access) 🆕
 
-**v0.5.0 New**: VSCode Remote-style remote server access
+**v0.5.4**: VSCode Remote-style remote server access
 
 #### Connection Management
 
 | Method | Endpoint | Description | Docs |
 |--------|----------|-------------|------|
 | POST | `/api/remote/connect` | Establish SSH connection | [📖](./remote_api.md#post-apiremoteconnect) |
-| GET | `/api/remote/connections` | List all connections | [📖](./remote_api.md#get-apiremoteconnections) |
-| DELETE | `/api/remote/connections/{id}` | Disconnect | [📖](./remote_api.md#delete-apiremoteconnectionsid) |
+| GET | `/api/remote/sessions` | List SSH sessions | [📖](./remote_api.md#get-apiremotesessions) |
+| POST | `/api/remote/disconnect` | Disconnect session | [📖](./remote_api.md#post-apiremotedisconnect) |
+| GET | `/api/remote/status` | Remote status | [📖](./remote_api.md#get-apiremotestatus) |
 
 #### Environment Detection
 
 | Method | Endpoint | Description | Docs |
 |--------|----------|-------------|------|
-| GET | `/api/remote/environments` | List Python environments | [📖](./remote_api.md#get-apiremoteenvironments) |
-| POST | `/api/remote/environments/detect` | Re-detect environments | [📖](./remote_api.md#post-apiremoteenvironmentsdetect) |
+| GET | `/api/remote/conda-envs` | List Python environments | [📖](./remote_api.md#get-apiremoteconda-envs) |
 | GET | `/api/remote/config` | Get remote config | [📖](./remote_api.md#get-apiremoteconfig) |
 
 #### Remote Viewer Management
@@ -114,15 +114,8 @@ with api.connect() as client:
 |--------|----------|-------------|------|
 | POST | `/api/remote/viewer/start` | Start Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstart) |
 | POST | `/api/remote/viewer/stop` | Stop Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstop) |
-| GET | `/api/remote/viewer/status` | Get Viewer status | [📖](./remote_api.md#get-apiremoteviewerstatus) |
-| GET | `/api/remote/viewer/logs` | Get Viewer logs | [📖](./remote_api.md#get-apiremoteviewerlogs) |
-
-#### Health Checks
-
-| Method | Endpoint | Description | Docs |
-|--------|----------|-------------|------|
-| GET | `/api/remote/health` | Connection health status | [📖](./remote_api.md#get-apiremotehealth) |
-| GET | `/api/remote/ping` | Test connection latency | [📖](./remote_api.md#get-apiremoteping) |
+| GET | `/api/remote/viewer/sessions` | List Viewer sessions | [📖](./remote_api.md#get-apiremoteviewersessions) |
+| GET | `/api/remote/viewer/status/{session_id}` | Get Viewer status by session_id | [📖](./remote_api.md#get-apiremoteviewerstatussession_id) |
 
 ### Projects API (Hierarchy)
 
@@ -183,23 +176,24 @@ GET /api/artifacts/resnet50-model/v3/files
 ```bash
 # 1. Connect to remote server
 POST /api/remote/connect
-Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
+Body: {"host": "gpu-server.com", "port": 22, "username": "mluser", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true}
 
 # 2. Detect Python environments
-GET /api/remote/environments?connection_id=conn_1a2b3c4d
+GET /api/remote/conda-envs?connection_id=user@host:port
 
 # 3. Start Remote Viewer
 POST /api/remote/viewer/start
-Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
+Body: {"host": "gpu-server.com", "port": 22, "username": "mluser", "private_key_path": "~/.ssh/id_rsa", "use_agent": true, "remote_root": "~/runicorn_data", "local_port": null, "remote_port": null, "conda_env": "system"}
 
 # 4. Monitor status
-GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
+GET /api/remote/viewer/status/{session_id}
 
 # 5. Access remote data
 # Browser opens: http://localhost:8081
 
 # 6. Disconnect
-DELETE /api/remote/connections/conn_1a2b3c4d
+POST /api/remote/disconnect
+Body: {"host": "gpu-server.com", "port": 22, "username": "mluser"}
 ```
 
 ### Use Case: Analytics
@@ -384,7 +378,7 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ## 📝 API Changelog
 
-### v0.5.3 (Current) ⚡
+### v0.5.4 (Current) ⚡
 **Performance & UI Improvements**
 - ✅ **Unified MetricChart**: Single component for single-run and multi-run views
 - ✅ **Lazy chart loading**: IntersectionObserver-based chart rendering

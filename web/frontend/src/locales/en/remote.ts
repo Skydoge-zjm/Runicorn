@@ -94,6 +94,31 @@ export default {
   'remote.error.connectionTimeout': 'Connection timeout',
   'remote.error.invalidConfig': 'Invalid configuration',
   'remote.error.unknown': 'Unknown error',
+
+  // Host Key Confirmation
+  'remote.hostKey.title': 'Host Key Verification',
+  'remote.hostKey.reasonUnknown': 'This host is not in your known hosts. Do you want to trust this key?',
+  'remote.hostKey.reasonChanged': 'WARNING: The host key has changed. This may indicate a security risk.',
+  'remote.hostKey.target': 'Target',
+  'remote.hostKey.keyType': 'Key Type',
+  'remote.hostKey.fingerprint': 'Fingerprint (SHA256)',
+  'remote.hostKey.publicKey': 'Public Key',
+  'remote.hostKey.expectedFingerprint': 'Expected Fingerprint (SHA256)',
+  'remote.hostKey.expectedPublicKey': 'Expected Public Key',
+  'remote.hostKey.trustAndContinue': 'Trust and Continue',
+  'remote.hostKey.cancel': 'Cancel',
+  'remote.hostKey.expand': 'Show more',
+  
+  // Known Hosts Management
+  'remote.knownHosts.title': 'Known Hosts',
+  'remote.knownHosts.refresh': 'Refresh',
+  'remote.knownHosts.empty': 'No known hosts yet',
+  'remote.knownHosts.actions': 'Actions',
+  'remote.knownHosts.remove': 'Remove',
+  'remote.knownHosts.removeConfirm': 'Remove this host key?',
+  'remote.knownHosts.removeSuccess': 'Host key removed',
+  'remote.knownHosts.removeFailed': 'Failed to remove host key',
+  'remote.knownHosts.loadFailed': 'Failed to load known hosts',
   
   // Help
   'remote.help.title': 'Help',
