@@ -59,7 +59,7 @@ class ArtifactStorage:
         if self.dedup_pool:
             self.dedup_pool.mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"Artifact storage initialized: {self.artifacts_root} (dedup={enable_dedup})")
+        logger.debug(f"Artifact storage initialized: {self.artifacts_root} (dedup={enable_dedup})")
     
     def save_artifact(
         self,
@@ -986,7 +986,7 @@ def get_artifact_storage(storage_root: Path) -> ArtifactStorage:
     if (_artifact_storage_instance is None or 
         _artifact_storage_instance.storage_root != Path(storage_root)):
         _artifact_storage_instance = ArtifactStorage(storage_root, enable_dedup=True)
-        logger.info(f"Artifact storage instance created for: {storage_root}")
+        logger.debug(f"Artifact storage instance created for: {storage_root}")
     
     return _artifact_storage_instance
 
