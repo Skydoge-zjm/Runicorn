@@ -4,7 +4,7 @@
  * Main page for managing Remote Viewer sessions (VSCode Remote-like architecture)
  */
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Card,
   Space,
@@ -19,19 +19,28 @@ import {
   Input,
   Table,
   Button,
-  Popconfirm
+  Popconfirm,
+  Drawer,
+  Collapse,
+  List,
+  Tag,
+  Tooltip,
+  Form,
+  InputNumber,
+  Radio,
+  Checkbox,
+  Divider
 } from 'antd'
 import {
   CloudServerOutlined,
   ThunderboltOutlined,
   SaveOutlined,
-  CheckCircleOutlined
+  SafetyCertificateOutlined,
+  PlusOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
-import SSHConnectionForm from '../components/remote/SSHConnectionForm'
 import RemoteSessionCard from '../components/remote/RemoteSessionCard'
-import SavedConnectionsList from '../components/remote/SavedConnectionsList'
 import RemoteConfigCard from '../components/remote/RemoteConfigCard'
 import CondaEnvSelector from '../components/remote/CondaEnvSelector'
 import HostKeyModal from '../components/remote/HostKeyModal'
@@ -59,10 +68,11 @@ import { ApiError } from '../types/remote'
 import type {
   HostKeyConfirmationRequiredDetail,
   HostKeyInfo,
-  SavedConnection,
   SSHConnectionConfig,
   SSHConnectionState,
-  KnownHostsEntry
+  KnownHostsEntry,
+  SavedConnectionProfile,
+  SavedServer
 } from '../types/remote'
 
 const { Title, Paragraph, Text } = Typography
@@ -70,19 +80,22 @@ const { Title, Paragraph, Text } = Typography
 export default function RemoteViewerPage() {
   const { t } = useTranslation()
   const [connecting, setConnecting] = useState(false)
-  const [sshConnected, setSSHConnected] = useState(false)
   const [fetchingEnvs, setFetchingEnvs] = useState(false)
   const [fetchingConfig, setFetchingConfig] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [quickStartingProfileId, setQuickStartingProfileId] = useState<string | null>(null)
   
   // Step 1: SSH connection, Step 2: Select env, Step 3: Config confirmation
   const [sshConnection, setSSHConnection] = useState<SSHConnectionState | null>(null)
-  const [savedConnectionId, setSavedConnectionId] = useState<string | null>(null)
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardServerId, setWizardServerId] = useState<string | null>(null)
+  const [wizardEditProfileId, setWizardEditProfileId] = useState<string | null>(null)
+  const [serverForm] = Form.useForm()
   
   // Password input dialog
   const [passwordDialogVisible, setPasswordDialogVisible] = useState(false)
-  const [passwordDialogConnection, setPasswordDialogConnection] = useState<SavedConnection | null>(null)
-  const [passwordDialogAction, setPasswordDialogAction] = useState<'connect' | 'quickstart'>('connect')
+  const [passwordDialogServer, setPasswordDialogServer] = useState<SavedServer | null>(null)
+  const [passwordDialogProfile, setPasswordDialogProfile] = useState<SavedConnectionProfile | null>(null)
   const [tempPassword, setTempPassword] = useState('')
 
   const [hostKeyModalOpen, setHostKeyModalOpen] = useState(false)
@@ -92,15 +105,28 @@ export default function RemoteViewerPage() {
   const hostKeyDecisionResolverRef = useRef<((decision: 'confirm' | 'cancel') => void) | null>(null)
   const [knownHosts, setKnownHosts] = useState<KnownHostsEntry[]>([])
   const [knownHostsLoading, setKnownHostsLoading] = useState(false)
+  const [securityDrawerOpen, setSecurityDrawerOpen] = useState(false)
 
   // Hooks
   const { sessions, refetch: refetchSessions } = useRemoteSessions()
   const {
-    connections,
-    saveConnection,
-    updateConnection,
-    deleteConnection
+    servers,
+    getProfilesForServer,
+    addServer,
+    updateServer,
+    deleteServer,
+    addProfile,
+    updateProfile,
+    deleteProfile
   } = useSavedConnections()
+
+  const serverCount = servers.length
+  const profileCount = useMemo(() => {
+    return servers.reduce((acc, srv) => acc + getProfilesForServer(srv.id).length, 0)
+  }, [getProfilesForServer, servers])
+
+  const activeSessions = sessions.filter(s => s.status !== 'stopped')
+  const connectedServers = new Set(sessions.map(s => s.host)).size
 
   const isHostKeyConfirmationRequiredError = (
     error: unknown
@@ -170,8 +196,10 @@ export default function RemoteViewerPage() {
   }
 
   useEffect(() => {
-    void loadKnownHosts()
-  }, [])
+    if (securityDrawerOpen) {
+      void loadKnownHosts()
+    }
+  }, [securityDrawerOpen])
 
   const runWithHostKeyConfirmation = async <T,>(
     action: () => Promise<T>,
@@ -212,6 +240,9 @@ export default function RemoteViewerPage() {
             public_key: hostKey.public_key,
             fingerprint_sha256: hostKey.fingerprint_sha256
           })
+          if (securityDrawerOpen) {
+            await loadKnownHosts()
+          }
         } finally {
           setHostKeyModalLoading(false)
           setHostKeyModalOpen(false)
@@ -225,9 +256,8 @@ export default function RemoteViewerPage() {
   /**
    * Step 1: Connect to SSH server and list conda environments
    */
-  const handleConnect = async (config: SSHConnectionConfig) => {
+  const connectAndListEnvs = async (config: SSHConnectionConfig) => {
     setConnecting(true)
-    setSSHConnected(false)
     
     try {
       const connectionId = `${config.username}@${config.host}:${config.port}`
@@ -235,9 +265,6 @@ export default function RemoteViewerPage() {
       // 1. Connect via SSH
       await runWithHostKeyConfirmation(() => connectRemote(config), connectionId)
       
-      // 2. SSH connected, show success and start fetching environments
-      setConnecting(false)
-      setSSHConnected(true)
       setFetchingEnvs(true)
       
       // 3. List conda environments (show loading state)
@@ -252,29 +279,7 @@ export default function RemoteViewerPage() {
         remoteConfig: undefined
       })
       
-      // Save connection if requested (will be updated with conda_env later)
-      if (config.saveName) {
-        // Save password only if user chose to save it
-        const shouldSavePassword = config.savePassword && config.authMethod === 'password'
-        const configToSave = shouldSavePassword
-          ? config 
-          : { ...config, password: undefined }
-        
-        console.log('Saving connection:', {
-          saveName: config.saveName,
-          savePassword: config.savePassword,
-          authMethod: config.authMethod,
-          hasPassword: !!config.password,
-          shouldSavePassword
-        })
-        
-        const connId = await saveConnection(configToSave)
-        setSavedConnectionId(connId)
-        message.success(t('remote.message.configSaved'))
-      }
-      
     } catch (error) {
-      setSSHConnected(false)
       // Clean up on error
       await disconnectRemote(config.host, config.port, config.username).catch(() => {})
       throw error
@@ -298,16 +303,10 @@ export default function RemoteViewerPage() {
       // Update connection state with selected env and config
       setSSHConnection({
         ...sshConnection,
+        config: { ...sshConnection.config, condaEnv: envName },
         selectedEnv: envName,
         remoteConfig
       })
-      
-      // Update saved connection with conda env if it was saved
-      if (savedConnectionId) {
-        updateConnection(savedConnectionId, {
-          condaEnv: envName
-        })
-      }
       
       // Don't show success message here, only show message when viewer starts
       
@@ -319,43 +318,47 @@ export default function RemoteViewerPage() {
   }
   
   /**
-   * Step 3: Start Remote Viewer after config confirmation
+   * Step 3: Save profile after config confirmation
    */
-  const handleStartViewer = async (remoteRoot: string, localPort?: number) => {
+  const handleSaveProfile = async (profileName: string, remoteRoot: string, localPort?: number, remotePort?: number) => {
     if (!sshConnection || !sshConnection.remoteConfig) return
+    if (!wizardServerId) return
     
     setStarting(true)
     try {
-      const config: SSHConnectionConfig = {
-        ...sshConnection.config,
-        remoteRoot,
-        localPort,
-        remotePort: sshConnection.remoteConfig.suggestedRemotePort,
-        condaEnv: sshConnection.selectedEnv
-      }
-
-      const target = `${config.username}@${config.host}:${config.port}`
-      
-      // Update saved connection with complete info before starting
-      if (savedConnectionId) {
-        await updateConnection(savedConnectionId, {
+      const finalName = profileName?.trim() || `${sshConnection.selectedEnv || 'system'} - ${remoteRoot}`
+      if (wizardEditProfileId) {
+        await updateProfile(wizardEditProfileId, {
+          name: finalName,
+          condaEnv: sshConnection.selectedEnv,
           remoteRoot,
           localPort,
-          remotePort: sshConnection.remoteConfig.suggestedRemotePort
+          remotePort
+        })
+      } else {
+        await addProfile(wizardServerId, {
+          name: finalName,
+          condaEnv: sshConnection.selectedEnv,
+          remoteRoot,
+          localPort,
+          remotePort
         })
       }
+
+      // Disconnect SSH after saving config
+      const { host, port, username } = sshConnection.config
+      await disconnectRemote(host, port, username).catch(() => {})
+
+      message.success(t('remote.message.configSaved'))
       
-      await runWithHostKeyConfirmation(() => startRemoteViewer(config), target)
-      await refetchSessions()
-      message.success(t('remote.message.viewerStarted'))
-      
-      // Reset to initial state
       setSSHConnection(null)
-      setSavedConnectionId(null)
-      setSSHConnected(false)
+      setWizardOpen(false)
+      setWizardServerId(null)
+      setWizardEditProfileId(null)
+      serverForm.resetFields()
       
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('remote.message.viewerStartFailed'))
+      message.error(error instanceof Error ? error.message : t('remote.message.saveFailed'))
     } finally {
       setStarting(false)
     }
@@ -373,10 +376,12 @@ export default function RemoteViewerPage() {
     
     // Reset all connection-related states
     setSSHConnection(null)
-    setSSHConnected(false)
     setFetchingEnvs(false)
     setFetchingConfig(false)
-    setSavedConnectionId(null)
+    setWizardOpen(false)
+    setWizardServerId(null)
+    setWizardEditProfileId(null)
+    serverForm.resetFields()
     message.info(t('remote.message.cancelled'))
   }
 
@@ -413,147 +418,149 @@ export default function RemoteViewerPage() {
   /**
    * Handle connect only (without starting viewer)
    */
-  const handleConnectOnly = async (conn: SavedConnection) => {
-    // If password auth and no password saved, show dialog
-    if (conn.authMethod === 'password' && !conn.password) {
-      setPasswordDialogConnection(conn)
-      setPasswordDialogAction('connect')
+  const openNewServerWizard = () => {
+    setWizardOpen(true)
+    setWizardServerId(null)
+    setWizardEditProfileId(null)
+    setSSHConnection(null)
+    serverForm.resetFields()
+  }
+
+  const openNewProfileWizard = (serverId: string) => {
+    setWizardOpen(true)
+    setWizardServerId(serverId)
+    setWizardEditProfileId(null)
+    setSSHConnection(null)
+    serverForm.resetFields()
+  }
+
+  const openEditProfileWizard = (serverId: string, profileId: string) => {
+    setWizardOpen(true)
+    setWizardServerId(serverId)
+    setWizardEditProfileId(profileId)
+    setSSHConnection(null)
+    serverForm.resetFields()
+  }
+
+  const startWizardConnect = async () => {
+    const values = await serverForm.validateFields()
+
+    let server: SavedServer | null = null
+    if (wizardServerId) {
+      server = servers.find(s => s.id === wizardServerId) || null
+    }
+
+    const authMethod = (values.authMethod as 'password' | 'key') || server?.authMethod || 'password'
+
+    const savePassword = Boolean(values.savePassword)
+
+    const config: SSHConnectionConfig = {
+      host: server?.host || values.host,
+      port: server?.port || values.port || 22,
+      username: server?.username || values.username,
+      authMethod: authMethod,
+      password: authMethod === 'password' ? (values.password || server?.password) : undefined,
+      privateKeyPath: authMethod === 'key' ? (values.privateKeyPath || server?.privateKeyPath) : undefined,
+      passphrase: authMethod === 'key' ? (values.passphrase || server?.passphrase) : undefined
+    }
+
+    if (!wizardServerId) {
+      const serverId = await addServer({
+        name: values.name,
+        host: config.host,
+        port: config.port,
+        username: config.username,
+        authMethod: config.authMethod,
+        password: savePassword && config.authMethod === 'password' ? values.password : undefined,
+        privateKeyPath: config.privateKeyPath,
+        passphrase: config.passphrase
+      })
+      setWizardServerId(serverId)
+    } else {
+      if (savePassword && config.authMethod === 'password' && values.password) {
+        await updateServer(wizardServerId, { password: values.password })
+      }
+    }
+
+    await connectAndListEnvs(config)
+  }
+
+  const handleQuickStartProfile = async (serverId: string, profile: SavedConnectionProfile) => {
+    const server = servers.find(s => s.id === serverId)
+    if (!server) return
+
+    setQuickStartingProfileId(profile.id)
+
+    if (!profile.condaEnv || !profile.remoteRoot) {
+      message.warning(t('remote.message.incompleteConfig'))
+      openEditProfileWizard(serverId, profile.id)
+      setQuickStartingProfileId(null)
+      return
+    }
+
+    if (server.authMethod === 'password' && !server.password) {
+      setPasswordDialogServer(server)
+      setPasswordDialogProfile(profile)
       setPasswordDialogVisible(true)
       return
     }
-    
-    await executeConnect(conn, conn.password)
+
+    await executeQuickStart(server, profile, server.password)
   }
-  
-  /**
-   * Execute connection with provided password
-   */
-  const executeConnect = async (conn: SavedConnection, password?: string) => {
-    setConnecting(true)
-    setSSHConnected(false)
-    
+
+  const executeQuickStart = async (server: SavedServer, profile: SavedConnectionProfile, password?: string) => {
+    const msgKey = 'remote.quickStart'
+    setStarting(true)
+    message.loading({ content: t('remote.message.quickStartStarting'), key: msgKey, duration: 0 })
     try {
+      const usedLocalPorts = new Set(activeSessions.map(s => s.localPort))
+      const usedRemotePorts = new Set(
+        activeSessions
+          .filter(s => s.host === server.host && s.sshPort === server.port)
+          .map(s => s.remotePort)
+      )
+
       const config: SSHConnectionConfig = {
-        host: conn.host,
-        port: conn.port,
-        username: conn.username,
-        authMethod: conn.authMethod,
-        password: password || conn.password,  // Use provided password or saved one
-        privateKeyPath: conn.privateKeyPath,
-        remoteRoot: conn.remoteRoot || '',
-        localPort: conn.localPort,
-        remotePort: conn.remotePort
+        host: server.host,
+        port: server.port,
+        username: server.username,
+        authMethod: server.authMethod,
+        password: server.authMethod === 'password' ? (password || server.password) : undefined,
+        privateKeyPath: server.authMethod === 'key' ? server.privateKeyPath : undefined,
+        passphrase: server.authMethod === 'key' ? server.passphrase : undefined,
+        condaEnv: profile.condaEnv,
+        remoteRoot: profile.remoteRoot,
+        localPort: profile.localPort,
+        remotePort: profile.remotePort
       }
 
-      const connectionId = `${config.username}@${config.host}:${config.port}`
-      
-      // Connect via SSH
-      await runWithHostKeyConfirmation(() => connectRemote(config), connectionId)
-      setConnecting(false)
-      setSSHConnected(true)
-      message.success(t('remote.message.connectSuccess'))
-      setFetchingEnvs(true)
-      
-      // List conda environments
-      const envsResult = await listCondaEnvs(connectionId)
-      
-      // Store connection state
-      setSSHConnection({
-        connectionId,
-        config,
-        condaEnvs: envsResult.envs || [],
-        selectedEnv: conn.condaEnv,
-        remoteConfig: undefined
-      })
-      
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : t('remote.message.connectFailed'))
-      setSSHConnected(false)
-      await disconnectRemote(conn.host, conn.port, conn.username).catch(() => {})
-      throw error  // Re-throw to handle in dialog
-    } finally {
-      setConnecting(false)
-      setFetchingEnvs(false)
-    }
-  }
+      // Avoid port conflicts when multiple sessions run on the same server.
+      // If the saved port is already in use, let backend auto-assign a free one.
+      if (config.localPort !== undefined && usedLocalPorts.has(config.localPort)) {
+        config.localPort = undefined
+      }
+      if (config.remotePort !== undefined && usedRemotePorts.has(config.remotePort)) {
+        config.remotePort = undefined
+      }
 
-  /**
-   * Handle quick start from saved connection
-   */
-  const handleQuickStart = async (conn: SavedConnection) => {
-    // Check if we have all required info for quick start
-    if (!conn.condaEnv || !conn.remoteRoot) {
-      message.warning(t('remote.message.incompleteConfig'))
-      // TODO: Show pre-filled connection form
-      return
-    }
-    
-    // If password auth and no password saved, show dialog
-    if (conn.authMethod === 'password' && !conn.password) {
-      setPasswordDialogConnection(conn)
-      setPasswordDialogAction('quickstart')
-      setPasswordDialogVisible(true)
-      return
-    }
-    
-    await executeQuickStart(conn, conn.password)
-  }
-  
-  /**
-   * Execute quick start with provided password
-   */
-  const executeQuickStart = async (conn: SavedConnection, password?: string) => {
-    setConnecting(true)
-    setSSHConnected(false)
-    setFetchingEnvs(true)
-    setFetchingConfig(true)
-    
-    try {
-      const config: SSHConnectionConfig = {
-        host: conn.host,
-        port: conn.port,
-        username: conn.username,
-        authMethod: conn.authMethod,
-        password: password || conn.password,  // Use provided password or saved one
-        privateKeyPath: conn.privateKeyPath,
-        remoteRoot: conn.remoteRoot,
-        localPort: conn.localPort,
-        remotePort: conn.remotePort
+      // Extra safety: remote viewer port must not clash with SSH port on the same host.
+      if (config.remotePort !== undefined && config.remotePort === server.port) {
+        config.remotePort = undefined
       }
 
       const target = `${config.username}@${config.host}:${config.port}`
-      
-      // 1. Connect via SSH
-      await runWithHostKeyConfirmation(() => connectRemote(config), target)
-      setConnecting(false)
-      setSSHConnected(true)
-      message.success(t('remote.message.connectSuccess'))
-      
-      // 2. Get remote config for saved environment
-      const connectionId = `${config.username}@${config.host}:${config.port}`
-      const remoteConfig = await getRemoteConfig(connectionId, conn.condaEnv)
-      
-      // 3. Start Remote Viewer directly
-      const viewerConfig: SSHConnectionConfig = {
-        ...config,
-        remoteRoot: conn.remoteRoot,
-        remotePort: remoteConfig.suggestedRemotePort,
-        condaEnv: conn.condaEnv
-      }
-      
-      await runWithHostKeyConfirmation(() => startRemoteViewer(viewerConfig), target)
+      await runWithHostKeyConfirmation(() => startRemoteViewer(config), target)
       await refetchSessions()
-      message.success(t('remote.message.viewerStarted'))
-      
+      message.success({ content: t('remote.message.viewerStarted'), key: msgKey })
     } catch (error) {
-      message.error(error instanceof Error ? error.message : t('remote.message.viewerStartFailed'))
-      setSSHConnected(false)
-      await disconnectRemote(conn.host, conn.port, conn.username).catch(() => {})
-      throw error  // Re-throw to handle in dialog
+      message.error({
+        content: error instanceof Error ? error.message : t('remote.message.viewerStartFailed'),
+        key: msgKey
+      })
+      throw error
     } finally {
-      setConnecting(false)
-      setFetchingEnvs(false)
-      setFetchingConfig(false)
+      setStarting(false)
+      setQuickStartingProfileId(null)
     }
   }
 
@@ -564,13 +571,6 @@ export default function RemoteViewerPage() {
     try {
       await stopRemoteViewer(session.sessionId)
       await refetchSessions()
-      
-      // Only reset connection state if not currently configuring a new connection
-      // This allows users to have multiple sessions and stop one without affecting others
-      if (!sshConnection) {
-        setSSHConnected(false)
-        setSavedConnectionId(null)
-      }
       
       message.success(t('remote.message.viewerStopped'))
     } catch (error) {
@@ -588,13 +588,6 @@ export default function RemoteViewerPage() {
       await disconnectRemote(session.host, session.sshPort || 22, session.username || 'user')
       await refetchSessions()
       
-      // Only reset connection state if not currently configuring a new connection
-      // This allows users to have multiple sessions and disconnect one without affecting others
-      if (!sshConnection) {
-        setSSHConnected(false)
-        setSavedConnectionId(null)
-      }
-      
       message.success(t('remote.message.disconnected'))
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('remote.message.disconnectFailed'))
@@ -602,29 +595,23 @@ export default function RemoteViewerPage() {
     }
   }
 
-  const activeSessions = sessions.filter(s => s.status !== 'stopped')
-  const connectedServers = new Set(sessions.map(s => s.host)).size
-
   /**
    * Handle password dialog submit
    */
   const handlePasswordSubmit = async () => {
-    if (!passwordDialogConnection || !tempPassword) {
+    if (!passwordDialogServer || !passwordDialogProfile || !tempPassword) {
       message.warning(t('remote.form.password') + ' ' + t('remote.form.required'))
       return
     }
     
     try {
-      if (passwordDialogAction === 'connect') {
-        await executeConnect(passwordDialogConnection, tempPassword)
-      } else {
-        await executeQuickStart(passwordDialogConnection, tempPassword)
-      }
+      await executeQuickStart(passwordDialogServer, passwordDialogProfile, tempPassword)
       
       // Success - close dialog
       setPasswordDialogVisible(false)
       setTempPassword('')
-      setPasswordDialogConnection(null)
+      setPasswordDialogServer(null)
+      setPasswordDialogProfile(null)
     } catch (error) {
       // Error already shown in execute functions
       // Keep dialog open for retry
@@ -637,8 +624,30 @@ export default function RemoteViewerPage() {
   const handlePasswordCancel = () => {
     setPasswordDialogVisible(false)
     setTempPassword('')
-    setPasswordDialogConnection(null)
+    setPasswordDialogServer(null)
+    setPasswordDialogProfile(null)
+    setQuickStartingProfileId(null)
   }
+
+  const wizardTitle = useMemo(() => {
+    if (!wizardServerId) {
+      return t('remote.saved.addServer')
+    }
+    if (wizardEditProfileId) {
+      return t('remote.saved.edit')
+    }
+    return t('remote.saved.addConnection')
+  }, [t, wizardEditProfileId, wizardServerId])
+
+  const wizardServer = useMemo(() => {
+    if (!wizardServerId) return null
+    return servers.find(s => s.id === wizardServerId) || null
+  }, [servers, wizardServerId])
+
+  const wizardProfile = useMemo(() => {
+    if (!wizardServerId || !wizardEditProfileId) return null
+    return getProfilesForServer(wizardServerId).find(p => p.id === wizardEditProfileId) || null
+  }, [getProfilesForServer, wizardEditProfileId, wizardServerId])
 
   return (
     <div>
@@ -675,7 +684,7 @@ export default function RemoteViewerPage() {
         <Col span={8}>
           <FancyStatCard
             title={t('remote.stats.savedConfigs')}
-            value={connections.length}
+            value={profileCount}
             icon={<SaveOutlined />}
             gradientColors={colorConfig.gradients.info}
           />
@@ -690,72 +699,197 @@ export default function RemoteViewerPage() {
         </Col>
       </Row>
 
-      <Row gutter={24}>
-        {/* Left Column: Connection Form / Env Selector / Config Confirmation */}
-        <Col xs={24} lg={12}>
-          {sshConnection ? (
-            // Step 2 or Step 3 (after SSH connected)
-            sshConnection.remoteConfig ? (
-              // Step 3: Config Confirmation (after env selected)
-              <Spin spinning={fetchingConfig} tip={t('remote.config.fetchingConfig')}>
-                <RemoteConfigCard
-                  config={sshConnection.remoteConfig}
-                  sshConfig={sshConnection.config}
-                  onConfirm={handleStartViewer}
-                  onCancel={handleCancelConfig}
-                  loading={starting}
-                />
-              </Spin>
-            ) : (
-              // Step 2: Conda Environment Selection (after SSH connected)
-              <Spin spinning={fetchingEnvs} tip={t('remote.env.fetching')}>
-                <CondaEnvSelector
-                  envs={sshConnection.condaEnvs || []}
-                  connectionId={sshConnection.connectionId}
-                  onSelect={handleSelectEnvironment}
-                  onCancel={handleCancelConfig}
-                  loading={fetchingConfig}
-                />
-              </Spin>
-            )
-          ) : (
-            // Step 1: SSH Connection Form
-            <>
-              <Card title={t('remote.form.title')} style={{ marginBottom: 24 }}>
-                {sshConnected && fetchingEnvs ? (
-                  // Show success state while fetching environments
-                  <Space direction="vertical" style={{ width: '100%' }} size="large">
-                    <Alert
-                      message={t('remote.message.connectSuccess')}
-                      description={t('remote.env.fetching')}
-                      type="success"
-                      showIcon
-                      icon={<CheckCircleOutlined />}
-                    />
-                    <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                      <Spin size="large" tip={t('remote.env.detectingEnvironments')} />
-                    </div>
-                  </Space>
-                ) : (
-                  <SSHConnectionForm
-                    onSubmit={handleConnect}
-                    onTest={handleTest}
-                    loading={connecting}
-                  />
-                )}
-              </Card>
+      <Space style={{ marginBottom: 16 }}>
+        <Button icon={<SafetyCertificateOutlined />} onClick={() => setSecurityDrawerOpen(true)}>
+          {t('remote.security.advanced')}
+        </Button>
+      </Space>
 
-              {!sshConnected && !fetchingEnvs && (
-                <SavedConnectionsList
-                  connections={connections}
-                  onQuickStart={handleQuickStart}
-                  onConnect={handleConnectOnly}
-                  onDelete={deleteConnection}
-                  loading={connecting}
-                />
-              )}
-            </>
-          )}
+      <Row gutter={24}>
+        {/* Left Column: Saved Servers */}
+        <Col xs={24} lg={12}>
+          <Card
+            title={t('remote.saved.title')}
+            extra={
+              <Button type="primary" icon={<PlusOutlined />} onClick={openNewServerWizard}>
+                {t('remote.saved.addServer')}
+              </Button>
+            }
+            style={{ minHeight: 520 }}
+          >
+            {serverCount === 0 ? (
+              <Empty description={t('remote.saved.noServers')} />
+            ) : (
+              <Collapse accordion>
+                {servers.map(server => (
+                  <Collapse.Panel
+                    header={
+                      <Space direction="vertical" size={0}>
+                        <Text strong>{server.name}</Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          SSH {server.username}@{server.host}:{server.port}
+                        </Text>
+                      </Space>
+                    }
+                    key={server.id}
+                    extra={
+                      <Space>
+                        <Button
+                          size="small"
+                          icon={<PlusOutlined />}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openNewProfileWizard(server.id)
+                          }}
+                        >
+                          {t('remote.saved.addConnection')}
+                        </Button>
+                        <Popconfirm
+                          title={t('remote.message.confirmDelete')}
+                          onConfirm={() => deleteServer(server.id)}
+                          okButtonProps={{ danger: true }}
+                        >
+                          <Button
+                            size="small"
+                            danger
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {t('remote.saved.delete')}
+                          </Button>
+                        </Popconfirm>
+                      </Space>
+                    }
+                  >
+                    <List
+                      size="small"
+                      dataSource={getProfilesForServer(server.id)}
+                      locale={{ emptyText: t('remote.saved.noConnections') }}
+                      renderItem={(profile) => (
+                        <List.Item
+                          style={{ paddingTop: '0.375rem', paddingBottom: '0.375rem' }}
+                          actions={[
+                            <Button
+                              key="quickstart"
+                              type="primary"
+                              icon={<ThunderboltOutlined />}
+                              size="small"
+                              loading={quickStartingProfileId === profile.id}
+                              disabled={quickStartingProfileId !== null && quickStartingProfileId !== profile.id}
+                              onClick={() => handleQuickStartProfile(server.id, profile)}
+                            >
+                              {t('remote.saved.quickStart')}
+                            </Button>,
+                            <Button
+                              key="edit"
+                              size="small"
+                              onClick={() => openEditProfileWizard(server.id, profile.id)}
+                            >
+                              {t('remote.saved.edit')}
+                            </Button>,
+                            <Popconfirm
+                              key="delete"
+                              title={t('remote.message.confirmDelete')}
+                              onConfirm={() => deleteProfile(profile.id)}
+                              okButtonProps={{ danger: true }}
+                            >
+                              <Button danger size="small">
+                                {t('remote.saved.delete')}
+                              </Button>
+                            </Popconfirm>
+                          ]}
+                        >
+                          <List.Item.Meta
+                            title={
+                              <Text
+                                strong
+                                style={{ lineHeight: '20px', display: 'block', marginBottom: 2 }}
+                                ellipsis={{ tooltip: profile.name }}
+                              >
+                                {profile.name}
+                              </Text>
+                            }
+                            description={
+                              <div
+                                style={{
+                                  display: 'grid',
+                                  gridTemplateColumns: 'clamp(6.5rem, 28%, 12rem) minmax(0, 1fr) auto',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  minWidth: 0,
+                                  lineHeight: '18px'
+                                }}
+                              >
+                                <Tooltip title={profile.condaEnv || 'system'}>
+                                  <Tag
+                                    color="blue"
+                                    style={{
+                                      marginInlineEnd: 0,
+                                      fontSize: 11,
+                                      lineHeight: '16px',
+                                      paddingInline: 6,
+                                      maxWidth: '100%'
+                                    }}
+                                  >
+                                    <Text
+                                      style={{ maxWidth: '100%', display: 'inline-block', verticalAlign: 'top' }}
+                                      ellipsis
+                                    >
+                                      {profile.condaEnv || 'system'}
+                                    </Text>
+                                  </Tag>
+                                </Tooltip>
+
+                                <Text
+                                  type="secondary"
+                                  code
+                                  style={{
+                                    fontSize: 11,
+                                    lineHeight: '16px',
+                                    minWidth: 0,
+                                    display: 'inline-block'
+                                  }}
+                                  ellipsis={{ tooltip: profile.remoteRoot || '-' }}
+                                >
+                                  {profile.remoteRoot || '-'}
+                                </Text>
+
+                                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+                                  {(profile.localPort !== undefined || profile.remotePort !== undefined) && (
+                                    <>
+                                      <Tag
+                                        style={{
+                                          marginInlineEnd: 0,
+                                          fontSize: 11,
+                                          lineHeight: '16px',
+                                          paddingInline: 6
+                                        }}
+                                      >
+                                        L:{profile.localPort ?? 'auto'}
+                                      </Tag>
+                                      <Tag
+                                        style={{
+                                          marginInlineEnd: 0,
+                                          fontSize: 11,
+                                          lineHeight: '16px',
+                                          paddingInline: 6
+                                        }}
+                                      >
+                                        R:{profile.remotePort ?? 'auto'}
+                                      </Tag>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            }
+                          />
+                        </List.Item>
+                      )}
+                    />
+                  </Collapse.Panel>
+                ))}
+              </Collapse>
+            )}
+          </Card>
         </Col>
 
         {/* Right Column: Active Sessions */}
@@ -796,16 +930,186 @@ export default function RemoteViewerPage() {
         </Col>
       </Row>
 
-      {/* Known Hosts Management */}
-      <Card
+      <Drawer
+        title={wizardTitle}
+        open={wizardOpen}
+        onClose={() => {
+          if (sshConnection) {
+            void handleCancelConfig()
+            return
+          }
+          setWizardOpen(false)
+          setWizardServerId(null)
+          setWizardEditProfileId(null)
+          setSSHConnection(null)
+          serverForm.resetFields()
+        }}
+        width={560}
+        destroyOnClose
+      >
+        <div style={{ minHeight: 520 }}>
+          {!sshConnection ? (
+            <>
+              {wizardServerId && wizardServer ? (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={`${wizardServer.username}@${wizardServer.host}:${wizardServer.port}`}
+                  style={{ marginBottom: 16 }}
+                />
+              ) : null}
+              <Form
+                form={serverForm}
+                layout="vertical"
+                initialValues={{
+                  port: 22,
+                  authMethod: wizardServer?.authMethod || 'password',
+                  host: wizardServer?.host,
+                  username: wizardServer?.username,
+                  name: wizardServer?.name,
+                  privateKeyPath: wizardServer?.privateKeyPath,
+                  passphrase: wizardServer?.passphrase,
+                  savePassword: false
+                }}
+              >
+                {!wizardServerId && (
+                  <Form.Item label={t('remote.form.saveName')} name="name">
+                    <Input placeholder={t('remote.form.saveNamePlaceholder')} />
+                  </Form.Item>
+                )}
+
+                {!wizardServerId && (
+                  <>
+                    <Form.Item
+                      label={t('remote.form.host')}
+                      name="host"
+                      rules={[{ required: true, message: t('remote.form.required') }]}
+                    >
+                      <Input placeholder={t('remote.form.hostPlaceholder')} />
+                    </Form.Item>
+                    <Row gutter={16}>
+                      <Col span={12}>
+                        <Form.Item label={t('remote.form.port')} name="port">
+                          <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </Col>
+                      <Col span={12}>
+                        <Form.Item
+                          label={t('remote.form.username')}
+                          name="username"
+                          rules={[{ required: true, message: t('remote.form.required') }]}
+                        >
+                          <Input placeholder={t('remote.form.usernamePlaceholder')} />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </>
+                )}
+
+                <Form.Item label={t('remote.form.authMethod')} name="authMethod">
+                  <Radio.Group>
+                    <Radio value="password">{t('remote.form.passwordAuth')}</Radio>
+                    <Radio value="key">{t('remote.form.keyAuth')}</Radio>
+                  </Radio.Group>
+                </Form.Item>
+
+                <Form.Item noStyle shouldUpdate>
+                  {() => {
+                    const method = serverForm.getFieldValue('authMethod') as 'password' | 'key'
+                    return method === 'password' ? (
+                      <>
+                        <Form.Item
+                          label={t('remote.form.password')}
+                          name="password"
+                          rules={wizardServerId && wizardServer?.authMethod === 'password' && wizardServer.password ? [] : [{ required: true, message: t('remote.form.required') }]}
+                        >
+                          <Input.Password />
+                        </Form.Item>
+
+                        {(!wizardServerId || (wizardServerId && wizardServer && wizardServer.authMethod === 'password' && !wizardServer.password)) && (
+                          <Form.Item name="savePassword" valuePropName="checked">
+                            <Checkbox>{t('remote.form.savePassword')}</Checkbox>
+                          </Form.Item>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <Form.Item
+                          label={t('remote.form.privateKey')}
+                          name="privateKeyPath"
+                          rules={[{ required: true, message: t('remote.form.required') }]}
+                        >
+                          <Input placeholder={t('remote.form.privateKeyPlaceholder')} />
+                        </Form.Item>
+                        <Form.Item label={t('remote.form.passphrase')} name="passphrase">
+                          <Input.Password />
+                        </Form.Item>
+                      </>
+                    )
+                  }}
+                </Form.Item>
+
+                <Divider />
+                <Space>
+                  <Button type="primary" loading={connecting} onClick={() => void startWizardConnect()}>
+                    {t('remote.form.connectButton')}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setWizardOpen(false)
+                      setWizardServerId(null)
+                      setWizardEditProfileId(null)
+                      setSSHConnection(null)
+                      serverForm.resetFields()
+                    }}
+                  >
+                    {t('remote.form.cancel')}
+                  </Button>
+                </Space>
+              </Form>
+            </>
+          ) : sshConnection.remoteConfig ? (
+            <Spin spinning={fetchingConfig} tip={t('remote.config.fetchingConfig')}>
+              <RemoteConfigCard
+                config={sshConnection.remoteConfig}
+                sshConfig={{
+                  ...sshConnection.config,
+                  saveName: wizardProfile?.name,
+                  remoteRoot: wizardProfile?.remoteRoot,
+                  localPort: wizardProfile?.localPort,
+                  remotePort: wizardProfile?.remotePort
+                }}
+                onConfirm={handleSaveProfile}
+                onCancel={handleCancelConfig}
+                loading={starting}
+              />
+            </Spin>
+          ) : (
+            <Spin spinning={fetchingEnvs} tip={t('remote.env.fetching')}>
+              <CondaEnvSelector
+                envs={sshConnection.condaEnvs || []}
+                connectionId={sshConnection.connectionId}
+                initialEnv={wizardProfile?.condaEnv}
+                onSelect={handleSelectEnvironment}
+                onCancel={handleCancelConfig}
+                loading={fetchingConfig}
+              />
+            </Spin>
+          )}
+        </div>
+      </Drawer>
+
+      <Drawer
         title={t('remote.knownHosts.title')}
-        style={{ marginTop: 24 }}
-        extra={
-          <Button onClick={() => loadKnownHosts()} loading={knownHostsLoading}>
+        open={securityDrawerOpen}
+        onClose={() => setSecurityDrawerOpen(false)}
+        width={860}
+      >
+        <Space style={{ marginBottom: 12 }}>
+          <Button onClick={() => void loadKnownHosts()} loading={knownHostsLoading}>
             {t('remote.knownHosts.refresh')}
           </Button>
-        }
-      >
+        </Space>
         <Table
           dataSource={knownHosts}
           loading={knownHostsLoading}
@@ -843,7 +1147,7 @@ export default function RemoteViewerPage() {
               render: (_: unknown, record: KnownHostsEntry) => (
                 <Popconfirm
                   title={t('remote.knownHosts.removeConfirm')}
-                  onConfirm={() => handleRemoveKnownHost(record)}
+                  onConfirm={() => void handleRemoveKnownHost(record)}
                   okButtonProps={{ danger: true }}
                 >
                   <Button danger size="small">
@@ -854,19 +1158,7 @@ export default function RemoteViewerPage() {
             }
           ]}
         />
-      </Card>
-
-      {/* Help Section */}
-      <Card title={t('remote.help.title')} style={{ marginTop: 24 }}>
-        <Space direction="vertical">
-          <Text>{t('remote.help.step1')}</Text>
-          <Text>{t('remote.help.step2')}</Text>
-          <Text>{t('remote.help.step3')}</Text>
-          <Text>{t('remote.help.step4')}</Text>
-          <Text>{t('remote.help.step5')}</Text>
-          <Text>{t('remote.help.step6')}</Text>
-        </Space>
-      </Card>
+      </Drawer>
 
       {/* Password Input Dialog */}
       <Modal
@@ -876,16 +1168,16 @@ export default function RemoteViewerPage() {
         onCancel={handlePasswordCancel}
         okText={t('remote.form.connectButton')}
         cancelText={t('remote.form.cancel')}
-        confirmLoading={connecting}
+        confirmLoading={starting}
         centered
         width={400}
       >
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
           <Text>
-            {t('remote.form.connectionTo')}: <Text strong>{passwordDialogConnection?.name}</Text>
+            {t('remote.form.connectionTo')}: <Text strong>{passwordDialogProfile?.name}</Text>
           </Text>
           <Text type="secondary">
-            {passwordDialogConnection?.username}@{passwordDialogConnection?.host}
+            {passwordDialogServer?.username}@{passwordDialogServer?.host}
           </Text>
           <Input.Password
             placeholder={t('remote.form.password')}

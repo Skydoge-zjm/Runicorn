@@ -40,7 +40,7 @@ export interface SSHConnectionConfig {
   
   // Remote Viewer configuration
   /** Remote storage root directory */
-  remoteRoot: string
+  remoteRoot?: string
   /** Local port for SSH tunnel (optional, auto-assign if not provided) */
   localPort?: number
   /** Remote Viewer port (default: 23300) */
@@ -86,6 +86,36 @@ export interface SavedConnection {
   /** Creation timestamp */
   createdAt: number
 }
+
+export type SavedEntryKind = 'server' | 'connection'
+
+export interface SavedServer {
+  kind: 'server'
+  id: string
+  name: string
+  host: string
+  port: number
+  username: string
+  authMethod: AuthMethod
+  password?: string
+  privateKeyPath?: string
+  passphrase?: string
+  createdAt: number
+}
+
+export interface SavedConnectionProfile {
+  kind: 'connection'
+  id: string
+  serverId: string
+  name: string
+  condaEnv?: string
+  remoteRoot?: string
+  localPort?: number
+  remotePort?: number
+  createdAt: number
+}
+
+export type SavedEntry = SavedServer | SavedConnectionProfile
 
 /**
  * Active SSH session

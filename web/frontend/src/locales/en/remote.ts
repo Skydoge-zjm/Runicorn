@@ -27,6 +27,8 @@ export default {
   'remote.form.savePassword': 'Also save password (insecure, use with caution)',
   'remote.form.saveName': 'Configuration Name',
   'remote.form.saveNamePlaceholder': 'GPU Server - Lab',
+  'remote.profile.name': 'Connection Name',
+  'remote.profile.namePlaceholder': 'e.g. Experiment Env A',
   'remote.form.browse': 'Browse...',
   'remote.form.connect': 'Connect and Start Viewer',
   'remote.form.testConnection': 'Test Connection',
@@ -60,12 +62,19 @@ export default {
   
   // Saved connections
   'remote.saved.title': 'Saved Connections',
+  'remote.saved.addServer': 'Add Server',
+  'remote.saved.noServers': 'No saved servers',
+  'remote.saved.addConnection': 'Add Connection',
+  'remote.saved.noConnections': 'No connection profiles',
   'remote.saved.quickStart': 'Quick Start',
   'remote.saved.connectOnly': 'Connect Only',
   'remote.saved.edit': 'Edit',
   'remote.saved.delete': 'Delete',
   'remote.saved.empty': 'No saved connections',
   'remote.saved.emptyHint': 'Save frequently used connection configs for quick access',
+
+  // Security
+  'remote.security.advanced': 'Advanced / Security',
   
   // Messages
   'remote.message.connectSuccess': 'SSH connected successfully',
@@ -78,7 +87,9 @@ export default {
   'remote.message.disconnectFailed': 'Failed to disconnect',
   'remote.message.testSuccess': 'Connection test successful',
   'remote.message.testFailed': 'Connection test failed',
+  'remote.message.quickStartStarting': 'Starting remote viewer, please wait...',
   'remote.message.configSaved': 'Configuration saved',
+  'remote.message.saveFailed': 'Failed to save configuration',
   'remote.message.configDeleted': 'Configuration deleted',
   'remote.message.confirmDelete': 'Are you sure you want to delete this connection?',
   'remote.message.confirmDisconnect': 'Are you sure you want to disconnect? This will stop the remote Viewer.',

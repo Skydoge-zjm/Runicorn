@@ -132,6 +132,10 @@ export async function listSSHSessions(): Promise<SSHSession[]> {
 export async function startRemoteViewer(
   config: SSHConnectionConfig
 ): Promise<RemoteSession> {
+  if (!config.remoteRoot) {
+    throw new Error('Remote storage root is required')
+  }
+
   const response = await fetch(`${API_BASE}/viewer/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -145,7 +149,7 @@ export async function startRemoteViewer(
       use_agent: true,
       remote_root: config.remoteRoot,
       local_port: config.localPort,
-      remote_port: config.remotePort || 23300,
+      remote_port: config.remotePort,
       conda_env: config.condaEnv
     })
   })
@@ -297,6 +301,9 @@ export async function acceptKnownHost(payload: KnownHostsAcceptRequest): Promise
 export async function quickStartRemoteViewer(
   config: SSHConnectionConfig
 ): Promise<RemoteSession> {
+  if (!config.remoteRoot) {
+    throw new Error('Remote storage root is required')
+  }
   // Start Remote Viewer (which internally connects via SSH)
   const result: any = await startRemoteViewer(config)
   // Backend returns {ok: true, session: {...}}
