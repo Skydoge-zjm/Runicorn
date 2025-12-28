@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from .sdk import Run, init
+from .registry import get_config
+from .enabled import enabled, is_enabled, reset_enabled, set_enabled
+from .rnconfig import get_effective_rnconfig
+from .assets_v2 import snapshot_workspace
 
 # Version information
 try:
@@ -22,6 +26,13 @@ except Exception:
 __all__ = [
     "Run",
     "init",
+    "get_config",
+    "snapshot_workspace",
+    "enabled",
+    "is_enabled",
+    "set_enabled",
+    "reset_enabled",
+    "get_effective_rnconfig",
     "__version__",
 ]
 

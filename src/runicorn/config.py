@@ -38,6 +38,19 @@ def get_config_file_path() -> Path:
     return _config_root_dir() / "config.json"
 
 
+def get_rnconfig_file_path() -> Path:
+    return _config_root_dir() / "rnconfig.toml"
+
+
+def get_registry_dir() -> Path:
+    path = _config_root_dir() / "registry"
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    return path
+
+
 def get_connections_file_path() -> Path:
     """Return path to saved connections file."""
     return _config_root_dir() / "connections.json"

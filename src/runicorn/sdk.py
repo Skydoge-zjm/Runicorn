@@ -11,10 +11,18 @@ import time
 import uuid
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from filelock import FileLock
 from .config import get_user_root_dir
+from .enabled import NoOpRun, is_enabled
+from .workspace import get_workspace_root
+from .assets_v2.assets_json import ensure_assets_file, read_assets, write_assets_atomic
+from .assets_v2.archive import archive_dir, archive_file
+from .assets_v2.fingerprint import dir_stat_fingerprint, stat_fingerprint
+from .assets_v2.snapshot import snapshot_workspace
+from .assets_v2.outputs_scan import scan_outputs_once
+from .index_v2 import IndexDb
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -59,7 +67,6 @@ except ImportError as e:
     LineageTracker = None
     HAS_ARTIFACTS = False
 
-# Optional imports for image handling
 # Optional imports for image handling
 try:
     from PIL import Image  # type: ignore
@@ -127,6 +134,7 @@ class RunMeta:
     hostname: str
     pid: int
     storage_dir: str
+    workspace_root: str
 
 
 class Run:
@@ -136,7 +144,11 @@ class Run:
         storage: Optional[str] = None,
         run_id: Optional[str] = None,
         name: Optional[str] = None,
-        capture_env: bool = True,
+        capture_env: bool = False,
+        snapshot_code: bool = False,
+        workspace_root: Optional[str] = None,
+        snapshot_format: str = "zip",
+        force_snapshot: bool = False,
     ) -> None:
         self.project = project or "default"
         # storage_root points to user_root_dir (or legacy ./.runicorn)
@@ -159,12 +171,26 @@ class Run:
         self._status_path = self.run_dir / "status.json"
         self._meta_path = self.run_dir / "meta.json"
         self._logs_txt_path = self.run_dir / "logs.txt"  # for websocket tailing
+        self._assets_path = self.run_dir / "assets.json"
+        self._outputs_state_path = self.run_dir / ".outputs_state.json"
 
         # Separate locks for files
         self._events_lock = FileLock(str(self._events_path) + ".lock")
         self._summary_lock = FileLock(str(self._summary_path) + ".lock")
         self._status_lock = FileLock(str(self._status_path) + ".lock")
         self._logs_lock = FileLock(str(self._logs_txt_path) + ".lock")
+        self._assets_lock = FileLock(str(self._assets_path) + ".lock")
+        self._outputs_state_lock = FileLock(str(self._outputs_state_path) + ".lock")
+
+        self.workspace_root = get_workspace_root(workspace_root)
+        self._outputs_watch_thread: Optional[threading.Thread] = None
+        self._outputs_watch_stop = threading.Event()
+
+        self._index_db: Optional[IndexDb] = None
+        try:
+            self._index_db = IndexDb(self.storage_root)
+        except Exception:
+            self._index_db = None
 
         # Global step counter for metrics logging
         # Starts from 0; first auto step will be 1
@@ -213,11 +239,69 @@ class Run:
             hostname=socket.gethostname(),
             pid=os.getpid(),
             storage_dir=str(self.storage_root),
+            workspace_root=str(self.workspace_root),
         )
         self._write_json(self._meta_path, asdict(meta))
         self._write_json(self._status_path, {"status": "running", "started_at": _now_ts()})
-        
-        # Capture environment if requested
+
+        if self._index_db is not None:
+            try:
+                self._index_db.upsert_run(
+                    run_id=self.id,
+                    project=self.project,
+                    name=self.name,
+                    created_at=float(meta.created_at),
+                    status="running",
+                    run_dir=str(self.run_dir),
+                    workspace_root=str(self.workspace_root),
+                )
+            except Exception:
+                pass
+
+        ensure_assets_file(self._assets_path)
+
+        if snapshot_code:
+            if snapshot_format != "zip":
+                raise ValueError("snapshot_format currently only supports 'zip'")
+            ws_root = self.workspace_root
+            zip_path = self.run_dir / "code_snapshot.zip"
+            snap = snapshot_workspace(ws_root, zip_path, force_snapshot=force_snapshot)
+            archived = archive_file(zip_path, self.storage_root / "archive", category="code")
+            assets = read_assets(self._assets_path)
+            assets["code"] = {
+                "snapshot": {
+                    "saved": True,
+                    "workspace_root": snap.get("workspace_root"),
+                    "format": "zip",
+                    "created_at": int(_now_ts()),
+                    "archive_path": archived.get("archive_path"),
+                    "fingerprint_kind": archived.get("fingerprint_kind"),
+                    "fingerprint": archived.get("fingerprint"),
+                }
+            }
+            write_assets_atomic(self._assets_path, self._assets_lock, assets)
+
+            if self._index_db is not None:
+                try:
+                    self._index_db.record_asset_for_run(
+                        run_id=self.id,
+                        role="code",
+                        asset_type="code_snapshot",
+                        name="code_snapshot.zip",
+                        source_uri=str(self.workspace_root),
+                        archive_uri=archived.get("archive_path"),
+                        is_archived=True,
+                        fingerprint_kind=archived.get("fingerprint_kind"),
+                        fingerprint=archived.get("fingerprint"),
+                        created_at=float(meta.created_at),
+                        metadata={
+                            "format": "zip",
+                            "workspace_root": str(self.workspace_root),
+                        },
+                    )
+                except Exception:
+                    pass
+
         if capture_env and HAS_ENV_CAPTURE:
             try:
                 env_capture = EnvironmentCapture()
@@ -226,6 +310,102 @@ class Run:
                 logger.info(f"Environment captured for run {self.id}")
             except Exception as e:
                 logger.warning(f"Failed to capture environment: {e}")
+
+    def scan_outputs_once(
+        self,
+        *,
+        output_dirs: List[Union[str, Path]],
+        patterns: Optional[List[str]] = None,
+        stable_required: int = 2,
+        min_age_sec: float = 1.0,
+        mode: str = "rolling",
+        log_snapshot_interval_sec: float = 60.0,
+        state_gc_after_sec: float = 7 * 24 * 3600,
+    ) -> Dict[str, Any]:
+        res = scan_outputs_once(
+            run_id=self.id,
+            run_dir=self.run_dir,
+            storage_root=self.storage_root,
+            workspace_root=self.workspace_root,
+            output_dirs=output_dirs,
+            assets_path=self._assets_path,
+            assets_lock=self._assets_lock,
+            state_path=self._outputs_state_path,
+            state_lock=self._outputs_state_lock,
+            patterns=patterns,
+            stable_required=stable_required,
+            min_age_sec=min_age_sec,
+            mode=mode,
+            log_snapshot_interval_sec=log_snapshot_interval_sec,
+            state_gc_after_sec=state_gc_after_sec,
+        )
+
+        if self._index_db is not None:
+            try:
+                for e in res.get("archived_entries") or []:
+                    self._index_db.record_asset_for_run(
+                        run_id=self.id,
+                        role="output",
+                        asset_type="output",
+                        name=e.get("name"),
+                        source_uri=e.get("path"),
+                        archive_uri=e.get("archive_path"),
+                        is_archived=True,
+                        fingerprint_kind=e.get("fingerprint_kind"),
+                        fingerprint=e.get("fingerprint"),
+                        created_at=float(e.get("archived_at") or 0),
+                        metadata={
+                            "key": e.get("key"),
+                            "kind": e.get("kind"),
+                            "mode": e.get("mode"),
+                        },
+                    )
+            except Exception:
+                pass
+
+        return res
+
+    def watch_outputs(
+        self,
+        *,
+        output_dirs: List[Union[str, Path]],
+        interval_sec: float = 10.0,
+        patterns: Optional[List[str]] = None,
+        stable_required: int = 2,
+        min_age_sec: float = 1.0,
+        mode: str = "rolling",
+        log_snapshot_interval_sec: float = 60.0,
+        state_gc_after_sec: float = 7 * 24 * 3600,
+    ) -> None:
+        if self._outputs_watch_thread and self._outputs_watch_thread.is_alive():
+            return
+        self._outputs_watch_stop.clear()
+
+        def _loop() -> None:
+            while not self._outputs_watch_stop.is_set():
+                try:
+                    self.scan_outputs_once(
+                        output_dirs=output_dirs,
+                        patterns=patterns,
+                        stable_required=stable_required,
+                        min_age_sec=min_age_sec,
+                        mode=mode,
+                        log_snapshot_interval_sec=log_snapshot_interval_sec,
+                        state_gc_after_sec=state_gc_after_sec,
+                    )
+                except Exception:
+                    pass
+                self._outputs_watch_stop.wait(interval_sec)
+
+        t = threading.Thread(target=_loop, daemon=True)
+        self._outputs_watch_thread = t
+        t.start()
+
+    def stop_outputs_watch(self) -> None:
+        self._outputs_watch_stop.set()
+        t = self._outputs_watch_thread
+        if t and t.is_alive():
+            t.join(timeout=2.0)
 
     def _init_modern_storage(self) -> None:
         """Initialize modern storage backend."""
@@ -417,6 +597,189 @@ class Run:
         }
         self._append_jsonl(self._events_path, evt, self._events_lock)
         return f"media/{rel_name}"
+
+    def log_config(
+        self,
+        *,
+        args: Optional[Any] = None,
+        extra: Optional[Dict[str, Any]] = None,
+        config_files: Optional[List[Union[str, Path]]] = None,
+    ) -> None:
+        assets = read_assets(self._assets_path)
+        cfg: Dict[str, Any] = dict(assets.get("config") or {})
+        if args is not None:
+            cfg["args"] = args if isinstance(args, dict) else vars(args)
+        if extra is not None:
+            cfg["extra"] = extra
+        if config_files is not None:
+            cfg["config_files"] = [str(Path(p)) for p in config_files]
+        assets["config"] = cfg
+        write_assets_atomic(self._assets_path, self._assets_lock, assets)
+
+        if self._index_db is not None:
+            try:
+                self._index_db.record_asset_for_run(
+                    run_id=self.id,
+                    role="config",
+                    asset_type="config",
+                    name=None,
+                    source_uri=None,
+                    archive_uri=None,
+                    is_archived=False,
+                    fingerprint_kind=None,
+                    fingerprint=None,
+                    created_at=_now_ts(),
+                    metadata=cfg,
+                )
+            except Exception:
+                pass
+
+    def log_dataset(
+        self,
+        name: str,
+        root_or_uri: Union[str, Path, Dict[str, Any]],
+        *,
+        context: str = "train",
+        save: bool = False,
+        description: Optional[str] = None,
+        force_save: bool = False,
+        max_archive_bytes: int = 5 * 1024 * 1024 * 1024,
+        max_archive_files: int = 2_000_000,
+    ) -> None:
+        uri: Any = root_or_uri
+        fp: Optional[Dict[str, Any]] = None
+        archived: Optional[Dict[str, Any]] = None
+
+        if isinstance(root_or_uri, (str, Path)):
+            p = Path(root_or_uri).expanduser()
+            uri = str(p)
+            try:
+                if p.is_dir():
+                    fp = dir_stat_fingerprint(p)
+                    if save:
+                        if (fp.get("total_size_bytes") or 0) > max_archive_bytes or (fp.get("file_count") or 0) > max_archive_files:
+                            if not force_save:
+                                raise ValueError("dataset too large to archive; set force_save=True or use save=False")
+                        archived = archive_dir(p, self.storage_root / "archive", category="datasets")
+                elif p.is_file():
+                    fp = stat_fingerprint(p)
+                    if save:
+                        if (fp.get("size_bytes") or 0) > max_archive_bytes:
+                            if not force_save:
+                                raise ValueError("dataset file too large to archive; set force_save=True or use save=False")
+                        archived = archive_file(p, self.storage_root / "archive", category="datasets")
+            except OSError:
+                fp = None
+
+        entry: Dict[str, Any] = {
+            "name": name,
+            "context": context,
+            "uri": uri,
+            "description": description,
+            "saved": bool(save and archived),
+            "fingerprint": fp,
+        }
+        if archived:
+            entry.update(archived)
+
+        assets = read_assets(self._assets_path)
+        assets.setdefault("datasets", [])
+        assets["datasets"].append(entry)
+        write_assets_atomic(self._assets_path, self._assets_lock, assets)
+
+        if self._index_db is not None:
+            try:
+                fp_kind = entry.get("fingerprint_kind")
+                fp_val = entry.get("fingerprint")
+                if isinstance(fp_val, dict):
+                    fp_val = json.dumps(fp_val, ensure_ascii=False, sort_keys=True)
+                    fp_kind = fp_kind or "stat"
+                self._index_db.record_asset_for_run(
+                    run_id=self.id,
+                    role="dataset",
+                    asset_type="dataset",
+                    name=name,
+                    source_uri=str(entry.get("uri")) if entry.get("uri") is not None else None,
+                    archive_uri=entry.get("archive_path"),
+                    is_archived=bool(entry.get("saved")),
+                    fingerprint_kind=fp_kind,
+                    fingerprint=fp_val,
+                    created_at=_now_ts(),
+                    metadata={
+                        "context": context,
+                        "description": description,
+                    },
+                )
+            except Exception:
+                pass
+
+    def log_pretrained(
+        self,
+        name: str,
+        *,
+        path_or_uri: Optional[Union[str, Path, Dict[str, Any]]] = None,
+        save: bool = False,
+        source_type: str = "unknown",
+        description: Optional[str] = None,
+        force_save: bool = False,
+        max_archive_bytes: int = 5 * 1024 * 1024 * 1024,
+        max_archive_files: int = 2_000_000,
+    ) -> None:
+        archived: Optional[Dict[str, Any]] = None
+
+        if save and path_or_uri is None:
+            raise ValueError("save=True requires path_or_uri")
+
+        if save and isinstance(path_or_uri, (str, Path)):
+            p = Path(path_or_uri).expanduser()
+            if p.is_dir():
+                fp = dir_stat_fingerprint(p)
+                if (fp.get("total_size_bytes") or 0) > max_archive_bytes or (fp.get("file_count") or 0) > max_archive_files:
+                    if not force_save:
+                        raise ValueError("pretrained dir too large to archive; set force_save=True or use save=False")
+                archived = archive_dir(p, self.storage_root / "archive", category="pretrained")
+            elif p.is_file():
+                fp2 = stat_fingerprint(p)
+                if (fp2.get("size_bytes") or 0) > max_archive_bytes:
+                    if not force_save:
+                        raise ValueError("pretrained file too large to archive; set force_save=True or use save=False")
+                archived = archive_file(p, self.storage_root / "archive", category="pretrained")
+
+        entry: Dict[str, Any] = {
+            "name": name,
+            "source_type": source_type,
+            "path_or_uri": None if path_or_uri is None else (str(path_or_uri) if isinstance(path_or_uri, (str, Path)) else path_or_uri),
+            "description": description,
+            "saved": bool(save and archived),
+        }
+        if archived:
+            entry.update(archived)
+
+        assets = read_assets(self._assets_path)
+        assets.setdefault("pretrained", [])
+        assets["pretrained"].append(entry)
+        write_assets_atomic(self._assets_path, self._assets_lock, assets)
+
+        if self._index_db is not None:
+            try:
+                self._index_db.record_asset_for_run(
+                    run_id=self.id,
+                    role="pretrained",
+                    asset_type="pretrained",
+                    name=name,
+                    source_uri=str(entry.get("path_or_uri")) if entry.get("path_or_uri") is not None else None,
+                    archive_uri=entry.get("archive_path"),
+                    is_archived=bool(entry.get("saved")),
+                    fingerprint_kind=entry.get("fingerprint_kind"),
+                    fingerprint=entry.get("fingerprint"),
+                    created_at=_now_ts(),
+                    metadata={
+                        "source_type": source_type,
+                        "description": description,
+                    },
+                )
+            except Exception:
+                pass
 
     def summary(self, update: Dict[str, Any]) -> None:
         # Update traditional summary.json file (always for compatibility)
@@ -708,6 +1071,20 @@ class Run:
     
     def finish(self, status: str = "finished") -> None:
         """Mark the run as finished and ensure all data is written."""
+        self.stop_outputs_watch()
+
+        if self._index_db is not None:
+            try:
+                self._index_db.finish_run(run_id=self.id, status=status, ended_at=_now_ts())
+            except Exception:
+                pass
+            try:
+                if hasattr(self._index_db, "close_all"):
+                    self._index_db.close_all()
+                else:
+                    self._index_db.close()
+            except Exception:
+                pass
         # Save best metric to summary before finishing
         if self._best_metric_value is not None:
             best_metric_summary = {
@@ -857,7 +1234,17 @@ class Run:
 
 # --------------- module-level API ---------------
 
-def init(project: str = "default", storage: Optional[str] = None, run_id: Optional[str] = None, name: Optional[str] = None, capture_env: bool = True) -> Run:
+def init(
+    project: str = "default",
+    storage: Optional[str] = None,
+    run_id: Optional[str] = None,
+    name: Optional[str] = None,
+    capture_env: bool = False,
+    snapshot_code: bool = False,
+    workspace_root: Optional[str] = None,
+    snapshot_format: str = "zip",
+    force_snapshot: bool = False,
+) -> Union[Run, NoOpRun]:
     """
     Initialize a new experiment run.
     
@@ -879,6 +1266,19 @@ def init(project: str = "default", storage: Optional[str] = None, run_id: Option
     """
     global _active_run
     with _active_run_lock:
-        r = Run(project=project, storage=storage, run_id=run_id, name=name, capture_env=capture_env)
+        if not is_enabled():
+            _active_run = None
+            return NoOpRun(project=project, name=name)
+        r = Run(
+            project=project,
+            storage=storage,
+            run_id=run_id,
+            name=name,
+            capture_env=capture_env,
+            snapshot_code=snapshot_code,
+            workspace_root=workspace_root,
+            snapshot_format=snapshot_format,
+            force_snapshot=force_snapshot,
+        )
         _active_run = r
     return r

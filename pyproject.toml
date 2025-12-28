@@ -38,6 +38,7 @@ dependencies = [
   "psutil>=5.8.0",
   "httpx",
   "cryptography>=41.0.0",
+  "tomli>=2.0.1",
 ]
 
 [project.optional-dependencies]
