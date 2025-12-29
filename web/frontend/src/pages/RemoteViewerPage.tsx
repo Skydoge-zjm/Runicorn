@@ -650,62 +650,72 @@ export default function RemoteViewerPage() {
   }, [getProfilesForServer, wizardEditProfileId, wizardServerId])
 
   return (
-    <div>
-      {/* Page Header */}
-      <div style={{ marginBottom: 24 }}>
-        <Title level={2}>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%',
+      overflow: 'hidden',
+      padding: 16,
+    }}>
+      {/* Page Header - fixed height */}
+      <div style={{ flexShrink: 0, marginBottom: 16 }}>
+        <Title level={2} style={{ marginBottom: 8 }}>
           <CloudServerOutlined /> {t('remote.title')}
         </Title>
-        <Paragraph type="secondary">
+        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
           {t('remote.subtitle')}
         </Paragraph>
       </div>
 
-      {/* Architecture Introduction */}
-      <DismissibleAlert
-        alertId="remote.intro"
-        type="info"
-        message={t('remote.help.architecture')}
-        description={t('remote.help.advantages')}
-        showIcon
-        style={{ marginBottom: 24 }}
-      />
+      {/* Architecture Introduction - fixed height */}
+      <div style={{ flexShrink: 0 }}>
+        <DismissibleAlert
+          alertId="remote.intro"
+          type="info"
+          message={t('remote.help.architecture')}
+          description={t('remote.help.advantages')}
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
 
-      {/* Statistics */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={8}>
-          <FancyStatCard
-            title={t('remote.stats.activeSessions')}
-            value={activeSessions.length}
-            icon={<ThunderboltOutlined />}
-            gradientColors={colorConfig.gradients.primary}
-          />
-        </Col>
-        <Col span={8}>
-          <FancyStatCard
-            title={t('remote.stats.savedConfigs')}
-            value={profileCount}
-            icon={<SaveOutlined />}
-            gradientColors={colorConfig.gradients.info}
-          />
-        </Col>
-        <Col span={8}>
-          <FancyStatCard
-            title={t('remote.stats.connectedServers')}
-            value={connectedServers}
-            icon={<CloudServerOutlined />}
-            gradientColors={colorConfig.gradients.success}
-          />
-        </Col>
-      </Row>
+        {/* Statistics */}
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col span={8}>
+            <FancyStatCard
+              title={t('remote.stats.activeSessions')}
+              value={activeSessions.length}
+              icon={<ThunderboltOutlined />}
+              gradientColors={colorConfig.gradients.primary}
+            />
+          </Col>
+          <Col span={8}>
+            <FancyStatCard
+              title={t('remote.stats.savedConfigs')}
+              value={profileCount}
+              icon={<SaveOutlined />}
+              gradientColors={colorConfig.gradients.info}
+            />
+          </Col>
+          <Col span={8}>
+            <FancyStatCard
+              title={t('remote.stats.connectedServers')}
+              value={connectedServers}
+              icon={<CloudServerOutlined />}
+              gradientColors={colorConfig.gradients.success}
+            />
+          </Col>
+        </Row>
 
-      <Space style={{ marginBottom: 16 }}>
-        <Button icon={<SafetyCertificateOutlined />} onClick={() => setSecurityDrawerOpen(true)}>
-          {t('remote.security.advanced')}
-        </Button>
-      </Space>
+        <Space style={{ marginBottom: 16 }}>
+          <Button icon={<SafetyCertificateOutlined />} onClick={() => setSecurityDrawerOpen(true)}>
+            {t('remote.security.advanced')}
+          </Button>
+        </Space>
+      </div>
 
-      <Row gutter={24}>
+      {/* Main content: Two columns - fills remaining space */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <Row gutter={24}>
         {/* Left Column: Saved Servers */}
         <Col xs={24} lg={12}>
           <Card
@@ -929,6 +939,7 @@ export default function RemoteViewerPage() {
           </Card>
         </Col>
       </Row>
+      </div>
 
       <Drawer
         title={wizardTitle}

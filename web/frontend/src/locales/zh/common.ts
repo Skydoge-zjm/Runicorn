@@ -9,6 +9,8 @@ export default {
   'tag.api_loading': 'API…',
   'tag.api_down': 'API 异常',
   
+  'table.path': '路径',
+  'table.alias': '别名',
   'table.project': '项目',
   'table.name': '实验',
   'table.run_id': '运行 ID',

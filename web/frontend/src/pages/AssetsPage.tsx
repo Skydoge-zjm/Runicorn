@@ -16,7 +16,6 @@ export default function AssetsPage() {
   const { settings, setSettings } = useSettings()
   const { index, loading, stats, refresh } = useAssetsIndex()
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null)
-  const [refreshInterval, setRefreshInterval] = useState<number | null>(null)
 
   // Use global settings for autoRefresh
   const autoRefresh = settings.autoRefresh
@@ -35,35 +34,26 @@ export default function AssetsPage() {
 
   // Auto-refresh functionality
   useEffect(() => {
-    if (autoRefresh) {
-      const interval = window.setInterval(() => {
-        refresh()
-        fetchStorageStats()
-      }, settings.refreshInterval * 1000)
-      setRefreshInterval(interval)
-    } else {
-      if (refreshInterval) {
-        window.clearInterval(refreshInterval)
-        setRefreshInterval(null)
-      }
-    }
-    return () => {
-      if (refreshInterval) {
-        window.clearInterval(refreshInterval)
-      }
-    }
+    if (!autoRefresh) return
+    
+    const interval = window.setInterval(() => {
+      refresh()
+      fetchStorageStats()
+    }, settings.refreshInterval * 1000)
+    
+    return () => window.clearInterval(interval)
   }, [autoRefresh, settings.refreshInterval, refresh, fetchStorageStats])
 
   const [repoType, setRepoType] = useState<string>('all')
   const [onlyArchived, setOnlyArchived] = useState(false)
   const [onlyRelated, setOnlyRelated] = useState(true)
-  const [projectFilter, setProjectFilter] = useState<string>('all')
+  const [pathFilter, setPathFilter] = useState<string>('all')
   const [sortMode, setSortMode] = useState<'recent' | 'name'>('recent')
   const [repoSearch, setRepoSearch] = useState('')
 
-  const projectOptions = useMemo(() => {
-    const projects = Array.from(new Set((index?.runs || []).map((r) => String(r.project || 'default')))).sort()
-    return [{ value: 'all', label: t('assets.filters.project') || 'Project' }, ...projects.map((p) => ({ value: p, label: p }))]
+  const pathOptions = useMemo(() => {
+    const paths = Array.from(new Set((index?.runs || []).map((r) => String(r.path || 'default')))).sort()
+    return [{ value: 'all', label: t('assets.filters.path') || 'Path' }, ...paths.map((p) => ({ value: p, label: p }))]
   }, [index?.runs, t])
 
   const repoRows = useMemo(() => {
@@ -74,9 +64,9 @@ export default function AssetsPage() {
       if (repoType !== 'all' && r.kind !== repoType) return false
       if (onlyArchived && !r.saved) return false
       if (onlyRelated && (r.runs_count || 0) <= 0) return false
-      if (projectFilter !== 'all' && !(r.projects || []).includes(projectFilter)) return false
+      if (pathFilter !== 'all' && !(r.paths || []).includes(pathFilter)) return false
       if (!q) return true
-      const hay = `${r.name} ${r.kind} ${(r.projects || []).join(' ')} ${r.source_uri || ''} ${r.archive_path || ''} ${r.description || ''} ${r.context || ''} ${r.source_type || ''}`.toLowerCase()
+      const hay = `${r.name} ${r.kind} ${(r.paths || []).join(' ')} ${r.source_uri || ''} ${r.archive_path || ''} ${r.description || ''} ${r.context || ''} ${r.source_type || ''}`.toLowerCase()
       return hay.includes(q)
     })
 
@@ -89,13 +79,20 @@ export default function AssetsPage() {
       if (ta !== tb) return tb - ta
       return a.name.localeCompare(b.name)
     })
-  }, [index?.repo, repoSearch, repoType, onlyArchived, onlyRelated, projectFilter, sortMode])
+  }, [index?.repo, repoSearch, repoType, onlyArchived, onlyRelated, pathFilter, sortMode])
 
   const overviewRows = useMemo(() => index?.experiments || [], [index?.experiments])
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Card>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%',
+      overflow: 'hidden',
+      padding: 16,
+    }}>
+      {/* Header: Title + Stats - fixed height */}
+      <Card style={{ flexShrink: 0, marginBottom: 16 }}>
         <Row gutter={16} align="middle">
           <Col flex="auto">
             <Space direction="vertical" size={0}>
@@ -145,10 +142,19 @@ export default function AssetsPage() {
             </Tooltip>
           </Col>
         </Row>
-
       </Card>
 
-      <Card>
+      {/* Main content: Tabs with tables - fills remaining space */}
+      <Card
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+        bodyStyle={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 24px 24px' }}
+      >
         <Tabs
           items={[
             {
@@ -173,8 +179,7 @@ export default function AssetsPage() {
                     rowExpandable: (r: any) => Array.isArray(r.run_ids) && r.run_ids.length > 0,
                   }}
                   columns={[
-                    { title: t('assets.table.project') || 'Project', dataIndex: 'project', key: 'project', width: 180 },
-                    { title: t('assets.table.name') || 'Experiment', dataIndex: 'name', key: 'name', width: 220 },
+                    { title: t('assets.table.path') || 'Path', dataIndex: 'path', key: 'path', width: 280 },
                     { title: t('assets.table.runs') || 'Runs', dataIndex: 'runs_count', key: 'runs_count', width: 100 },
                     { title: t('assets.table.assets_total') || 'Assets', dataIndex: 'assets_total', key: 'assets_total', width: 110 },
                     { title: t('assets.table.archived') || 'Archived', dataIndex: 'archived_total', key: 'archived_total', width: 110 },
@@ -234,7 +239,7 @@ export default function AssetsPage() {
                       />
                     </Col>
                     <Col flex="220px">
-                      <Select value={projectFilter} onChange={setProjectFilter} style={{ width: '100%' }} options={projectOptions} />
+                      <Select value={pathFilter} onChange={setPathFilter} style={{ width: '100%' }} options={pathOptions} />
                     </Col>
                     <Col flex="auto">
                       <Input
@@ -291,12 +296,12 @@ export default function AssetsPage() {
                             <Text ellipsis title={v} strong>
                               {v}
                             </Text>
-                            {Array.isArray(r.projects) && r.projects.length > 0 ? (
+                            {Array.isArray(r.paths) && r.paths.length > 0 ? (
                               <Space wrap size={4}>
-                                {r.projects.slice(0, 3).map((p: string) => (
+                                {r.paths.slice(0, 3).map((p: string) => (
                                   <Tag key={p}>{p}</Tag>
                                 ))}
-                                {r.projects.length > 3 ? <Tag>+{r.projects.length - 3}</Tag> : null}
+                                {r.paths.length > 3 ? <Tag>+{r.paths.length - 3}</Tag> : null}
                               </Space>
                             ) : null}
                           </Space>
@@ -373,6 +378,6 @@ export default function AssetsPage() {
           ]}
         />
       </Card>
-    </Space>
+    </div>
   )
 }

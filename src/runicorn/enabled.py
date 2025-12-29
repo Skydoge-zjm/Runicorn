@@ -48,9 +48,9 @@ def enabled(enabled: bool) -> Iterator[None]:
 
 
 class NoOpRun:
-    def __init__(self, project: str = "default", name: Optional[str] = None) -> None:
-        self.project = project or "default"
-        self.name = name or "default"
+    def __init__(self, path: Optional[str] = None, alias: Optional[str] = None) -> None:
+        self.path = path or "default"
+        self.alias = alias
         self.id = "disabled"
 
     def set_primary_metric(self, metric_name: str, mode: str = "max") -> None:

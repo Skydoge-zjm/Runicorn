@@ -73,14 +73,17 @@ class IndexDb:
                     """
 CREATE TABLE IF NOT EXISTS runs (
   run_id TEXT PRIMARY KEY,
-  project TEXT NULL,
-  name TEXT NULL,
+  path TEXT NOT NULL DEFAULT 'default',
+  alias TEXT NULL,
   created_at REAL NULL,
   ended_at REAL NULL,
   status TEXT NULL,
   run_dir TEXT NOT NULL,
   workspace_root TEXT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_runs_path ON runs(path);
+CREATE INDEX IF NOT EXISTS idx_runs_alias ON runs(alias);
 
 CREATE TABLE IF NOT EXISTS assets (
   asset_id TEXT PRIMARY KEY,
@@ -122,8 +125,8 @@ CREATE INDEX IF NOT EXISTS idx_run_assets_asset ON run_assets(asset_id);
         self,
         *,
         run_id: str,
-        project: str,
-        name: Optional[str],
+        path: str,
+        alias: Optional[str],
         created_at: float,
         status: str,
         run_dir: str,
@@ -133,17 +136,17 @@ CREATE INDEX IF NOT EXISTS idx_run_assets_asset ON run_assets(asset_id);
             conn = self._connect()
             conn.execute(
                 """
-INSERT INTO runs(run_id, project, name, created_at, status, run_dir, workspace_root)
+INSERT INTO runs(run_id, path, alias, created_at, status, run_dir, workspace_root)
 VALUES(?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(run_id) DO UPDATE SET
-  project=excluded.project,
-  name=excluded.name,
+  path=excluded.path,
+  alias=excluded.alias,
   created_at=excluded.created_at,
   status=excluded.status,
   run_dir=excluded.run_dir,
   workspace_root=excluded.workspace_root
 """,
-                (run_id, project, name, float(created_at), status, run_dir, workspace_root),
+                (run_id, path, alias, float(created_at), status, run_dir, workspace_root),
             )
             conn.commit()
 

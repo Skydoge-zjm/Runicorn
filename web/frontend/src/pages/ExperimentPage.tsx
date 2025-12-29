@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Table, Button, Card, Space, Input, Select, Tag, Statistic, Row, Col, message, Modal, Tooltip, Empty, Dropdown, Badge, Checkbox, notification } from 'antd'
-import { SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, LineChartOutlined, EyeOutlined, DownOutlined, FileExcelOutlined, FileTextOutlined, FilterOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, FilePdfOutlined, HeartOutlined, UndoOutlined, ExperimentOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, LineChartOutlined, EyeOutlined, DownOutlined, FileExcelOutlined, FileTextOutlined, FilterOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, FilePdfOutlined, HeartOutlined, UndoOutlined, ExperimentOutlined, ThunderboltOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useSettings } from '../contexts/SettingsContext'
 import { checkAllStatus, softDeleteRuns } from '../api'
 import RecycleBin from '../components/RecycleBin'
+import PathTreePanel from '../components/PathTreePanel'
 import { ExperimentListSkeleton } from '../components/LoadingSkeleton'
 import ResizableTitle from '../components/ResizableTitle'
 import { useColumnWidths } from '../hooks/useColumnWidths'
@@ -29,8 +30,8 @@ interface ResizeCallbackData {
 
 interface RunData {
   run_id: string
-  project: string
-  name: string
+  path: string
+  alias: string | null
   status: string
   created: string
   summary: any
@@ -59,6 +60,7 @@ const csvEscape = (value: any): string => {
 const ExperimentPage: React.FC = () => {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const { settings, setSettings } = useSettings()
   const [runs, setRuns] = useState<RunData[]>([])
   const [loading, setLoading] = useState(false)
@@ -68,7 +70,8 @@ const ExperimentPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [projects, setProjects] = useState<string[]>([])
   const [stats, setStats] = useState({ total: 0, running: 0, finished: 0, failed: 0 })
-  const [refreshInterval, setRefreshInterval] = useState<number | null>(null)
+  // Use ref for interval to avoid stale closure issues in cleanup
+  const refreshIntervalRef = useRef<number | null>(null)
   
   // Use global settings for autoRefresh
   const autoRefresh = settings.autoRefresh
@@ -77,11 +80,11 @@ const ExperimentPage: React.FC = () => {
   }
   // Column width management
   const defaultColumnWidths = {
-    project: 120,
-    name: 100,
-    run_id: 280,          // 增加宽度以显示完整ID (20251009_082632_d5a4c7)
+    path: 180,
+    alias: 120,
+    run_id: 280,          // Wider to show full ID (20251009_082632_d5a4c7)
     status: 100,
-    created: 210,         // 增加宽度以显示完整日期时间 (2025/10/09 08:26:32)
+    created: 210,         // Wider to show full datetime (2025/10/09 08:26:32)
     best_metric: 200,
     assets: 120,
     actions: 120,
@@ -105,6 +108,18 @@ const ExperimentPage: React.FC = () => {
   )
   
   const [recycleBinOpen, setRecycleBinOpen] = useState(false)
+  
+  // Path tree panel state
+  const [treePanelCollapsed, setTreePanelCollapsed] = useState(() => {
+    const saved = localStorage.getItem('tree_panel_collapsed')
+    return saved === 'true'
+  })
+  const [selectedTreePath, setSelectedTreePath] = useState<string | null>(null)
+  
+  // Persist tree panel collapsed state
+  useEffect(() => {
+    localStorage.setItem('tree_panel_collapsed', String(treePanelCollapsed))
+  }, [treePanelCollapsed])
   
   // Success confetti effect
   const { trigger: triggerConfetti, ConfettiComponent } = useSuccessConfetti()
@@ -142,16 +157,16 @@ const ExperimentPage: React.FC = () => {
       }
       const data = await response.json()
       // API returns array directly, not wrapped in object
-      const runs = Array.isArray(data) ? data : (data.runs || [])
+      const runsData = Array.isArray(data) ? data : (data.runs || [])
       
       // Map API response to our RunData interface
-      const mappedRuns = runs.map((r: any) => {
+      const mappedRuns = runsData.map((r: any) => {
         const created = r.created_time ? new Date(r.created_time * 1000) : new Date()
         
         return {
           run_id: r.id || r.run_id,
-          project: r.project || 'default',
-          name: r.name || 'unnamed',
+          path: r.path || 'default',
+          alias: r.alias || null,
           status: r.status || 'unknown',
           created: created.toISOString(),
           summary: r.summary || {},
@@ -164,9 +179,9 @@ const ExperimentPage: React.FC = () => {
       
       setRuns(mappedRuns)
       
-      // Extract unique projects
-      const uniqueProjects = [...new Set(mappedRuns.map((r: RunData) => r.project))] as string[]
-      setProjects(uniqueProjects)
+      // Extract unique paths (top-level segments for filtering)
+      const uniquePaths = [...new Set(mappedRuns.map((r: RunData) => r.path.split('/')[0]))] as string[]
+      setProjects(uniquePaths)
       
       // Calculate statistics
       const runStats = {
@@ -176,15 +191,6 @@ const ExperimentPage: React.FC = () => {
         failed: mappedRuns.filter((r: RunData) => r.status === 'failed').length,
       }
       setStats(runStats)
-      
-      // Show notification for new runs if not initial load
-      if (!showLoading && mappedRuns.length > runs.length) {
-        notification.info({
-          message: t('experiments.new_runs') || 'New runs detected',
-          description: `${mappedRuns.length - runs.length} new run(s) added`,
-          placement: 'bottomRight'
-        })
-      }
     } catch (error) {
       logger.error('Failed to fetch runs:', error)
       if (showLoading) {
@@ -192,31 +198,77 @@ const ExperimentPage: React.FC = () => {
       }
     }
     if (showLoading) setLoading(false)
-  }, [runs.length, t])
+  }, [t])
 
+  // Fetch runs on mount and when navigating back to this page
   useEffect(() => {
     fetchRuns(true)
-  }, [])
+  }, [location.key])
+
+  // Batch delete runs by path
+  const handleBatchDeleteByPath = useCallback(async (path: string) => {
+    try {
+      const response = await fetch('/api/paths/soft-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const result = await response.json()
+      if (result.deleted_count > 0) {
+        triggerConfetti()
+        message.success(t('experiments.soft_delete_success', { count: result.deleted_count }) || `Moved ${result.deleted_count} runs to recycle bin`)
+        fetchRuns(false)
+      } else {
+        message.info(t('experiments.no_runs_to_delete') || 'No runs to delete in this path')
+      }
+    } catch (error) {
+      logger.error('Batch delete by path failed:', error)
+      message.error(t('experiments.delete_failed') || 'Failed to delete runs')
+    }
+  }, [t, fetchRuns, triggerConfetti])
+  
+  // Batch export runs by path
+  const handleBatchExportByPath = useCallback(async (path: string) => {
+    try {
+      // Download as ZIP file
+      const url = `/api/paths/export?path=${encodeURIComponent(path)}&format=zip`
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `runicorn_export_${path.replace(/\//g, '_')}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      message.success(t('experiments.export_started') || 'Export started')
+    } catch (error) {
+      logger.error('Batch export by path failed:', error)
+      message.error(t('experiments.export_failed') || 'Failed to export runs')
+    }
+  }, [t])
 
   // Auto-refresh functionality using global settings
   useEffect(() => {
+    // Clear any existing interval first
+    if (refreshIntervalRef.current) {
+      window.clearInterval(refreshIntervalRef.current)
+      refreshIntervalRef.current = null
+    }
+    
     if (autoRefresh) {
-      const interval = window.setInterval(() => {
+      refreshIntervalRef.current = window.setInterval(() => {
         fetchRuns(false)  // Don't show loading for auto-refresh
-      }, settings.refreshInterval * 1000)  // Use user-configured interval
-      setRefreshInterval(interval)
-    } else {
-      if (refreshInterval) {
-        window.clearInterval(refreshInterval)
-        setRefreshInterval(null)
-      }
+      }, settings.refreshInterval * 1000)
     }
+    
     return () => {
-      if (refreshInterval) {
-        window.clearInterval(refreshInterval)
+      if (refreshIntervalRef.current) {
+        window.clearInterval(refreshIntervalRef.current)
+        refreshIntervalRef.current = null
       }
     }
-  }, [autoRefresh, settings.refreshInterval])
+  }, [autoRefresh, settings.refreshInterval, fetchRuns])
 
   // Delete selected runs with better error handling
   const handleDelete = useCallback(() => {
@@ -279,8 +331,8 @@ const ExperimentPage: React.FC = () => {
         total_runs: selectedRunData.length,
         runs: selectedRunData.map(run => ({
           run_id: run.run_id,
-          project: run.project,
-          name: run.name,
+          path: run.path,
+          alias: run.alias,
           status: run.status,
           created: run.created,
           summary: run.summary,
@@ -340,7 +392,7 @@ const ExperimentPage: React.FC = () => {
     try {
       // Create comprehensive CSV with all important fields
       const headers = [
-        'Run ID', 'Project', 'Experiment Name', 'Status', 'Created Time',
+        'Run ID', 'Path', 'Alias', 'Status', 'Created Time',
         'Final Loss', 'Learning Rate', 'Batch Size', 'Epochs',
         'Best Metric Value', 'Best Metric Name'
       ]
@@ -348,8 +400,8 @@ const ExperimentPage: React.FC = () => {
       // Create CSV rows with safe escaping
       const rows = selectedRunData.map(run => [
         csvEscape(run.run_id),
-        csvEscape(run.project),
-        csvEscape(run.name),
+        csvEscape(run.path),
+        csvEscape(run.alias),
         csvEscape(run.status),
         csvEscape(new Date(run.created).toLocaleString()),
         csvEscape(run.summary?.final_loss?.toFixed(6) || ''),
@@ -423,49 +475,59 @@ const ExperimentPage: React.FC = () => {
       const searchLower = searchText.toLowerCase()
       const matchesSearch = searchText === '' || 
         run.run_id.toLowerCase().includes(searchLower) ||
-        run.name.toLowerCase().includes(searchLower) ||
-        run.project.toLowerCase().includes(searchLower) ||
+        run.path.toLowerCase().includes(searchLower) ||
+        (run.alias && run.alias.toLowerCase().includes(searchLower)) ||
         (run.summary?.tags && run.summary.tags.some((tag: string) => 
           tag.toLowerCase().includes(searchLower)))
       
-      // Project filter
-      const matchesProject = projectFilter === 'all' || run.project === projectFilter
+      // Path filter from tree panel (prefix match)
+      const matchesTreePath = !selectedTreePath || 
+        run.path === selectedTreePath || 
+        run.path.startsWith(`${selectedTreePath}/`)
+      
+      // Path filter from dropdown (matches top-level segment)
+      const topLevelPath = run.path.split('/')[0]
+      const matchesProject = projectFilter === 'all' || topLevelPath === projectFilter
       
       // Status filter
       const matchesStatus = statusFilter === 'all' || run.status === statusFilter
       
-      return matchesSearch && matchesProject && matchesStatus
+      return matchesSearch && matchesTreePath && matchesProject && matchesStatus
     })
-  }, [runs, searchText, projectFilter, statusFilter])
+  }, [runs, searchText, selectedTreePath, projectFilter, statusFilter])
 
   // Enhanced table columns with sorting and better rendering (resizable)
   const columns: ColumnsType<RunData> = useMemo(() => [
     {
-      title: t('table.project'),
-      dataIndex: 'project',
-      key: 'project',
-      sorter: (a, b) => a.project.localeCompare(b.project),
-      render: (text) => <Tag color="blue">{text}</Tag>,
-      width: columnWidths.project,
+      title: t('table.path'),
+      dataIndex: 'path',
+      key: 'path',
+      sorter: (a, b) => a.path.localeCompare(b.path),
+      render: (text) => (
+        <Tooltip title={text}>
+          <code style={{ fontSize: '12px', color: '#1677ff' }}>{text}</code>
+        </Tooltip>
+      ),
+      width: columnWidths.path,
       onHeaderCell: () => ({
-        width: columnWidths.project,
-        onResize: handleResize('project'),
+        width: columnWidths.path,
+        onResize: handleResize('path'),
       }),
     },
     {
-      title: t('table.name'),
-      dataIndex: 'name',
-      key: 'name',
-      width: columnWidths.name,
-      sorter: (a, b) => a.name.localeCompare(b.name),
-      render: (text, record) => (
-        <Tooltip title={`${record.project}/${text}`}>
-          <strong>{text}</strong>
-        </Tooltip>
+      title: t('table.alias'),
+      dataIndex: 'alias',
+      key: 'alias',
+      width: columnWidths.alias,
+      sorter: (a, b) => (a.alias || '').localeCompare(b.alias || ''),
+      render: (text) => text ? (
+        <Tag color="purple">{text}</Tag>
+      ) : (
+        <span style={{ color: '#999' }}>-</span>
       ),
       onHeaderCell: () => ({
-        width: columnWidths.name,
-        onResize: handleResize('name'),
+        width: columnWidths.alias,
+        onResize: handleResize('alias'),
       }),
     },
     {
@@ -503,7 +565,7 @@ const ExperimentPage: React.FC = () => {
       sorter: (a, b) => new Date(a.created).getTime() - new Date(b.created).getTime(),
       render: (text) => {
         const date = new Date(text)
-        // 使用当前语言设置
+        // Use current language setting
         const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
         return (
           <span style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>
@@ -608,277 +670,261 @@ const ExperimentPage: React.FC = () => {
     <>
       {ConfettiComponent}
       
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        style={{ padding: 24 }}
-      >
-        {/* Fancy page title */}
-        <motion.div
-          initial={experimentsPageConfig.title.initial}
-          animate={experimentsPageConfig.title.animate}
-          transition={experimentsPageConfig.title.transition}
-          style={{ marginBottom: 36 }}
-        >
-          <h1 style={{
-            fontSize: experimentsPageConfig.title.fontSize,
-            fontWeight: experimentsPageConfig.title.fontWeight,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            marginBottom: experimentsPageConfig.title.marginBottom,
-            lineHeight: experimentsPageConfig.title.lineHeight
-          }}>
-            {t('menu.experiments')}
-          </h1>
-          <p style={{
-            color: experimentsPageConfig.subtitle.color,
-            fontSize: experimentsPageConfig.subtitle.fontSize,
-            margin: 0,
-            fontWeight: experimentsPageConfig.subtitle.fontWeight
-          }}>
-            {t('experiments.subtitle')}
-          </p>
-        </motion.div>
-        
-        {/* Fancy Statistics Cards with stagger animation */}
-        <StaggerContainer>
-          <Row gutter={[16, 16]} style={{ marginBottom: 32 }}>
-            <Col xs={24} sm={12} lg={6}>
-              <StaggerItem>
-                <FancyStatCard
-                  title={t('experiments.total_runs') || 'Total Runs'}
-                  value={stats.total}
-                  icon={<ExperimentOutlined />}
-                  gradientColors={experimentsPageConfig.statCards.total.gradientColors}
-                  delay={experimentsPageConfig.statCards.total.delay}
-                  pulse={experimentsPageConfig.statCards.total.pulse}
-                />
-              </StaggerItem>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100%',
+        overflow: 'hidden',
+        padding: 16,
+      }}>
+        {/* Header: Title + Stats - fixed height */}
+        <div style={{ flexShrink: 0, marginBottom: 16 }}>
+          {/* Compact page title */}
+          <div style={{ marginBottom: 16 }}>
+            <h1 style={{
+              fontSize: 24,
+              fontWeight: 700,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+              margin: 0,
+              lineHeight: 1.2
+            }}>
+              {t('menu.experiments')}
+            </h1>
+          </div>
+          
+          {/* Compact Statistics Cards */}
+          <Row gutter={[12, 12]}>
+            <Col xs={12} sm={6}>
+              <FancyStatCard
+                title={t('experiments.total_runs') || 'Total Runs'}
+                value={stats.total}
+                icon={<ExperimentOutlined />}
+                gradientColors={experimentsPageConfig.statCards.total.gradientColors}
+                delay={0}
+                pulse={false}
+              />
             </Col>
-            
-            <Col xs={24} sm={12} lg={6}>
-              <StaggerItem>
-                <FancyStatCard
-                  title={t('experiments.running') || 'Running'}
-                  value={stats.running}
-                  icon={<ThunderboltOutlined />}
-                  gradientColors={experimentsPageConfig.statCards.running.gradientColors}
-                  delay={experimentsPageConfig.statCards.running.delay}
-                  pulse={stats.running > 0}  // Dynamic based on actual running count
-                />
-              </StaggerItem>
+            <Col xs={12} sm={6}>
+              <FancyStatCard
+                title={t('experiments.running') || 'Running'}
+                value={stats.running}
+                icon={<ThunderboltOutlined />}
+                gradientColors={experimentsPageConfig.statCards.running.gradientColors}
+                delay={0}
+                pulse={stats.running > 0}
+              />
             </Col>
-            
-            <Col xs={24} sm={12} lg={6}>
-              <StaggerItem>
-                <FancyStatCard
-                  title={t('experiments.finished') || 'Finished'}
-                  value={stats.finished}
-                  icon={<CheckCircleOutlined />}
-                  gradientColors={experimentsPageConfig.statCards.finished.gradientColors}
-                  delay={experimentsPageConfig.statCards.finished.delay}
-                  pulse={experimentsPageConfig.statCards.finished.pulse}
-                />
-              </StaggerItem>
+            <Col xs={12} sm={6}>
+              <FancyStatCard
+                title={t('experiments.finished') || 'Finished'}
+                value={stats.finished}
+                icon={<CheckCircleOutlined />}
+                gradientColors={experimentsPageConfig.statCards.finished.gradientColors}
+                delay={0}
+                pulse={false}
+              />
             </Col>
-            
-            <Col xs={24} sm={12} lg={6}>
-              <StaggerItem>
-                <FancyStatCard
-                  title={t('experiments.failed') || 'Failed'}
-                  value={stats.failed}
-                  icon={<CloseCircleOutlined />}
-                  gradientColors={experimentsPageConfig.statCards.failed.gradientColors}
-                  delay={experimentsPageConfig.statCards.failed.delay}
-                  pulse={experimentsPageConfig.statCards.failed.pulse}
-                />
-              </StaggerItem>
+            <Col xs={12} sm={6}>
+              <FancyStatCard
+                title={t('experiments.failed') || 'Failed'}
+                value={stats.failed}
+                icon={<CloseCircleOutlined />}
+                gradientColors={experimentsPageConfig.statCards.failed.gradientColors}
+                delay={0}
+                pulse={false}
+              />
             </Col>
           </Row>
-        </StaggerContainer>
+        </div>
 
-      {/* Filters and Actions */}
-      <motion.div
-        initial={experimentsPageConfig.filterCard.animation.initial}
-        animate={experimentsPageConfig.filterCard.animation.animate}
-        transition={experimentsPageConfig.filterCard.animation.transition}
-      >
-        <Card
-          bordered={false}
-          style={{
-            borderRadius: experimentsPageConfig.filterCard.borderRadius,
-            marginBottom: 20,
-            background: experimentsPageConfig.filterCard.background,
-            backdropFilter: experimentsPageConfig.filterCard.backdropFilter,
-            border: experimentsPageConfig.filterCard.border,
-            boxShadow: experimentsPageConfig.filterCard.boxShadow
-          }}
-          bodyStyle={{ padding: experimentsPageConfig.filterCard.padding }}
-        >
-          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-            <Space>
-          <Input
-            placeholder={t('experiments.search_placeholder') || 'Search runs...'}
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 200 }}
-          />
-          <Select
-            value={projectFilter}
-            onChange={setProjectFilter}
-            style={{ width: 150 }}
-          >
-            <Select.Option value="all">{t('runs.filter.all')}</Select.Option>
-            {projects.map(p => (
-              <Select.Option key={p} value={p}>{p}</Select.Option>
-            ))}
-          </Select>
-          <Select
-            value={statusFilter}
-            onChange={setStatusFilter}
-            style={{ width: 120 }}
-          >
-            <Select.Option value="all">{t('runs.filter.all')}</Select.Option>
-            <Select.Option value="running">{t('experiments.running') || 'Running'}</Select.Option>
-            <Select.Option value="finished">{t('experiments.finished') || 'Finished'}</Select.Option>
-            <Select.Option value="failed">{t('experiments.failed') || 'Failed'}</Select.Option>
-          </Select>
-          <Button 
-            icon={autoRefresh ? <SyncOutlined spin /> : <ReloadOutlined />} 
-            onClick={() => fetchRuns(true)}
-            loading={loading}
-          >
-            {autoRefresh ? t('runs.refreshing') : t('runs.refresh')}
-          </Button>
-          <Tooltip title={t('experiments.check_status_tooltip') || 'Check if running experiments are still alive'}>
-            <Button 
-              icon={<HeartOutlined />}
-              onClick={handleStatusCheck}
-              loading={statusCheckLoading}
-              type="dashed"
+        {/* Main content: Path Tree + Runs Table - fills remaining space */}
+        <div style={{ 
+          display: 'flex', 
+          gap: 16,
+          flex: 1,
+          minHeight: 0,  // Important for flex child scrolling
+          overflow: 'hidden',
+        }}>
+          {/* Left: Path Tree Panel */}
+          {!treePanelCollapsed && (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              style={{ 
+                width: 240, 
+                flexShrink: 0,
+                borderRadius: 8,
+                overflow: 'hidden',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
             >
-              {t('experiments.check_status') || 'Check Status'}
-            </Button>
-          </Tooltip>
-          <Checkbox
-            checked={autoRefresh}
-            onChange={(e) => setAutoRefresh(e.target.checked)}
-          >
-            {t('experiments.auto_refresh') || 'Auto-refresh'}
-          </Checkbox>
-          <Tooltip title={t('recycle_bin.tooltip') || 'View and restore deleted experiments'}>
-            <Button 
-              icon={<UndoOutlined />}
-              onClick={() => setRecycleBinOpen(true)}
-              type="dashed"
-            >
-              {t('recycle_bin.title') || 'Recycle Bin'}
-            </Button>
-          </Tooltip>
-        </Space>
-        
-        <Space>
-          {selectedRowKeys.length > 0 && (
-            <>
-              <Button 
-                icon={<LineChartOutlined />} 
-                onClick={handleCompare}
-                disabled={selectedRowKeys.length < 2}
-              >
-                {t('experiments.compare') || 'Compare'} ({selectedRowKeys.length})
-              </Button>
-              <Dropdown
-                menu={{ items: exportMenuItems }}
-                trigger={['click']}
-              >
-                <Button icon={<ExportOutlined />}>
-                  {t('experiments.export') || 'Export'} ({selectedRowKeys.length}) <DownOutlined />
-                </Button>
-              </Dropdown>
-              <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>
-                {t('experiments.delete') || 'Delete'} ({selectedRowKeys.length})
-              </Button>
-            </>
+              <PathTreePanel
+                selectedPath={selectedTreePath}
+                onSelectPath={setSelectedTreePath}
+                onBatchDelete={handleBatchDeleteByPath}
+                onBatchExport={handleBatchExportByPath}
+                style={{ height: '100%', minHeight: 0 }}
+              />
+            </motion.div>
           )}
-            </Space>
-          </Space>
-        </Card>
-      </motion.div>
 
-      {/* Enhanced Runs Table with fancy effects */}
-      <motion.div
-        initial={experimentsPageConfig.tableContainer.animation.initial}
-        animate={experimentsPageConfig.tableContainer.animation.animate}
-        transition={experimentsPageConfig.tableContainer.animation.transition}
-      >
-        <Card
-          bordered={false}
-          style={{
-            borderRadius: experimentsPageConfig.tableContainer.borderRadius,
+          {/* Right: Filters + Table */}
+          <div style={{ 
+            flex: 1, 
+            minWidth: 0, 
+            display: 'flex', 
+            flexDirection: 'column', 
             overflow: 'hidden',
-            boxShadow: experimentsPageConfig.tableContainer.boxShadow
-          }}
-          bodyStyle={{ padding: 0 }}
-        >
-          <Table
-            className="enhanced-table"
-        components={{
-          header: {
-            cell: ResizableTitle,
-          },
-        }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys as string[]),
-          getCheckboxProps: (record) => ({
-            disabled: deleteLoading,  // Disable selection during deletion
-          }),
-        }}
-        columns={columns}
-        dataSource={filteredRuns}
-        rowKey="run_id"
-        loading={loading}
-        pagination={{
-          pageSize: pageSize,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          onShowSizeChange: (_, size) => setPageSize(size),
-          showTotal: (total, range) => 
-            t('experiments.table_total', { 
-              from: range[0], 
-              to: range[1], 
-              total 
-            }) || `${range[0]}-${range[1]} of ${total} items`,
-        }}
-        scroll={{ x: 1200 }}  // Horizontal scroll for better mobile view
-        size="middle"
-        onChange={(pagination, filters, sorter) => {
-          setSortedInfo(sorter as SorterResult<RunData>)
-        }}
-        locale={{
-          emptyText: (
-            <FancyEmpty
-              title={t('experiments.no_runs') || 'No experiments yet'}
-              description={t('experiments.no_runs_desc') || 'Start tracking your ML experiments with Runicorn SDK. Check out the quickstart guide to begin.'}
-              actionText={t('experiments.view_quickstart') || 'View Quickstart Guide'}
-              onAction={() => window.open('https://github.com/runicorn/runicorn#quick-start', '_blank')}
-            />
-          ),
-        }}
-      />
-        </Card>
-      </motion.div>
+            minHeight: 0,
+          }}>
+            {/* Filters and Actions - fixed height */}
+            <Card
+              bordered={false}
+              size="small"
+              style={{
+                borderRadius: 8,
+                marginBottom: 12,
+                flexShrink: 0,
+              }}
+              bodyStyle={{ padding: '12px 16px' }}
+            >
+              <Space style={{ width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <Space wrap>
+                  <Tooltip title={treePanelCollapsed ? (t('experiments.show_tree') || 'Show path tree') : (t('experiments.hide_tree') || 'Hide path tree')}>
+                    <Button
+                      icon={treePanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                      onClick={() => setTreePanelCollapsed(!treePanelCollapsed)}
+                    />
+                  </Tooltip>
+                  <Input
+                    placeholder={t('experiments.search_placeholder') || 'Search runs...'}
+                    prefix={<SearchOutlined />}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    style={{ width: 180 }}
+                    allowClear
+                  />
+                  <Select
+                    value={projectFilter}
+                    onChange={setProjectFilter}
+                    style={{ width: 140 }}
+                    options={[
+                      { value: 'all', label: t('experiments.all_projects') || 'All Projects' },
+                      ...projects.map(p => ({ value: p, label: p }))
+                    ]}
+                  />
+                  <Select
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                    style={{ width: 120 }}
+                    options={[
+                      { value: 'all', label: t('experiments.all_status') || 'All Status' },
+                      { value: 'running', label: t('experiments.running') || 'Running' },
+                      { value: 'finished', label: t('experiments.finished') || 'Finished' },
+                      { value: 'failed', label: t('experiments.failed') || 'Failed' },
+                    ]}
+                  />
+                  <Button
+                    icon={autoRefresh ? <SyncOutlined spin /> : <ReloadOutlined />}
+                    onClick={() => fetchRuns(true)}
+                    loading={loading}
+                  >
+                    {t('runs.refresh') || 'Refresh'}
+                  </Button>
+                  <Checkbox
+                    checked={autoRefresh}
+                    onChange={(e) => setAutoRefresh(e.target.checked)}
+                  >
+                    {t('experiments.auto_refresh') || 'Auto'}
+                  </Checkbox>
+                  <Button icon={<UndoOutlined />} onClick={() => setRecycleBinOpen(true)}>
+                    {t('experiments.recycle_bin') || 'Bin'}
+                  </Button>
+                </Space>
+                
+                <Space>
+                  {selectedRowKeys.length > 0 && (
+                    <>
+                      <Button icon={<LineChartOutlined />} onClick={handleCompare} disabled={selectedRowKeys.length < 2}>
+                        {t('experiments.compare') || 'Compare'} ({selectedRowKeys.length})
+                      </Button>
+                      <Dropdown menu={{ items: exportMenuItems }} trigger={['click']}>
+                        <Button icon={<ExportOutlined />}>
+                          {t('experiments.export') || 'Export'} ({selectedRowKeys.length}) <DownOutlined />
+                        </Button>
+                      </Dropdown>
+                      <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>
+                        {t('experiments.delete') || 'Delete'} ({selectedRowKeys.length})
+                      </Button>
+                    </>
+                  )}
+                </Space>
+              </Space>
+            </Card>
+
+            {/* Table - fills remaining space with internal scroll */}
+            <Card
+              bordered={false}
+              style={{
+                borderRadius: 8,
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+              bodyStyle={{ padding: 0, flex: 1, minHeight: 0, overflow: 'auto' }}
+            >
+              <Table
+                className="enhanced-table"
+                components={{ header: { cell: ResizableTitle } }}
+                rowSelection={{
+                  selectedRowKeys,
+                  onChange: (keys) => setSelectedRowKeys(keys as string[]),
+                  getCheckboxProps: () => ({ disabled: deleteLoading }),
+                }}
+                columns={columns}
+                dataSource={filteredRuns}
+                rowKey="run_id"
+                loading={loading}
+                pagination={{
+                  pageSize,
+                  showSizeChanger: true,
+                  showQuickJumper: true,
+                  pageSizeOptions: ['10', '20', '50', '100'],
+                  onShowSizeChange: (_, size) => setPageSize(size),
+                  showTotal: (total, range) => `${range[0]}-${range[1]} / ${total}`,
+                }}
+                scroll={{ x: 1200 }}
+                size="middle"
+                onChange={(_, __, sorter) => setSortedInfo(sorter as SorterResult<RunData>)}
+                locale={{
+                  emptyText: (
+                    <FancyEmpty
+                      title={t('experiments.no_runs') || 'No experiments yet'}
+                      description={t('experiments.no_runs_desc') || 'Start tracking your ML experiments.'}
+                      actionText={t('experiments.view_quickstart') || 'View Quickstart'}
+                      onAction={() => window.open('https://github.com/runicorn/runicorn#quick-start', '_blank')}
+                    />
+                  ),
+                }}
+              />
+            </Card>
+          </div>
+        </div>
+      </div>
       
-        <RecycleBin
-          open={recycleBinOpen}
-          onClose={() => setRecycleBinOpen(false)}
-          onRestore={() => fetchRuns(false)}
-        />
-      </motion.div>
+      <RecycleBin
+        open={recycleBinOpen}
+        onClose={() => setRecycleBinOpen(false)}
+        onRestore={() => fetchRuns(false)}
+      />
     </>
   )
 }

@@ -111,11 +111,59 @@ def get_active_run() -> Optional["Run"]:
     return _active_run
 
 
+def _normalize_path(path: Optional[str]) -> str:
+    """Normalize experiment path.
+    
+    Args:
+        path: User-provided path (e.g., "cv/yolo", "/", None)
+        
+    Returns:
+        Normalized path (e.g., "cv/yolo", "", "default")
+    """
+    if path is None:
+        return "default"
+    
+    # Normalize separators to forward slash
+    path = path.replace("\\", "/")
+    
+    # Handle root path
+    if path == "/" or path == "":
+        return ""
+    
+    # Strip leading/trailing slashes
+    path = path.strip("/")
+    
+    # Validate path characters
+    import re
+    if not re.match(r'^[a-zA-Z0-9_\-/]+$', path):
+        raise ValueError(
+            f"Invalid path: '{path}'. "
+            "Path can only contain letters, numbers, underscores, hyphens, and forward slashes."
+        )
+    
+    # Check for ".." to prevent directory traversal
+    if ".." in path:
+        raise ValueError(f"Invalid path: '{path}'. Path cannot contain '..'")
+    
+    # Check path length
+    if len(path) > 200:
+        raise ValueError(f"Path too long: {len(path)} characters. Maximum is 200.")
+    
+    return path
+
+
+def _path_to_fs_path(path: str) -> str:
+    """Convert normalized path to filesystem path using os.sep."""
+    if not path:
+        return ""
+    return path.replace("/", os.sep)
+
+
 @dataclass
 class RunMeta:
     id: str
-    project: str
-    name: Optional[str]
+    path: str  # Flexible hierarchy path
+    alias: Optional[str]
     created_at: float
     python: str
     platform: str
@@ -128,27 +176,34 @@ class RunMeta:
 class Run:
     def __init__(
         self,
-        project: str = "default",
+        path: Optional[str] = None,
         storage: Optional[str] = None,
         run_id: Optional[str] = None,
-        name: Optional[str] = None,
+        alias: Optional[str] = None,
         capture_env: bool = False,
         snapshot_code: bool = False,
         workspace_root: Optional[str] = None,
         snapshot_format: str = "zip",
         force_snapshot: bool = False,
     ) -> None:
-        self.project = project or "default"
+        # Normalize and validate path
+        self.path = _normalize_path(path)
+        self.alias = alias
+        
         # storage_root points to user_root_dir (or legacy ./.runicorn)
         self.storage_root = _default_storage_dir(storage)
-        # New hierarchy: user_root_dir / project / name / runs / run_id
-        exp_name = name or "default"
-        self.name = exp_name
-        self.project_dir = self.storage_root / self.project
-        self.experiment_dir = self.project_dir / exp_name
-        self.runs_dir = self.experiment_dir / "runs"
-        self.runs_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Build run directory: storage_root/runs/<path>/<run_id>
         self.id = run_id or _gen_run_id()
+        
+        if self.path:
+            fs_path = _path_to_fs_path(self.path)
+            self.runs_dir = self.storage_root / "runs" / fs_path
+        else:
+            # Root path: storage_root/runs/
+            self.runs_dir = self.storage_root / "runs"
+        
+        self.runs_dir.mkdir(parents=True, exist_ok=True)
         self.run_dir = self.runs_dir / self.id
         self.media_dir = self.run_dir / "media"
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -211,8 +266,8 @@ class Run:
 
         meta = RunMeta(
             id=self.id,
-            project=self.project,
-            name=self.name,
+            path=self.path,
+            alias=self.alias,
             created_at=_now_ts(),
             python=sys.version.split(" ")[0],
             platform=f"{platform.system()} {platform.release()} ({platform.machine()})",
@@ -228,8 +283,8 @@ class Run:
             try:
                 self._index_db.upsert_run(
                     run_id=self.id,
-                    project=self.project,
-                    name=self.name,
+                    path=self.path,
+                    alias=self.alias,
                     created_at=float(meta.created_at),
                     status="running",
                     run_dir=str(self.run_dir),
@@ -399,8 +454,8 @@ class Run:
             # Create experiment record in modern storage
             experiment = ExperimentRecord(
                 id=self.id,
-                project=self.project,
-                name=self.name,
+                path=self.path,
+                alias=self.alias,
                 created_at=_now_ts(),
                 updated_at=_now_ts(),
                 status="running",
@@ -972,10 +1027,10 @@ class Run:
 # --------------- module-level API ---------------
 
 def init(
-    project: str = "default",
+    path: Optional[str] = None,
     storage: Optional[str] = None,
     run_id: Optional[str] = None,
-    name: Optional[str] = None,
+    alias: Optional[str] = None,
     capture_env: bool = False,
     snapshot_code: bool = False,
     workspace_root: Optional[str] = None,
@@ -986,18 +1041,22 @@ def init(
     Initialize a new experiment run.
     
     Args:
-        project: Project name
+        path: Experiment path (e.g., "cv/detection/yolo"). Defaults to "default".
         storage: Storage directory path (optional, uses config if not specified)
         run_id: Run ID (optional, auto-generated if not specified)
-        name: Experiment name (optional, defaults to "default")
+        alias: Optional user-friendly alias for this run
         capture_env: Whether to capture environment information
+        snapshot_code: Whether to snapshot the workspace code
+        workspace_root: Workspace root directory for code snapshot
+        snapshot_format: Format for code snapshot (currently only "zip")
+        force_snapshot: Force snapshot even if workspace is large
         
     Returns:
         Run object for logging metrics and managing the experiment
         
     Example:
         >>> import runicorn as rn
-        >>> run = rn.init(project="vision", name="resnet50")
+        >>> run = rn.init(path="cv/yolo/ablation", alias="best-v2")
         >>> run.log({"loss": 0.5}, step=0)
         >>> run.finish()
     """
@@ -1005,12 +1064,12 @@ def init(
     with _active_run_lock:
         if not is_enabled():
             _active_run = None
-            return NoOpRun(project=project, name=name)
+            return NoOpRun(path=path, alias=alias)
         r = Run(
-            project=project,
+            path=path,
             storage=storage,
             run_id=run_id,
-            name=name,
+            alias=alias,
             capture_env=capture_env,
             snapshot_code=snapshot_code,
             workspace_root=workspace_root,

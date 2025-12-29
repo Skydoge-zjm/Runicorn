@@ -7,8 +7,8 @@ import logger from '../utils/logger'
 
 interface DeletedRun {
   id: string
-  project: string
-  name: string
+  path: string
+  alias: string | null
   created_time: number
   deleted_at: number
   delete_reason: string
@@ -194,21 +194,25 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       )
     },
     {
-      title: t('table.project'),
-      dataIndex: 'project',
-      key: 'project',
-      width: 100,
-      render: (project: string) => (
-        <Tag color="blue">{project}</Tag>
+      title: t('table.path'),
+      dataIndex: 'path',
+      key: 'path',
+      width: 150,
+      render: (path: string) => (
+        <Tooltip title={path}>
+          <code style={{ fontSize: '12px', color: '#1677ff' }}>{path}</code>
+        </Tooltip>
       )
     },
     {
-      title: t('table.name'),
-      dataIndex: 'name', 
-      key: 'name',
+      title: t('table.alias'),
+      dataIndex: 'alias', 
+      key: 'alias',
       width: 100,
-      render: (name: string) => (
-        <Tag color="purple">{name}</Tag>
+      render: (alias: string | null) => alias ? (
+        <Tag color="purple">{alias}</Tag>
+      ) : (
+        <span style={{ color: '#999' }}>-</span>
       )
     },
     {

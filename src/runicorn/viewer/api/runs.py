@@ -44,8 +44,8 @@ class RunListItem(BaseModel):
     pid: Optional[int] = None
     best_metric_value: Optional[float] = None
     best_metric_name: Optional[str] = None
-    project: Optional[str] = None
-    name: Optional[str] = None
+    path: Optional[str] = None  # Flexible hierarchy path
+    alias: Optional[str] = None  # User-friendly alias
     assets_count: int = 0
 
 
@@ -111,9 +111,9 @@ async def list_runs(request: Request) -> List[RunListItem]:
             except Exception:
                 created = None
         
-        # Get project and name (prefer from entry structure, fallback to meta)
-        project = (meta.get("project") if isinstance(meta, dict) else None) or entry.project
-        name = (meta.get("name") if isinstance(meta, dict) else None) or entry.name
+        # Get path and alias from meta (new model)
+        path = (meta.get("path") if isinstance(meta, dict) else None) or entry.project
+        alias = (meta.get("alias") if isinstance(meta, dict) else None)
         
         # Get best metric info from summary
         best_metric_value = None
@@ -140,8 +140,8 @@ async def list_runs(request: Request) -> List[RunListItem]:
                 pid=(meta.get("pid") if isinstance(meta, dict) else None),
                 best_metric_value=best_metric_value,
                 best_metric_name=best_metric_name,
-                project=project,
-                name=name,
+                path=path,
+                alias=alias,
                 assets_count=assets_count,
             )
         )
@@ -180,9 +180,9 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     meta = read_json(run_dir / "meta.json")
     status = read_json(run_dir / "status.json")
     
-    # Get project and name
-    project = (meta.get("project") if isinstance(meta, dict) else None) or entry.project
-    name = (meta.get("name") if isinstance(meta, dict) else None) or entry.name
+    # Get path and alias
+    path = (meta.get("path") if isinstance(meta, dict) else None) or entry.project
+    alias = (meta.get("alias") if isinstance(meta, dict) else None)
 
     assets: Any = {}
     assets_count = 0
@@ -200,8 +200,8 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
         "status": str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
         "pid": (meta.get("pid") if isinstance(meta, dict) else None),
         "run_dir": str(run_dir),
-        "project": project,
-        "name": name,
+        "path": path,
+        "alias": alias,
         "logs": str(run_dir / "logs.txt"),
         "metrics": str(run_dir / "events.jsonl"),
         "metrics_step": str(run_dir / "events.jsonl"),
@@ -454,8 +454,8 @@ async def list_deleted_runs(request: Request) -> Dict[str, Any]:
         meta = read_json(run_dir / "meta.json") 
         deleted_info = read_json(run_dir / ".deleted")
         
-        project = (meta.get("project") if isinstance(meta, dict) else None) or entry.project
-        name = (meta.get("name") if isinstance(meta, dict) else None) or entry.name
+        path = (meta.get("path") if isinstance(meta, dict) else None) or entry.project
+        alias = (meta.get("alias") if isinstance(meta, dict) else None)
         
         created = meta.get("created_at") if isinstance(meta, dict) else None
         if not isinstance(created, (int, float)):
@@ -466,8 +466,8 @@ async def list_deleted_runs(request: Request) -> Dict[str, Any]:
         
         items.append({
             "id": run_id,
-            "project": project,
-            "name": name,
+            "path": path,
+            "alias": alias,
             "created_time": created,
             "deleted_at": deleted_info.get("deleted_at"),
             "delete_reason": deleted_info.get("reason", "unknown"),

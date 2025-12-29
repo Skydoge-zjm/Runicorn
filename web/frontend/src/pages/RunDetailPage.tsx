@@ -159,21 +159,26 @@ export default function RunDetailPage() {
 
   // Initialize comparison state when detail is loaded
   useEffect(() => {
-    if (!detail?.project || !detail?.name) return
+    if (!detail?.path) return
+    
+    // Extract project/name from path for legacy comparison API
+    const pathParts = (detail.path || 'default').split('/')
+    const project = pathParts[0] || 'default'
+    const name = pathParts.slice(1).join('/') || ''
     
     // 1. Load all projects
     listProjects().then(res => setAvailableProjects(res.projects || [])).catch(() => {})
 
     // 2. Set default selected project/experiment to current run's info
     if (!selectedProject) {
-      setSelectedProject(detail.project)
-      setSelectedExperiment(detail.name)
+      setSelectedProject(project)
+      setSelectedExperiment(name)
     }
     
     // 3. Ensure current run is in selectedRunIds
     setSelectedRunIds(prev => prev.includes(id) ? prev : [id])
     
-  }, [detail?.project, detail?.name, id])
+  }, [detail?.path, id])
 
   // Load experiments when selectedProject changes
   useEffect(() => {
@@ -181,17 +186,23 @@ export default function RunDetailPage() {
       setAvailableExperiments([])
       return
     }
+    
+    // Extract project from current path for comparison
+    const pathParts = (detail?.path || 'default').split('/')
+    const currentProject = pathParts[0] || 'default'
+    const currentName = pathParts.slice(1).join('/') || ''
+    
     listNames(selectedProject).then(res => {
       setAvailableExperiments(res.names || [])
       // Reset experiment selection if switching projects (unless it matches detail)
-      if (selectedProject !== detail?.project) {
+      if (selectedProject !== currentProject) {
         setSelectedExperiment('')
       } else {
         // If back to original project, select original experiment
-        setSelectedExperiment(detail?.name || '')
+        setSelectedExperiment(currentName)
       }
     }).catch(() => setAvailableExperiments([]))
-  }, [selectedProject, detail?.project, detail?.name])
+  }, [selectedProject, detail?.path])
 
   // Load runs when selectedExperiment changes
   useEffect(() => {
@@ -361,17 +372,25 @@ export default function RunDetailPage() {
   }
 
   return (
-    <Space direction="vertical" size="middle" style={{ 
-      width: '100%', 
-      maxWidth: '100%',
-      overflowX: 'hidden' 
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%',
+      overflow: 'hidden',
+      padding: 16,
     }}>
+      {/* Main scrollable content */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <Space direction="vertical" size="middle" style={{ 
+          width: '100%', 
+          maxWidth: '100%',
+        }}>
       {/* Top Header Card */}
       <Card bodyStyle={{ padding: '20px 24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           <div>
             <Space align="center" style={{ marginBottom: 8 }}>
-              <Title level={3} style={{ margin: 0 }}>{detail?.name || id}</Title>
+              <Title level={3} style={{ margin: 0 }}>{detail?.alias || id}</Title>
               {detail?.status && (
                 <Tag 
                   icon={getStatusIcon(detail.status)} 
@@ -383,7 +402,9 @@ export default function RunDetailPage() {
               )}
             </Space>
             <Space split={<Divider type="vertical" />}>
-              <Text type="secondary"><FolderOpenOutlined /> {detail?.project || 'Default Project'}</Text>
+              <Tooltip title={detail?.path}>
+                <Text type="secondary"><FolderOpenOutlined /> {detail?.path || 'default'}</Text>
+              </Tooltip>
               {detail?.start_time && <Text type="secondary"><CalendarOutlined /> {formatTimestamp(detail.start_time)}</Text>}
               {detail?.pid && <Text type="secondary">PID: {detail.pid}</Text>}
             </Space>
@@ -543,11 +564,13 @@ export default function RunDetailPage() {
                    optionLabelProp="label"
                    maxTagCount={3}
                  >
-                   {(runsInExperiment || []).map((r: any) => (
-                     <Select.Option key={r.id} value={r.id} label={r.id.substring(0,8)}>
+                   {(runsInExperiment || []).map((r: any) => {
+                     const runId = r.run_id || r.id || ''
+                     return (
+                     <Select.Option key={runId} value={runId} label={runId.substring(0,8)}>
                        <Space direction="vertical" size={0} style={{ width: '100%' }}>
                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                           <Text strong>{r.id}</Text>
+                           <Text strong>{runId}</Text>
                            <Tag color={r.status === 'running' ? 'blue' : r.status === 'finished' ? 'green' : 'red'} style={{ marginRight: 0 }}>{r.status}</Tag>
                          </div>
                          <Text type="secondary" style={{ fontSize: 12 }}>
@@ -555,7 +578,7 @@ export default function RunDetailPage() {
                          </Text>
                        </Space>
                      </Select.Option>
-                   ))}
+                   )})}
                  </Select>
                </div>
 
@@ -727,6 +750,8 @@ export default function RunDetailPage() {
       >
         <LogsViewer url={logUrl} persistKey={`run_${id}_logs`} />
       </Card>
-    </Space>
+        </Space>
+      </div>
+    </div>
   )
 }

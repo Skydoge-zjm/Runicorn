@@ -17,6 +17,7 @@ export default {
   'assets.loading.index_progress': '{{done}} / {{total}} runs',
 
   'assets.filters.type': 'Type',
+  'assets.filters.path': 'Path',
   'assets.filters.project': 'Project',
   'assets.filters.only_archived': 'Archived only',
   'assets.filters.only_related': 'Only related runs',
@@ -24,6 +25,7 @@ export default {
   'assets.filters.sort_recent': 'Sort: Recent',
   'assets.filters.sort_name': 'Sort: Name',
 
+  'assets.table.path': 'Path',
   'assets.table.project': 'Project',
   'assets.table.name': 'Experiment',
   'assets.table.runs': 'Runs',

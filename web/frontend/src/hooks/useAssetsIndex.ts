@@ -6,8 +6,8 @@ import { AssetIdentity, assetIdentityToString, encodeAssetIdentity } from '../ut
 
 export type AssetsIndexRun = {
   run_id: string
-  project: string
-  name: string
+  path: string
+  alias: string | null
   created_time?: number
   status?: string
   assets_count?: number
@@ -15,8 +15,7 @@ export type AssetsIndexRun = {
 
 export type AssetsIndexExperimentRow = {
   key: string
-  project: string
-  name: string
+  path: string
   runs_count: number
   assets_total: number
   archived_total: number
@@ -37,7 +36,7 @@ export type AssetsIndexRepoRow = {
   description?: string
   context?: string
   source_type?: string
-  projects: string[]
+  paths: string[]
   runs_count: number
   last_used_time?: number
   run_ids: string[]
@@ -52,7 +51,7 @@ export type AssetsIndex = {
   repo: AssetsIndexRepoRow[]
 }
 
-const STORAGE_KEY = 'assets_index_v2'
+const STORAGE_KEY = 'assets_index_v3'
 
 function nowSec(): number {
   return Math.floor(Date.now() / 1000)
@@ -87,8 +86,8 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, idx: numb
 function normalizeRun(r: any): AssetsIndexRun {
   return {
     run_id: String(r?.id || r?.run_id || ''),
-    project: String(r?.project || 'default'),
-    name: String(r?.name || 'unnamed'),
+    path: String(r?.path || 'default'),
+    alias: r?.alias || null,
     created_time: typeof r?.created_time === 'number' ? r.created_time : undefined,
     status: r?.status != null ? String(r.status) : undefined,
     assets_count: typeof r?.assets_count === 'number' ? r.assets_count : undefined,
@@ -111,7 +110,7 @@ function buildIndexFromRuns(runs: AssetsIndexRun[], runAssets: Record<string, Pa
       description?: string
       context?: string
       source_type?: string
-      projects: Set<string>
+      paths: Set<string>
       run_ids: Set<string>
       last_used_time?: number
     }
@@ -126,11 +125,10 @@ function buildIndexFromRuns(runs: AssetsIndexRun[], runAssets: Record<string, Pa
     const assets = runAssets[r.run_id] || []
     if (assets.length === 0) return
 
-    const expKey = `${r.project}::${r.name}`
+    const expKey = r.path
     const row = expMap.get(expKey) || {
       key: expKey,
-      project: r.project,
-      name: r.name,
+      path: r.path,
       runs_count: 0,
       assets_total: 0,
       archived_total: 0,
@@ -156,7 +154,7 @@ function buildIndexFromRuns(runs: AssetsIndexRun[], runAssets: Record<string, Pa
         description: a.description,
         context: a.context,
         source_type: a.source_type,
-        projects: new Set<string>(),
+        paths: new Set<string>(),
         run_ids: new Set<string>(),
         last_used_time: undefined as number | undefined,
       }
@@ -169,7 +167,7 @@ function buildIndexFromRuns(runs: AssetsIndexRun[], runAssets: Record<string, Pa
       if (!existing.context && a.context) existing.context = a.context
       if (!existing.source_type && a.source_type) existing.source_type = a.source_type
 
-      existing.projects.add(r.project)
+      existing.paths.add(r.path)
       existing.run_ids.add(r.run_id)
       const ts = runTime.get(r.run_id)
       if (typeof ts === 'number') {
@@ -184,8 +182,7 @@ function buildIndexFromRuns(runs: AssetsIndexRun[], runAssets: Record<string, Pa
   })
 
   const experiments = Array.from(expMap.values()).sort((a, b) => {
-    if (a.project !== b.project) return a.project.localeCompare(b.project)
-    return a.name.localeCompare(b.name)
+    return a.path.localeCompare(b.path)
   })
 
   const repo = Array.from(repoMap.entries())
@@ -204,7 +201,7 @@ function buildIndexFromRuns(runs: AssetsIndexRun[], runAssets: Record<string, Pa
         description: v.description,
         context: v.context,
         source_type: v.source_type,
-        projects: Array.from(v.projects.values()).sort(),
+        paths: Array.from(v.paths.values()).sort(),
         runs_count: v.run_ids.size,
         last_used_time: v.last_used_time,
         run_ids: Array.from(v.run_ids.values()),
@@ -223,7 +220,7 @@ function buildIndexFromRuns(runs: AssetsIndexRun[], runAssets: Record<string, Pa
 export function loadAssetsIndexFromCache(): AssetsIndex | null {
   const obj = safeParseJson(localStorage.getItem(STORAGE_KEY))
   if (!obj || typeof obj !== 'object') return null
-  if (obj.version !== 2) return null
+  if (obj.version !== 3) return null
   if (!obj.generated_at || !obj.runs || !obj.run_assets) return null
   return obj as AssetsIndex
 }
@@ -269,7 +266,7 @@ export function useAssetsIndex() {
 
       const { experiments, repo } = buildIndexFromRuns(runs, runAssets)
       const next: AssetsIndex = {
-        version: 2,
+        version: 3,
         generated_at: nowSec(),
         runs,
         run_assets: runAssets,

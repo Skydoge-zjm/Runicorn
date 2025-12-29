@@ -42,7 +42,7 @@ export default function AssetDetailPage() {
         const fromKey = assetIdentityToString(fromAsset.identity)
         if (fromKey === key) {
           const cache = loadAssetsIndexFromCache()
-          const runProject = fromRunId ? cache?.runs?.find((r) => r.run_id === fromRunId)?.project : undefined
+          const runPath = fromRunId ? cache?.runs?.find((r) => r.run_id === fromRunId)?.path : undefined
           setRepoRow({
             key,
             encoded: id,
@@ -56,7 +56,7 @@ export default function AssetDetailPage() {
             description: fromAsset.description,
             context: fromAsset.context,
             source_type: fromAsset.source_type,
-            projects: runProject ? [runProject] : [],
+            paths: runPath ? [runPath] : [],
             runs_count: fromRunId ? 1 : 0,
             run_ids: fromRunId ? [fromRunId] : [],
             last_used_time: undefined,
@@ -113,7 +113,7 @@ export default function AssetDetailPage() {
         const parsed = parseRunAssetsPayload(payload)
         const hit = parsed.find((a) => assetIdentityToString(a.identity) === key)
         if (hit) {
-          const runProject = cache?.runs?.find((r) => r.run_id === rid)?.project
+          const runPath = cache?.runs?.find((r) => r.run_id === rid)?.path
           setRepoRow({
             key,
             encoded: id,
@@ -127,7 +127,7 @@ export default function AssetDetailPage() {
             description: hit.description,
             context: hit.context,
             source_type: hit.source_type,
-            projects: runProject ? [runProject] : [],
+            paths: runPath ? [runPath] : [],
             runs_count: 1,
             run_ids: [rid],
             last_used_time: undefined,
@@ -160,8 +160,17 @@ export default function AssetDetailPage() {
   }
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Card>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%',
+      overflow: 'hidden',
+      padding: 16,
+    }}>
+      {/* Main scrollable content */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <Card>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Space wrap>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')}>{t('asset_detail.back') || 'Back'}</Button>
@@ -186,11 +195,11 @@ export default function AssetDetailPage() {
                 <Text strong>{repoRow.name}</Text>
               </Space>
 
-              {Array.isArray(repoRow.projects) && repoRow.projects.length > 0 ? (
+              {Array.isArray(repoRow.paths) && repoRow.paths.length > 0 ? (
                 <div>
-                  <Text type="secondary">{t('asset_detail.fields.projects') || 'Projects'}: </Text>
+                  <Text type="secondary">{t('asset_detail.fields.paths') || 'Paths'}: </Text>
                   <Space wrap>
-                    {repoRow.projects.map((p) => (
+                    {repoRow.paths.map((p) => (
                       <Tag key={p}>{p}</Tag>
                     ))}
                   </Space>
@@ -294,6 +303,8 @@ export default function AssetDetailPage() {
           ]}
         />
       </Card>
-    </Space>
+        </Space>
+      </div>
+    </div>
   )
 }

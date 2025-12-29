@@ -359,8 +359,8 @@ export async function listDeletedRuns() {
   if (!res.ok) throw new Error(await res.text())
   return res.json() as Promise<{ deleted_runs: Array<{
     id: string
-    project: string
-    name: string
+    path: string
+    alias: string | null
     created_time: number
     deleted_at: number
     delete_reason: string

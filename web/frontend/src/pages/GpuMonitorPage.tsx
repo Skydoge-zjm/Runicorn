@@ -91,8 +91,14 @@ export default function GpuMonitorPage() {
 
   if (available === false) {
     return (
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        <Card>
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100%',
+        overflow: 'hidden',
+        padding: 16,
+      }}>
+        <Card style={{ flexShrink: 0, marginBottom: 16 }}>
           <Space direction="vertical" size="small">
             <Title level={3}>
               <DashboardOutlined /> {t('gpu.monitor_title')}
@@ -109,14 +115,20 @@ export default function GpuMonitorPage() {
           description={reason || t('gpu.no_nvidia_smi')}
           showIcon
         />
-      </Space>
+      </div>
     )
   }
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      {/* Page Header */}
-      <Card>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%',
+      overflow: 'hidden',
+      padding: 16,
+    }}>
+      {/* Page Header - fixed height */}
+      <Card style={{ flexShrink: 0, marginBottom: 16 }}>
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Space>
@@ -139,28 +151,33 @@ export default function GpuMonitorPage() {
         </Space>
       </Card>
 
-      {/* System Metrics Card */}
-      {systemMetrics && systemMetrics.available && (
-        <SystemMetricsCard metrics={systemMetrics} loading={systemLoading} />
-      )}
+      {/* Main content - fills remaining space with internal scroll */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          {/* System Metrics Card */}
+          {systemMetrics && systemMetrics.available && (
+            <SystemMetricsCard metrics={systemMetrics} loading={systemLoading} />
+          )}
 
-      {/* GPU Metrics Card */}
-      {gpus.length > 0 && (
-        <GpuMetricsCard gpus={gpus} loading={loading} />
-      )}
+          {/* GPU Metrics Card */}
+          {gpus.length > 0 && (
+            <GpuMetricsCard gpus={gpus} loading={loading} />
+          )}
 
-      {/* GPU Telemetry Charts */}
-      <Card 
-        title={
-          <Space>
-            <ThunderboltOutlined />
-            <span>{t('gpu.telemetry_charts')}</span>
-            <Tag color="cyan">{t('gpu.history_2min')}</Tag>
-          </Space>
-        }
-      >
-        <GpuTelemetry />
-      </Card>
-    </Space>
+          {/* GPU Telemetry Charts */}
+          <Card 
+            title={
+              <Space>
+                <ThunderboltOutlined />
+                <span>{t('gpu.telemetry_charts')}</span>
+                <Tag color="cyan">{t('gpu.history_2min')}</Tag>
+              </Space>
+            }
+          >
+            <GpuTelemetry />
+          </Card>
+        </Space>
+      </div>
+    </div>
   )
 }

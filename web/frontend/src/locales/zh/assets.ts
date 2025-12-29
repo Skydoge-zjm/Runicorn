@@ -17,6 +17,7 @@ export default {
   'assets.loading.index_progress': '{{done}} / {{total}} 个运行',
 
   'assets.filters.type': '类型',
+  'assets.filters.path': '路径',
   'assets.filters.project': '项目',
   'assets.filters.only_archived': '仅收录',
   'assets.filters.only_related': '仅看有关联运行',
@@ -24,6 +25,7 @@ export default {
   'assets.filters.sort_recent': '排序：最近使用',
   'assets.filters.sort_name': '排序：名称',
 
+  'assets.table.path': '路径',
   'assets.table.project': '项目',
   'assets.table.name': '实验',
   'assets.table.runs': '运行数',

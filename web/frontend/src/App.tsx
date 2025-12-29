@@ -200,13 +200,16 @@ export default function App() {
       <SettingsProvider value={{ settings, setSettings }}>
         <div style={bgStyle} />
         <Layout style={{ 
-          minHeight: '100vh', 
+          height: '100vh',
+          overflow: 'hidden',  // Prevent page-level scrolling
           position: 'relative', 
           zIndex: 1, 
           background: 'transparent',
-          transition: settings.animationsEnabled ? 'all 0.3s ease' : 'none'
+          transition: settings.animationsEnabled ? 'all 0.3s ease' : 'none',
+          display: 'flex',
+          flexDirection: 'column',
         }}>
-          <Header style={{ display: 'flex', alignItems: 'center' }}>
+          <Header style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
             <div style={{ color: '#fff', fontWeight: 700, marginRight: 24 }}>{t('app.title')}</div>
             <Menu
               theme="dark"
@@ -234,8 +237,23 @@ export default function App() {
               <Button type="link" icon={<SettingOutlined style={{ color: '#fff' }} />} onClick={() => setSettingsOpen(true)} />
             </div>
           </Header>
-          <Content style={{ padding: '24px' }}>
-            <div style={{ ...wrapperStyle, padding: 24, minHeight: 360 }}>
+          <Content style={{ 
+            flex: 1,
+            padding: '16px 24px',
+            overflow: 'hidden',  // Content area doesn't scroll
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,  // Important for flex child
+          }}>
+            <div style={{ 
+              ...wrapperStyle, 
+              padding: 0,
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              minHeight: 0,
+            }}>
               <PageTransition>
                 <Routes>
                   <Route path="/" element={<ExperimentPage />} />
@@ -248,7 +266,6 @@ export default function App() {
               </PageTransition>
             </div>
           </Content>
-          <Footer style={{ textAlign: 'center' }}> {new Date().getFullYear()} {t('app.title')}</Footer>
         </Layout>
         <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} value={settings} onChange={setSettings} />
       </SettingsProvider>

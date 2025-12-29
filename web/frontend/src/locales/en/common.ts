@@ -9,6 +9,8 @@ export default {
   'tag.api_loading': 'API…',
   'tag.api_down': 'API DOWN',
   
+  'table.path': 'Path',
+  'table.alias': 'Alias',
   'table.project': 'Project',
   'table.name': 'Name',
   'table.run_id': 'Run ID',
