@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
+import enUS from 'antd/locale/en_US'
+import zhCN from 'antd/locale/zh_CN'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import { SettingOutlined, ExperimentOutlined, CloudServerOutlined, DashboardOutlined, AppstoreOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
@@ -185,13 +187,16 @@ export default function App() {
   }, [settings.autoRefresh, settings.refreshInterval])
 
   return (
-    <ConfigProvider theme={{ 
-      algorithm: algorithms as any, 
-      token: {
-        ...tokenOverrides,
-        motion: settings.animationsEnabled
-      }
-    }}>
+    <ConfigProvider
+      locale={i18n.language?.startsWith('zh') ? zhCN : enUS}
+      theme={{
+        algorithm: algorithms as any,
+        token: {
+          ...tokenOverrides,
+          motion: settings.animationsEnabled,
+        },
+      }}
+    >
       <SettingsProvider value={{ settings, setSettings }}>
         <div style={bgStyle} />
         <Layout style={{ 

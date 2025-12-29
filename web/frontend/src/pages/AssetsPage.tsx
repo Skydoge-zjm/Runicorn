@@ -252,7 +252,8 @@ export default function AssetsPage() {
                         dataIndex: 'saved',
                         key: 'saved',
                         width: 110,
-                        render: (v: boolean) => (v ? <Tag color="green">saved</Tag> : <Tag>ref</Tag>),
+                        render: (v: boolean) =>
+                          v ? <Tag color="green">{t('assets.tag.saved') || 'saved'}</Tag> : <Tag>{t('assets.tag.ref') || 'ref'}</Tag>,
                       },
                       {
                         title: t('assets.repo.last_used') || 'Last Used',

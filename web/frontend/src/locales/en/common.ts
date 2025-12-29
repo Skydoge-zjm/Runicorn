@@ -37,5 +37,8 @@ export default {
   'cancel': 'Cancel',
   'confirm': 'Confirm',
   'close': 'Close',
+
+  'common.copied': 'Copied',
+  'common.copy_failed': 'Failed to copy',
 }
 

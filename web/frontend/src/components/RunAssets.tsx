@@ -31,7 +31,7 @@ export default function RunAssets({ runId }: RunAssetsProps) {
       setData(res)
     } catch (error) {
       logger.error('Failed to load run assets:', error)
-      message.error(`Failed to load assets: ${error}`)
+      message.error(`${t('assets.errors.failed_to_load_assets') || 'Failed to load assets'}: ${error}`)
     } finally {
       setLoading(false)
     }
@@ -51,9 +51,9 @@ export default function RunAssets({ runId }: RunAssetsProps) {
   const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
-      message.success(t('save') || 'Saved')
+      message.success(t('common.copied') || 'Copied')
     } catch {
-      message.error('Failed to copy')
+      message.error(t('common.copy_failed') || 'Failed to copy')
     }
   }
 
@@ -69,9 +69,9 @@ export default function RunAssets({ runId }: RunAssetsProps) {
               {a.kind === 'config' && <SettingOutlined />}
               {a.kind === 'dataset' && <DatabaseOutlined />}
               {a.kind === 'pretrained' && <RocketOutlined />}
-              {a.kind === 'output' && <Tag>output</Tag>}
+              {a.kind === 'output' && <Tag>{t('assets.kind.output') || 'output'}</Tag>}
               <Text strong>{a.name}</Text>
-              {a.saved ? <Tag color="green">saved</Tag> : <Tag>ref</Tag>}
+              {a.saved ? <Tag color="green">{t('assets.tag.saved') || 'saved'}</Tag> : <Tag>{t('assets.tag.ref') || 'ref'}</Tag>}
             </Space>
           }
           right={
@@ -85,12 +85,12 @@ export default function RunAssets({ runId }: RunAssetsProps) {
               </Button>
               {a.source_uri ? (
                 <Button size="small" icon={<CopyOutlined />} onClick={() => copy(a.source_uri!)}>
-                  Source
+                  {t('assets.actions.copy_source') || 'Source'}
                 </Button>
               ) : null}
               {a.archive_path ? (
                 <Button size="small" icon={<CopyOutlined />} onClick={() => copy(a.archive_path!)}>
-                  Archive
+                  {t('assets.actions.copy_archive') || 'Archive'}
                 </Button>
               ) : null}
               <Button size="small" icon={<DownloadOutlined />} disabled={!href} onClick={() => href && window.open(href, '_blank')}>
@@ -104,13 +104,13 @@ export default function RunAssets({ runId }: RunAssetsProps) {
           <Space direction="vertical" style={{ width: '100%' }} size={6}>
             {a.meta?.args ? (
               <div>
-                <Text type="secondary">args</Text>
+                <Text type="secondary">{t('assets.config.args') || 'args'}</Text>
                 <pre style={{ margin: 0, maxHeight: 240, overflow: 'auto' }}>{JSON.stringify(a.meta.args, null, 2)}</pre>
               </div>
             ) : null}
             {Array.isArray(a.meta?.config_files) && a.meta.config_files.length > 0 ? (
               <div>
-                <Text type="secondary">config_files</Text>
+                <Text type="secondary">{t('assets.config.config_files') || 'config_files'}</Text>
                 <pre style={{ margin: 0, maxHeight: 200, overflow: 'auto' }}>{JSON.stringify(a.meta.config_files, null, 2)}</pre>
               </div>
             ) : null}
@@ -129,7 +129,7 @@ export default function RunAssets({ runId }: RunAssetsProps) {
   }
 
   if (parsed.length === 0) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('No assets') || 'No assets'} />
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('assets.empty.no_assets') || 'No assets'} />
   }
 
   return (
@@ -141,55 +141,55 @@ export default function RunAssets({ runId }: RunAssetsProps) {
           label: (
             <Space>
               <CodeOutlined />
-              <span>Code</span>
+              <span>{t('assets.table.code') || 'Code'}</span>
               <Tag>{groups.code.length}</Tag>
             </Space>
           ),
-          children: groups.code.length ? groups.code.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />, 
+          children: groups.code.length ? groups.code.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('assets.empty.no_assets') || 'No assets'} />, 
         },
         {
           key: 'config',
           label: (
             <Space>
               <SettingOutlined />
-              <span>Config</span>
+              <span>{t('assets.table.config') || 'Config'}</span>
               <Tag>{groups.config.length}</Tag>
             </Space>
           ),
-          children: groups.config.length ? groups.config.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />,
+          children: groups.config.length ? groups.config.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('assets.empty.no_assets') || 'No assets'} />,
         },
         {
           key: 'dataset',
           label: (
             <Space>
               <DatabaseOutlined />
-              <span>Datasets</span>
+              <span>{t('assets.table.datasets') || 'Datasets'}</span>
               <Tag>{groups.dataset.length}</Tag>
             </Space>
           ),
-          children: groups.dataset.length ? groups.dataset.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />,
+          children: groups.dataset.length ? groups.dataset.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('assets.empty.no_assets') || 'No assets'} />,
         },
         {
           key: 'pretrained',
           label: (
             <Space>
               <RocketOutlined />
-              <span>Pretrained</span>
+              <span>{t('assets.table.pretrained') || 'Pretrained'}</span>
               <Tag>{groups.pretrained.length}</Tag>
             </Space>
           ),
-          children: groups.pretrained.length ? groups.pretrained.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />,
+          children: groups.pretrained.length ? groups.pretrained.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('assets.empty.no_assets') || 'No assets'} />,
         },
         {
           key: 'output',
           label: (
             <Space>
-              <Tag>output</Tag>
-              <span>Outputs</span>
+              <Tag>{t('assets.kind.output') || 'output'}</Tag>
+              <span>{t('assets.table.outputs') || 'Outputs'}</span>
               <Tag>{groups.output.length}</Tag>
             </Space>
           ),
-          children: groups.output.length ? groups.output.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />,
+          children: groups.output.length ? groups.output.map(renderAssetRow) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('assets.empty.no_assets') || 'No assets'} />,
         },
       ]}
     />

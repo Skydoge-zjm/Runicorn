@@ -54,6 +54,7 @@ export default {
 
   'asset_detail.loading': '加载中...',
   'asset_detail.not_found': '本地索引中未找到该资产，请先在资产页面刷新索引。',
+  'asset_detail.invalid_id': '无效的资产 id',
 
   'asset_detail.fields.projects': '项目',
   'asset_detail.fields.last_used': '最近使用',
@@ -80,4 +81,32 @@ export default {
   'assets.code_preview.binary_or_unsupported': '二进制或不支持的文件类型',
   'assets.code_preview.truncated': '内容已截断（文件过大）',
   'assets.code_preview.zip_too_large': 'Zip 过大，浏览器无法预览',
+
+  'assets.code_viewer.search': '搜索（Ctrl+F）',
+  'assets.code_viewer.fold_all': '全部折叠',
+  'assets.code_viewer.unfold_all': '全部展开',
+  'assets.code_viewer.font_size': '字号',
+
+  'assets.code_search.find': '查找',
+  'assets.code_search.placeholder': '在文件中搜索',
+  'assets.code_search.previous': '上一个',
+  'assets.code_search.next': '下一个',
+  'assets.code_search.all': '全选',
+  'assets.code_search.close': '关闭',
+  'assets.code_search.match_case': '区分大小写',
+  'assets.code_search.whole_word': '全词匹配',
+  'assets.code_search.regexp': '正则',
+
+  'assets.tag.saved': '已收录',
+  'assets.tag.ref': '引用',
+  'assets.kind.output': '输出',
+
+  'assets.actions.copy_source': '复制来源',
+  'assets.actions.copy_archive': '复制归档路径',
+
+  'assets.config.args': '参数',
+  'assets.config.config_files': '配置文件',
+
+  'assets.empty.no_assets': '暂无资产',
+  'assets.errors.failed_to_load_assets': '加载资产失败',
 }

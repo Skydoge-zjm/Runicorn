@@ -54,6 +54,7 @@ export default {
 
   'asset_detail.loading': 'Loading...',
   'asset_detail.not_found': 'Not found in local index. Please refresh index on Assets page.',
+  'asset_detail.invalid_id': 'Invalid asset id',
 
   'asset_detail.fields.projects': 'Projects',
   'asset_detail.fields.last_used': 'Last used',
@@ -80,4 +81,32 @@ export default {
   'assets.code_preview.binary_or_unsupported': 'Binary or unsupported file type',
   'assets.code_preview.truncated': 'Truncated (file too large)',
   'assets.code_preview.zip_too_large': 'Zip too large to preview in browser',
+
+  'assets.code_viewer.search': 'Search (Ctrl+F)',
+  'assets.code_viewer.fold_all': 'Fold all',
+  'assets.code_viewer.unfold_all': 'Unfold all',
+  'assets.code_viewer.font_size': 'Font size',
+
+  'assets.code_search.find': 'Find',
+  'assets.code_search.placeholder': 'Search in file',
+  'assets.code_search.previous': 'Previous',
+  'assets.code_search.next': 'Next',
+  'assets.code_search.all': 'All',
+  'assets.code_search.close': 'Close',
+  'assets.code_search.match_case': 'Match case',
+  'assets.code_search.whole_word': 'Whole word',
+  'assets.code_search.regexp': 'RegExp',
+
+  'assets.tag.saved': 'saved',
+  'assets.tag.ref': 'ref',
+  'assets.kind.output': 'output',
+
+  'assets.actions.copy_source': 'Source',
+  'assets.actions.copy_archive': 'Archive',
+
+  'assets.config.args': 'args',
+  'assets.config.config_files': 'config_files',
+
+  'assets.empty.no_assets': 'No assets',
+  'assets.errors.failed_to_load_assets': 'Failed to load assets',
 }

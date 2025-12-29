@@ -152,7 +152,7 @@ export default function AssetDetailPage() {
       <Card>
         <Space direction="vertical">
           <Title level={4}>{t('asset_detail.title') || 'Asset Detail'}</Title>
-          <Text type="secondary">Invalid asset id</Text>
+          <Text type="secondary">{t('asset_detail.invalid_id') || 'Invalid asset id'}</Text>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')}>{t('asset_detail.back') || 'Back'}</Button>
         </Space>
       </Card>
@@ -178,7 +178,11 @@ export default function AssetDetailPage() {
             <Space direction="vertical" style={{ width: '100%' }}>
               <Space wrap>
                 <Tag>{repoRow.kind}</Tag>
-                {repoRow.saved ? <Tag color="green">saved</Tag> : <Tag>ref</Tag>}
+                {repoRow.saved ? (
+                  <Tag color="green">{t('assets.tag.saved') || 'saved'}</Tag>
+                ) : (
+                  <Tag>{t('assets.tag.ref') || 'ref'}</Tag>
+                )}
                 <Text strong>{repoRow.name}</Text>
               </Space>
 

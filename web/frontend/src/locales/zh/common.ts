@@ -1,13 +1,13 @@
 export default {
-  'app.title': 'Runicorn 查看器',
+  'app.title': 'Runicorn Viewer',
   'menu.runs': '运行',
-  'menu.experiments': '实验管理',
-  'menu.comparison': '对比分析',
+  'menu.experiments': '实验',
+  'menu.comparison': '对比',
   'menu.performance': '性能监控',
   'menu.remote': '远程',
   'tag.api_ok': 'API 正常',
   'tag.api_loading': 'API…',
-  'tag.api_down': 'API 不可用',
+  'tag.api_down': 'API 异常',
   
   'table.project': '项目',
   'table.name': '实验',
@@ -37,5 +37,8 @@ export default {
   'cancel': '取消',
   'confirm': '确认',
   'close': '关闭',
+
+  'common.copied': '已复制',
+  'common.copy_failed': '复制失败',
 }
 
