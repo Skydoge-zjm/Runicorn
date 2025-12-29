@@ -251,6 +251,10 @@ async def download_run_asset(
         if name.strip():
             download_name = name
 
+    # Check if this is a manifest file (CAS directory archive)
+    if target.is_file() and target.suffix == ".json" and "manifests" in str(target):
+        return await _download_from_manifest(target, storage_root, download_name)
+
     if target.is_file():
         final_name = download_name or target.name
         media_type, _ = mimetypes.guess_type(final_name)
@@ -289,6 +293,76 @@ async def download_run_asset(
     if not final_name.lower().endswith(".zip"):
         final_name = f"{final_name}.zip"
 
+    return FileResponse(
+        path=str(tmp_zip),
+        filename=final_name,
+        media_type="application/zip",
+        background=BackgroundTask(_cleanup),
+    )
+
+
+async def _download_from_manifest(
+    manifest_path: Path,
+    storage_root: Path,
+    download_name: Optional[str],
+) -> FileResponse:
+    """
+    Download a CAS-archived directory by generating zip from manifest + blobs.
+    """
+    import json
+    
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read manifest: {e}")
+    
+    files = manifest.get("files", {})
+    if not files:
+        raise HTTPException(status_code=404, detail="Manifest contains no files")
+    
+    blob_root = storage_root / "archive" / "blobs"
+    
+    # Create temp zip
+    tmp_fd, tmp_path = tempfile.mkstemp(prefix="runicorn_manifest_", suffix=".zip", text=False)
+    os.close(tmp_fd)
+    tmp_zip = Path(tmp_path)
+    
+    def _cleanup() -> None:
+        try:
+            if tmp_zip.exists():
+                tmp_zip.unlink()
+        except Exception:
+            pass
+    
+    try:
+        with zipfile.ZipFile(str(tmp_zip), "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for rel_path, entry in files.items():
+                sha256 = entry.get("sha256")
+                if not sha256:
+                    continue
+                blob_path = blob_root / sha256[:2] / sha256
+                if not blob_path.exists():
+                    logger.warning(f"Blob not found: {sha256} for {rel_path}")
+                    continue
+                zf.write(str(blob_path), arcname=rel_path)
+    except Exception as e:
+        _cleanup()
+        raise HTTPException(status_code=500, detail=f"Failed to create zip: {e}")
+    
+    # Determine filename
+    if download_name:
+        final_name = download_name
+    else:
+        # Use source_path from manifest or fingerprint
+        source_path = manifest.get("source_path", "")
+        if source_path:
+            final_name = Path(source_path).name
+        else:
+            final_name = manifest.get("fingerprint", "archive")[:16]
+    
+    if not final_name.lower().endswith(".zip"):
+        final_name = f"{final_name}.zip"
+    
     return FileResponse(
         path=str(tmp_zip),
         filename=final_name,
@@ -502,3 +576,181 @@ async def empty_recycle_bin(request: Request, payload: Dict[str, Any] = Body(...
         "permanently_deleted": deleted_count,
         "message": f"Permanently deleted {deleted_count} runs"
     }
+
+
+# -------------------- Permanent Delete with Assets --------------------
+
+@router.delete("/runs/{run_id}/permanent")
+async def permanent_delete_run(
+    run_id: str,
+    request: Request,
+    dry_run: bool = Query(False, description="Preview deletion without actually deleting"),
+) -> Dict[str, Any]:
+    """
+    Permanently delete a run and its orphaned assets.
+    
+    This will:
+    1. Delete the run directory
+    2. Delete any assets only referenced by this run (orphaned assets)
+    3. Keep assets that are shared with other runs
+    4. Clean up blob files for orphaned assets
+    
+    Args:
+        run_id: The run ID to delete
+        dry_run: If true, only preview what would be deleted
+        
+    Returns:
+        Deletion summary including orphaned vs kept assets
+    """
+    storage_root = get_storage_root(request)
+    
+    if not validate_run_id(run_id):
+        raise HTTPException(status_code=400, detail=f"Invalid run_id format: {run_id}")
+    
+    from ...assets.cleanup import delete_run_completely
+    
+    result = delete_run_completely(
+        run_id=run_id,
+        storage_root=storage_root,
+        dry_run=dry_run,
+    )
+    
+    if not result["success"] and result["errors"]:
+        raise HTTPException(status_code=500, detail=result["errors"][0])
+    
+    return result
+
+
+@router.post("/runs/permanent-delete")
+async def permanent_delete_runs_batch(
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+) -> Dict[str, Any]:
+    """
+    Permanently delete multiple runs and their orphaned assets.
+    
+    Args:
+        payload: Dictionary containing:
+            - run_ids: list of run IDs to delete
+            - dry_run: optional, preview without deleting
+        
+    Returns:
+        Summary of deletion results for each run
+    """
+    storage_root = get_storage_root(request)
+    run_ids = payload.get("run_ids", [])
+    dry_run = payload.get("dry_run", False)
+    
+    if not run_ids or not isinstance(run_ids, list):
+        raise HTTPException(
+            status_code=400,
+            detail="run_ids is required and must be a list"
+        )
+    
+    if not validate_batch_size(len(run_ids), max_size=50):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete more than 50 runs at once"
+        )
+    
+    for run_id in run_ids:
+        if not isinstance(run_id, str) or not validate_run_id(run_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid run_id format: {run_id}"
+            )
+    
+    from ...assets.cleanup import delete_run_completely
+    
+    results = {}
+    total_blobs_deleted = 0
+    total_bytes_freed = 0
+    successful_deletes = 0
+    
+    for run_id in run_ids:
+        result = delete_run_completely(
+            run_id=run_id,
+            storage_root=storage_root,
+            dry_run=dry_run,
+        )
+        results[run_id] = result
+        
+        if result["success"]:
+            successful_deletes += 1
+            total_blobs_deleted += result.get("blobs_deleted", 0)
+            total_bytes_freed += result.get("bytes_freed", 0)
+    
+    return {
+        "deleted_count": successful_deletes,
+        "total_runs": len(run_ids),
+        "total_blobs_deleted": total_blobs_deleted,
+        "total_bytes_freed": total_bytes_freed,
+        "dry_run": dry_run,
+        "results": results,
+    }
+
+
+@router.get("/runs/{run_id}/assets/refs")
+async def get_run_asset_refs(run_id: str, request: Request) -> Dict[str, Any]:
+    """
+    Get asset reference information for a run.
+    
+    Shows which assets are shared with other runs and which are unique to this run.
+    Useful for previewing what would be deleted.
+    
+    Returns:
+        Dict with orphaned_assets (unique to this run) and shared_assets
+    """
+    storage_root = get_storage_root(request)
+    
+    if not validate_run_id(run_id):
+        raise HTTPException(status_code=400, detail=f"Invalid run_id format: {run_id}")
+    
+    # Include deleted runs so we can preview assets before permanent deletion
+    entry = find_run_dir_by_id(storage_root, run_id, include_deleted=True)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    try:
+        from ...index import IndexDb
+        index_db = IndexDb(storage_root)
+        
+        assets = index_db.get_assets_for_run(run_id)
+        
+        orphaned = []
+        shared = []
+        
+        for asset in assets:
+            asset_id = asset["asset_id"]
+            ref_count = index_db.get_asset_ref_count(asset_id)
+            
+            asset_info = {
+                "asset_id": asset_id,
+                "asset_type": asset.get("asset_type"),
+                "name": asset.get("name"),
+                "fingerprint": asset.get("fingerprint"),
+                "role": asset.get("role"),
+                "ref_count": ref_count,
+            }
+            
+            if ref_count <= 1:
+                orphaned.append(asset_info)
+            else:
+                # Get other runs that reference this asset
+                other_runs = [r for r in index_db.get_runs_for_asset(asset_id) if r != run_id]
+                asset_info["other_runs"] = other_runs
+                shared.append(asset_info)
+        
+        index_db.close()
+        
+        return {
+            "run_id": run_id,
+            "orphaned_assets": orphaned,
+            "shared_assets": shared,
+            "orphaned_count": len(orphaned),
+            "shared_count": len(shared),
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get asset refs for {run_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

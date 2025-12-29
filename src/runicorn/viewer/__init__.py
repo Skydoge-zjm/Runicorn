@@ -30,6 +30,7 @@ from .api import (
     import_router,
     remote_router,
     system_router,
+    storage_router,
     ui_preferences_router,
 )
 
@@ -132,6 +133,7 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     app.include_router(projects_router, prefix="/api", tags=["projects"])
     app.include_router(gpu_router, prefix="/api", tags=["gpu"])
     app.include_router(system_router, prefix="/api", tags=["system"])
+    app.include_router(storage_router, prefix="/api", tags=["storage"])
     app.include_router(import_router, prefix="/api", tags=["import"])
     
     # Register UI preferences router

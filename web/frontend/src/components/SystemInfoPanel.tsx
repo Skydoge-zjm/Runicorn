@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Descriptions, Space, Button, Typography, Spin, message, Tag, Alert } from 'antd'
-import { CopyOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons'
-import { health, getConfig } from '../api'
+import { Card, Descriptions, Space, Button, Typography, Spin, message, Tag, Alert, Row, Col, Statistic, Progress, Collapse, Tooltip } from 'antd'
+import { CopyOutlined, ReloadOutlined, InfoCircleOutlined, DatabaseOutlined, FolderOutlined, FileOutlined, CloudServerOutlined } from '@ant-design/icons'
+import { health, getConfig, getStorageStats, StorageStats } from '../api'
 import { useTranslation } from 'react-i18next'
 
 const { Text, Title } = Typography
@@ -10,19 +10,22 @@ export default function SystemInfoPanel() {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [systemInfo, setSystemInfo] = useState<any>(null)
+  const [storageStats, setStorageStats] = useState<StorageStats | null>(null)
   
   const loadSystemInfo = async () => {
     setLoading(true)
     try {
-      const [healthData, configData] = await Promise.all([
+      const [healthData, configData, storageData] = await Promise.all([
         health(),
         getConfig(),
+        getStorageStats().catch(() => null),
       ])
       
       setSystemInfo({
         health: healthData,
         config: configData,
       })
+      setStorageStats(storageData)
     } catch (error) {
       console.error('Failed to load system info:', error)
       message.error('Failed to load system information')
@@ -173,6 +176,138 @@ Generated: ${new Date().toLocaleString()}
               {systemInfo.health.cache.size} / {systemInfo.health.cache.max_size}
             </Descriptions.Item>
           </Descriptions>
+        </Card>
+      )}
+      
+      {/* Storage Statistics */}
+      {storageStats && (
+        <Card 
+          size="small" 
+          title={
+            <Space>
+              <DatabaseOutlined />
+              <span>{t('storage.title') || 'Storage Usage'}</span>
+            </Space>
+          }
+        >
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            {/* Total */}
+            <div>
+              <Title level={4} style={{ margin: 0 }}>{storageStats.total.size_human}</Title>
+              <Text type="secondary">{t('storage.total') || 'Total Storage'}</Text>
+            </div>
+            
+            {/* Overview Stats */}
+            <Row gutter={16}>
+              <Col span={6}>
+                <Statistic 
+                  title={t('storage.projects') || 'Projects'} 
+                  value={storageStats.runs.projects_count}
+                  valueStyle={{ fontSize: 18 }}
+                />
+              </Col>
+              <Col span={6}>
+                <Statistic 
+                  title={t('storage.experiments') || 'Experiments'} 
+                  value={storageStats.runs.experiments_count}
+                  valueStyle={{ fontSize: 18 }}
+                />
+              </Col>
+              <Col span={6}>
+                <Statistic 
+                  title={t('storage.runs') || 'Runs'} 
+                  value={storageStats.runs.runs_count}
+                  valueStyle={{ fontSize: 18 }}
+                />
+              </Col>
+              <Col span={6}>
+                <Statistic 
+                  title={t('storage.blobs') || 'CAS Blobs'} 
+                  value={storageStats.archive.blobs.file_count}
+                  valueStyle={{ fontSize: 18 }}
+                />
+              </Col>
+            </Row>
+            
+            {/* Storage Breakdown */}
+            <div>
+              <Text strong style={{ marginBottom: 8, display: 'block' }}>
+                {t('storage.breakdown') || 'Storage Breakdown'}
+              </Text>
+              
+              {/* Run Data */}
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text>{t('storage.run_data') || 'Run Data'}</Text>
+                  <Text type="secondary">{storageStats.runs.size_human}</Text>
+                </div>
+                <Progress 
+                  percent={storageStats.total.size_bytes > 0 ? (storageStats.runs.size_bytes / storageStats.total.size_bytes) * 100 : 0} 
+                  showInfo={false} 
+                  strokeColor="#52c41a"
+                  size="small"
+                />
+              </div>
+              
+              {/* Archive */}
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text>{t('storage.archive') || 'Archive (CAS)'}</Text>
+                  <Text type="secondary">{storageStats.archive.size_human}</Text>
+                </div>
+                <Progress 
+                  percent={storageStats.total.size_bytes > 0 ? (storageStats.archive.size_bytes / storageStats.total.size_bytes) * 100 : 0} 
+                  showInfo={false} 
+                  strokeColor="#1890ff"
+                  size="small"
+                />
+              </div>
+              
+              {/* Index */}
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text>{t('storage.index_db') || 'Index Database'}</Text>
+                  <Text type="secondary">{storageStats.index.size_human}</Text>
+                </div>
+                <Progress 
+                  percent={storageStats.total.size_bytes > 0 ? (storageStats.index.size_bytes / storageStats.total.size_bytes) * 100 : 0} 
+                  showInfo={false} 
+                  strokeColor="#722ed1"
+                  size="small"
+                />
+              </div>
+            </div>
+            
+            {/* Archive Details */}
+            <Collapse 
+              ghost 
+              size="small"
+              items={[
+                {
+                  key: 'archive',
+                  label: (
+                    <Space>
+                      <Text>{t('storage.archive_details') || 'Archive Details'}</Text>
+                      <Text type="secondary">({storageStats.archive.size_human})</Text>
+                    </Space>
+                  ),
+                  children: (
+                    <Descriptions column={3} size="small">
+                      <Descriptions.Item label={t('storage.blobs') || 'Blobs'}>
+                        {storageStats.archive.blobs.size_human} ({storageStats.archive.blobs.file_count})
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('storage.manifests') || 'Manifests'}>
+                        {storageStats.archive.manifests.size_human} ({storageStats.archive.manifests.file_count})
+                      </Descriptions.Item>
+                      <Descriptions.Item label={t('storage.outputs') || 'Outputs'}>
+                        {storageStats.archive.outputs.size_human} ({storageStats.archive.outputs.file_count})
+                      </Descriptions.Item>
+                    </Descriptions>
+                  ),
+                },
+              ]}
+            />
+          </Space>
         </Card>
       )}
       

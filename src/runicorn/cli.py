@@ -77,6 +77,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_rate.add_argument("--whitelist-localhost", action="store_true", help="Whitelist localhost")
     p_rate.add_argument("--no-whitelist-localhost", action="store_true", help="Don't whitelist localhost")
 
+    # Delete run with assets subcommand
+    p_delete = sub.add_parser("delete", help="Permanently delete runs and their orphaned assets")
+    p_delete.add_argument("--storage", default=os.environ.get("RUNICORN_DIR") or None, help="Storage root directory")
+    p_delete.add_argument("--run-id", dest="run_ids", action="append", help="Run ID to delete (can specify multiple)")
+    p_delete.add_argument("--dry-run", action="store_true", help="Preview deletion without actually deleting")
+    p_delete.add_argument("--force", action="store_true", help="Skip confirmation prompt")
+
     args = parser.parse_args(argv)
 
     if args.cmd == "viewer":
@@ -549,9 +556,90 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return 1
             
         return 0
+
+    if args.cmd == "delete":
+        root = _default_storage_dir(getattr(args, "storage", None))
+        run_ids = getattr(args, "run_ids", None) or []
+        dry_run = getattr(args, "dry_run", False)
+        force = getattr(args, "force", False)
+        
+        if not run_ids:
+            print("Error: --run-id is required")
+            print("Usage: runicorn delete --run-id <run_id> [--run-id <run_id2>] [--dry-run] [--force]")
+            return 1
+        
+        from .assets.cleanup import delete_run_completely
+        
+        # Preview mode
+        if dry_run:
+            print("=" * 60)
+            print("DRY RUN - No files will be deleted")
+            print("=" * 60)
+        
+        total_blobs = 0
+        total_bytes = 0
+        
+        for run_id in run_ids:
+            print(f"\n{'[Preview] ' if dry_run else ''}Deleting run: {run_id}")
+            
+            result = delete_run_completely(
+                run_id=run_id,
+                storage_root=root,
+                dry_run=dry_run,
+            )
+            
+            if not result["success"]:
+                print(f"  ✗ Failed: {result['errors']}")
+                continue
+            
+            print(f"  Run directory: {'would be deleted' if dry_run else 'deleted'}")
+            
+            orphaned = result.get("orphaned_assets", [])
+            kept = result.get("kept_assets", [])
+            
+            if orphaned:
+                print(f"  Orphaned assets ({len(orphaned)}) - {'would be' if dry_run else ''} deleted:")
+                for a in orphaned:
+                    name = a.get('name') or (a.get('fingerprint') or '')[:16] or 'unknown'
+                    print(f"    - [{a.get('asset_type')}] {name}")
+            
+            if kept:
+                print(f"  Shared assets ({len(kept)}) - kept (referenced by other runs):")
+                for a in kept:
+                    name = a.get('name') or (a.get('fingerprint') or '')[:16] or 'unknown'
+                    print(f"    - [{a.get('asset_type')}] {name}")
+            
+            blobs = result.get("blobs_deleted", 0)
+            bytes_freed = result.get("bytes_freed", 0)
+            total_blobs += blobs
+            total_bytes += bytes_freed
+            
+            if blobs > 0:
+                print(f"  Blobs deleted: {blobs} ({_format_bytes(bytes_freed)})")
+        
+        print("\n" + "=" * 60)
+        if dry_run:
+            print(f"DRY RUN Summary: Would delete {len(run_ids)} run(s)")
+            print(f"  Blobs: {total_blobs}")
+            print(f"  Space: {_format_bytes(total_bytes)}")
+        else:
+            print(f"Deleted {len(run_ids)} run(s)")
+            print(f"  Blobs removed: {total_blobs}")
+            print(f"  Space freed: {_format_bytes(total_bytes)}")
+        
+        return 0
     
     parser.print_help()
     return 1
+
+
+def _format_bytes(size: int) -> str:
+    """Format bytes to human readable string."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} PB"
 
 
 if __name__ == "__main__":

@@ -49,6 +49,7 @@ web/frontend/*.tsbuildinfo
 .vscode/
 .cursor/
 .windsurf/
+.kiro/
 .DS_Store
 Thumbs.db
 

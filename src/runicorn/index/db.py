@@ -253,3 +253,163 @@ INSERT INTO assets(
         )
         self.link_run_asset(run_id=run_id, asset_id=asset_id, role=role, created_at=created_at)
         return asset_id
+
+    # -------------------- Query Methods --------------------
+
+    def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """Get run info by run_id."""
+        conn = self._connect()
+        row = conn.execute("SELECT * FROM runs WHERE run_id=?", (run_id,)).fetchone()
+        if row:
+            return dict(row)
+        return None
+
+    def get_assets_for_run(self, run_id: str) -> list[Dict[str, Any]]:
+        """
+        Get all assets associated with a run.
+        
+        Returns:
+            List of asset records with role info.
+        """
+        conn = self._connect()
+        rows = conn.execute(
+            """
+SELECT a.*, ra.role, ra.created_at as linked_at
+FROM assets a
+JOIN run_assets ra ON a.asset_id = ra.asset_id
+WHERE ra.run_id = ?
+""",
+            (run_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_runs_for_asset(self, asset_id: str) -> list[str]:
+        """
+        Get all run_ids that reference an asset.
+        
+        Returns:
+            List of run_ids.
+        """
+        conn = self._connect()
+        rows = conn.execute(
+            "SELECT run_id FROM run_assets WHERE asset_id = ?",
+            (asset_id,),
+        ).fetchall()
+        return [r["run_id"] for r in rows]
+
+    def get_asset_ref_count(self, asset_id: str) -> int:
+        """
+        Get the number of runs referencing an asset.
+        
+        Returns:
+            Reference count.
+        """
+        conn = self._connect()
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM run_assets WHERE asset_id = ?",
+            (asset_id,),
+        ).fetchone()
+        return int(row["cnt"]) if row else 0
+
+    def get_asset_by_fingerprint(self, asset_type: str, fingerprint: str) -> Optional[Dict[str, Any]]:
+        """Get asset by type and fingerprint."""
+        conn = self._connect()
+        row = conn.execute(
+            "SELECT * FROM assets WHERE asset_type=? AND fingerprint=?",
+            (asset_type, fingerprint),
+        ).fetchone()
+        if row:
+            return dict(row)
+        return None
+
+    # -------------------- Delete Methods --------------------
+
+    def unlink_run_asset(self, run_id: str, asset_id: str) -> None:
+        """Remove the link between a run and an asset."""
+        with self._lock:
+            conn = self._connect()
+            conn.execute(
+                "DELETE FROM run_assets WHERE run_id=? AND asset_id=?",
+                (run_id, asset_id),
+            )
+            conn.commit()
+
+    def delete_asset(self, asset_id: str) -> None:
+        """Delete an asset record (does not delete files)."""
+        with self._lock:
+            conn = self._connect()
+            # CASCADE will delete run_assets links
+            conn.execute("DELETE FROM assets WHERE asset_id=?", (asset_id,))
+            conn.commit()
+
+    def delete_run(self, run_id: str) -> None:
+        """Delete a run record (does not delete files)."""
+        with self._lock:
+            conn = self._connect()
+            # CASCADE will delete run_assets links
+            conn.execute("DELETE FROM runs WHERE run_id=?", (run_id,))
+            conn.commit()
+
+    def delete_run_with_orphan_assets(self, run_id: str) -> Dict[str, Any]:
+        """
+        Delete a run and any assets that become orphaned (no other runs reference them).
+        
+        This method:
+        1. Finds all assets linked to the run
+        2. For each asset, checks if other runs reference it
+        3. If no other runs reference it, marks it for deletion
+        4. Deletes the run record (CASCADE deletes run_assets links)
+        5. Deletes orphaned asset records
+        
+        Returns:
+            Dict with:
+            - orphaned_assets: list of asset records that were orphaned
+            - kept_assets: list of asset records still referenced by other runs
+        
+        Note: This does NOT delete actual files. Caller must handle file deletion.
+        """
+        with self._lock:
+            conn = self._connect()
+            
+            # Get all assets for this run
+            assets = conn.execute(
+                """
+SELECT a.*, ra.role
+FROM assets a
+JOIN run_assets ra ON a.asset_id = ra.asset_id
+WHERE ra.run_id = ?
+""",
+                (run_id,),
+            ).fetchall()
+            
+            orphaned = []
+            kept = []
+            
+            for asset in assets:
+                asset_id = asset["asset_id"]
+                # Count references excluding current run
+                row = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM run_assets WHERE asset_id=? AND run_id!=?",
+                    (asset_id, run_id),
+                ).fetchone()
+                ref_count = int(row["cnt"]) if row else 0
+                
+                asset_dict = dict(asset)
+                if ref_count == 0:
+                    orphaned.append(asset_dict)
+                else:
+                    kept.append(asset_dict)
+            
+            # Delete run (CASCADE deletes run_assets)
+            conn.execute("DELETE FROM runs WHERE run_id=?", (run_id,))
+            
+            # Delete orphaned assets
+            for asset in orphaned:
+                conn.execute("DELETE FROM assets WHERE asset_id=?", (asset["asset_id"],))
+            
+            conn.commit()
+            
+            return {
+                "orphaned_assets": orphaned,
+                "kept_assets": kept,
+            }

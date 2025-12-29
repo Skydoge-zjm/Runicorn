@@ -1,17 +1,58 @@
-import React, { useMemo, useState } from 'react'
-import { Card, Row, Col, Statistic, Tabs, Table, Space, Button, Tag, Input, Select, Switch, Typography } from 'antd'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import { Card, Row, Col, Statistic, Tabs, Table, Space, Button, Tag, Input, Select, Switch, Typography, Tooltip, Checkbox } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { ReloadOutlined, EyeOutlined } from '@ant-design/icons'
+import { ReloadOutlined, EyeOutlined, DatabaseOutlined, SyncOutlined } from '@ant-design/icons'
 import { useAssetsIndex } from '../hooks/useAssetsIndex'
+import { useSettings } from '../contexts/SettingsContext'
 import { formatRelativeTime } from '../utils/format'
+import { getStorageStats, StorageStats } from '../api'
 
 const { Text } = Typography
 
 export default function AssetsPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { index, loading, progress, stats, refresh } = useAssetsIndex()
+  const { settings, setSettings } = useSettings()
+  const { index, loading, stats, refresh } = useAssetsIndex()
+  const [storageStats, setStorageStats] = useState<StorageStats | null>(null)
+  const [refreshInterval, setRefreshInterval] = useState<number | null>(null)
+
+  // Use global settings for autoRefresh
+  const autoRefresh = settings.autoRefresh
+  const setAutoRefresh = useCallback((checked: boolean) => {
+    setSettings({ ...settings, autoRefresh: checked })
+  }, [settings, setSettings])
+
+  // Fetch storage stats
+  const fetchStorageStats = useCallback(() => {
+    getStorageStats().then(setStorageStats).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetchStorageStats()
+  }, [fetchStorageStats])
+
+  // Auto-refresh functionality
+  useEffect(() => {
+    if (autoRefresh) {
+      const interval = window.setInterval(() => {
+        refresh()
+        fetchStorageStats()
+      }, settings.refreshInterval * 1000)
+      setRefreshInterval(interval)
+    } else {
+      if (refreshInterval) {
+        window.clearInterval(refreshInterval)
+        setRefreshInterval(null)
+      }
+    }
+    return () => {
+      if (refreshInterval) {
+        window.clearInterval(refreshInterval)
+      }
+    }
+  }, [autoRefresh, settings.refreshInterval, refresh, fetchStorageStats])
 
   const [repoType, setRepoType] = useState<string>('all')
   const [onlyArchived, setOnlyArchived] = useState(false)
@@ -63,34 +104,48 @@ export default function AssetsPage() {
             </Space>
           </Col>
           <Col>
-            <Button icon={<ReloadOutlined />} onClick={() => refresh()} loading={loading}>
-              {t('assets.actions.refresh_index') || 'Refresh Index'}
-            </Button>
+            <Space>
+              <Button 
+                icon={autoRefresh ? <SyncOutlined spin /> : <ReloadOutlined />} 
+                onClick={() => { refresh(); fetchStorageStats() }} 
+                loading={loading}
+              >
+                {autoRefresh ? t('runs.refreshing') : (t('assets.actions.refresh_index') || 'Refresh Index')}
+              </Button>
+              <Checkbox
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+              >
+                {t('experiments.auto_refresh') || 'Auto-refresh'}
+              </Checkbox>
+            </Space>
           </Col>
         </Row>
 
         <Row gutter={16} style={{ marginTop: 16 }}>
-          <Col xs={24} sm={12} md={6}>
+          <Col xs={24} sm={12} md={4}>
             <Statistic title={t('experiments.total_runs') || 'Total Runs'} value={stats.totalRuns} />
           </Col>
-          <Col xs={24} sm={12} md={6}>
-            <Statistic title={t('assets.table.runs') || 'Runs'} value={stats.runsWithAssets} />
+          <Col xs={24} sm={12} md={5}>
+            <Statistic title={t('assets.table.runs') || 'Runs with Assets'} value={stats.runsWithAssets} />
           </Col>
-          <Col xs={24} sm={12} md={6}>
+          <Col xs={24} sm={12} md={5}>
             <Statistic title={t('assets.table.assets_total') || 'Assets'} value={stats.totalAssets} />
           </Col>
-          <Col xs={24} sm={12} md={6}>
+          <Col xs={24} sm={12} md={5}>
             <Statistic title={t('assets.table.archived') || 'Archived'} value={stats.archivedAssets} />
+          </Col>
+          <Col xs={24} sm={12} md={5}>
+            <Tooltip title={t('storage.archive_tooltip') || 'CAS blobs + manifests + outputs'}>
+              <Statistic 
+                title={t('storage.archive_size') || 'Archive Size'} 
+                value={storageStats?.archive.size_human || '-'}
+                prefix={<DatabaseOutlined />}
+              />
+            </Tooltip>
           </Col>
         </Row>
 
-        {loading && progress.total > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <Text type="secondary">
-              {t('assets.loading.index_progress', { done: progress.done, total: progress.total }) || `${progress.done}/${progress.total}`}
-            </Text>
-          </div>
-        )}
       </Card>
 
       <Card>

@@ -388,3 +388,127 @@ export async function emptyRecycleBin() {
   if (!res.ok) throw new Error(await res.text())
   return res.json() as Promise<{ permanently_deleted: number; message: string }>
 }
+
+// ----- Permanent delete with asset cleanup -----
+export interface AssetRefInfo {
+  asset_id: string
+  asset_type: string
+  name: string | null
+  fingerprint: string | null
+  role: string
+  ref_count: number
+  other_runs?: string[]
+}
+
+export interface RunAssetRefs {
+  run_id: string
+  orphaned_assets: AssetRefInfo[]
+  shared_assets: AssetRefInfo[]
+  orphaned_count: number
+  shared_count: number
+}
+
+export interface PermanentDeleteResult {
+  success: boolean
+  run_id: string
+  run_dir_deleted: boolean
+  orphaned_assets: Array<{
+    asset_id: string
+    asset_type: string
+    name: string | null
+    fingerprint: string | null
+    role: string
+  }>
+  kept_assets: Array<{
+    asset_id: string
+    asset_type: string
+    name: string | null
+    fingerprint: string | null
+    role: string
+  }>
+  blobs_deleted: number
+  manifests_deleted: number
+  bytes_freed: number
+  errors: string[]
+}
+
+export async function getRunAssetRefs(runId: string): Promise<RunAssetRefs> {
+  const res = await fetch(url(`/runs/${runId}/assets/refs`))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function permanentDeleteRun(runId: string, dryRun: boolean = false): Promise<PermanentDeleteResult> {
+  const res = await fetch(url(`/runs/${runId}/permanent?dry_run=${dryRun}`), {
+    method: 'DELETE',
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function permanentDeleteRunsBatch(runIds: string[], dryRun: boolean = false): Promise<{
+  deleted_count: number
+  total_runs: number
+  total_blobs_deleted: number
+  total_bytes_freed: number
+  dry_run: boolean
+  results: Record<string, PermanentDeleteResult>
+}> {
+  const res = await fetch(url('/runs/permanent-delete'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ run_ids: runIds, dry_run: dryRun })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+// ----- Storage stats -----
+export interface StorageStats {
+  storage_root: string
+  total: {
+    size_bytes: number
+    size_human: string
+  }
+  archive: {
+    size_bytes: number
+    size_human: string
+    blobs: {
+      size_bytes: number
+      size_human: string
+      file_count: number
+    }
+    manifests: {
+      size_bytes: number
+      size_human: string
+      file_count: number
+      by_category: Record<string, {
+        size_bytes: number
+        size_human: string
+        file_count: number
+      }>
+    }
+    outputs: {
+      size_bytes: number
+      size_human: string
+      file_count: number
+    }
+  }
+  runs: {
+    size_bytes: number
+    size_human: string
+    projects_count: number
+    experiments_count: number
+    runs_count: number
+  }
+  index: {
+    size_bytes: number
+    size_human: string
+  }
+}
+
+export async function getStorageStats(): Promise<StorageStats> {
+  const res = await fetch(url('/storage/stats'))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
