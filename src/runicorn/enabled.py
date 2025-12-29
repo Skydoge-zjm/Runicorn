@@ -119,12 +119,6 @@ class NoOpRun:
     ) -> None:
         return None
 
-    def log_artifact(self, artifact: Any) -> int:
-        return 0
-
-    def use_artifact(self, artifact_spec: str) -> Any:
-        return None
-
     def summary(self, update: Dict[str, Any]) -> None:
         return None
 

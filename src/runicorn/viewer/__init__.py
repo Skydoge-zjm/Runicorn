@@ -28,32 +28,9 @@ from .api import (
     projects_router,
     gpu_router,
     import_router,
-    artifacts_router,
+    remote_router,
     system_router,
-)
-
-# Import experiment-artifacts integration router
-from .api.experiment_artifacts import router as experiment_artifacts_router
-
-# Import model lifecycle router
-from .api.model_lifecycle import router as model_lifecycle_router
-
-# Import UI preferences router
-from .api.ui_preferences import router as ui_preferences_router
-
-# Import new unified remote API
-try:
-    from .api.remote import router as remote_router
-    HAS_REMOTE_API = True
-except ImportError as e:
-    remote_router = None
-    HAS_REMOTE_API = False
-    logger.warning(f"Remote API not available: {e}")
-
-# Import v2 APIs for modern storage
-from .api.v2 import (
-    v2_experiments_router,
-    v2_analytics_router
+    ui_preferences_router,
 )
 
 # Import version from main package
@@ -137,14 +114,6 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             except Exception as e:
                 logger.warning(f"Failed to close SSH connections: {e}")
         
-        # Close remote adapter if connected (legacy)
-        if hasattr(app.state, 'remote_adapter') and app.state.remote_adapter:
-            try:
-                app.state.remote_adapter.close()
-                logger.info("Closed remote storage adapter")
-            except Exception as e:
-                logger.warning(f"Failed to close remote adapter: {e}")
-        
         # Close storage service (CRITICAL for Windows desktop app)
         try:
             from .services.modern_storage import close_storage_service
@@ -165,42 +134,26 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     app.include_router(system_router, prefix="/api", tags=["system"])
     app.include_router(import_router, prefix="/api", tags=["import"])
     
-    # Register artifacts router
-    app.include_router(artifacts_router, prefix="/api", tags=["artifacts"])
-    
-    # Register experiment-artifacts integration router
-    app.include_router(experiment_artifacts_router, prefix="/api", tags=["experiment-artifacts"])
-    
-    # Register model lifecycle router
-    app.include_router(model_lifecycle_router, prefix="/api", tags=["model-lifecycle"])
-    
     # Register UI preferences router
     app.include_router(ui_preferences_router, prefix="/api", tags=["ui-preferences"])
     
-    # Register new unified remote API
-    if HAS_REMOTE_API and remote_router:
-        app.include_router(remote_router, prefix="/api", tags=["remote"])
-        logger.info("Remote API routes registered (Remote Viewer ready)")
-    
-    # Register v2 API routers (modern storage)
-    app.include_router(v2_experiments_router, prefix="/api/v2", tags=["v2-experiments"])
-    app.include_router(v2_analytics_router, prefix="/api/v2", tags=["v2-analytics"])
+    # Register unified remote API
+    app.include_router(remote_router, prefix="/api", tags=["remote"])
+    logger.info("Remote API routes registered (Remote Viewer ready)")
     
     # Store storage root and mode for access by routers
     app.state.storage_root = root
-    app.state.storage_mode = "local"  # Default to local mode
-    app.state.remote_adapter = None   # Legacy, will be removed
     
-    # Initialize Remote Viewer components (if available)
-    if HAS_REMOTE_API:
-        try:
-            from ..remote import SSHConnectionPool
-            from ..remote.viewer import RemoteViewerManager
-            app.state.connection_pool = SSHConnectionPool()
-            app.state.viewer_manager = RemoteViewerManager()
-            logger.info("Remote Viewer components initialized")
-        except ImportError as e:
-            logger.warning(f"Could not initialize Remote Viewer: {e}")
+    
+    # Initialize Remote Viewer components
+    try:
+        from ..remote import SSHConnectionPool
+        from ..remote.viewer import RemoteViewerManager
+        app.state.connection_pool = SSHConnectionPool()
+        app.state.viewer_manager = RemoteViewerManager()
+        logger.info("Remote Viewer components initialized")
+    except ImportError as e:
+        logger.warning(f"Could not initialize Remote Viewer: {e}")
     
     # Mount static frontend if available
     _mount_static_frontend(app)

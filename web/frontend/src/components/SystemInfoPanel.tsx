@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Card, Descriptions, Space, Button, Typography, Spin, message, Tag, Alert } from 'antd'
 import { CopyOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons'
-import { health, getConfig, getArtifactsStats } from '../api'
+import { health, getConfig } from '../api'
 import { useTranslation } from 'react-i18next'
 
 const { Text, Title } = Typography
@@ -14,16 +14,14 @@ export default function SystemInfoPanel() {
   const loadSystemInfo = async () => {
     setLoading(true)
     try {
-      const [healthData, configData, artifactsStats] = await Promise.all([
+      const [healthData, configData] = await Promise.all([
         health(),
         getConfig(),
-        getArtifactsStats().catch(() => ({ total_artifacts: 0 }))
       ])
       
       setSystemInfo({
         health: healthData,
         config: configData,
-        artifacts: artifactsStats
       })
     } catch (error) {
       console.error('Failed to load system info:', error)
@@ -66,12 +64,6 @@ Cache Statistics:
 - Hits: ${systemInfo.health.cache?.hits || 0}
 - Misses: ${systemInfo.health.cache?.misses || 0}
 - Size: ${systemInfo.health.cache?.size || 0}/${systemInfo.health.cache?.max_size || 0}
-
-Artifacts Statistics:
-- Total Artifacts: ${systemInfo.artifacts?.total_artifacts || 0}
-- Total Versions: ${systemInfo.artifacts?.total_versions || 0}
-- Deduplication: ${systemInfo.artifacts?.dedup_enabled ? 'Enabled' : 'Disabled'}
-- Space Saved: ${systemInfo.artifacts?.dedup_ratio ? (systemInfo.artifacts.dedup_ratio * 100).toFixed(1) + '%' : 'N/A'}
 
 Generated: ${new Date().toLocaleString()}
 `.trim()
@@ -180,32 +172,6 @@ Generated: ${new Date().toLocaleString()}
             <Descriptions.Item label={t('settings.system_info.cache_size')}>
               {systemInfo.health.cache.size} / {systemInfo.health.cache.max_size}
             </Descriptions.Item>
-          </Descriptions>
-        </Card>
-      )}
-      
-      {/* Artifacts Statistics */}
-      {systemInfo.artifacts && systemInfo.artifacts.total_artifacts > 0 && (
-        <Card size="small" title={t('settings.system_info.artifacts_stats')}>
-          <Descriptions column={2} size="small">
-            <Descriptions.Item label={t('settings.system_info.total_artifacts')}>
-              {systemInfo.artifacts.total_artifacts}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('settings.system_info.total_versions')}>
-              {systemInfo.artifacts.total_versions}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('settings.system_info.deduplication')}>
-              <Tag color={systemInfo.artifacts.dedup_enabled ? 'green' : 'default'}>
-                {systemInfo.artifacts.dedup_enabled ? 'Enabled' : 'Disabled'}
-              </Tag>
-            </Descriptions.Item>
-            {systemInfo.artifacts.dedup_enabled && systemInfo.artifacts.dedup_ratio && (
-              <Descriptions.Item label={t('settings.system_info.space_saved')}>
-                <Text type="success" strong>
-                  {(systemInfo.artifacts.dedup_ratio * 100).toFixed(1)}%
-                </Text>
-              </Descriptions.Item>
-            )}
           </Descriptions>
         </Card>
       )}

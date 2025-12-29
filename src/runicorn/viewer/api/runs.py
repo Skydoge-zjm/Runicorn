@@ -6,10 +6,17 @@ Handles CRUD operations for experiment runs, including soft delete and restore f
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
+import mimetypes
+import zipfile
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Request, Body
+from fastapi import APIRouter, HTTPException, Request, Body, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 from ..services.storage import (
     iter_all_runs, 
@@ -19,10 +26,10 @@ from ..services.storage import (
     is_run_deleted,
     soft_delete_run,
     restore_run,
-    get_storage_root
 )
 from .storage_utils import get_storage_root
 from ..utils.validation import validate_run_id, validate_batch_size
+from ..utils.helpers import is_within_directory
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -39,8 +46,29 @@ class RunListItem(BaseModel):
     best_metric_name: Optional[str] = None
     project: Optional[str] = None
     name: Optional[str] = None
-    artifacts_created_count: int = 0
-    artifacts_used_count: int = 0
+    assets_count: int = 0
+
+
+def _count_assets_from_assets_json(assets: Any) -> int:
+    if not isinstance(assets, dict):
+        return 0
+    n = 0
+    code = assets.get("code")
+    if isinstance(code, dict) and isinstance(code.get("snapshot"), dict):
+        n += 1
+    config = assets.get("config")
+    if isinstance(config, dict) and len(config) > 0:
+        n += 1
+    datasets = assets.get("datasets")
+    if isinstance(datasets, list):
+        n += len(datasets)
+    pretrained = assets.get("pretrained")
+    if isinstance(pretrained, list):
+        n += len(pretrained)
+    outputs = assets.get("outputs")
+    if isinstance(outputs, list):
+        n += len(outputs)
+    return int(n)
 
 
 @router.get("/runs", response_model=List[RunListItem])
@@ -94,23 +122,12 @@ async def list_runs(request: Request) -> List[RunListItem]:
             best_metric_value = summary.get("best_metric_value")
             best_metric_name = summary.get("best_metric_name")
         
-        # Count artifacts created
-        artifacts_created_count = 0
-        artifacts_created_path = run_dir / "artifacts_created.json"
-        if artifacts_created_path.exists():
+        assets_count = 0
+        assets_path = run_dir / "assets.json"
+        if assets_path.exists():
             try:
-                artifacts_data = read_json(artifacts_created_path) or {}
-                artifacts_created_count = len(artifacts_data.get("artifacts", []))
-            except Exception:
-                pass
-        
-        # Count artifacts used
-        artifacts_used_count = 0
-        artifacts_used_path = run_dir / "artifacts_used.json"
-        if artifacts_used_path.exists():
-            try:
-                artifacts_data = read_json(artifacts_used_path) or {}
-                artifacts_used_count = len(artifacts_data.get("artifacts", []))
+                assets = read_json(assets_path)
+                assets_count = _count_assets_from_assets_json(assets)
             except Exception:
                 pass
         
@@ -125,8 +142,7 @@ async def list_runs(request: Request) -> List[RunListItem]:
                 best_metric_name=best_metric_name,
                 project=project,
                 name=name,
-                artifacts_created_count=artifacts_created_count,
-                artifacts_used_count=artifacts_used_count,
+                assets_count=assets_count,
             )
         )
     
@@ -167,26 +183,17 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     # Get project and name
     project = (meta.get("project") if isinstance(meta, dict) else None) or entry.project
     name = (meta.get("name") if isinstance(meta, dict) else None) or entry.name
-    
-    # Count artifacts created
-    artifacts_created_count = 0
-    artifacts_created_path = run_dir / "artifacts_created.json"
-    if artifacts_created_path.exists():
+
+    assets: Any = {}
+    assets_count = 0
+    assets_path = run_dir / "assets.json"
+    if assets_path.exists():
         try:
-            artifacts_data = read_json(artifacts_created_path) or {}
-            artifacts_created_count = len(artifacts_data.get("artifacts", []))
+            assets = read_json(assets_path)
+            assets_count = _count_assets_from_assets_json(assets)
         except Exception:
-            pass
-    
-    # Count artifacts used
-    artifacts_used_count = 0
-    artifacts_used_path = run_dir / "artifacts_used.json"
-    if artifacts_used_path.exists():
-        try:
-            artifacts_data = read_json(artifacts_used_path) or {}
-            artifacts_used_count = len(artifacts_data.get("artifacts", []))
-        except Exception:
-            pass
+            assets = {}
+            assets_count = 0
     
     return {
         "id": run_id,
@@ -198,9 +205,96 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
         "logs": str(run_dir / "logs.txt"),
         "metrics": str(run_dir / "events.jsonl"),
         "metrics_step": str(run_dir / "events.jsonl"),
-        "artifacts_created_count": artifacts_created_count,
-        "artifacts_used_count": artifacts_used_count,
+        "assets": assets,
+        "assets_count": assets_count,
     }
+
+
+@router.get("/runs/{run_id}/assets")
+async def get_run_assets(run_id: str, request: Request) -> Dict[str, Any]:
+    storage_root = get_storage_root(request)
+    entry = find_run_dir_by_id(storage_root, run_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Run not found")
+    run_dir = entry.dir
+    assets_path = run_dir / "assets.json"
+    assets = read_json(assets_path) if assets_path.exists() else {}
+    return {
+        "run_id": run_id,
+        "assets": assets,
+        "assets_count": _count_assets_from_assets_json(assets),
+    }
+
+
+@router.get("/runs/{run_id}/assets/download")
+async def download_run_asset(
+    run_id: str,
+    request: Request,
+    path: str = Query(..., description="Absolute file/directory path under storage_root"),
+    filename: Optional[str] = Query(None, description="Optional download filename override"),
+) -> FileResponse:
+    storage_root = get_storage_root(request)
+    entry = find_run_dir_by_id(storage_root, run_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    target = Path(path)
+    if not is_within_directory(storage_root, target):
+        raise HTTPException(status_code=403, detail="Unsafe path")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    download_name: Optional[str] = None
+    if filename is not None:
+        name = os.path.basename(filename)
+        name = name.replace("\\", "_").replace("/", "_")
+        if name.strip():
+            download_name = name
+
+    if target.is_file():
+        final_name = download_name or target.name
+        media_type, _ = mimetypes.guess_type(final_name)
+        return FileResponse(path=str(target), filename=final_name, media_type=media_type or "application/octet-stream")
+
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="Unsupported target")
+
+    tmp_fd, tmp_path = tempfile.mkstemp(prefix="runicorn_asset_", suffix=".zip", text=False)
+    os.close(tmp_fd)
+    tmp_zip = Path(tmp_path)
+
+    def _cleanup() -> None:
+        try:
+            if tmp_zip.exists():
+                tmp_zip.unlink()
+        except Exception:
+            pass
+
+    try:
+        with zipfile.ZipFile(str(tmp_zip), "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for dirpath, _, filenames in os.walk(target):
+                dp = Path(dirpath)
+                for fn in filenames:
+                    fp = dp / fn
+                    try:
+                        rel = fp.relative_to(target).as_posix()
+                    except Exception:
+                        rel = fp.name
+                    zf.write(str(fp), arcname=rel)
+    except Exception:
+        _cleanup()
+        raise
+
+    final_name = download_name or f"{target.name}.zip"
+    if not final_name.lower().endswith(".zip"):
+        final_name = f"{final_name}.zip"
+
+    return FileResponse(
+        path=str(tmp_zip),
+        filename=final_name,
+        media_type="application/zip",
+        background=BackgroundTask(_cleanup),
+    )
 
 
 @router.post("/runs/soft-delete")

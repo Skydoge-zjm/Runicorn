@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { getRunDetail, getStepMetrics, getGpuTelemetry, listRunsByName, listNames, listProjects } from '../api'
 import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
-import RunArtifacts from '../components/RunArtifacts'
+import RunAssets from '../components/RunAssets'
 import { RunDetailSkeleton } from '../components/LoadingSkeleton'
 import FancyMetricCard from '../components/fancy/FancyMetricCard'
 import CircularProgress from '../components/fancy/CircularProgress'
@@ -102,7 +102,7 @@ export default function RunDetailPage() {
       if (showLoading) setDetailLoading(false)
     }
   }
-  
+
   const loadStepMetrics = async (showLoading = true) => {
     if (showLoading) setMetricsLoading(true)
     try {
@@ -424,8 +424,8 @@ export default function RunDetailPage() {
           </Col>
           <Col xs={24} sm={12} md={8}>
              <Statistic 
-              title={t('run.stats.artifacts') || "Artifacts"} 
-              value={(detail?.artifacts_created_count || 0) + (detail?.artifacts_used_count || 0)} 
+              title={t('run.stats.assets') || "Assets"} 
+              value={(detail?.assets_count || 0)} 
               prefix={<RocketOutlined />} 
             />
           </Col>
@@ -703,19 +703,16 @@ export default function RunDetailPage() {
         )}
       </Card>
 
-      {/* 关联的模型与数据集 - 只在有artifacts时显示 */}
-      {(detail?.artifacts_created_count > 0 || detail?.artifacts_used_count > 0) && (
-        <Card 
-          title={
-            <Space>
-              <RocketOutlined /> 
-              {t('run.artifacts.title')}
-            </Space>
-          }
-        >
-          <RunArtifacts runId={id} />
-        </Card>
-      )}
+      <Card 
+        title={
+          <Space>
+            <RocketOutlined /> 
+            {t('run.assets.title') || 'Assets'}
+          </Space>
+        }
+      >
+        <RunAssets runId={id} />
+      </Card>
 
       {/* 实时日志 */}
       <Card 

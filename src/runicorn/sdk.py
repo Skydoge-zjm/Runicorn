@@ -17,12 +17,12 @@ from filelock import FileLock
 from .config import get_user_root_dir
 from .enabled import NoOpRun, is_enabled
 from .workspace import get_workspace_root
-from .assets_v2.assets_json import ensure_assets_file, read_assets, write_assets_atomic
-from .assets_v2.archive import archive_dir, archive_file
-from .assets_v2.fingerprint import dir_stat_fingerprint, stat_fingerprint
-from .assets_v2.snapshot import snapshot_workspace
-from .assets_v2.outputs_scan import scan_outputs_once
-from .index_v2 import IndexDb
+from .assets.assets_json import ensure_assets_file, read_assets, update_assets_atomic
+from .assets.archive import archive_dir, archive_file
+from .assets.fingerprint import dir_stat_fingerprint, stat_fingerprint
+from .assets.snapshot import snapshot_workspace
+from .assets.outputs_scan import scan_outputs_once
+from .index import IndexDb
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -54,18 +54,6 @@ try:
 except ImportError:
     EnvironmentCapture = None
     HAS_ENV_CAPTURE = False
-
-# Optional: Import artifacts system
-try:
-    from .artifacts import Artifact, ArtifactStorage, LineageTracker, create_artifact_storage
-    HAS_ARTIFACTS = True
-    logger.info("Artifacts system available")
-except ImportError as e:
-    logger.debug(f"Artifacts system not available: {e}")
-    Artifact = None
-    ArtifactStorage = None
-    LineageTracker = None
-    HAS_ARTIFACTS = False
 
 # Optional imports for image handling
 try:
@@ -220,14 +208,6 @@ class Run:
         if HAS_MONITORING:
             self.monitor = MetricMonitor()
             self.anomaly_detector = AnomalyDetector()
-        
-        # Optional artifacts
-        self.artifact_storage = None
-        if HAS_ARTIFACTS:
-            try:
-                self.artifact_storage = create_artifact_storage(self.storage_root)
-            except Exception as e:
-                logger.warning(f"Failed to initialize artifact storage: {e}")
 
         meta = RunMeta(
             id=self.id,
@@ -267,19 +247,22 @@ class Run:
             zip_path = self.run_dir / "code_snapshot.zip"
             snap = snapshot_workspace(ws_root, zip_path, force_snapshot=force_snapshot)
             archived = archive_file(zip_path, self.storage_root / "archive", category="code")
-            assets = read_assets(self._assets_path)
-            assets["code"] = {
-                "snapshot": {
-                    "saved": True,
-                    "workspace_root": snap.get("workspace_root"),
-                    "format": "zip",
-                    "created_at": int(_now_ts()),
-                    "archive_path": archived.get("archive_path"),
-                    "fingerprint_kind": archived.get("fingerprint_kind"),
-                    "fingerprint": archived.get("fingerprint"),
+
+            def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
+                a["code"] = {
+                    "snapshot": {
+                        "saved": True,
+                        "workspace_root": snap.get("workspace_root"),
+                        "format": "zip",
+                        "created_at": int(_now_ts()),
+                        "archive_path": archived.get("archive_path"),
+                        "fingerprint_kind": archived.get("fingerprint_kind"),
+                        "fingerprint": archived.get("fingerprint"),
+                    }
                 }
-            }
-            write_assets_atomic(self._assets_path, self._assets_lock, assets)
+                return a
+
+            update_assets_atomic(self._assets_path, self._assets_lock, _upd)
 
             if self._index_db is not None:
                 try:
@@ -605,16 +588,22 @@ class Run:
         extra: Optional[Dict[str, Any]] = None,
         config_files: Optional[List[Union[str, Path]]] = None,
     ) -> None:
-        assets = read_assets(self._assets_path)
-        cfg: Dict[str, Any] = dict(assets.get("config") or {})
-        if args is not None:
-            cfg["args"] = args if isinstance(args, dict) else vars(args)
-        if extra is not None:
-            cfg["extra"] = extra
-        if config_files is not None:
-            cfg["config_files"] = [str(Path(p)) for p in config_files]
-        assets["config"] = cfg
-        write_assets_atomic(self._assets_path, self._assets_lock, assets)
+        cfg_holder: Dict[str, Any] = {}
+
+        def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
+            cfg: Dict[str, Any] = dict((a.get("config") or {}))
+            if args is not None:
+                cfg["args"] = args if isinstance(args, dict) else vars(args)
+            if extra is not None:
+                cfg["extra"] = extra
+            if config_files is not None:
+                cfg["config_files"] = [str(Path(p)) for p in config_files]
+            a["config"] = cfg
+            cfg_holder.clear()
+            cfg_holder.update(cfg)
+            return a
+
+        update_assets_atomic(self._assets_path, self._assets_lock, _upd)
 
         if self._index_db is not None:
             try:
@@ -629,7 +618,7 @@ class Run:
                     fingerprint_kind=None,
                     fingerprint=None,
                     created_at=_now_ts(),
-                    metadata=cfg,
+                    metadata=cfg_holder,
                 )
             except Exception:
                 pass
@@ -682,10 +671,12 @@ class Run:
         if archived:
             entry.update(archived)
 
-        assets = read_assets(self._assets_path)
-        assets.setdefault("datasets", [])
-        assets["datasets"].append(entry)
-        write_assets_atomic(self._assets_path, self._assets_lock, assets)
+        def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
+            a.setdefault("datasets", [])
+            a["datasets"].append(entry)
+            return a
+
+        update_assets_atomic(self._assets_path, self._assets_lock, _upd)
 
         if self._index_db is not None:
             try:
@@ -755,10 +746,12 @@ class Run:
         if archived:
             entry.update(archived)
 
-        assets = read_assets(self._assets_path)
-        assets.setdefault("pretrained", [])
-        assets["pretrained"].append(entry)
-        write_assets_atomic(self._assets_path, self._assets_lock, assets)
+        def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
+            a.setdefault("pretrained", [])
+            a["pretrained"].append(entry)
+            return a
+
+        update_assets_atomic(self._assets_path, self._assets_lock, _upd)
 
         if self._index_db is not None:
             try:
@@ -868,207 +861,6 @@ class Run:
                 except Exception as e:
                     logger.debug(f"Failed to update best metric in modern storage: {e}")
     
-    def log_artifact(self, artifact: 'Artifact') -> int:
-        """
-        Log (save) an artifact with version control.
-        
-        Args:
-            artifact: Artifact object to log
-            
-        Returns:
-            Version number assigned to this artifact
-            
-        Raises:
-            RuntimeError: If artifacts system is not available
-            
-        Example:
-            artifact = rn.Artifact("my-model", type="model")
-            artifact.add_file("model.pth")
-            artifact.add_metadata({"accuracy": 0.95})
-            version = run.log_artifact(artifact)
-        """
-        if not HAS_ARTIFACTS or not self.artifact_storage:
-            raise RuntimeError(
-                "Artifacts system is not available. "
-                "Make sure runicorn.artifacts module is properly installed."
-            )
-        
-        # Save artifact
-        version = self.artifact_storage.save_artifact(
-            artifact=artifact,
-            run_id=self.id,
-            staged_files=artifact._staged_files,
-            staged_references=artifact._staged_references,
-            user=None  # TODO: Add user tracking
-        )
-        
-        # Update artifact object
-        artifact._version = version
-        artifact._storage = self.artifact_storage
-        artifact._is_loaded = True
-        
-        # Record artifact creation in run metadata
-        artifacts_created_path = self.run_dir / "artifacts_created.json"
-        
-        try:
-            if artifacts_created_path.exists():
-                try:
-                    created = json.loads(artifacts_created_path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, IOError) as e:
-                    logger.warning(f"Failed to read artifacts_created.json, starting fresh: {e}")
-                    created = {"artifacts": []}
-            else:
-                created = {"artifacts": []}
-            
-            # Calculate size safely (files may have been moved/deleted)
-            total_size = 0
-            for source_path, _ in artifact._staged_files:
-                try:
-                    if source_path.exists():
-                        total_size += source_path.stat().st_size
-                except Exception:
-                    pass  # File may have been deleted after staging
-            
-            created["artifacts"].append({
-                "name": artifact.name,
-                "type": artifact.type,
-                "version": version,
-                "created_at": time.time(),
-                "size_bytes": total_size,
-                "num_files": len(artifact._staged_files),
-                "num_references": len(artifact._staged_references)
-            })
-            
-            # Atomic write
-            self._write_json_atomic(artifacts_created_path, created)
-            
-        except Exception as e:
-            logger.warning(f"Failed to record artifact creation: {e}")
-            # Don't fail the whole operation if recording fails
-        
-        logger.info(f"Logged artifact {artifact.name}:v{version}")
-        return version
-    
-    def use_artifact(self, artifact_spec: str) -> 'Artifact':
-        """
-        Use (load) an artifact by name and version.
-        
-        Args:
-            artifact_spec: Artifact specification in format "name:version" or "name:alias"
-                         Examples: "my-model:v3", "my-model:latest", "dataset:production"
-            
-        Returns:
-            Artifact object with loaded metadata
-            
-        Raises:
-            RuntimeError: If artifacts system is not available
-            FileNotFoundError: If artifact not found
-            ValueError: If artifact_spec format is invalid
-            
-        Example:
-            artifact = run.use_artifact("my-model:latest")
-            model_path = artifact.download()
-        """
-        if not HAS_ARTIFACTS or not self.artifact_storage:
-            raise RuntimeError(
-                "Artifacts system is not available. "
-                "Make sure runicorn.artifacts module is properly installed."
-            )
-        
-        # Parse artifact spec
-        if ":" not in artifact_spec:
-            raise ValueError(
-                f"Artifact spec must be in format 'name:version' or 'name:alias', got: {artifact_spec}"
-            )
-        
-        name, version_or_alias = artifact_spec.split(":", 1)
-        
-        # Determine type by searching
-        artifact_type = None
-        for type_name in ["model", "dataset", "config", "code", "custom"]:
-            artifact_dir = self.artifact_storage.artifacts_root / type_name / name
-            if artifact_dir.exists():
-                artifact_type = type_name
-                break
-        
-        if not artifact_type:
-            raise FileNotFoundError(f"Artifact not found: {name}")
-        
-        # Determine version number
-        if version_or_alias.lower().startswith("v"):
-            # Direct version number (case-insensitive)
-            try:
-                version = int(version_or_alias[1:])
-                if version <= 0:
-                    raise ValueError(f"Invalid version number: {version}")
-            except (ValueError, IndexError) as e:
-                raise ValueError(f"Invalid version format: {version_or_alias}") from e
-        else:
-            # Alias (e.g., "latest", "production")
-            index = self.artifact_storage._load_index(name, artifact_type)
-            version = index.get_version_by_alias(version_or_alias)
-            
-            if version is None:
-                available_aliases = list(index.aliases.keys())
-                raise ValueError(
-                    f"Alias not found: {version_or_alias} for artifact {name}. "
-                    f"Available aliases: {available_aliases}"
-                )
-        
-        # Load artifact
-        metadata, manifest = self.artifact_storage.load_artifact(name, artifact_type, version)
-        
-        # Create artifact object
-        artifact = Artifact(
-            name=name,
-            type=artifact_type,
-            description=metadata.description,
-            metadata=metadata.metadata
-        )
-        artifact._version = version
-        artifact._storage = self.artifact_storage
-        artifact._manifest = manifest
-        artifact._artifact_metadata = metadata
-        artifact._is_loaded = True
-        
-        # Record artifact usage in run metadata
-        artifacts_used_path = self.run_dir / "artifacts_used.json"
-        
-        try:
-            if artifacts_used_path.exists():
-                try:
-                    used = json.loads(artifacts_used_path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, IOError) as e:
-                    logger.warning(f"Failed to read artifacts_used.json, starting fresh: {e}")
-                    used = {"artifacts": []}
-            else:
-                used = {"artifacts": []}
-            
-            # Check if already recorded (avoid duplicates)
-            already_recorded = any(
-                a["name"] == name and a["version"] == version
-                for a in used.get("artifacts", [])
-            )
-            
-            if not already_recorded:
-                used["artifacts"].append({
-                    "name": name,
-                    "type": artifact_type,
-                    "version": version,
-                    "used_at": time.time(),
-                    "size_bytes": metadata.size_bytes,
-                    "num_files": metadata.num_files
-                })
-                
-                # Atomic write
-                self._write_json_atomic(artifacts_used_path, used)
-        except Exception as e:
-            logger.warning(f"Failed to record artifact usage: {e}")
-            # Don't fail the whole operation
-        
-        logger.info(f"Using artifact {name}:v{version}")
-        return artifact
-    
     def finish(self, status: str = "finished") -> None:
         """Mark the run as finished and ensure all data is written."""
         self.stop_outputs_watch()
@@ -1145,14 +937,6 @@ class Run:
             except Exception as e:
                 logger.debug(f"Failed to close storage backend: {e}")
         
-        # Close artifact storage (if initialized)
-        if self.artifact_storage and hasattr(self.artifact_storage, 'close'):
-            try:
-                # ArtifactStorage doesn't have close, but check anyway
-                pass
-            except Exception:
-                pass
-            
         # Force flush to ensure data is written to disk
         try:
             import os
@@ -1177,53 +961,6 @@ class Run:
         os.makedirs(path.parent, exist_ok=True)
         path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
     
-    @staticmethod
-    def _write_json_atomic(path: Path, obj: Dict[str, Any]) -> None:
-        """
-        Write JSON file atomically using temp-then-rename pattern.
-        
-        This prevents corruption if process crashes during write.
-        Windows-compatible version.
-        """
-        os.makedirs(path.parent, exist_ok=True)
-        
-        import tempfile
-        
-        # Create temp file (Windows: must close fd before using path)
-        temp_fd, temp_path = tempfile.mkstemp(
-            dir=path.parent,
-            prefix=f".{path.stem}_",
-            suffix=".json.tmp",
-            text=False  # Binary mode for Windows
-        )
-        
-        try:
-            # Close fd immediately (Windows compatibility)
-            os.close(temp_fd)
-            
-            # Write to temp file
-            with open(temp_path, 'w', encoding='utf-8') as f:
-                json.dump(obj, f, ensure_ascii=False, indent=2)
-            
-            # On Windows, must remove target first
-            if os.name == 'nt' and path.exists():
-                try:
-                    path.unlink()
-                except Exception:
-                    pass
-            
-            # Atomic rename
-            Path(temp_path).replace(path)
-            
-        except Exception:
-            # Clean up temp file
-            try:
-                if Path(temp_path).exists():
-                    Path(temp_path).unlink()
-            except Exception:
-                pass
-            raise
- 
     @staticmethod
     def _append_jsonl(path: Path, obj: Dict[str, Any], lock: FileLock) -> None:
         os.makedirs(path.parent, exist_ok=True)

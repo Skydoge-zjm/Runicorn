@@ -28,7 +28,8 @@ def is_within_directory(base: Path, target: Path) -> bool:
     try:
         base_resolved = base.resolve()
         target_resolved = target.resolve()
-        return str(target_resolved).startswith(str(base_resolved))
+        target_resolved.relative_to(base_resolved)
+        return True
     except Exception as e:
         logger.debug(f"Path resolution failed: {e}")
         return False

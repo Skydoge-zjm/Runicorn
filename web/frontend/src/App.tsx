@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { SettingOutlined, CloudSyncOutlined, ExperimentOutlined, DatabaseOutlined, CloudServerOutlined, DashboardOutlined } from '@ant-design/icons'
+import { SettingOutlined, ExperimentOutlined, CloudServerOutlined, DashboardOutlined, AppstoreOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
 import ExperimentPage from './pages/ExperimentPage'
-import ArtifactsPage from './pages/ArtifactsPage'
-import ArtifactDetailPage from './pages/ArtifactDetailPage'
+import AssetsPage from './pages/AssetsPage'
+import AssetDetailPage from './pages/AssetDetailPage'
 import RemoteViewerPage from './pages/RemoteViewerPage'
 import PerformanceMonitorPage from './pages/PerformanceMonitorPage'
 import { PageTransition } from './components/animations/PageTransition'
@@ -21,7 +21,7 @@ export default function App() {
   const getSelectedKey = () => {
     if (location.pathname.startsWith('/performance')) return 'performance'
     if (location.pathname.startsWith('/remote')) return 'remote'
-    if (location.pathname.startsWith('/artifacts')) return 'artifacts'
+    if (location.pathname.startsWith('/assets')) return 'assets'
     if (location.pathname.startsWith('/runs/')) return 'experiments'  // Detail page also under experiments
     return 'experiments'  // Default to experiments
   }
@@ -209,7 +209,7 @@ export default function App() {
               selectedKeys={selected}
               items={[
                 { key: 'experiments', icon: <ExperimentOutlined />, label: <Link to="/">{t('menu.experiments')}</Link> },
-                { key: 'artifacts', icon: <DatabaseOutlined />, label: <Link to="/artifacts">{t('menu.artifacts')}</Link> },
+                { key: 'assets', icon: <AppstoreOutlined />, label: <Link to="/assets">{t('menu.assets')}</Link> },
                 { key: 'performance', icon: <DashboardOutlined />, label: <Link to="/performance">{t('menu.performance')}</Link> },
                 { key: 'remote', icon: <CloudServerOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
               ]}
@@ -235,8 +235,8 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<ExperimentPage />} />
                   <Route path="/runs/:id" element={<RunDetailPage />} />
-                  <Route path="/artifacts" element={<ArtifactsPage />} />
-                  <Route path="/artifacts/:name" element={<ArtifactDetailPage />} />
+                  <Route path="/assets" element={<AssetsPage />} />
+                  <Route path="/assets/:id" element={<AssetDetailPage />} />
                   <Route path="/performance" element={<PerformanceMonitorPage />} />
                   <Route path="/remote" element={<RemoteViewerPage />} />
                 </Routes>

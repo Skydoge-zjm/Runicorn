@@ -4,7 +4,7 @@ from .sdk import Run, init
 from .registry import get_config
 from .enabled import enabled, is_enabled, reset_enabled, set_enabled
 from .rnconfig import get_effective_rnconfig
-from .assets_v2 import snapshot_workspace
+from .assets import snapshot_workspace
 
 # Version information
 try:
@@ -35,13 +35,6 @@ __all__ = [
     "get_effective_rnconfig",
     "__version__",
 ]
-
-# Optional artifacts import
-try:
-    from .artifacts import Artifact, ArtifactType
-    __all__.extend(["Artifact", "ArtifactType"])
-except ImportError:
-    pass
 
 # Optional imports for extended functionality
 try:

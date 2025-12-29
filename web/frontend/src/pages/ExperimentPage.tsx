@@ -37,8 +37,7 @@ interface RunData {
   pid?: number
   best_metric_value?: number
   best_metric_name?: string
-  artifacts_created_count?: number
-  artifacts_used_count?: number
+  assets_count?: number
 }
 
 interface FilterState {
@@ -84,7 +83,7 @@ const ExperimentPage: React.FC = () => {
     status: 100,
     created: 210,         // 增加宽度以显示完整日期时间 (2025/10/09 08:26:32)
     best_metric: 200,
-    artifacts_created: 120,
+    assets: 120,
     actions: 120,
   }
   
@@ -159,8 +158,7 @@ const ExperimentPage: React.FC = () => {
           pid: r.pid,
           best_metric_value: r.best_metric_value,
           best_metric_name: r.best_metric_name,
-          artifacts_created_count: r.artifacts_created_count || 0,
-          artifacts_used_count: r.artifacts_used_count || 0
+          assets_count: r.assets_count || 0
         }
       })
       
@@ -549,20 +547,20 @@ const ExperimentPage: React.FC = () => {
       },
     },
     {
-      title: t('experiments.artifacts_created') || 'Artifacts',
-      key: 'artifacts_created',
-      width: columnWidths.artifacts_created,
+      title: t('experiments.assets') || 'Assets',
+      key: 'assets',
+      width: columnWidths.assets,
       onHeaderCell: () => ({
-        width: columnWidths.artifacts_created,
-        onResize: handleResize('artifacts_created'),
+        width: columnWidths.assets,
+        onResize: handleResize('assets'),
       }),
       render: (_, record) => {
-        const count = record.artifacts_created_count || 0
+        const count = record.assets_count || 0
         if (count === 0) {
           return <span style={{ color: '#999' }}>-</span>
         }
         return (
-          <Tooltip title={t('experiments.artifacts_created_tip', { count })}>
+          <Tooltip title={t('experiments.assets_tip', { count })}>
             <Badge count={count} style={{ backgroundColor: '#52c41a' }} />
           </Tooltip>
         )
