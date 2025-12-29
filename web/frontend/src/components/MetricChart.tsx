@@ -39,6 +39,9 @@ export interface MetricChartProps {
   height?: number | string
   persistKey?: string
   group?: string
+  showLegend?: boolean  // Default true, set false for inline compare mode
+  colors?: string[]     // Custom colors for each run
+  legendSelected?: Record<string, boolean>  // Control series visibility via legend
 }
 
 /** EMA smoothing function */
@@ -62,7 +65,7 @@ function getBestType(key: string): 'max' | 'min' | undefined {
 }
 
 const MetricChart = memo(function MetricChart({ 
-  runs, xKey, yKey, title, height, persistKey, group 
+  runs, xKey, yKey, title, height, persistKey, group, showLegend = true, colors, legendSelected 
 }: MetricChartProps) {
   const { t } = useTranslation()
   const { settings } = useSettings()
@@ -164,8 +167,18 @@ const MetricChart = memo(function MetricChart({
       const nnz = smoothedY.filter(v => v != null).length
       const isSparse = nnz <= 12 || nnz <= Math.ceil(rows.length * 0.2)
       
+      // Get color for this run from colors array
+      const seriesColor = colors?.[runIndex]
+      
+      // For single run: use yKey as name
+      // For multi-run with legendSelected: use run.id for uniqueness (legendSelected uses runId as key)
+      // For multi-run without legendSelected: use label for display
+      const seriesName = isSingleRun 
+        ? yKey 
+        : (legendSelected ? run.id : (run.label || run.id))
+      
       const s: any = {
-        name: isSingleRun ? yKey : (run.label || run.id),
+        name: seriesName,
         type: 'line',
         smooth: 0.2,
         showSymbol: isSparse,
@@ -174,6 +187,11 @@ const MetricChart = memo(function MetricChart({
         sampling: 'lttb',
         large: true,
         data,
+        // Explicitly set color for this series to ensure consistency
+        ...(seriesColor && {
+          lineStyle: { color: seriesColor },
+          itemStyle: { color: seriesColor },
+        }),
       }
       
       // Single run extras: best point marker and stage separators
@@ -223,24 +241,46 @@ const MetricChart = memo(function MetricChart({
         : xRaw
     }
     
-    const legendData = isSingleRun ? [yKey] : runs.map(r => r.label || r.id)
+    // Legend data should match series names
+    const legendData = isSingleRun 
+      ? [yKey] 
+      : (legendSelected ? runs.map(r => r.id) : runs.map(r => r.label || r.id))
+    
+    // Calculate grid top based on legend visibility
+    const gridTop = !showLegend ? 45 : (runs.length > 3 ? 70 : (runs.length > 1 ? 60 : 50))
+    
+    // Build legend config with optional selected state for controlling visibility
+    const legendConfig = showLegend 
+      ? { 
+          data: legendData, 
+          top: designTokens.spacing.xl, 
+          type: runs.length > 3 ? 'scroll' : 'plain', 
+          padding: [5, 10],
+          ...(legendSelected && { selected: legendSelected }),
+        }
+      : { 
+          show: false,
+          // Even when hidden, legend.selected controls series visibility
+          ...(legendSelected && { selected: legendSelected }),
+        }
     
     return {
       title: { text: title, left: 'center', top: designTokens.spacing.xs,
         textStyle: { fontSize: designTokens.typography.fontSize.md, fontWeight: designTokens.typography.fontWeight.semibold }
       },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
-      legend: { data: legendData, top: designTokens.spacing.xl, type: runs.length > 3 ? 'scroll' : 'plain', padding: [5, 10] },
+      legend: legendConfig,
+      color: colors,  // Custom colors if provided
       xAxis: isSingleRun ? { type: 'category', data: xAxisData } : { type: 'value', name: xKey },
       yAxis: { type: useLog ? 'log' : 'value', scale: dynamicScale, min: dynamicScale ? 'dataMin' : 0 },
-      grid: { left: 50, right: 30, top: runs.length > 3 ? 70 : (runs.length > 1 ? 60 : 50), bottom: 80, show: settings.showGridLines },
+      grid: { left: 50, right: 30, top: gridTop, bottom: 80, show: settings.showGridLines },
       dataZoom: [{ type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 40 }],
       toolbox: { feature: { restore: {}, saveAsImage: {} }, right: 10 },
       series,
       animation: settings.enableChartAnimations,
       animationDuration: settings.enableChartAnimations ? 1000 : 0,
     }
-  }, [runs, xKey, xAxisKey, yKey, title, useLog, dynamicScale, smoothing, presentCols, isSingleRun, primaryRun, settings, token.colorBorder])
+  }, [runs, xKey, xAxisKey, yKey, title, useLog, dynamicScale, smoothing, presentCols, isSingleRun, primaryRun, settings, token.colorBorder, showLegend, colors, legendSelected])
 
   const exportCsv = () => {
     try {
@@ -337,13 +377,38 @@ const MetricChart = memo(function MetricChart({
     }
   }
   
+  // Check legendSelected changes (for visibility toggle)
+  const prevSelected = prevProps.legendSelected
+  const nextSelected = nextProps.legendSelected
+  if (prevSelected !== nextSelected) {
+    if (!prevSelected || !nextSelected) return false
+    const prevKeys = Object.keys(prevSelected)
+    const nextKeys = Object.keys(nextSelected)
+    if (prevKeys.length !== nextKeys.length) return false
+    for (const key of prevKeys) {
+      if (prevSelected[key] !== nextSelected[key]) return false
+    }
+  }
+  
+  // Check colors array
+  const prevColors = prevProps.colors
+  const nextColors = nextProps.colors
+  if (prevColors !== nextColors) {
+    if (!prevColors || !nextColors) return false
+    if (prevColors.length !== nextColors.length) return false
+    for (let i = 0; i < prevColors.length; i++) {
+      if (prevColors[i] !== nextColors[i]) return false
+    }
+  }
+  
   return (
     prevProps.xKey === nextProps.xKey &&
     prevProps.yKey === nextProps.yKey &&
     prevProps.title === nextProps.title &&
     prevProps.height === nextProps.height &&
     prevProps.persistKey === nextProps.persistKey &&
-    prevProps.group === nextProps.group
+    prevProps.group === nextProps.group &&
+    prevProps.showLegend === nextProps.showLegend
   )
 })
 

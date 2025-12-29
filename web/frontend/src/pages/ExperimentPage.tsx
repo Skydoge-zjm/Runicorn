@@ -5,9 +5,11 @@ import { SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, LineCha
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useSettings } from '../contexts/SettingsContext'
-import { checkAllStatus, softDeleteRuns } from '../api'
+import { checkAllStatus, softDeleteRuns, getStepMetrics, getRunDetail } from '../api'
 import RecycleBin from '../components/RecycleBin'
 import PathTreePanel from '../components/PathTreePanel'
+import CompareRunsPanel, { CompareRunInfo } from '../components/CompareRunsPanel'
+import CompareChartsView from '../components/CompareChartsView'
 import { ExperimentListSkeleton } from '../components/LoadingSkeleton'
 import ResizableTitle from '../components/ResizableTitle'
 import { useColumnWidths } from '../hooks/useColumnWidths'
@@ -20,8 +22,15 @@ import { experimentsPageConfig } from '../config/animation_config'
 import logger from '../utils/logger'
 import type { ColumnsType, TableProps } from 'antd/es/table'
 import type { SorterResult } from 'antd/es/table/interface'
+import type { MetricsData } from '../components/MetricChart'
 import '../styles/resizable-table.css'
 import '../styles/enhanced-table.css'
+
+// ECharts default color palette
+const ECHARTS_COLORS = [
+  '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+  '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
+]
 
 // Define ResizeCallbackData type locally
 interface ResizeCallbackData {
@@ -115,6 +124,15 @@ const ExperimentPage: React.FC = () => {
     return saved === 'true'
   })
   const [selectedTreePath, setSelectedTreePath] = useState<string | null>(null)
+  
+  // Compare mode state
+  const [compareMode, setCompareMode] = useState(false)
+  const [compareRunInfos, setCompareRunInfos] = useState<CompareRunInfo[]>([])
+  const [compareMetrics, setCompareMetrics] = useState<Map<string, MetricsData>>(new Map())
+  const [compareRunLabels, setCompareRunLabels] = useState<Map<string, string>>(new Map())
+  const [compareLoading, setCompareLoading] = useState(false)
+  const [visibleRunIds, setVisibleRunIds] = useState<Set<string>>(new Set())
+  const [addRunsModalOpen, setAddRunsModalOpen] = useState(false)
   
   // Persist tree panel collapsed state
   useEffect(() => {
@@ -456,17 +474,142 @@ const ExperimentPage: React.FC = () => {
     },
   ]
 
-  // Handle compare action (removed - comparison is done in run detail page)
-  const handleCompare = () => {
+  // Handle compare action - switch to inline compare mode
+  const handleCompare = useCallback(async () => {
     if (selectedRowKeys.length < 2) {
       message.warning(t('experiments.select_multiple') || 'Please select at least 2 runs to compare')
       return
     }
-    // Open first run with others for comparison
-    const firstRun = selectedRowKeys[0]
-    navigate(`/runs/${firstRun}`)
-    message.info(t('experiments.compare_hint') || 'Use the comparison feature in the run detail page')
-  }
+    
+    // Build run info list from selected runs
+    const selectedRuns = runs.filter(r => selectedRowKeys.includes(r.run_id))
+    const runInfos: CompareRunInfo[] = selectedRuns.map(r => ({
+      runId: r.run_id,
+      path: r.path,
+      alias: r.alias,
+      status: r.status,
+    }))
+    
+    // Build labels map (prefer alias, fallback to path last segment)
+    const labels = new Map<string, string>()
+    selectedRuns.forEach(r => {
+      labels.set(r.run_id, r.alias || r.path.split('/').pop() || r.run_id.slice(-12))
+    })
+    
+    setCompareRunInfos(runInfos)
+    setCompareRunLabels(labels)
+    setCompareMode(true)
+    setCompareLoading(true)
+    
+    // Initialize visible runs (all visible by default)
+    setVisibleRunIds(new Set(selectedRowKeys))
+    
+    // Fetch metrics for all selected runs in parallel
+    try {
+      const metricsMap = new Map<string, MetricsData>()
+      await Promise.all(
+        selectedRowKeys.map(async (runId) => {
+          try {
+            const data = await getStepMetrics(runId)
+            metricsMap.set(runId, data)
+          } catch (err) {
+            logger.warn(`Failed to fetch metrics for ${runId}:`, err)
+          }
+        })
+      )
+      setCompareMetrics(metricsMap)
+    } catch (error) {
+      logger.error('Failed to fetch metrics for comparison:', error)
+      message.error(t('experiments.compare_fetch_failed') || 'Failed to load metrics')
+    } finally {
+      setCompareLoading(false)
+    }
+  }, [selectedRowKeys, runs, t])
+  
+  // Toggle run visibility in compare charts
+  const toggleRunVisibility = useCallback((runId: string) => {
+    setVisibleRunIds(prev => {
+      const next = new Set(prev)
+      if (next.has(runId)) {
+        next.delete(runId)
+      } else {
+        next.add(runId)
+      }
+      return next
+    })
+  }, [])
+  
+  // Handle add more runs to comparison
+  const handleAddRuns = useCallback(() => {
+    setAddRunsModalOpen(true)
+  }, [])
+  
+  // Exit compare mode
+  const handleExitCompare = useCallback(() => {
+    setCompareMode(false)
+    setCompareRunInfos([])
+    setCompareMetrics(new Map())
+    setCompareRunLabels(new Map())
+  }, [])
+  
+  // Check if any compared run is still running
+  const hasRunningCompareRun = useMemo(() => {
+    return compareRunInfos.some(r => r.status === 'running')
+  }, [compareRunInfos])
+  
+  // Auto-refresh metrics and status when in compare mode with running experiments
+  useEffect(() => {
+    if (!compareMode || !hasRunningCompareRun || compareLoading) return
+    
+    const refreshInterval = settings.refreshInterval * 1000 // Use global refresh interval
+    
+    const intervalId = window.setInterval(async () => {
+      // Only refresh for running runs
+      const runningRunIds = compareRunInfos
+        .filter(r => r.status === 'running')
+        .map(r => r.runId)
+      
+      if (runningRunIds.length === 0) return
+      
+      try {
+        const newMetrics = new Map(compareMetrics)
+        const updatedRunInfos = [...compareRunInfos]
+        let statusChanged = false
+        
+        await Promise.all(
+          runningRunIds.map(async (runId) => {
+            try {
+              // Fetch metrics
+              const data = await getStepMetrics(runId)
+              newMetrics.set(runId, data)
+              
+              // Fetch status update
+              const detail = await getRunDetail(runId)
+              const newStatus = detail.status || 'unknown'
+              
+              // Update status if changed
+              const idx = updatedRunInfos.findIndex(r => r.runId === runId)
+              if (idx !== -1 && updatedRunInfos[idx].status !== newStatus) {
+                updatedRunInfos[idx] = { ...updatedRunInfos[idx], status: newStatus }
+                statusChanged = true
+              }
+            } catch (err) {
+              logger.warn(`Failed to refresh data for ${runId}:`, err)
+            }
+          })
+        )
+        
+        setCompareMetrics(newMetrics)
+        if (statusChanged) {
+          setCompareRunInfos(updatedRunInfos)
+        }
+      } catch (error) {
+        logger.error('Failed to refresh compare data:', error)
+      }
+    }, refreshInterval)
+    
+    return () => window.clearInterval(intervalId)
+  }, [compareMode, hasRunningCompareRun, compareLoading, compareRunInfos, compareMetrics, settings.refreshInterval])
 
   // Enhanced filtering with memoization
   const filteredRuns = useMemo(() => {
@@ -748,14 +891,13 @@ const ExperimentPage: React.FC = () => {
           minHeight: 0,  // Important for flex child scrolling
           overflow: 'hidden',
         }}>
-          {/* Left: Path Tree Panel */}
-          {!treePanelCollapsed && (
+          {/* Left: Path Tree Panel OR Compare Runs Panel */}
+          {compareMode ? (
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
               style={{ 
-                width: 240, 
+                width: 260, 
                 flexShrink: 0,
                 borderRadius: 8,
                 overflow: 'hidden',
@@ -764,17 +906,44 @@ const ExperimentPage: React.FC = () => {
                 flexDirection: 'column',
               }}
             >
-              <PathTreePanel
-                selectedPath={selectedTreePath}
-                onSelectPath={setSelectedTreePath}
-                onBatchDelete={handleBatchDeleteByPath}
-                onBatchExport={handleBatchExportByPath}
+              <CompareRunsPanel
+                runs={compareRunInfos}
+                colors={ECHARTS_COLORS}
+                visibleRunIds={visibleRunIds}
+                onToggleRunVisibility={toggleRunVisibility}
+                onAddRuns={handleAddRuns}
+                onBack={handleExitCompare}
                 style={{ height: '100%', minHeight: 0 }}
               />
             </motion.div>
+          ) : (
+            !treePanelCollapsed && (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                style={{ 
+                  width: 240, 
+                  flexShrink: 0,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                <PathTreePanel
+                  selectedPath={selectedTreePath}
+                  onSelectPath={setSelectedTreePath}
+                  onBatchDelete={handleBatchDeleteByPath}
+                  onBatchExport={handleBatchExportByPath}
+                  style={{ height: '100%', minHeight: 0 }}
+                />
+              </motion.div>
+            )
           )}
 
-          {/* Right: Filters + Table */}
+          {/* Right: Filters + Table OR Compare Charts */}
           <div style={{ 
             flex: 1, 
             minWidth: 0, 
@@ -783,6 +952,18 @@ const ExperimentPage: React.FC = () => {
             overflow: 'hidden',
             minHeight: 0,
           }}>
+            {compareMode ? (
+              /* Compare Charts View */
+              <CompareChartsView
+                runIds={compareRunInfos.map(r => r.runId)}
+                visibleRunIds={visibleRunIds}
+                metricsMap={compareMetrics}
+                runLabels={compareRunLabels}
+                colors={ECHARTS_COLORS}
+                loading={compareLoading}
+              />
+            ) : (
+              <>
             {/* Filters and Actions - fixed height */}
             <Card
               bordered={false}
@@ -916,6 +1097,8 @@ const ExperimentPage: React.FC = () => {
                 }}
               />
             </Card>
+              </>
+            )}
           </div>
         </div>
       </div>
