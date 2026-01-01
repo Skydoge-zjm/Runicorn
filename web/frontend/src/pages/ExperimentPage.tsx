@@ -1,24 +1,23 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Table, Button, Card, Space, Input, Select, Tag, Statistic, Row, Col, message, Modal, Tooltip, Empty, Dropdown, Badge, Checkbox, notification } from 'antd'
-import { SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, LineChartOutlined, EyeOutlined, DownOutlined, FileExcelOutlined, FileTextOutlined, FilterOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, FilePdfOutlined, HeartOutlined, UndoOutlined, ExperimentOutlined, ThunderboltOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import { Table, Button, Card, Space, Input, Select, Tag, Statistic, message, Modal, Tooltip, Empty, Dropdown, Badge, Checkbox, notification, theme } from 'antd'
+import { SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, LineChartOutlined, EyeOutlined, DownOutlined, FileExcelOutlined, FileTextOutlined, FilterOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, FilePdfOutlined, HeartOutlined, UndoOutlined, ExperimentOutlined, ThunderboltOutlined, MenuFoldOutlined, MenuUnfoldOutlined, CopyOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { Resizable, ResizeCallbackData as ResizableCallbackData } from 'react-resizable'
 import { useSettings } from '../contexts/SettingsContext'
-import { checkAllStatus, softDeleteRuns, getStepMetrics, getRunDetail } from '../api'
+import { checkAllStatus, softDeleteRuns, getStepMetrics, getRunDetail, updateRunAlias, updateRunTags } from '../api'
 import RecycleBin from '../components/RecycleBin'
 import PathTreePanel from '../components/PathTreePanel'
+import AddTagModal from '../components/AddTagModal'
 import CompareRunsPanel, { CompareRunInfo } from '../components/CompareRunsPanel'
 import CompareChartsView from '../components/CompareChartsView'
 import { ExperimentListSkeleton } from '../components/LoadingSkeleton'
 import ResizableTitle from '../components/ResizableTitle'
 import { useColumnWidths } from '../hooks/useColumnWidths'
-import FancyStatCard from '../components/fancy/FancyStatCard'
 import FancyEmpty from '../components/fancy/FancyEmpty'
 import AnimatedStatusBadge from '../components/fancy/AnimatedStatusBadge'
 import { useSuccessConfetti } from '../hooks/useSuccessConfetti'
-import { StaggerContainer, StaggerItem } from '../components/animations/PageTransition'
-import { experimentsPageConfig } from '../config/animation_config'
 import logger from '../utils/logger'
 import type { ColumnsType, TableProps } from 'antd/es/table'
 import type { SorterResult } from 'antd/es/table/interface'
@@ -41,6 +40,7 @@ interface RunData {
   run_id: string
   path: string
   alias: string | null
+  tags: string[]
   status: string
   created: string
   summary: any
@@ -71,6 +71,7 @@ const ExperimentPage: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { settings, setSettings } = useSettings()
+  const { token } = theme.useToken()
   const [runs, setRuns] = useState<RunData[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
@@ -91,7 +92,8 @@ const ExperimentPage: React.FC = () => {
   const defaultColumnWidths = {
     path: 180,
     alias: 120,
-    run_id: 280,          // Wider to show full ID (20251009_082632_d5a4c7)
+    tags: 180,
+    run_id: 140,          // Compact: only show hash suffix with copy button
     status: 100,
     created: 210,         // Wider to show full datetime (2025/10/09 08:26:32)
     best_metric: 200,
@@ -118,12 +120,28 @@ const ExperimentPage: React.FC = () => {
   
   const [recycleBinOpen, setRecycleBinOpen] = useState(false)
   
+  // Inline editing state for alias
+  const [editingRunId, setEditingRunId] = useState<string | null>(null)
+  const [editingAlias, setEditingAlias] = useState<string>('')
+  const [aliasUpdateLoading, setAliasUpdateLoading] = useState(false)
+  
   // Path tree panel state
   const [treePanelCollapsed, setTreePanelCollapsed] = useState(() => {
     const saved = localStorage.getItem('tree_panel_collapsed')
     return saved === 'true'
   })
+  const [treePanelWidth, setTreePanelWidth] = useState(() => {
+    const saved = localStorage.getItem('tree_panel_width')
+    return saved ? parseInt(saved, 10) : 240
+  })
+  const [isResizing, setIsResizing] = useState(false)
   const [selectedTreePath, setSelectedTreePath] = useState<string | null>(null)
+  
+  // Tag editing state
+  const [tagEditingRunId, setTagEditingRunId] = useState<string | null>(null)
+  const [tagModalOpen, setTagModalOpen] = useState(false)
+  const [tagModalRunId, setTagModalRunId] = useState<string | null>(null)
+  const [tagModalCurrentTags, setTagModalCurrentTags] = useState<string[]>([])
   
   // Compare mode state
   const [compareMode, setCompareMode] = useState(false)
@@ -134,10 +152,14 @@ const ExperimentPage: React.FC = () => {
   const [visibleRunIds, setVisibleRunIds] = useState<Set<string>>(new Set())
   const [addRunsModalOpen, setAddRunsModalOpen] = useState(false)
   
-  // Persist tree panel collapsed state
+  // Persist tree panel collapsed state and width
   useEffect(() => {
     localStorage.setItem('tree_panel_collapsed', String(treePanelCollapsed))
   }, [treePanelCollapsed])
+  
+  useEffect(() => {
+    localStorage.setItem('tree_panel_width', String(treePanelWidth))
+  }, [treePanelWidth])
   
   // Success confetti effect
   const { trigger: triggerConfetti, ConfettiComponent } = useSuccessConfetti()
@@ -165,6 +187,104 @@ const ExperimentPage: React.FC = () => {
     savePreferences()
   }, [savePreferences])
 
+  // Handle alias inline editing
+  const handleAliasEdit = useCallback((runId: string, currentAlias: string | null) => {
+    setEditingRunId(runId)
+    setEditingAlias(currentAlias || '')
+  }, [])
+  
+  const handleAliasSave = useCallback(async (runId: string) => {
+    const newAlias = editingAlias.trim() || null
+    setAliasUpdateLoading(true)
+    try {
+      await updateRunAlias(runId, newAlias)
+      // Update local state
+      setRuns(prev => prev.map(r => 
+        r.run_id === runId ? { ...r, alias: newAlias } : r
+      ))
+      message.success(t('experiments.alias_updated') || 'Alias updated')
+    } catch (error) {
+      logger.error('Failed to update alias:', error)
+      message.error(t('experiments.alias_update_failed') || 'Failed to update alias')
+    } finally {
+      setAliasUpdateLoading(false)
+      setEditingRunId(null)
+      setEditingAlias('')
+    }
+  }, [editingAlias, t])
+  
+  const handleAliasCancel = useCallback(() => {
+    setEditingRunId(null)
+    setEditingAlias('')
+  }, [])
+  
+  // Handle tree panel resize
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    
+    const startX = e.clientX
+    const startWidth = treePanelWidth
+    
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX
+      const newWidth = Math.min(Math.max(startWidth + delta, 160), 400)
+      setTreePanelWidth(newWidth)
+    }
+    
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+    
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [treePanelWidth])
+  
+  // Handle tags update
+  const handleTagsUpdate = useCallback(async (runId: string, newTags: string[]) => {
+    try {
+      await updateRunTags(runId, newTags)
+      // Update local state
+      setRuns(prev => prev.map(r => 
+        r.run_id === runId ? { ...r, tags: newTags } : r
+      ))
+      message.success(t('experiments.tags_updated') || 'Tags updated')
+    } catch (error) {
+      logger.error('Failed to update tags:', error)
+      message.error(t('experiments.tags_update_failed') || 'Failed to update tags')
+    }
+  }, [t])
+  
+  // Handle removing a single tag
+  const handleRemoveTag = useCallback((runId: string, tagToRemove: string, currentTags: string[]) => {
+    const newTags = currentTags.filter(t => t !== tagToRemove)
+    handleTagsUpdate(runId, newTags)
+  }, [handleTagsUpdate])
+  
+  // Open tag modal
+  const handleOpenTagModal = useCallback((runId: string, currentTags: string[]) => {
+    setTagModalRunId(runId)
+    setTagModalCurrentTags(currentTags)
+    setTagModalOpen(true)
+  }, [])
+  
+  // Handle adding a new tag from modal
+  const handleAddTagFromModal = useCallback((tag: string) => {
+    if (!tagModalRunId) return
+    const newTags = [...tagModalCurrentTags, tag]
+    handleTagsUpdate(tagModalRunId, newTags)
+    setTagModalOpen(false)
+    setTagModalRunId(null)
+    setTagModalCurrentTags([])
+  }, [tagModalRunId, tagModalCurrentTags, handleTagsUpdate])
+  
+  // Get all tags from all runs for history
+  const allTagsFromRuns = useMemo(() => {
+    return runs.flatMap(r => r.tags || [])
+  }, [runs])
+
   // Fetch runs from API with better error handling
   const fetchRuns = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
@@ -185,6 +305,7 @@ const ExperimentPage: React.FC = () => {
           run_id: r.id || r.run_id,
           path: r.path || 'default',
           alias: r.alias || null,
+          tags: r.tags || [],
           status: r.status || 'unknown',
           created: created.toISOString(),
           summary: r.summary || {},
@@ -300,7 +421,7 @@ const ExperimentPage: React.FC = () => {
       content: (
         <div>
           <p>{t('experiments.soft_delete_confirm_content', { count: selectedRowKeys.length }) || `Move ${selectedRowKeys.length} selected runs to recycle bin?`}</p>
-          <p style={{ color: '#1677ff', fontWeight: 500 }}>
+          <p style={{ color: token.colorPrimary, fontWeight: 500 }}>
             {t('experiments.soft_delete_note') || 'Files will be preserved and can be restored later.'}
           </p>
         </div>
@@ -620,7 +741,7 @@ const ExperimentPage: React.FC = () => {
         run.run_id.toLowerCase().includes(searchLower) ||
         run.path.toLowerCase().includes(searchLower) ||
         (run.alias && run.alias.toLowerCase().includes(searchLower)) ||
-        (run.summary?.tags && run.summary.tags.some((tag: string) => 
+        (run.tags && run.tags.some((tag: string) => 
           tag.toLowerCase().includes(searchLower)))
       
       // Path filter from tree panel (prefix match)
@@ -648,7 +769,7 @@ const ExperimentPage: React.FC = () => {
       sorter: (a, b) => a.path.localeCompare(b.path),
       render: (text) => (
         <Tooltip title={text}>
-          <code style={{ fontSize: '12px', color: '#1677ff' }}>{text}</code>
+          <code style={{ fontSize: '12px', color: token.colorPrimary }}>{text}</code>
         </Tooltip>
       ),
       width: columnWidths.path,
@@ -663,14 +784,100 @@ const ExperimentPage: React.FC = () => {
       key: 'alias',
       width: columnWidths.alias,
       sorter: (a, b) => (a.alias || '').localeCompare(b.alias || ''),
-      render: (text) => text ? (
-        <Tag color="purple">{text}</Tag>
-      ) : (
-        <span style={{ color: '#999' }}>-</span>
-      ),
+      render: (text, record) => {
+        const isEditing = editingRunId === record.run_id
+        
+        if (isEditing) {
+          return (
+            <Input
+              size="small"
+              value={editingAlias}
+              onChange={(e) => setEditingAlias(e.target.value)}
+              onPressEnter={() => handleAliasSave(record.run_id)}
+              onBlur={() => handleAliasSave(record.run_id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  handleAliasCancel()
+                }
+              }}
+              autoFocus
+              style={{ width: '100%' }}
+              placeholder={t('experiments.alias_placeholder') || 'Enter alias...'}
+              disabled={aliasUpdateLoading}
+            />
+          )
+        }
+        
+        return (
+          <Tooltip title={t('experiments.double_click_edit') || 'Double-click to edit'}>
+            <div
+              style={{ 
+                cursor: 'pointer', 
+                minHeight: 22,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              onDoubleClick={() => handleAliasEdit(record.run_id, text)}
+            >
+              {text ? (
+                <Tag color="purple">{text}</Tag>
+              ) : (
+                <span style={{ color: token.colorTextDisabled }}>-</span>
+              )}
+            </div>
+          </Tooltip>
+        )
+      },
       onHeaderCell: () => ({
         width: columnWidths.alias,
         onResize: handleResize('alias'),
+      }),
+    },
+    {
+      title: t('table.tags'),
+      dataIndex: 'tags',
+      key: 'tags',
+      width: columnWidths.tags,
+      render: (tags: string[], record) => {
+        const currentTags = tags || []
+        
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+            {currentTags.map(tag => (
+              <Tag
+                key={tag}
+                closable
+                onClose={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleRemoveTag(record.run_id, tag, currentTags)
+                }}
+                style={{ marginRight: 0 }}
+              >
+                {tag}
+              </Tag>
+            ))}
+            <Tooltip title={t('experiments.add_tag') || 'Add tag'}>
+              <Tag
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleOpenTagModal(record.run_id, currentTags)
+                }}
+                style={{ 
+                  cursor: 'pointer', 
+                  borderStyle: 'dashed',
+                  background: 'transparent',
+                }}
+              >
+                <PlusOutlined />
+              </Tag>
+            </Tooltip>
+          </div>
+        )
+      },
+      onHeaderCell: () => ({
+        width: columnWidths.tags,
+        onResize: handleResize('tags'),
       }),
     },
     {
@@ -678,9 +885,30 @@ const ExperimentPage: React.FC = () => {
       dataIndex: 'run_id',
       key: 'run_id',
       width: columnWidths.run_id,
-      render: (text) => (
-        <code style={{ fontSize: '11px', wordBreak: 'break-all' }}>{text}</code>
-      ),
+      render: (text: string) => {
+        // Extract hash suffix (last segment after underscore)
+        const suffix = text.split('_').pop() || text.slice(-6)
+        return (
+          <Space size={4}>
+            <Tooltip title={text}>
+              <code style={{ fontSize: '12px', cursor: 'pointer' }}>{suffix}</code>
+            </Tooltip>
+            <Tooltip title={t('common.copy') || 'Copy'}>
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                style={{ padding: '0 4px', height: 20, minWidth: 20 }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigator.clipboard.writeText(text)
+                  message.success(t('common.copied') || 'Copied!')
+                }}
+              />
+            </Tooltip>
+          </Space>
+        )
+      },
       onHeaderCell: () => ({
         width: columnWidths.run_id,
         onResize: handleResize('run_id'),
@@ -743,8 +971,8 @@ const ExperimentPage: React.FC = () => {
         if (value != null && name) {
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: '13px', color: '#666', fontWeight: 500 }}>{name}</span>
-              <span style={{ fontSize: '16px', fontWeight: 700, color: '#1677ff' }}>{value.toFixed(4)}</span>
+              <span style={{ fontSize: '13px', color: token.colorTextSecondary, fontWeight: 500 }}>{name}</span>
+              <span style={{ fontSize: '16px', fontWeight: 700, color: token.colorPrimary }}>{value.toFixed(4)}</span>
             </div>
           )
         }
@@ -762,11 +990,11 @@ const ExperimentPage: React.FC = () => {
       render: (_, record) => {
         const count = record.assets_count || 0
         if (count === 0) {
-          return <span style={{ color: '#999' }}>-</span>
+          return <span style={{ color: token.colorTextDisabled }}>-</span>
         }
         return (
           <Tooltip title={t('experiments.assets_tip', { count })}>
-            <Badge count={count} style={{ backgroundColor: '#52c41a' }} />
+            <Badge count={count} style={{ backgroundColor: token.colorSuccess }} />
           </Tooltip>
         )
       },
@@ -802,7 +1030,7 @@ const ExperimentPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t, navigate, columnWidths, handleResize, handleDelete])
+  ], [t, navigate, columnWidths, handleResize, handleDelete, token, i18n.language, editingRunId, editingAlias, aliasUpdateLoading, handleAliasEdit, handleAliasSave, handleAliasCancel, handleTagsUpdate, handleRemoveTag, handleOpenTagModal])
 
   // Show skeleton on initial load
   if (loading && runs.length === 0) {
@@ -821,66 +1049,44 @@ const ExperimentPage: React.FC = () => {
         padding: 16,
       }}>
         {/* Header: Title + Stats - fixed height */}
-        <div style={{ flexShrink: 0, marginBottom: 16 }}>
-          {/* Compact page title */}
-          <div style={{ marginBottom: 16 }}>
+        <div style={{ flexShrink: 0, marginBottom: 12 }}>
+          {/* Header: Title + Inline Stats */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}>
             <h1 style={{
-              fontSize: 24,
-              fontWeight: 700,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
+              fontSize: 20,
+              fontWeight: 600,
+              color: token.colorText,
               margin: 0,
-              lineHeight: 1.2
             }}>
               {t('menu.experiments')}
             </h1>
+            
+            {/* Inline Statistics */}
+            <Space size={16} style={{ flexWrap: 'wrap' }}>
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                <ExperimentOutlined style={{ marginRight: 4 }} />
+                {t('experiments.total_runs') || 'Total'}: <span style={{ fontWeight: 600, color: token.colorText }}>{stats.total}</span>
+              </span>
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                <ThunderboltOutlined style={{ marginRight: 4, color: token.colorWarning }} />
+                {t('experiments.running') || 'Running'}: <span style={{ fontWeight: 600, color: token.colorWarning }}>{stats.running}</span>
+              </span>
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                <CheckCircleOutlined style={{ marginRight: 4, color: token.colorSuccess }} />
+                {t('experiments.finished') || 'Finished'}: <span style={{ fontWeight: 600, color: token.colorSuccess }}>{stats.finished}</span>
+              </span>
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                <CloseCircleOutlined style={{ marginRight: 4, color: token.colorError }} />
+                {t('experiments.failed') || 'Failed'}: <span style={{ fontWeight: 600, color: token.colorError }}>{stats.failed}</span>
+              </span>
+            </Space>
           </div>
-          
-          {/* Compact Statistics Cards */}
-          <Row gutter={[12, 12]}>
-            <Col xs={12} sm={6}>
-              <FancyStatCard
-                title={t('experiments.total_runs') || 'Total Runs'}
-                value={stats.total}
-                icon={<ExperimentOutlined />}
-                gradientColors={experimentsPageConfig.statCards.total.gradientColors}
-                delay={0}
-                pulse={false}
-              />
-            </Col>
-            <Col xs={12} sm={6}>
-              <FancyStatCard
-                title={t('experiments.running') || 'Running'}
-                value={stats.running}
-                icon={<ThunderboltOutlined />}
-                gradientColors={experimentsPageConfig.statCards.running.gradientColors}
-                delay={0}
-                pulse={stats.running > 0}
-              />
-            </Col>
-            <Col xs={12} sm={6}>
-              <FancyStatCard
-                title={t('experiments.finished') || 'Finished'}
-                value={stats.finished}
-                icon={<CheckCircleOutlined />}
-                gradientColors={experimentsPageConfig.statCards.finished.gradientColors}
-                delay={0}
-                pulse={false}
-              />
-            </Col>
-            <Col xs={12} sm={6}>
-              <FancyStatCard
-                title={t('experiments.failed') || 'Failed'}
-                value={stats.failed}
-                icon={<CloseCircleOutlined />}
-                gradientColors={experimentsPageConfig.statCards.failed.gradientColors}
-                delay={0}
-                pulse={false}
-              />
-            </Col>
-          </Row>
         </div>
 
         {/* Main content: Path Tree + Runs Table - fills remaining space */}
@@ -923,13 +1129,14 @@ const ExperimentPage: React.FC = () => {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 style={{ 
-                  width: 240, 
+                  width: treePanelWidth, 
                   flexShrink: 0,
                   borderRadius: 8,
                   overflow: 'hidden',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                   display: 'flex',
                   flexDirection: 'column',
+                  position: 'relative',
                 }}
               >
                 <PathTreePanel
@@ -938,6 +1145,31 @@ const ExperimentPage: React.FC = () => {
                   onBatchDelete={handleBatchDeleteByPath}
                   onBatchExport={handleBatchExportByPath}
                   style={{ height: '100%', minHeight: 0 }}
+                />
+                {/* Resize handle */}
+                <div
+                  onMouseDown={handleResizeStart}
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 4,
+                    cursor: 'col-resize',
+                    background: isResizing ? token.colorPrimary : 'transparent',
+                    transition: 'background 0.2s',
+                    zIndex: 10,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isResizing) {
+                      (e.target as HTMLElement).style.background = token.colorPrimaryBg
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isResizing) {
+                      (e.target as HTMLElement).style.background = 'transparent'
+                    }
+                  }}
                 />
               </motion.div>
             )
@@ -1107,6 +1339,18 @@ const ExperimentPage: React.FC = () => {
         open={recycleBinOpen}
         onClose={() => setRecycleBinOpen(false)}
         onRestore={() => fetchRuns(false)}
+      />
+      
+      <AddTagModal
+        open={tagModalOpen}
+        existingTags={tagModalCurrentTags}
+        allTags={allTagsFromRuns}
+        onConfirm={handleAddTagFromModal}
+        onClose={() => {
+          setTagModalOpen(false)
+          setTagModalRunId(null)
+          setTagModalCurrentTags([])
+        }}
       />
     </>
   )

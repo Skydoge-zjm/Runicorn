@@ -11,6 +11,7 @@ export default {
   
   'table.path': '路径',
   'table.alias': '别名',
+  'table.tags': '标签',
   'table.project': '项目',
   'table.name': '实验',
   'table.run_id': '运行 ID',
@@ -39,8 +40,11 @@ export default {
   'cancel': '取消',
   'confirm': '确认',
   'close': '关闭',
+  'common.cancel': '取消',
+  'common.confirm': '确认',
 
   'common.copied': '已复制',
+  'common.copy': '复制',
   'common.copy_failed': '复制失败',
 }
 

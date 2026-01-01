@@ -11,6 +11,7 @@ export default {
   
   'table.path': 'Path',
   'table.alias': 'Alias',
+  'table.tags': 'Tags',
   'table.project': 'Project',
   'table.name': 'Name',
   'table.run_id': 'Run ID',
@@ -39,8 +40,11 @@ export default {
   'cancel': 'Cancel',
   'confirm': 'Confirm',
   'close': 'Close',
+  'common.cancel': 'Cancel',
+  'common.confirm': 'Confirm',
 
   'common.copied': 'Copied',
+  'common.copy': 'Copy',
   'common.copy_failed': 'Failed to copy',
 }
 

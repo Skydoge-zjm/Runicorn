@@ -65,6 +65,24 @@ export default {
   'experiments.all_status': '全部状态',
   'experiments.no_runs_to_delete': '此路径下没有可删除的运行',
   
+  // Alias inline editing
+  'experiments.alias_updated': '别名已更新',
+  'experiments.alias_update_failed': '更新别名失败',
+  'experiments.alias_placeholder': '输入别名...',
+  'experiments.double_click_edit': '双击编辑',
+  
+  // Tags
+  'experiments.add_tags': '添加标签...',
+  'experiments.add_tag': '添加标签',
+  'experiments.add_tag_title': '添加标签',
+  'experiments.enter_tag': '输入标签名称...',
+  'experiments.new_tag': '新标签',
+  'experiments.tag_exists': '标签已存在',
+  'experiments.tags_updated': '标签已更新',
+  'experiments.tags_update_failed': '更新标签失败',
+  'experiments.history_tags': '历史标签',
+  'experiments.recommended_tags': '推荐标签',
+  
   // Path tree panel
   'experiments.path_tree': '路径',
   'experiments.all_runs': '全部运行',

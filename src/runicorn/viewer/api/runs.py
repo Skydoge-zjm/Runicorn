@@ -46,6 +46,7 @@ class RunListItem(BaseModel):
     best_metric_name: Optional[str] = None
     path: Optional[str] = None  # Flexible hierarchy path
     alias: Optional[str] = None  # User-friendly alias
+    tags: List[str] = []  # User-defined tags
     assets_count: int = 0
 
 
@@ -114,6 +115,7 @@ async def list_runs(request: Request) -> List[RunListItem]:
         # Get path and alias from meta (new model)
         path = (meta.get("path") if isinstance(meta, dict) else None) or entry.project
         alias = (meta.get("alias") if isinstance(meta, dict) else None)
+        tags = (meta.get("tags") if isinstance(meta, dict) else None) or []
         
         # Get best metric info from summary
         best_metric_value = None
@@ -142,6 +144,7 @@ async def list_runs(request: Request) -> List[RunListItem]:
                 best_metric_name=best_metric_name,
                 path=path,
                 alias=alias,
+                tags=tags,
                 assets_count=assets_count,
             )
         )
@@ -207,6 +210,73 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
         "metrics_step": str(run_dir / "events.jsonl"),
         "assets": assets,
         "assets_count": assets_count,
+    }
+
+
+class RunUpdatePayload(BaseModel):
+    """Model for run update request."""
+    alias: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+@router.patch("/runs/{run_id}")
+async def update_run(run_id: str, request: Request, payload: RunUpdatePayload) -> Dict[str, Any]:
+    """
+    Update run metadata (alias, tags).
+    
+    Args:
+        run_id: The run ID to update
+        payload: Update payload containing alias and/or tags
+        
+    Returns:
+        Updated run information
+        
+    Raises:
+        HTTPException: If run is not found
+    """
+    import json
+    
+    storage_root = get_storage_root(request)
+    
+    if not validate_run_id(run_id):
+        raise HTTPException(status_code=400, detail=f"Invalid run_id format: {run_id}")
+    
+    entry = find_run_dir_by_id(storage_root, run_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Run not found")
+    
+    run_dir = entry.dir
+    meta_path = run_dir / "meta.json"
+    
+    # Load existing metadata
+    meta = read_json(meta_path)
+    if not isinstance(meta, dict):
+        meta = {}
+    
+    # Update alias if provided
+    if payload.alias is not None:
+        # Allow empty string to clear alias, strip whitespace
+        alias_value = payload.alias.strip() if payload.alias else None
+        meta["alias"] = alias_value if alias_value else None
+    
+    # Update tags if provided
+    if payload.tags is not None:
+        # Filter out empty strings and strip whitespace
+        tags_value = [t.strip() for t in payload.tags if t and t.strip()]
+        meta["tags"] = tags_value if tags_value else []
+    
+    # Write updated metadata
+    try:
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        logger.error(f"Failed to update meta.json for {run_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update run: {e}")
+    
+    return {
+        "ok": True,
+        "alias": meta.get("alias"),
+        "tags": meta.get("tags", []),
     }
 
 

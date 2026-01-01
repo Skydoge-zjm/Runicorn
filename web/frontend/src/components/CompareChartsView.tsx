@@ -8,7 +8,7 @@
  * instead of re-rendering the entire chart when hiding/showing runs.
  */
 import React, { useMemo, useState, useEffect } from 'react'
-import { Row, Col, Empty, Spin, Card, Checkbox, Space, Button, Tooltip } from 'antd'
+import { Row, Col, Empty, Spin, Card, Checkbox, Space, Button, Tooltip, theme } from 'antd'
 import { LineChartOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { motion } from 'framer-motion'
@@ -35,6 +35,7 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
   loading,
 }) => {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   
   // Visible metrics state (all visible by default)
   const [visibleMetrics, setVisibleMetrics] = useState<Set<string>>(new Set())
@@ -164,7 +165,7 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <LineChartOutlined style={{ color: '#1677ff' }} />
+            <LineChartOutlined style={{ color: token.colorPrimary }} />
             <span style={{ fontWeight: 500 }}>
               {t('experiments.common_metrics') || 'Common Metrics'}
             </span>
@@ -196,7 +197,7 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
             ))}
           </Space>
           
-          <span style={{ color: '#999', fontSize: 12, flexShrink: 0 }}>
+          <span style={{ color: token.colorTextSecondary, fontSize: 12, flexShrink: 0 }}>
             {displayedMetrics.length}/{commonMetrics.length}
           </span>
         </div>
@@ -225,7 +226,7 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
             )
             // Build colors array matching the runs order
             // Color is determined by the run's position in the original runIds array
-            const chartColors = runsWithMetric.map(id => colors[runIds.indexOf(id)] || '#999')
+            const chartColors = runsWithMetric.map(id => colors[runIds.indexOf(id)] || token.colorTextDisabled)
             
             return (
               <Col xs={24} lg={12} key={metric}>

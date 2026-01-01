@@ -512,3 +512,24 @@ export async function getStorageStats(): Promise<StorageStats> {
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+// ----- Run update helpers -----
+export async function updateRunAlias(runId: string, alias: string | null): Promise<{ ok: boolean; alias: string | null }> {
+  const res = await fetch(url(`/runs/${runId}`), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ alias })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function updateRunTags(runId: string, tags: string[]): Promise<{ ok: boolean; tags: string[] }> {
+  const res = await fetch(url(`/runs/${runId}`), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tags })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}

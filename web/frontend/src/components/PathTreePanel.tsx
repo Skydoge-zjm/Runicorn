@@ -13,7 +13,7 @@
  * - Smooth animations
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Tree, Spin, Empty, Input, Tooltip, Dropdown, Modal } from 'antd'
+import { Tree, Spin, Empty, Input, Tooltip, Dropdown, Modal, theme } from 'antd'
 import { FolderOutlined, FolderOpenOutlined, SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, AppstoreOutlined, LoadingOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -147,7 +147,8 @@ const treeStyles = `
 const buildTreeData = (
   tree: Record<string, any>,
   parentPath: string = '',
-  stats?: Record<string, PathStats>
+  stats?: Record<string, PathStats>,
+  token?: any
 ): DataNode[] => {
   const nodes: DataNode[] = []
   
@@ -189,9 +190,9 @@ const buildTreeData = (
               )}
               <span style={{ 
                 fontSize: 10, 
-                color: '#999',
+                color: token?.colorTextSecondary || '#999',
                 padding: '1px 6px',
-                background: '#f5f5f5',
+                background: token?.colorFillTertiary || '#f5f5f5',
                 borderRadius: 10,
                 fontWeight: 500,
               }}>
@@ -201,7 +202,7 @@ const buildTreeData = (
           )}
         </span>
       ),
-      children: hasChildren ? buildTreeData(children, currentPath, stats) : undefined,
+      children: hasChildren ? buildTreeData(children, currentPath, stats, token) : undefined,
       isLeaf: !hasChildren,
     })
   }
@@ -218,6 +219,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
   style,
 }) => {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [loading, setLoading] = useState(false)
   const [treeData, setTreeData] = useState<PathTreeData | null>(null)
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([])
@@ -307,7 +309,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
   const treeNodes = useMemo(() => {
     if (!treeData?.tree) return []
     
-    const nodes = buildTreeData(treeData.tree, '', treeData.stats)
+    const nodes = buildTreeData(treeData.tree, '', treeData.stats, token)
     
     // Filter by search text
     if (searchText) {
@@ -331,7 +333,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
     }
     
     return nodes
-  }, [treeData, searchText])
+  }, [treeData, searchText, token])
 
   // Handle tree node selection
   const handleSelect: TreeProps['onSelect'] = (selectedKeys) => {
@@ -398,7 +400,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         alignItems: 'center', 
         justifyContent: 'center',
         padding: 24,
-        background: '#fafafa',
+        background: token.colorBgLayout,
       }}>
         <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />
       </div>
@@ -416,16 +418,16 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         flexDirection: 'column',
         height: '100%',
         minHeight: 0,  // Important for flex child to allow shrinking
-        borderRight: '1px solid #f0f0f0',
-        background: '#fafafa',
+        borderRight: `1px solid ${token.colorBorderSecondary}`,
+        background: token.colorBgLayout,
         outline: 'none',
       }}
     >
       {/* Header - fixed height */}
       <div style={{ 
         padding: '12px 12px 8px',
-        borderBottom: '1px solid #f0f0f0',
-        background: '#fff',
+        borderBottom: `1px solid ${token.colorBorderSecondary}`,
+        background: token.colorBgContainer,
         flexShrink: 0,
       }}>
         <div style={{ 
@@ -434,15 +436,15 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
           justifyContent: 'space-between',
           marginBottom: 8,
         }}>
-          <span style={{ fontWeight: 600, fontSize: 13, color: '#333' }}>
-            <FolderOutlined style={{ marginRight: 6, color: '#faad14' }} />
+          <span style={{ fontWeight: 600, fontSize: 13, color: token.colorText }}>
+            <FolderOutlined style={{ marginRight: 6, color: token.colorWarning }} />
             {t('experiments.path_tree') || 'Paths'}
           </span>
           <Tooltip title={t('runs.refresh') || 'Refresh'}>
             <ReloadOutlined 
               style={{ 
                 cursor: 'pointer', 
-                color: '#666',
+                color: token.colorTextSecondary,
                 transition: 'color 0.2s',
               }}
               onClick={fetchPathTree}
@@ -453,7 +455,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         <Input
           size="small"
           placeholder={t('experiments.search_path') || 'Search paths...'}
-          prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+          prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
           allowClear
@@ -471,26 +473,26 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         {/* "All Runs" option */}
         <motion.div
           onClick={() => onSelectPath(null)}
-          whileHover={{ backgroundColor: selectedPath === null ? '#e6f4ff' : 'rgba(0,0,0,0.04)' }}
+          whileHover={{ backgroundColor: selectedPath === null ? token.colorPrimaryBg : token.colorFillTertiary }}
           whileTap={{ scale: 0.98 }}
           style={{
             padding: '6px 12px',
             cursor: 'pointer',
             borderRadius: 4,
             margin: '0 4px 4px',
-            background: selectedPath === null ? '#e6f4ff' : 'transparent',
-            color: selectedPath === null ? '#1677ff' : '#333',
+            background: selectedPath === null ? token.colorPrimaryBg : 'transparent',
+            color: selectedPath === null ? token.colorPrimary : token.colorText,
             fontWeight: selectedPath === null ? 600 : 400,
             fontSize: 13,
             display: 'flex',
             alignItems: 'center',
             gap: 6,
             position: 'relative',
-            borderLeft: selectedPath === null ? '3px solid #1677ff' : '3px solid transparent',
+            borderLeft: selectedPath === null ? `3px solid ${token.colorPrimary}` : '3px solid transparent',
             transition: 'all 0.15s ease',
           }}
         >
-          <AppstoreOutlined style={{ color: selectedPath === null ? '#1677ff' : '#8c8c8c' }} />
+          <AppstoreOutlined style={{ color: selectedPath === null ? token.colorPrimary : token.colorTextTertiary }} />
           <span style={{ flex: 1 }}>{t('experiments.all_runs') || 'All Runs'}</span>
           {totalStats && (
             <span style={{ 
@@ -503,9 +505,9 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
               )}
               <span style={{ 
                 fontSize: 10, 
-                color: '#999',
+                color: token.colorTextSecondary,
                 padding: '1px 6px',
-                background: selectedPath === null ? '#fff' : '#f5f5f5',
+                background: selectedPath === null ? token.colorBgContainer : token.colorFillTertiary,
                 borderRadius: 10,
                 fontWeight: 500,
               }}>
@@ -533,8 +535,8 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
                     showLine={{ showLeafIcon: false }}
                     switcherIcon={({ expanded }) => 
                       expanded 
-                        ? <FolderOpenOutlined style={{ color: '#faad14' }} /> 
-                        : <FolderOutlined style={{ color: '#faad14' }} />
+                        ? <FolderOpenOutlined style={{ color: token.colorWarning }} /> 
+                        : <FolderOutlined style={{ color: token.colorWarning }} />
                     }
                     treeData={treeNodes}
                     selectedKeys={selectedPath ? [selectedPath] : []}
@@ -575,19 +577,19 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
             exit={{ opacity: 0, height: 0 }}
             style={{
               padding: '8px 12px',
-              borderTop: '1px solid #f0f0f0',
-              background: '#fff',
+              borderTop: `1px solid ${token.colorBorderSecondary}`,
+              background: token.colorBgContainer,
               fontSize: 12,
-              color: '#666',
+              color: token.colorTextSecondary,
               overflow: 'hidden',
               flexShrink: 0,
             }}
           >
-            <span style={{ color: '#999' }}>{t('experiments.filtering') || 'Filtering'}:</span>
+            <span style={{ color: token.colorTextTertiary }}>{t('experiments.filtering') || 'Filtering'}:</span>
             <code style={{ 
               marginLeft: 6, 
-              color: '#1677ff',
-              background: '#f0f5ff',
+              color: token.colorPrimary,
+              background: token.colorPrimaryBg,
               padding: '2px 8px',
               borderRadius: 4,
               fontSize: 11,

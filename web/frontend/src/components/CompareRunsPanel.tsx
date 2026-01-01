@@ -10,7 +10,7 @@
  * - Auto-refresh indicator when running experiments exist
  */
 import React, { useMemo } from 'react'
-import { Button, Tag, Tooltip } from 'antd'
+import { Button, Tag, Tooltip, theme } from 'antd'
 import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, QuestionCircleOutlined, EyeOutlined, EyeInvisibleOutlined, PlusOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -33,20 +33,6 @@ interface CompareRunsPanelProps {
   style?: React.CSSProperties
 }
 
-// Status icon mapping
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'finished':
-      return <CheckCircleOutlined style={{ color: '#52c41a' }} />
-    case 'failed':
-      return <CloseCircleOutlined style={{ color: '#ff4d4f' }} />
-    case 'running':
-      return <SyncOutlined spin style={{ color: '#1677ff' }} />
-    default:
-      return <QuestionCircleOutlined style={{ color: '#999' }} />
-  }
-}
-
 const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
   runs,
   colors,
@@ -58,6 +44,21 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
 }) => {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const { token } = theme.useToken()
+  
+  // Status icon mapping using design tokens
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'finished':
+        return <CheckCircleOutlined style={{ color: token.colorSuccess }} />
+      case 'failed':
+        return <CloseCircleOutlined style={{ color: token.colorError }} />
+      case 'running':
+        return <SyncOutlined spin style={{ color: token.colorPrimary }} />
+      default:
+        return <QuestionCircleOutlined style={{ color: token.colorTextDisabled }} />
+    }
+  }
   
   // Check if any run is still running
   const hasRunning = useMemo(() => runs.some(r => r.status === 'running'), [runs])
@@ -73,16 +74,16 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
         flexDirection: 'column',
         height: '100%',
         minHeight: 0,
-        borderRight: '1px solid #f0f0f0',
-        background: '#fafafa',
+        borderRight: `1px solid ${token.colorBorderSecondary}`,
+        background: token.colorBgLayout,
       }}
     >
       {/* Header */}
       <div
         style={{
           padding: '12px',
-          borderBottom: '1px solid #f0f0f0',
-          background: '#fff',
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
+          background: token.colorBgContainer,
           flexShrink: 0,
         }}
       >
@@ -95,7 +96,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
           {t('experiments.back_to_list') || 'Back to List'}
         </Button>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#333' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: token.colorText }}>
             {t('experiments.comparing_runs', { count: runs.length }) || `Comparing ${runs.length} runs`}
           </div>
           <Tooltip title={t('experiments.add_runs') || 'Add more runs'}>
@@ -104,12 +105,12 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
               size="small"
               icon={<PlusOutlined />}
               onClick={onAddRuns}
-              style={{ color: '#1677ff' }}
+              style={{ color: token.colorPrimary }}
             />
           </Tooltip>
         </div>
         {/* Visible count */}
-        <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
+        <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
           {t('experiments.visible_runs', { count: visibleCount, total: runs.length }) || 
             `${visibleCount}/${runs.length} visible`}
         </div>
@@ -117,7 +118,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
         {hasRunning && (
           <div style={{ 
             fontSize: 11, 
-            color: '#1677ff', 
+            color: token.colorPrimary, 
             marginTop: 4,
             display: 'flex',
             alignItems: 'center',
@@ -149,9 +150,9 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
               style={{
                 padding: '10px 12px',
                 marginBottom: 8,
-                background: '#fff',
+                background: token.colorBgContainer,
                 borderRadius: 8,
-                border: '1px solid #f0f0f0',
+                border: `1px solid ${token.colorBorderSecondary}`,
                 boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
                 opacity: isVisible ? 1 : 0.5,
                 cursor: 'pointer',
@@ -167,7 +168,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                     width: 10,
                     height: 10,
                     borderRadius: '50%',
-                    background: isVisible ? (colors[index] || '#999') : '#ccc',
+                    background: isVisible ? (colors[index] || token.colorTextDisabled) : token.colorTextDisabled,
                     flexShrink: 0,
                   }}
                 />
@@ -175,7 +176,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                   <code
                     style={{
                       fontSize: 11,
-                      color: '#666',
+                      color: token.colorTextSecondary,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -197,7 +198,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                     }}
                     style={{ 
                       cursor: 'pointer', 
-                      color: isVisible ? '#1677ff' : '#999',
+                      color: isVisible ? token.colorPrimary : token.colorTextDisabled,
                       display: 'flex',
                       alignItems: 'center',
                     }}
@@ -212,7 +213,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                 <div
                   style={{
                     fontSize: 12,
-                    color: '#1677ff',
+                    color: token.colorPrimary,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',

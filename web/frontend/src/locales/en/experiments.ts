@@ -65,6 +65,24 @@ export default {
   'experiments.all_status': 'All Status',
   'experiments.no_runs_to_delete': 'No runs to delete in this path',
   
+  // Alias inline editing
+  'experiments.alias_updated': 'Alias updated',
+  'experiments.alias_update_failed': 'Failed to update alias',
+  'experiments.alias_placeholder': 'Enter alias...',
+  'experiments.double_click_edit': 'Double-click to edit',
+  
+  // Tags
+  'experiments.add_tags': 'Add tags...',
+  'experiments.add_tag': 'Add tag',
+  'experiments.add_tag_title': 'Add Tag',
+  'experiments.enter_tag': 'Enter tag name...',
+  'experiments.new_tag': 'New tag',
+  'experiments.tag_exists': 'Tag already exists',
+  'experiments.tags_updated': 'Tags updated',
+  'experiments.tags_update_failed': 'Failed to update tags',
+  'experiments.history_tags': 'History',
+  'experiments.recommended_tags': 'Recommended',
+  
   // Path tree panel
   'experiments.path_tree': 'Paths',
   'experiments.all_runs': 'All Runs',
