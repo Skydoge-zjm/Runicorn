@@ -748,7 +748,7 @@ export default function RunDetailPage() {
         }
         styles={{ body: { padding: 0 } }}
       >
-        <LogsViewer url={logUrl} persistKey={`run_${id}_logs`} />
+        <LogsViewer url={logUrl} />
       </Card>
         </Space>
       </div>

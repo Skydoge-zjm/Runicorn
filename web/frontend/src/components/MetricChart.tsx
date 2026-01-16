@@ -65,7 +65,7 @@ function getBestType(key: string): 'max' | 'min' | undefined {
 }
 
 const MetricChart = memo(function MetricChart({ 
-  runs, xKey, yKey, title, height, persistKey, group, showLegend = true, colors, legendSelected 
+  runs, xKey, yKey, title, height, persistKey, group, showLegend = true, colors = [], legendSelected 
 }: MetricChartProps) {
   const { t } = useTranslation()
   const { settings } = useSettings()
@@ -270,7 +270,7 @@ const MetricChart = memo(function MetricChart({
       },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
       legend: legendConfig,
-      color: colors,  // Custom colors if provided
+      ...(colors.length > 0 && { color: colors }),
       xAxis: isSingleRun ? { type: 'category', data: xAxisData } : { type: 'value', name: xKey },
       yAxis: { type: useLog ? 'log' : 'value', scale: dynamicScale, min: dynamicScale ? 'dataMin' : 0 },
       grid: { left: 50, right: 30, top: gridTop, bottom: 80, show: settings.showGridLines },
