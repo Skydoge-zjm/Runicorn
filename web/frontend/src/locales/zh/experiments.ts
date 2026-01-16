@@ -142,6 +142,7 @@ export default {
   'logs.autoscroll': '自动滚动',
   'logs.tooltip.filter_tqdm': '隐藏 tqdm 进度帧以降低噪声',
   'logs.filter_tqdm': '过滤 tqdm',
+  'logs.search_placeholder': '搜索日志...',
   'logs.clear': '清空',
   'logs.copy': '复制',
   'logs.copied': '已复制日志到剪贴板',

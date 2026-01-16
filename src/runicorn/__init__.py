@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .sdk import Run, init
+from .sdk import Run, init, get_active_run
 from .registry import get_config
 from .enabled import enabled, is_enabled, reset_enabled, set_enabled
 from .rnconfig import get_effective_rnconfig
@@ -26,6 +26,7 @@ except Exception:
 __all__ = [
     "Run",
     "init",
+    "get_active_run",
     "get_config",
     "snapshot_workspace",
     "enabled",

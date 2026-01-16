@@ -185,6 +185,8 @@ class Run:
         workspace_root: Optional[str] = None,
         snapshot_format: str = "zip",
         force_snapshot: bool = False,
+        capture_console: bool = False,
+        tqdm_mode: str = "smart",
     ) -> None:
         # Normalize and validate path
         self.path = _normalize_path(path)
@@ -348,6 +350,31 @@ class Run:
                 logger.info(f"Environment captured for run {self.id}")
             except Exception as e:
                 logger.warning(f"Failed to capture environment: {e}")
+
+        # Console capture (initialized after _logs_txt_path is set)
+        self._console_capture = None
+        self._capture_console = capture_console
+        self._tqdm_mode = tqdm_mode
+        
+        if capture_console:
+            try:
+                from .console import ConsoleCapture
+                self._console_capture = ConsoleCapture(
+                    log_path=self._logs_txt_path,
+                    tqdm_mode=tqdm_mode,
+                )
+                self._console_capture.start()
+                logger.debug(f"Console capture started for run {self.id}")
+            except Exception as e:
+                # Graceful degradation: log warning and continue without capture
+                import warnings
+                warnings.warn(
+                    f"Failed to initialize console capture: {e}. "
+                    "Continuing without capture.",
+                    RuntimeWarning,
+                    stacklevel=2
+                )
+                self._console_capture = None
 
     def scan_outputs_once(
         self,
@@ -587,6 +614,30 @@ class Run:
         with self._logs_lock:
             with open(self._logs_txt_path, "a", encoding="utf-8", errors="ignore") as f:
                 f.write(line)
+
+    def get_logging_handler(
+        self,
+        level: int = logging.INFO,
+        fmt: Optional[str] = None,
+    ):
+        """
+        Get a logging handler that writes to this run's log file.
+        
+        Usage:
+            run = runicorn.init(capture_console=True)
+            logger = logging.getLogger(__name__)
+            logger.addHandler(run.get_logging_handler())
+            logger.info("This goes to logs.txt")
+        
+        Args:
+            level: Minimum log level (default: logging.INFO)
+            fmt: Custom format string (optional)
+        
+        Returns:
+            A configured RunicornLoggingHandler instance.
+        """
+        from .console import RunicornLoggingHandler
+        return RunicornLoggingHandler(run=self, level=level, fmt=fmt)
 
     def log_image(
         self,
@@ -918,6 +969,15 @@ class Run:
     
     def finish(self, status: str = "finished") -> None:
         """Mark the run as finished and ensure all data is written."""
+        # Stop console capture before finishing
+        if self._console_capture is not None:
+            try:
+                self._console_capture.stop()
+                logger.debug(f"Console capture stopped for run {self.id}")
+            except Exception as e:
+                logger.debug(f"Failed to stop console capture: {e}")
+            self._console_capture = None
+        
         self.stop_outputs_watch()
 
         if self._index_db is not None:
@@ -1010,6 +1070,16 @@ class Run:
         import time
         time.sleep(0.1)
 
+    # ---------------- context manager -----------------
+    def __enter__(self) -> "Run":
+        """Enter context manager."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit context manager, finishing the run."""
+        status = "failed" if exc_type is not None else "finished"
+        self.finish(status=status)
+
     # ---------------- helpers -----------------
     @staticmethod
     def _write_json(path: Path, obj: Dict[str, Any]) -> None:
@@ -1036,6 +1106,8 @@ def init(
     workspace_root: Optional[str] = None,
     snapshot_format: str = "zip",
     force_snapshot: bool = False,
+    capture_console: bool = False,
+    tqdm_mode: str = "smart",
 ) -> Union[Run, NoOpRun]:
     """
     Initialize a new experiment run.
@@ -1050,6 +1122,8 @@ def init(
         workspace_root: Workspace root directory for code snapshot
         snapshot_format: Format for code snapshot (currently only "zip")
         force_snapshot: Force snapshot even if workspace is large
+        capture_console: Whether to capture stdout/stderr to logs.txt (default: False)
+        tqdm_mode: How to handle tqdm progress bars: "smart" (default), "all", or "none"
         
     Returns:
         Run object for logging metrics and managing the experiment
@@ -1058,6 +1132,11 @@ def init(
         >>> import runicorn as rn
         >>> run = rn.init(path="cv/yolo/ablation", alias="best-v2")
         >>> run.log({"loss": 0.5}, step=0)
+        >>> run.finish()
+        
+        # With console capture:
+        >>> run = rn.init(path="train", capture_console=True)
+        >>> print("This goes to logs.txt")
         >>> run.finish()
     """
     global _active_run
@@ -1075,6 +1154,8 @@ def init(
             workspace_root=workspace_root,
             snapshot_format=snapshot_format,
             force_snapshot=force_snapshot,
+            capture_console=capture_console,
+            tqdm_mode=tqdm_mode,
         )
         _active_run = r
     return r

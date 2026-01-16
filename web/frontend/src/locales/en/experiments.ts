@@ -142,6 +142,7 @@ export default {
   'logs.autoscroll': 'Auto Scroll',
   'logs.tooltip.filter_tqdm': 'Hide tqdm progress frames to reduce noise',
   'logs.filter_tqdm': 'Filter tqdm',
+  'logs.search_placeholder': 'Search logs...',
   'logs.clear': 'Clear',
   'logs.copy': 'Copy',
   'logs.copied': 'Copied logs to clipboard',
