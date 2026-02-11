@@ -1,97 +1,234 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Space, Switch, Tag, Tooltip, message } from 'antd'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { Button, Input, Space, Switch, Tag, Tooltip, message } from 'antd'
 import { useTranslation } from 'react-i18next'
+import AnsiToHtml from 'ansi-to-html'
 
-function isTqdmLine(s: string) {
-  // Heuristics for tqdm progress frames when redirected to file
-  // e.g. " 45%|███████████▍            | 45/100 [00:12<00:15,  3.45it/s]"
-  if (/\d{1,3}%\|/.test(s)) return true
-  if (/it\/(s|sec)/i.test(s)) return true
-  if (/ETA|elapsed/i.test(s)) return true
+// Constants
+const MAX_LINES = 5000
+const RECONNECT_BASE_MS = 500
+const RECONNECT_MAX_MS = 10000
+
+/**
+ * Escape HTML special characters to prevent XSS attacks.
+ * Used for search keyword highlighting.
+ */
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+/**
+ * Escape special regex characters in a string.
+ */
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// ANSI converter instance with terminal-like colors
+const ansiConverter = new AnsiToHtml({
+  fg: '#e6e9ef',
+  bg: '#0b1020',
+  newline: false,
+  escapeXML: true,
+  colors: {
+    0: '#1d1f21',   // black
+    1: '#cc6666',   // red
+    2: '#b5bd68',   // green
+    3: '#f0c674',   // yellow
+    4: '#81a2be',   // blue
+    5: '#b294bb',   // magenta
+    6: '#8abeb7',   // cyan
+    7: '#c5c8c6',   // white
+  },
+})
+
+/**
+ * Heuristics for detecting tqdm progress bar lines.
+ * Only matches actual tqdm-style progress bars, not MetricLogger output.
+ */
+function isTqdmLine(s: string): boolean {
+  // tqdm progress bar pattern: " 45%|███████████▍            | 45/100 [00:12<00:15,  3.45it/s]"
+  // Must have percentage + bar character (█ or #) pattern
+  if (/\d{1,3}%\|[█▏▎▍▌▋▊▉#\-\s]+\|/.test(s)) return true
+  
+  // Alternative tqdm pattern with brackets: "100%|██████████| 100/100 [00:10<00:00, 10.00it/s]"
+  if (/\d{1,3}%\|.*\|\s*\d+\/\d+\s*\[/.test(s)) return true
+  
+  // Simple tqdm without bar: "  5%|          | 5/100 [00:01<00:19,  4.89it/s]"
+  if (/^\s*\d{1,3}%\|/.test(s)) return true
+  
   return false
 }
 
-export default function LogsViewer({ url, persistKey }: { url: string, persistKey?: string }) {
+interface LogsViewerProps {
+  url: string
+}
+
+export default function LogsViewer({ url }: LogsViewerProps) {
   const { t } = useTranslation()
-  const [lines, setLines] = useState<string[]>(() => {
-    if (!persistKey) return []
-    try {
-      const raw = localStorage.getItem(persistKey)
-      if (!raw) return []
-      const arr = JSON.parse(raw)
-      return Array.isArray(arr) ? arr.slice(-2000) : []
-    } catch { return [] }
-  })
+  
+  const [allLines, setAllLines] = useState<string[]>([])
   const [autoScroll, setAutoScroll] = useState(true)
   const [filterTqdm, setFilterTqdm] = useState(true)
+  const [searchKeyword, setSearchKeyword] = useState('')
   const [connected, setConnected] = useState<'connected' | 'connecting' | 'disconnected'>('connecting')
   const [nextRetryMs, setNextRetryMs] = useState(0)
-  const ref = useRef<HTMLDivElement>(null)
+  
+  const containerRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const retryTimer = useRef<number | null>(null)
-  const backoffRef = useRef(500)
+  const backoffRef = useRef(RECONNECT_BASE_MS)
+  const mountedRef = useRef(true)
 
+  // WebSocket connection with exponential backoff
   useEffect(() => {
-    let closedByUser = false
+    mountedRef.current = true
+    
+    const cleanup = () => {
+      if (retryTimer.current) {
+        window.clearTimeout(retryTimer.current)
+        retryTimer.current = null
+      }
+      if (wsRef.current) {
+        wsRef.current.onopen = null
+        wsRef.current.onmessage = null
+        wsRef.current.onerror = null
+        wsRef.current.onclose = null
+        try { wsRef.current.close() } catch {}
+        wsRef.current = null
+      }
+    }
 
     const connect = () => {
-      try { if (wsRef.current) wsRef.current.close() } catch {}
+      if (!mountedRef.current) return
+      
+      cleanup()
       setConnected('connecting')
+      
       const ws = new WebSocket(url)
       wsRef.current = ws
+      
       ws.onopen = () => {
+        if (!mountedRef.current) return
         setConnected('connected')
-        backoffRef.current = 500
+        backoffRef.current = RECONNECT_BASE_MS
         setNextRetryMs(0)
+        // Clear logs on new connection - server will resend all existing logs
+        setAllLines([])
       }
+      
       ws.onmessage = (ev) => {
+        if (!mountedRef.current) return
         const text = String(ev.data)
-        if (filterTqdm && isTqdmLine(text)) return
-        setLines((prev) => {
+        setAllLines((prev) => {
           const next = [...prev, text]
-          const sliced = next.slice(-2000)
-          try { if (persistKey) localStorage.setItem(persistKey, JSON.stringify(sliced)) } catch {}
-          return sliced
+          return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next
         })
       }
+      
       const scheduleReconnect = () => {
-        if (closedByUser) return
+        if (!mountedRef.current) return
         setConnected('disconnected')
-        const delay = Math.min(10000, backoffRef.current)
-        backoffRef.current = Math.min(10000, Math.floor(backoffRef.current * 1.8))
+        const delay = Math.min(RECONNECT_MAX_MS, backoffRef.current)
+        backoffRef.current = Math.min(RECONNECT_MAX_MS, Math.floor(backoffRef.current * 1.8))
         setNextRetryMs(delay)
+        
         if (retryTimer.current) window.clearTimeout(retryTimer.current)
         retryTimer.current = window.setTimeout(() => {
+          if (!mountedRef.current) return
           setNextRetryMs(0)
           connect()
         }, delay)
       }
-      ws.onerror = scheduleReconnect
-      ws.onclose = scheduleReconnect
+      
+      ws.onerror = () => scheduleReconnect()
+      ws.onclose = () => scheduleReconnect()
     }
 
     connect()
+    
     return () => {
-      closedByUser = true
-      try { wsRef.current?.close() } catch {}
-      if (retryTimer.current) window.clearTimeout(retryTimer.current)
+      mountedRef.current = false
+      cleanup()
     }
-  }, [url, filterTqdm, persistKey])
+  }, [url])
 
+  // Auto-scroll effect
   useEffect(() => {
-    if (autoScroll && ref.current) {
-      ref.current.scrollTop = ref.current.scrollHeight
+    if (autoScroll && containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight
     }
-  }, [lines, autoScroll])
+  }, [allLines, autoScroll])
 
-  const copyAll = async () => {
+  // Filter and search lines
+  const displayLines = useMemo(() => {
+    let lines = allLines
+    
+    if (filterTqdm) {
+      lines = lines.filter(line => !isTqdmLine(line))
+    }
+    
+    if (searchKeyword) {
+      const keyword = searchKeyword.toLowerCase()
+      lines = lines.filter(line => line.toLowerCase().includes(keyword))
+    }
+    
+    return lines
+  }, [allLines, filterTqdm, searchKeyword])
+
+  // Render line with ANSI colors and search highlight
+  const renderLine = useCallback((line: string, index: number) => {
+    let html: string
     try {
-      await navigator.clipboard.writeText(lines.join('\n'))
+      html = ansiConverter.toHtml(line)
+    } catch {
+      // Fallback to escaped plain text if ANSI conversion fails
+      html = escapeHtml(line)
+    }
+    
+    // Highlight search keyword (with proper HTML escaping to prevent XSS)
+    if (searchKeyword) {
+      const regex = new RegExp(`(${escapeRegex(searchKeyword)})`, 'gi')
+      html = html.replace(regex, '<mark style="background:#f0c674;color:#1d1f21">$1</mark>')
+    }
+    
+    return (
+      <div 
+        key={index} 
+        className="log-line"
+        style={{ display: 'flex', minHeight: 20 }}
+      >
+        <span style={{ 
+          color: '#6c7a89', 
+          minWidth: 50, 
+          textAlign: 'right', 
+          paddingRight: 12,
+          userSelect: 'none',
+          flexShrink: 0,
+        }}>
+          {index + 1}
+        </span>
+        <span 
+          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+          dangerouslySetInnerHTML={{ __html: html }} 
+        />
+      </div>
+    )
+  }, [searchKeyword])
+
+  const copyAll = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(displayLines.join('\n'))
       message.success(t('logs.copied'))
     } catch {
       message.error(t('logs.copy_failed'))
     }
-  }
+  }, [displayLines, t])
+
+  const clearLogs = useCallback(() => {
+    setAllLines([])
+  }, [])
 
   const statusTag = useMemo(() => {
     if (connected === 'connected') return <Tag color="green">{t('logs.status.connected')}</Tag>
@@ -106,7 +243,7 @@ export default function LogsViewer({ url, persistKey }: { url: string, persistKe
 
   return (
     <div>
-      <Space style={{ marginBottom: 8 }}>
+      <Space style={{ marginBottom: 8 }} wrap>
         {statusTag}
         <Tooltip title={t('logs.tooltip.autoscroll')}>
           <span>{t('logs.autoscroll')} <Switch checked={autoScroll} onChange={setAutoScroll} style={{ marginLeft: 6 }} /></span>
@@ -114,13 +251,31 @@ export default function LogsViewer({ url, persistKey }: { url: string, persistKe
         <Tooltip title={t('logs.tooltip.filter_tqdm')}>
           <span>{t('logs.filter_tqdm')} <Switch checked={filterTqdm} onChange={setFilterTqdm} style={{ marginLeft: 6 }} /></span>
         </Tooltip>
-        <Button size="small" onClick={() => { setLines([]); try { if (persistKey) localStorage.removeItem(persistKey) } catch {} }}>{t('logs.clear')}</Button>
+        <Input
+          placeholder={t('logs.search_placeholder')}
+          value={searchKeyword}
+          onChange={(e) => setSearchKeyword(e.target.value)}
+          style={{ width: 160 }}
+          size="small"
+          allowClear
+        />
+        <Button size="small" onClick={clearLogs}>{t('logs.clear')}</Button>
         <Button size="small" onClick={copyAll}>{t('logs.copy')}</Button>
       </Space>
-      <div ref={ref} style={{ height: 320, overflow: 'auto', background: '#0b1020', color: '#e6e9ef', padding: 12, borderRadius: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', fontSize: 12 }}>
-        {lines.map((l, i) => (
-          <div key={i}>{l}</div>
-        ))}
+      <div 
+        ref={containerRef} 
+        style={{ 
+          height: 320, 
+          overflow: 'auto', 
+          background: '#0b1020', 
+          color: '#e6e9ef', 
+          padding: 12, 
+          borderRadius: 8, 
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', 
+          fontSize: 12,
+        }}
+      >
+        {displayLines.map((line, index) => renderLine(line, index))}
       </div>
     </div>
   )

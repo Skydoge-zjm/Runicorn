@@ -30,7 +30,6 @@
 Python API Client 提供了对 Runicorn Viewer REST API 的简洁封装，使您可以通过 Python 代码进行以下操作：
 
 - 📊 查询和分析实验数据
-- 📦 管理 Artifacts 版本
 - 🔌 控制远程 Viewer 会话
 - 📤 导出数据为各种格式
 - 🐼 集成 pandas DataFrame
@@ -41,7 +40,7 @@ Python API Client 提供了对 Runicorn Viewer REST API 的简洁封装，使您
 - ✅ **自动重试**: 内置请求重试机制
 - ✅ **上下文管理**: 支持 `with` 语句自动清理
 - ✅ **DataFrame 集成**: 内置 pandas 转换工具
-- ✅ **模块化设计**: Artifacts 和 Remote API 独立扩展
+- ✅ **模块化设计**: Remote API 独立扩展
 
 ---
 
@@ -150,7 +149,6 @@ client = RunicornClient(
 | `base_url` | `str` | Viewer 基础 URL |
 | `timeout` | `int` | 请求超时时间 |
 | `session` | `requests.Session` | HTTP 会话对象 |
-| `artifacts` | `ArtifactsAPI` | Artifacts API 扩展 |
 | `remote` | `RemoteAPI` | Remote API 扩展 |
 
 ---
@@ -407,125 +405,6 @@ if gpu_info.get("available"):
 ---
 
 ## 扩展 API
-
-### Artifacts API
-
-通过 `client.artifacts` 访问。
-
-#### list_artifacts()
-
-列出所有 artifacts。
-
-```python
-client.artifacts.list_artifacts(
-    type: Optional[str] = None,
-    limit: Optional[int] = None,
-    offset: Optional[int] = None
-) -> List[Dict[str, Any]]
-```
-
-**示例**：
-```python
-# 列出所有 artifacts
-artifacts = client.artifacts.list_artifacts()
-
-# 按类型过滤
-models = client.artifacts.list_artifacts(type="model")
-datasets = client.artifacts.list_artifacts(type="dataset")
-```
-
----
-
-#### get_artifact()
-
-获取 artifact 详情。
-
-```python
-client.artifacts.get_artifact(artifact_id: str) -> Dict[str, Any]
-```
-
-**参数**：
-- `artifact_id`: Artifact ID（格式：`name:version` 或 `name:vN`）
-
-**示例**：
-```python
-artifact = client.artifacts.get_artifact("my-model:v3")
-
-print(f"名称: {artifact['name']}")
-print(f"版本: {artifact['version']}")
-print(f"类型: {artifact['type']}")
-print(f"大小: {artifact['size_bytes'] / 1024 / 1024:.2f} MB")
-```
-
----
-
-#### list_versions()
-
-列出 artifact 的所有版本。
-
-```python
-client.artifacts.list_versions(artifact_name: str) -> List[Dict[str, Any]]
-```
-
-**示例**：
-```python
-versions = client.artifacts.list_versions("my-model")
-
-for v in versions:
-    print(f"v{v['version']}: {v['created_at']}")
-```
-
----
-
-#### get_artifact_lineage()
-
-获取 artifact 血缘关系。
-
-```python
-client.artifacts.get_artifact_lineage(artifact_id: str) -> Dict[str, Any]
-```
-
-**示例**：
-```python
-lineage = client.artifacts.get_artifact_lineage("my-model:v3")
-
-print(f"创建于: {lineage['created_by']}")
-print(f"使用于: {lineage['used_by']}")
-```
-
----
-
-#### list_experiment_artifacts()
-
-列出实验相关的 artifacts。
-
-```python
-client.artifacts.list_experiment_artifacts(
-    run_id: str,
-    relation: Optional[str] = None
-) -> List[Dict[str, Any]]
-```
-
-**参数**：
-- `run_id`: 运行 ID
-- `relation`: 关系类型（`created`, `used`）
-
-**示例**：
-```python
-# 实验创建的 artifacts
-created = client.artifacts.list_experiment_artifacts(
-    "run_id",
-    relation="created"
-)
-
-# 实验使用的 artifacts
-used = client.artifacts.list_experiment_artifacts(
-    "run_id",
-    relation="used"
-)
-```
-
----
 
 ### Remote API
 

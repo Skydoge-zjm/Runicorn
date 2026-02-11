@@ -72,7 +72,7 @@ async def get_column_widths(
     Get column width preferences for a specific table and window size.
     
     Args:
-        table: Table identifier (e.g., 'experiments', 'artifacts')
+        table: Table identifier (e.g., 'experiments', 'runs')
         size: Window size key (e.g., '1920x1080')
         
     Returns:

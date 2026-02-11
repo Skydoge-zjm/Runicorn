@@ -24,12 +24,6 @@ export default {
   'settings.system_info.misses': '未命中次数',
   'settings.system_info.cache_size': '缓存大小',
   
-  'settings.system_info.artifacts_stats': 'Artifacts 统计',
-  'settings.system_info.total_artifacts': '总 Artifacts',
-  'settings.system_info.total_versions': '总版本数',
-  'settings.system_info.deduplication': '去重',
-  'settings.system_info.space_saved': '节省空间',
-  
   'settings.system_info.help_text': '此信息对调试和技术支持很有用。点击"复制全部"将所有详情复制到剪贴板。',
   
   'settings.drawer.title': '设置',

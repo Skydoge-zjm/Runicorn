@@ -4,7 +4,7 @@
 
 # Runicorn API 快速参考
 
-**版本**: v0.5.0  
+**版本**: v0.6.0  
 **基础 URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -24,8 +24,8 @@ with api.connect() as client:
     # 获取指标
     metrics = client.get_metrics(experiments[0]["id"])
     
-    # Artifacts
-    artifacts = client.artifacts.list_artifacts(type="model")
+    # Remote Viewer
+    client.remote.connect(host="gpu-server.com", username="user")
 ```
 
 **文档**: [python_client_api.md](./python_client_api.md)
@@ -66,58 +66,6 @@ POST /api/runs/soft-delete
 Body: {"run_ids": ["run1", "run2"]}
 ```
 
-### Manifest-Based Sync 🚀
-
-```bash
-# 生成 manifest（服务器端）
-runicorn generate-manifest --verbose
-
-# 生成活跃 manifest（最近 1 小时）
-runicorn generate-manifest --active
-
-# 指定实验目录
-runicorn generate-manifest --root /data/experiments
-
-# 查看 manifest 统计
-jq '.statistics' .runicorn/full_manifest.json
-
-# Python SDK - 服务端
-from runicorn.manifest import ManifestGenerator, ManifestType
-generator = ManifestGenerator(Path("/data/experiments"))
-manifest, path = generator.generate(ManifestType.FULL)
-
-# Python SDK - 客户端（自动集成）
-from runicorn.remote_storage import MetadataSyncService
-service = MetadataSyncService(..., use_manifest_sync=True)
-service.sync_all()  # 自动使用 manifest，失败时回退
-```
-
-### Artifacts
-
-```bash
-# 列出 artifacts
-GET /api/artifacts?type=model
-
-# 获取版本
-GET /api/artifacts/{name}/versions
-
-# 获取版本详情
-GET /api/artifacts/{name}/v{version}
-
-# 获取血缘图
-GET /api/artifacts/{name}/v{version}/lineage
-```
-
-### V2 API (高性能)
-
-```bash
-# 高级查询
-GET /api/v2/experiments?project=demo&status=finished&page=1&per_page=50
-
-# 快速指标
-GET /api/v2/experiments/{id}/metrics/fast?downsample=1000
-```
-
 ### 配置
 
 ```bash
@@ -134,23 +82,69 @@ Body: {"path": "E:\\RunicornData"}
 ```bash
 # 连接到远程服务器
 POST /api/remote/connect
-Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
+Body: {"host": "gpu-server.com", "port": 22, "username": "user", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true}
 
 # 列出 Python 环境
-GET /api/remote/environments?connection_id=conn_1a2b3c4d
+GET /api/remote/conda-envs?connection_id=user@gpu-server.com:22
 
 # 启动 Remote Viewer
 POST /api/remote/viewer/start
-Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
+Body: {"host": "gpu-server.com", "port": 22, "username": "user", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true, "remote_root": "/data/experiments", "local_port": null, "remote_port": null, "conda_env": null}
 
 # 获取 Viewer 状态
-GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
+GET /api/remote/viewer/status/{session_id}
 
-# 健康检查
-GET /api/remote/health?connection_id=conn_1a2b3c4d
+# 列出 SSH sessions
+GET /api/remote/sessions
 
 # 断开连接
-DELETE /api/remote/connections/conn_1a2b3c4d
+POST /api/remote/disconnect
+Body: {"host": "gpu-server.com", "port": 22, "username": "user"}
+```
+
+### 增强日志 API 🆕 (v0.6.0)
+
+```python
+import runicorn
+import logging
+
+# 启用控制台捕获
+run = runicorn.init(
+    path="my/experiment",
+    capture_console=True,  # 捕获 stdout/stderr
+    tqdm_mode="smart"      # smart/all/none
+)
+
+# Python logging 集成
+logger = logging.getLogger(__name__)
+logger.addHandler(run.get_logging_handler())
+logger.info("这会写入 logs.txt")
+
+# MetricLogger (torchvision 兼容)
+from runicorn.log_compat.torchvision import MetricLogger
+metric_logger = MetricLogger()
+metric_logger.update(loss=0.5, accuracy=0.95)  # 自动记录到 Runicorn
+```
+
+
+### 路径层级 API 🆕 (v0.6.0)
+
+```bash
+# 列出所有路径（含统计）
+GET /api/paths?include_stats=true
+
+# 获取路径树结构
+GET /api/paths/tree
+
+# 列出某路径下的运行
+GET /api/paths/runs?path=cv/yolo
+
+# 按路径批量软删除
+POST /api/paths/soft-delete
+Body: {"path": "old_experiments", "exact": false}
+
+# 按路径导出运行
+GET /api/paths/export?path=cv/yolo&format=zip
 ```
 
 ---
@@ -194,7 +188,6 @@ DELETE /api/remote/connections/conn_1a2b3c4d
 | 端点类型 | 限制 |
 |---------|------|
 | 标准 | 60/分钟 |
-| V2 查询 | 100/分钟 |
 | SSH 连接 | 5/分钟 |
 | 批量删除 | 10/分钟 |
 
@@ -388,7 +381,9 @@ response = requests.get(
 - **[v2_api.md](./v2_api.md)** - 高性能查询
 - **[metrics_api.md](./metrics_api.md)** - 指标和日志
 - **[config_api.md](./config_api.md)** - 配置
-- **[remote_api.md](./remote_api.md)** - Remote Viewer API 🆕
+- **[remote_api.md](./remote_api.md)** - Remote Viewer API
+- **[logging_api.md](./logging_api.md)** - 增强日志 API 🆕
+- **[paths_api.md](./paths_api.md)** - 路径层级 API 🆕
 - **[manifest_api.md](./manifest_api.md)** - Manifest-based 同步 🚀
 
 ---
@@ -397,6 +392,6 @@ response = requests.get(
 
 ---
 
-**最后更新**: 2025-10-25
+**最后更新**: 2025-01-XX
 
 

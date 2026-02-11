@@ -95,7 +95,7 @@ run.finish()
 pip install runicorn
 
 # 从源码安装
-git clone https://github.com/yourusername/runicorn.git
+git clone https://github.com/Skydoge-zjm/runicorn.git
 cd runicorn
 pip install -e .
 
@@ -772,7 +772,7 @@ run.finish()
 - 🏗️ [架构文档](../../architecture/zh/)
 
 **社区**:
-- 💬 GitHub Issues: https://github.com/yourusername/runicorn/issues
+- 💬 GitHub Issues: https://github.com/Skydoge-zjm/runicorn/issues
 - 📧 Email: support@runicorn.dev
 - 🐦 Twitter: @runicorn
 
@@ -833,7 +833,7 @@ runicorn --version >> diagnosis.txt
 ```bash
 # 1. Fork 仓库
 # 2. 克隆到本地
-git clone https://github.com/your-username/runicorn.git
+git clone https://github.com/Skydoge-zjm/runicorn.git
 cd runicorn
 
 # 3. 安装开发依赖
@@ -852,7 +852,7 @@ pytest tests/
 
 **没有找到答案？** 
 
-查看 [完整文档](../../README.md) 或 [提交 Issue](https://github.com/yourusername/runicorn/issues/new)
+查看 [完整文档](../../README.md) 或 [提交 Issue](https://github.com/Skydoge-zjm/runicorn/issues/new)
 
 ---
 

@@ -19,9 +19,6 @@ Example:
     >>> # Get metrics
     >>> metrics = client.get_metrics(run["id"])
     >>> 
-    >>> # Access artifacts
-    >>> artifacts = client.artifacts.list_artifacts(type="model")
-    >>> 
     >>> # Remote viewer
     >>> client.remote.connect(host="localhost", username="user")
     >>> session = client.remote.start_viewer(
@@ -45,7 +42,6 @@ from .models import (
     Experiment,
     MetricPoint,
     MetricSeries,
-    Artifact,
     RemoteSession,
     Project,
 )
@@ -65,7 +61,6 @@ __all__ = [
     "Experiment",
     "MetricPoint",
     "MetricSeries",
-    "Artifact",
     "RemoteSession",
     "Project",
 ]

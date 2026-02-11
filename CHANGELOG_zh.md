@@ -2,6 +2,123 @@
 
 记录本项目的所有重要变更。
 
+## [0.6.0] - 2025-01
+
+### 🚀 重大新功能
+
+#### 新资产系统
+- **新增**: 基于 SHA256 内容寻址存储，自动去重（节省 50-90% 存储空间）
+- **新增**: `snapshot_workspace()` - 创建工作区快照，支持 `.rnignore`
+- **新增**: Blob 存储 - 高效的内容寻址存储
+- **新增**: `restore_from_manifest()` - 将任何快照恢复到原始状态
+- **新增**: `archive_file()` / `archive_dir()` - 归档文件并 SHA256 去重
+- **新增**: `cleanup_orphaned_blobs()` - 清理孤立 blob
+- **新增**: 新模块: `assets/`, `index/`, `workspace/`, `rnconfig/`
+- **移除**: 旧的 `artifacts/` 模块（已被 `assets/` 替代）
+
+#### 增强日志系统
+- **新增**: 控制台捕获 - 自动捕获所有 `print()` 和 logging 输出
+- **新增**: `rn.init()` 的 `capture_console=True` 参数
+- **新增**: tqdm 处理模式: `"smart"`（推荐）、`"all"`、`"none"`
+- **新增**: `run.get_logging_handler()` - Python logging 集成
+- **新增**: `MetricLogger` 兼容层 - torchvision MetricLogger 的即插即用替代品
+- **新增**: 新模块: `console/`, `log_compat/`
+
+#### 路径层级结构
+- **新增**: 灵活的路径式组织，替代固定的 `project/name` 结构
+- **新增**: `PathTreePanel` - VSCode 风格的实验树形导航
+- **新增**: `GET /api/paths` - 列出所有路径，可选统计信息
+- **新增**: `GET /api/paths/tree` - 获取层级树结构
+- **新增**: `GET /api/paths/runs` - 按路径前缀过滤运行
+- **新增**: `POST /api/paths/soft-delete` - 按路径批量软删除
+- **新增**: `GET /api/paths/export` - 按路径批量导出
+- **新增**: 运行计数徽章、搜索过滤、右键菜单、键盘导航
+
+#### 内联比较视图
+- **新增**: 在实验列表页面直接比较多个实验
+- **新增**: `CompareChartsView` / `CompareRunsPanel` 组件
+- **新增**: 共有指标自动检测（2 个以上运行共有的指标）
+- **新增**: 颜色编码运行，ECharts 联动（同步 tooltip 和缩放）
+- **新增**: 单个运行或指标的可见性切换
+- **新增**: 运行中实验的自动刷新
+
+#### 新 SSH 后端架构
+- **新增**: 多后端回退架构，提升可靠性
+- **新增**: `AutoBackend` 类，回退链: OpenSSH → AsyncSSH → Paramiko
+- **新增**: 连接层始终使用 Paramiko (`SSHConnection`)
+- **新增**: `OpenSSHTunnel` - 使用系统 OpenSSH 客户端（首选）
+- **新增**: `AsyncSSHTunnel` - 纯 Python 异步实现
+- **新增**: `SSHTunnel` (Paramiko) - 最终回退，始终可用
+- **新增**: 严格主机密钥验证，Runicorn 管理的 known_hosts
+- **新增**: 409 确认协议，处理未知/已更改的主机密钥
+- **新增**: `RUNICORN_SSH_PATH` 环境变量，指定自定义 SSH 路径
+- **新增**: 新模块: `known_hosts.py`, `ssh_backend.py`, `host_key.py`
+
+#### 前端改进
+- **新增**: LogsViewer 支持 ANSI 颜色
+- **新增**: 日志查看器行号
+- **新增**: 日志搜索功能，支持高亮
+- **新增**: 实时日志的自动滚动跟随模式
+- **新增**: 虚拟滚动，流畅处理 10 万行以上
+
+### 💥 破坏性变更
+
+#### API 变更
+| 旧 API | 新 API | 说明 |
+|--------|--------|------|
+| `project` 参数 | `path` 参数 | 使用路径层级 |
+| `name` 参数 | `path` 参数 | 合并为单一路径 |
+| `/api/projects` | `/api/paths` | 新端点结构 |
+| `/api/projects/{p}/names` | `/api/paths/tree` | 树结构 |
+
+#### 模块变更
+| 已移除 | 替代 |
+|--------|------|
+| `artifacts/` 模块 | `assets/` 模块 |
+| 旧的 `project/name` 字段 | `path` 字段 |
+
+#### SDK 参数变更
+```python
+# 旧版 (v0.5.x)
+run = rn.init(project="cv", name="yolo")
+
+# 新版 (v0.6.0)
+run = rn.init(path="cv/yolo")
+```
+
+### 🐛 Bug 修复
+
+- **修复**: Remote Viewer 中 WebSocket 连接稳定性问题
+- **修复**: 长时间指标记录的内存泄漏
+- **修复**: tqdm 输出导致日志文件膨胀
+- **修复**: SSH 隧道重连问题
+- **修复**: 文件操作中的路径遍历漏洞
+- **修复**: 并发指标写入的竞态条件
+
+### 📚 文档
+
+- **新增**: 增强日志指南
+- **新增**: 资产指南
+- **新增**: SSH 后端架构文档
+- **新增**: 路径 API 参考
+- **新增**: 日志 API 参考
+- **更新**: 快速入门指南
+- **更新**: API 索引
+- **更新**: 系统概览
+
+### ⚠️ 已知限制
+
+- 控制台捕获在 `rn.init()` 之后开始 - 早期 print 可能被遗漏
+- 最大路径长度: 200 字符
+- OpenSSH 后端需要 PATH 中有 `ssh` 和 `ssh-keyscan`
+- OpenSSH 隧道不支持密码认证
+
+### 🔄 迁移指南
+
+详细迁移说明请参阅 [v0.6.0 发布说明](docs/releases/zh/RELEASE_NOTES_v0.6.0.md)。
+
+---
+
 ## [0.5.3] - 2025-11-28
 
 ### ⚡ 前端性能与 UI 改进

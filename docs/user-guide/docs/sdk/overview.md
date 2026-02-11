@@ -21,7 +21,7 @@ graph LR
 
 Every experiment follows this lifecycle:
 
-1. **Initialize** - Create new experiment
+1. **Initialize** - Create new experiment with `rn.init()`
 2. **Log** - Record metrics during training
 3. **Summary** - Save final results
 4. **Finish** - Mark as complete
@@ -34,44 +34,59 @@ Every experiment follows this lifecycle:
 
 Create a new experiment run.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def init(
-    project: str = "default",
-    name: str = None,
+    path: str = None,
     storage: str = None,
     run_id: str = None,
-    capture_env: bool = True
+    alias: str = None,
+    capture_env: bool = False,
+    snapshot_code: bool = False,
+    workspace_root: str = None,
+    snapshot_format: str = "zip",
+    force_snapshot: bool = False,
+    capture_console: bool = False,
+    tqdm_mode: str = "smart"
 ) -> Run
 ```
+</div>
 
-**Parameters**:
+**Key Parameters**:
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `project` | str | "default" | Project name (like a folder) |
-| `name` | str | "default" | Experiment name (like sub-folder) |
-| `storage` | str | None | Storage root path (overrides config) |
-| `run_id` | str | None | Custom run ID (auto-generated if None) |
-| `capture_env` | bool | True | Capture Git info, dependencies, system info |
+- `path` — Experiment path hierarchy (e.g., `"cv/resnet50/baseline"`). Defaults to `"default"`
+- `storage` — Storage root path (overrides config)
+- `alias` — User-friendly alias for this run
+- `capture_env` — Capture system/environment info (default: `False`)
+- `snapshot_code` — Snapshot workspace code automatically (default: `False`)
+- `capture_console` — Capture stdout/stderr to logs.txt (default: `False`)
+- `tqdm_mode` — tqdm handling: `"smart"` (default), `"all"`, `"none"`
 
-**Returns**: `Run` object
+**Returns**: `Run` object (or `NoOpRun` if tracking is disabled)
 
 **Example**:
 ```python
 import runicorn as rn
 
 # Simple
-run = rn.init(project="demo")
+run = rn.init(path="demo")
 
-# With name
-run = rn.init(project="image_classification", name="resnet50_v1")
+# With path hierarchy
+run = rn.init(path="cv/resnet50/baseline")
+
+# With alias
+run = rn.init(path="cv/resnet50/v2", alias="best-model")
 
 # With custom storage
-run = rn.init(project="demo", storage="E:\\MLData")
+run = rn.init(path="demo", storage="E:\\MLData")
 
-# Without environment capture (faster)
-run = rn.init(project="demo", capture_env=False)
+# With code snapshot
+run = rn.init(path="demo", snapshot_code=True)
+
+# With console capture
+run = rn.init(path="demo", capture_console=True, tqdm_mode="smart")
 ```
 
 ---
@@ -80,30 +95,32 @@ run = rn.init(project="demo", capture_env=False)
 
 Record training metrics at each step.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def log(
     data: dict = None,
+    *,
     step: int = None,
     stage: str = None,
     **kwargs
 ) -> None
 ```
+</div>
 
 **Parameters**:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `data` | dict | Dictionary of metric names and values |
-| `step` | int | Training step (auto-increments if not provided) |
-| `stage` | str | Training stage: "warmup", "train", "eval", etc. |
-| `**kwargs` | any | Additional metrics as keyword arguments |
+- `data` — Dictionary of metric names and values
+- `step` — Training step (auto-increments if not provided)
+- `stage` — Training stage: `"warmup"`, `"train"`, `"eval"`, etc.
+- `**kwargs` — Additional metrics as keyword arguments
 
 **Example**:
 ```python
 import runicorn as rn
 
-run = rn.init(project="demo")
+run = rn.init(path="demo")
 
 # Simple logging
 run.log({"loss": 0.5, "accuracy": 0.8}, step=10)
@@ -119,9 +136,6 @@ run.log({"val_loss": 0.3}, stage="eval")
 # Using kwargs
 run.log(loss=0.1, accuracy=0.95, lr=0.001, step=100)
 
-# Mixed
-run.log({"loss": 0.1}, accuracy=0.95, step=100)
-
 run.finish()
 ```
 
@@ -129,22 +143,58 @@ run.finish()
 
 ### `run.log_text()` - Log Text Messages
 
-Log text messages and progress updates.
+Log text messages and progress updates to `logs.txt`.
+
+<div class="rn-sig" markdown>
 
 **Signature**:
 ```python
 def log_text(text: str) -> None
 ```
+</div>
+
+**Example**:
+```python
+run.log_text("Starting training...")
+run.log_text(f"Epoch 1/100, loss=0.5")
+run.log_text("✓ Training completed")
+```
+
+---
+
+### `run.get_logging_handler()` - Python Logging Integration
+
+Get a logging handler to integrate with Python's logging module.
+
+<div class="rn-sig" markdown>
+
+**Signature**:
+```python
+def get_logging_handler(
+    level: int = logging.INFO,
+    fmt: str = None
+) -> RunicornLoggingHandler
+```
+</div>
+
+**Parameters**:
+
+- `level` — Minimum log level (default: `logging.INFO`)
+- `fmt` — Custom format string (optional)
 
 **Example**:
 ```python
 import runicorn as rn
+import logging
 
-run = rn.init(project="demo")
+run = rn.init(path="demo")
 
-run.log_text("Starting training...")
-run.log_text(f"Epoch 1/100, loss=0.5")
-run.log_text("✓ Training completed")
+logger = logging.getLogger(__name__)
+logger.addHandler(run.get_logging_handler())
+logger.setLevel(logging.INFO)
+
+logger.info("Training started")    # Saved to logs.txt
+logger.warning("LR is high")      # Saved to logs.txt
 
 run.finish()
 ```
@@ -154,6 +204,8 @@ run.finish()
 ### `run.log_image()` - Log Images
 
 Log images for visualization.
+
+<div class="rn-sig" markdown>
 
 **Signature**:
 ```python
@@ -166,17 +218,16 @@ def log_image(
     quality: int = 90
 ) -> str
 ```
+</div>
 
 **Parameters**:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `key` | str | Image identifier/name |
-| `image` | PIL.Image, np.ndarray, bytes, or path | Image to log |
-| `step` | int | Training step |
-| `caption` | str | Image caption |
-| `format` | str | Image format: "png", "jpg" |
-| `quality` | int | JPEG quality (1-100) |
+- `key` — Image identifier/name
+- `image` — PIL.Image, numpy array, bytes, or file path
+- `step` — Training step
+- `caption` — Image caption
+- `format` — Image format: `"png"`, `"jpg"`
+- `quality` — JPEG quality (1-100)
 
 **Example**:
 ```python
@@ -184,7 +235,7 @@ import runicorn as rn
 from PIL import Image
 import numpy as np
 
-run = rn.init(project="demo")
+run = rn.init(path="demo")
 
 # From PIL Image
 img = Image.open("prediction.png")
@@ -206,40 +257,154 @@ run.finish()
 
 Set which metric to track automatically.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
-def set_primary_metric(
-    metric_name: str,
-    mode: str = "max"
-) -> None
+def set_primary_metric(metric_name: str, mode: str = "max") -> None
 ```
+</div>
 
 **Parameters**:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `metric_name` | str | Metric to track (e.g., "accuracy", "loss") |
-| `mode` | str | "max" (higher is better) or "min" (lower is better) |
+- `metric_name` — Metric to track (e.g., `"accuracy"`, `"loss"`)
+- `mode` — `"max"` (higher is better) or `"min"` (lower is better)
 
 **Example**:
 ```python
-import runicorn as rn
-
-run = rn.init(project="demo")
-
-# Track best accuracy
+run = rn.init(path="demo")
 run.set_primary_metric("accuracy", mode="max")
 
-# Training loop
 for step in range(100):
-    acc = train_step()  # Your training code
+    acc = train_step()
     run.log({"accuracy": acc}, step=step)
 
 # Best accuracy is automatically saved to summary
 run.finish()
 ```
 
-**Automatic tracking**: The best value and its step are automatically saved to `summary.json`.
+---
+
+### `run.log_config()` - Log Configuration
+
+Record experiment configuration, CLI arguments, and config files.
+
+<div class="rn-sig" markdown>
+
+**Signature**:
+```python
+def log_config(
+    *,
+    args: Any = None,
+    extra: dict = None,
+    config_files: list[str | Path] = None
+) -> None
+```
+</div>
+
+**Example**:
+```python
+import argparse
+import runicorn as rn
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--lr", type=float, default=0.001)
+parser.add_argument("--epochs", type=int, default=100)
+args = parser.parse_args()
+
+run = rn.init(path="demo")
+
+# Log argparse args + extra config + config file paths
+run.log_config(
+    args=args,
+    extra={"model": "ResNet50", "dataset": "CIFAR-10"},
+    config_files=["config.yaml"]
+)
+
+run.finish()
+```
+
+---
+
+### `run.log_dataset()` - Log Dataset Information
+
+Record dataset metadata with optional archiving.
+
+<div class="rn-sig" markdown>
+
+**Signature**:
+```python
+def log_dataset(
+    name: str,
+    root_or_uri: str | Path | dict,
+    *,
+    context: str = "train",
+    save: bool = False,
+    description: str = None,
+    force_save: bool = False,
+    max_archive_bytes: int = 5 * 1024**3,
+    max_archive_files: int = 2_000_000
+) -> None
+```
+</div>
+
+**Example**:
+```python
+run = rn.init(path="cv/resnet50")
+
+# Log dataset metadata (no copy)
+run.log_dataset("cifar10", "./data/cifar10", context="train", description="CIFAR-10 training set")
+
+# Log and archive dataset
+run.log_dataset("config", "./configs", context="config", save=True)
+
+run.finish()
+```
+
+---
+
+### `run.log_pretrained()` - Log Pretrained Model
+
+Record pretrained model information with optional archiving.
+
+<div class="rn-sig" markdown>
+
+**Signature**:
+```python
+def log_pretrained(
+    name: str,
+    *,
+    path_or_uri: str | Path | dict = None,
+    save: bool = False,
+    source_type: str = "unknown",
+    description: str = None,
+    force_save: bool = False
+) -> None
+```
+</div>
+
+**Example**:
+```python
+run = rn.init(path="nlp/bert-finetuning")
+
+# Log HuggingFace model reference
+run.log_pretrained(
+    "bert-base",
+    path_or_uri="bert-base-uncased",
+    source_type="huggingface",
+    description="BERT base model (uncased)"
+)
+
+# Log and archive local checkpoint
+run.log_pretrained(
+    "my-checkpoint",
+    path_or_uri="./checkpoints/best.pth",
+    save=True,
+    source_type="local"
+)
+
+run.finish()
+```
 
 ---
 
@@ -247,32 +412,23 @@ run.finish()
 
 Record final results and metadata.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def summary(update: dict) -> None
 ```
+</div>
 
 **Example**:
 ```python
-import runicorn as rn
-
-run = rn.init(project="demo")
-
-# Training...
-for step in range(100):
-    run.log({"loss": 0.1}, step=step)
-
-# Save final results
 run.summary({
     "final_accuracy": 0.95,
     "final_loss": 0.05,
     "total_epochs": 100,
-    "dataset": "CIFAR-10",
     "model": "ResNet50",
-    "notes": "Baseline experiment with default hyperparameters"
+    "notes": "Baseline with default hyperparameters"
 })
-
-run.finish()
 ```
 
 ---
@@ -281,46 +437,73 @@ run.finish()
 
 Mark experiment as finished.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def finish(status: str = "finished") -> None
 ```
+</div>
 
 **Parameters**:
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `status` | str | "finished" | Final status: "finished", "failed", "interrupted" |
+- `status` — Final status: `"finished"`, `"failed"`, `"interrupted"`
 
 **Example**:
 ```python
-import runicorn as rn
-
-run = rn.init(project="demo")
-
 try:
-    # Training code
     for step in range(100):
         run.log({"loss": 0.1}, step=step)
-    
-    # Success
     run.finish(status="finished")
-    
 except KeyboardInterrupt:
-    # User interrupted
     run.finish(status="interrupted")
-    
 except Exception as e:
-    # Training failed
     run.log_text(f"Error: {e}")
     run.finish(status="failed")
 ```
 
 ---
 
-## Complete Example
+### Context Manager
 
-Here's a complete experiment tracking a real PyTorch model:
+Use `Run` as a context manager for automatic finish:
+
+```python
+import runicorn as rn
+
+with rn.init(path="demo") as run:
+    run.log({"loss": 0.5}, step=1)
+    run.log({"loss": 0.3}, step=2)
+# Automatically calls run.finish()
+# If exception occurs, status is set to "failed"
+```
+
+---
+
+### `rn.enabled()` / `rn.set_enabled()` - Toggle Tracking
+
+Disable/enable tracking globally (useful for debugging or inference):
+
+```python
+import runicorn as rn
+
+# Disable tracking
+rn.set_enabled(False)
+
+run = rn.init(path="demo")  # Returns NoOpRun (no-op, zero overhead)
+run.log({"loss": 0.1})      # Does nothing
+run.finish()                 # Does nothing
+
+# Re-enable
+rn.set_enabled(True)
+
+# Check status
+print(rn.is_enabled())  # True
+```
+
+---
+
+## Complete Example
 
 ```python
 import runicorn as rn
@@ -329,29 +512,36 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision import datasets, transforms
 
-# Initialize
+# Initialize with code snapshot and console capture
 run = rn.init(
-    project="image_classification",
-    name="mnist_cnn",
-    capture_env=True  # Capture Git, pip packages, system info
+    path="cv/mnist/cnn_baseline",
+    snapshot_code=True,
+    capture_console=True,
+    tqdm_mode="smart"
 )
 
 run.log_text("Starting MNIST training...")
 run.set_primary_metric("test_accuracy", mode="max")
 
+# Log config
+run.log_config(extra={
+    "model": "SimpleCNN",
+    "epochs": 10,
+    "optimizer": "Adam",
+    "lr": 0.001
+})
+
+# Log dataset
+run.log_dataset("mnist", "./data", context="train")
+
 # Define model
 model = nn.Sequential(
-    nn.Conv2d(1, 32, 3, 1),
-    nn.ReLU(),
-    nn.MaxPool2d(2),
-    nn.Flatten(),
-    nn.Linear(5408, 10)
+    nn.Conv2d(1, 32, 3, 1), nn.ReLU(), nn.MaxPool2d(2),
+    nn.Flatten(), nn.Linear(5408, 10)
 )
-
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 criterion = nn.CrossEntropyLoss()
 
-# Load data
 train_loader = torch.utils.data.DataLoader(
     datasets.MNIST('./data', train=True, download=True,
                    transform=transforms.ToTensor()),
@@ -362,43 +552,16 @@ train_loader = torch.utils.data.DataLoader(
 for epoch in range(10):
     model.train()
     total_loss = 0
-    
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for data, target in train_loader:
         optimizer.zero_grad()
-        output = model(data)
-        loss = criterion(output, target)
+        loss = criterion(model(data), target)
         loss.backward()
         optimizer.step()
-        
         total_loss += loss.item()
-        
-        # Log every 100 batches
-        if batch_idx % 100 == 0:
-            run.log({
-                "train_loss": loss.item(),
-                "learning_rate": optimizer.param_groups[0]['lr']
-            }, stage="train")
     
-    # Log epoch metrics
     avg_loss = total_loss / len(train_loader)
     run.log({"epoch_loss": avg_loss}, step=epoch)
     run.log_text(f"Epoch {epoch+1}/10, loss={avg_loss:.4f}")
-
-# Save model
-torch.save(model.state_dict(), "mnist_model.pth")
-
-# Save as artifact
-artifact = rn.Artifact("mnist-cnn", type="model")
-artifact.add_file("mnist_model.pth")
-artifact.add_metadata({
-    "architecture": "Simple CNN",
-    "epochs": 10,
-    "optimizer": "Adam",
-    "dataset": "MNIST"
-})
-
-version = run.log_artifact(artifact)
-run.log_text(f"Model saved as v{version}")
 
 # Summary
 run.summary({
@@ -422,14 +585,11 @@ print(f"✓ Experiment completed: {run.id}")
 ```python
 import runicorn as rn
 
-run = rn.init(project="demo", name="simple_training")
+run = rn.init(path="cv/resnet50/baseline")
 run.set_primary_metric("accuracy", mode="max")
 
 for epoch in range(100):
-    # Your training code
     loss, acc = train_one_epoch(model)
-    
-    # Log metrics
     run.log({"loss": loss, "accuracy": acc}, step=epoch)
 
 run.finish()
@@ -440,67 +600,52 @@ run.finish()
 ```python
 import runicorn as rn
 
-run = rn.init(project="demo")
+run = rn.init(path="training/multi-stage")
 
-# Warmup stage
 for step in range(10):
     run.log({"loss": 1.0}, step=step, stage="warmup")
 
-# Training stage
 for step in range(10, 100):
     run.log({"loss": 0.5}, step=step, stage="train")
 
-# Evaluation stage
 for step in range(100, 110):
     run.log({"val_loss": 0.3}, step=step, stage="eval")
 
 run.finish()
 ```
 
-### Pattern 3: Checkpoint Saving
+### Pattern 3: Context Manager with Error Handling
 
 ```python
 import runicorn as rn
-import torch
 
-run = rn.init(project="training")
-
-for epoch in range(100):
-    train_one_epoch(model)
+with rn.init(path="training/safe") as run:
+    run.set_primary_metric("loss", mode="min")
     
-    # Save checkpoint every 10 epochs
-    if epoch % 10 == 0:
-        # Save model
-        checkpoint_path = f"checkpoint_epoch{epoch}.pth"
-        torch.save(model.state_dict(), checkpoint_path)
-        
-        # Save as artifact
-        artifact = rn.Artifact(f"model-checkpoint", type="model")
-        artifact.add_file(checkpoint_path)
-        artifact.add_metadata({"epoch": epoch})
-        
-        version = run.log_artifact(artifact)
-        run.log_text(f"Checkpoint saved as v{version}")
-
-run.finish()
+    for epoch in range(100):
+        loss = train_one_epoch(model)
+        run.log({"loss": loss}, step=epoch)
+    
+    run.summary({"final_loss": loss})
+# Automatically finishes — "failed" if exception, "finished" otherwise
 ```
 
 ---
 
 ## Best Practices
 
-!!! tip "Tip: Organize Your Projects"
+!!! tip "Tip: Organize with Path Hierarchy"
 
-    Use a clear project/name hierarchy:
+    Use descriptive, hierarchical paths:
     
     ```python
     # Good
-    rn.init(project="image_classification", name="resnet50_baseline")
-    rn.init(project="image_classification", name="resnet50_augmented")
-    rn.init(project="nlp", name="bert_finetuning")
+    rn.init(path="cv/classification/resnet50/baseline")
+    rn.init(path="cv/classification/resnet50/augmented")
+    rn.init(path="nlp/sentiment/bert-finetuning")
     
     # Avoid
-    rn.init(project="test", name="exp1")  # Not descriptive
+    rn.init(path="test")  # Not descriptive
     ```
 
 !!! tip "Tip: Set Primary Metric"
@@ -509,29 +654,33 @@ run.finish()
     
     ```python
     run.set_primary_metric("accuracy", mode="max")
-    # Now best accuracy is automatically tracked
     ```
 
 !!! warning "Remember to call finish()"
 
-    Always call `run.finish()` at the end to ensure data is saved:
+    Always call `run.finish()` or use the context manager:
     
     ```python
-    run = rn.init(project="demo")
+    # Option 1: try/finally
+    run = rn.init(path="demo")
     try:
-        # Training code
         run.log({"loss": 0.1})
     finally:
-        run.finish()  # Always called, even if error occurs
+        run.finish()
+    
+    # Option 2: context manager (recommended)
+    with rn.init(path="demo") as run:
+        run.log({"loss": 0.1})
     ```
 
 ---
 
 ## Next Steps
 
-- More SDK documentation coming soon
-- For complete API reference, see the inline documentation in code
-- For examples, see [Image Classification Tutorial](../tutorials/image-classification.md)
+- [Path-based Hierarchy](../getting-started/path-hierarchy.md) — Learn path organization
+- [Assets System](../getting-started/assets-system.md) — Workspace snapshots
+- [Enhanced Logging](../getting-started/enhanced-logging.md) — Console capture
+- [Image Classification Tutorial](../tutorials/image-classification.md) — Complete example
 
 ---
 
@@ -541,7 +690,7 @@ run.finish()
 import runicorn as rn
 
 # Initialize
-run = rn.init(project="demo", name="exp1")
+run = rn.init(path="cv/resnet50/v1", alias="baseline")
 
 # Set primary metric
 run.set_primary_metric("accuracy", mode="max")
@@ -555,10 +704,10 @@ run.log_text("Training started")
 # Log image
 run.log_image("prediction", image_array, step=100)
 
-# Save artifact
-artifact = rn.Artifact("my-model", type="model")
-artifact.add_file("model.pth")
-run.log_artifact(artifact)
+# Log config, dataset, pretrained model
+run.log_config(args=args, extra={"model": "ResNet50"})
+run.log_dataset("cifar10", "./data", context="train")
+run.log_pretrained("base-model", path_or_uri="resnet50", source_type="torchvision")
 
 # Summary
 run.summary({"final_accuracy": 0.95})
@@ -569,7 +718,6 @@ run.finish()
 
 ---
 
-<div align="center">
-  <p><a href="experiment-tracking.md">Learn More About Experiment Tracking →</a></p>
+<div class="rn-page-nav">
+  <a href="../getting-started/path-hierarchy.md">Learn About Path Hierarchy →</a>
 </div>
-

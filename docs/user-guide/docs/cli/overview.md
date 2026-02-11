@@ -1,6 +1,6 @@
 # Command Line Interface
 
-Runicorn provides a powerful CLI for managing experiments, artifacts, and configuration.
+Runicorn provides a powerful CLI for managing experiments, assets, and configuration.
 
 ---
 
@@ -28,7 +28,7 @@ runicorn --help
 | `config` | Manage configuration |
 | `export` | Export experiments |
 | `import` | Import experiments |
-| `artifacts` | Manage artifacts |
+| `delete` | Permanently delete runs and orphaned assets |
 | `export-data` | Export metrics to CSV/Excel |
 | `manage` | Advanced experiment management |
 | `rate-limit` | Configure rate limits |
@@ -73,20 +73,17 @@ runicorn export --project image_classification --out exports/images.tar.gz
 runicorn import --archive experiments.tar.gz
 ```
 
-### Artifacts
+### Delete Runs
 
 ```bash
-# List all artifacts
-runicorn artifacts --action list
+# Preview deletion (dry run)
+runicorn delete --run-id 20260115_100000_abc123 --dry-run
 
-# List versions
-runicorn artifacts --action versions --name resnet50-model
+# Delete a single run permanently
+runicorn delete --run-id 20260115_100000_abc123 --force
 
-# Get artifact info
-runicorn artifacts --action info --name resnet50-model --version 3
-
-# Storage statistics
-runicorn artifacts --action stats
+# Delete multiple runs
+runicorn delete --run-id run1 --run-id run2 --force
 ```
 
 ---
@@ -166,7 +163,7 @@ Available for all commands:
 runicorn viewer --storage "D:\TempStorage"
 
 # Show help for specific command
-runicorn artifacts --help
+runicorn delete --help
 ```
 
 ### Storage Override
@@ -190,33 +187,35 @@ runicorn export --storage "D:\OldData" --out old_experiments.tar.gz
 
 ### Tip 1: Create Aliases
 
-**Bash/Linux**:
+=== "Bash / Zsh"
+
+    ```bash
+    # Add to ~/.bashrc or ~/.zshrc
+    alias rv='runicorn viewer'
+    alias rconfig='runicorn config --show'
+    alias rexport='runicorn export --out'
+
+    # Usage
+    rv  # Start viewer
+    rconfig  # Show config
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    # Add to $PROFILE
+    function rv { runicorn viewer }
+    function rconfig { runicorn config --show }
+
+    # Usage
+    rv  # Start viewer
+    ```
+
+### Tip 2: Quick Cleanup
+
 ```bash
-# Add to ~/.bashrc or ~/.zshrc
-alias rv='runicorn viewer'
-alias rconfig='runicorn config --show'
-alias rexport='runicorn export --out'
-
-# Usage
-rv  # Start viewer
-rconfig  # Show config
-```
-
-**PowerShell/Windows**:
-```powershell
-# Add to $PROFILE
-function rv { runicorn viewer }
-function rconfig { runicorn config --show }
-
-# Usage
-rv  # Start viewer
-```
-
-### Tip 2: Quick Stats
-
-```bash
-# One-liner to see artifact stats
-runicorn artifacts --action stats | grep -E "Total|Dedup"
+# Preview cleanup of experiments older than 30 days
+runicorn manage --action cleanup --days 30 --dry-run
 ```
 
 ### Tip 3: Scheduled Exports
@@ -246,19 +245,26 @@ Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "RunicornBack
 
 **Usage**:
 
-```bash
-# Linux/Mac
-export RUNICORN_DIR="/data/runicorn"
-runicorn viewer
+=== "Linux / macOS"
 
-# Windows (PowerShell)
-$env:RUNICORN_DIR = "E:\RunicornData"
-runicorn viewer
+    ```bash
+    export RUNICORN_DIR="/data/runicorn"
+    runicorn viewer
+    ```
 
-# Windows (CMD)
-set RUNICORN_DIR=E:\RunicornData
-runicorn viewer
-```
+=== "PowerShell"
+
+    ```powershell
+    $env:RUNICORN_DIR = "E:\RunicornData"
+    runicorn viewer
+    ```
+
+=== "CMD"
+
+    ```cmd
+    set RUNICORN_DIR=E:\RunicornData
+    runicorn viewer
+    ```
 
 ---
 
@@ -350,7 +356,7 @@ kill -9 <PID>
 
 ---
 
-<div align="center">
-  <p><a href="../sdk/overview.md">Explore Python SDK →</a></p>
+<div class="rn-page-nav">
+  <a href="../sdk/overview.md">Explore Python SDK →</a>
 </div>
 

@@ -24,9 +24,25 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RunEntry:
     """Represents a run entry with its metadata."""
-    project: Optional[str]
-    name: Optional[str]
+    path: Optional[str]  # Flexible hierarchy path (e.g., "cv/detection/yolo")
     dir: Path
+    
+    # Legacy compatibility - derive from path
+    @property
+    def project(self) -> Optional[str]:
+        """Get first part of path for legacy compatibility."""
+        if not self.path:
+            return None
+        parts = self.path.split("/")
+        return parts[0] if parts else None
+    
+    @property
+    def name(self) -> Optional[str]:
+        """Get last part of path for legacy compatibility."""
+        if not self.path:
+            return None
+        parts = self.path.split("/")
+        return parts[-1] if parts else None
 
 
 def get_storage_root(storage: Optional[str] = None) -> Path:
@@ -266,8 +282,8 @@ def iter_all_runs(root: Path, include_deleted: bool = False) -> List[RunEntry]:
     """
     Discover runs in both new and legacy layouts.
     
-    New layout:   root/<project>/<name>/runs/<run_id>
-    Legacy layout: root/runs/<run_id>
+    New layout:   root/runs/<path>/<run_id>
+    Legacy layout: root/<project>/<name>/runs/<run_id>
     
     Args:
         root: Storage root directory
@@ -278,11 +294,19 @@ def iter_all_runs(root: Path, include_deleted: bool = False) -> List[RunEntry]:
     """
     entries: List[RunEntry] = []
     
-    # New layout: project/name/runs/*
+    # New layout: root/runs/<path>/<run_id>
+    runs_root = root / "runs"
+    if runs_root.exists():
+        try:
+            entries.extend(_scan_runs_recursive(runs_root, "", include_deleted))
+        except Exception as e:
+            logger.debug(f"Error scanning new layout: {e}")
+    
+    # Legacy layout: root/<project>/<name>/runs/<run_id>
     try:
         for proj in sorted([p for p in root.iterdir() if p.is_dir()], key=lambda p: p.name.lower()):
             # Skip well-known non-project dirs
-            if proj.name in {"runs", "webui"}:
+            if proj.name in {"runs", "webui", "archive", "index"}:
                 continue
             for name in sorted([n for n in proj.iterdir() if n.is_dir()], key=lambda p: p.name.lower()):
                 runs_dir = name / "runs"
@@ -293,20 +317,48 @@ def iter_all_runs(root: Path, include_deleted: bool = False) -> List[RunEntry]:
                     # Filter out soft-deleted runs unless explicitly requested
                     if not include_deleted and is_run_deleted(rd):
                         continue
-                    entries.append(RunEntry(project=proj.name, name=name.name, dir=rd))
-    except Exception as e:
-        logger.debug(f"Error scanning new layout: {e}")
-    
-    # Legacy layout fallback
-    try:
-        for rd in list_run_dirs_legacy(root):
-            # Filter out soft-deleted runs unless explicitly requested
-            if not include_deleted and is_run_deleted(rd):
-                continue
-            # project/name can be inferred from meta.json if present; leave None here
-            entries.append(RunEntry(project=None, name=None, dir=rd))
+                    # Convert legacy project/name to path
+                    legacy_path = f"{proj.name}/{name.name}"
+                    entries.append(RunEntry(path=legacy_path, dir=rd))
     except Exception as e:
         logger.debug(f"Error scanning legacy layout: {e}")
+    
+    return entries
+
+
+def _scan_runs_recursive(
+    current_dir: Path, 
+    current_path: str, 
+    include_deleted: bool
+) -> List[RunEntry]:
+    """
+    Recursively scan for run directories.
+    
+    A directory is considered a run if it contains meta.json or status.json.
+    Otherwise, it's treated as a path segment.
+    """
+    entries: List[RunEntry] = []
+    
+    try:
+        for item in sorted(current_dir.iterdir(), key=lambda p: p.name.lower()):
+            if not item.is_dir():
+                continue
+            
+            # Check if this is a run directory (has meta.json or status.json)
+            is_run = (item / "meta.json").exists() or (item / "status.json").exists()
+            
+            if is_run:
+                # Filter out soft-deleted runs unless explicitly requested
+                if not include_deleted and is_run_deleted(item):
+                    continue
+                # This is a run directory
+                entries.append(RunEntry(path=current_path or None, dir=item))
+            else:
+                # This is a path segment, recurse
+                new_path = f"{current_path}/{item.name}" if current_path else item.name
+                entries.extend(_scan_runs_recursive(item, new_path, include_deleted))
+    except Exception as e:
+        logger.debug(f"Error scanning {current_dir}: {e}")
     
     return entries
 

@@ -4,8 +4,8 @@
 
 # Runicorn 架构文档
 
-**版本**: v0.4.0  
-**最后更新**: 2025-10-14  
+**版本**: v0.6.0  
+**最后更新**: 2026-01-15  
 **目标受众**: 开发者、贡献者、架构师
 
 ---
@@ -59,6 +59,19 @@
   - 状态管理
   - 组件层级
   - 性能优化
+
+### 远程与网络
+
+- **[REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)** - ⭐ Remote Viewer 架构 (v0.5.0)
+  - SSH 隧道设计
+  - 远程进程管理
+  - 健康检查机制
+  - 安全模型
+
+- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - ⭐ SSH 后端多回退架构 (v0.6.0)
+  - OpenSSH + AsyncSSH + Paramiko 回退链
+  - 平台特定策略
+  - 连接管理
 
 ### 部署与决策
 

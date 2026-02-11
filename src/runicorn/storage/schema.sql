@@ -6,9 +6,9 @@
 -- =====================================================
 CREATE TABLE IF NOT EXISTS experiments (
     -- Primary identification
-    id TEXT PRIMARY KEY,                    -- Experiment ID (keeping existing format)
-    project TEXT NOT NULL,                 -- Project name
-    name TEXT NOT NULL,                    -- Experiment name
+    id TEXT PRIMARY KEY,                    -- Experiment ID (format: YYYYMMDD_HHMMSS_XXXXXX)
+    path TEXT NOT NULL DEFAULT 'default',   -- Flexible hierarchy path (e.g., "cv/detection/yolo")
+    alias TEXT,                             -- Optional user-friendly alias (can be repeated)
     
     -- Timestamps
     created_at REAL NOT NULL,              -- Creation time (Unix timestamp)
@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS experiments (
 );
 
 -- Performance indexes for common queries
-CREATE INDEX IF NOT EXISTS idx_experiments_project_name ON experiments(project, name);
+CREATE INDEX IF NOT EXISTS idx_experiments_path ON experiments(path);
+CREATE INDEX IF NOT EXISTS idx_experiments_alias ON experiments(alias);
 CREATE INDEX IF NOT EXISTS idx_experiments_status ON experiments(status);
 CREATE INDEX IF NOT EXISTS idx_experiments_created_desc ON experiments(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_experiments_best_metric ON experiments(best_metric_name, best_metric_value DESC);
@@ -169,10 +170,10 @@ CREATE INDEX IF NOT EXISTS idx_cache_expires ON query_cache(expires_at);
 -- Analytics Views: Pre-computed analytics
 -- =====================================================
 
--- Project summary view
-CREATE VIEW IF NOT EXISTS v_project_stats AS
+-- Path summary view (replaces project_stats)
+CREATE VIEW IF NOT EXISTS v_path_stats AS
 SELECT 
-    project,
+    path,
     COUNT(*) as total_experiments,
     COUNT(CASE WHEN status = 'finished' THEN 1 END) as finished_count,
     COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_count,
@@ -182,16 +183,16 @@ SELECT
     MIN(created_at) as first_experiment_time,
     COUNT(CASE WHEN deleted_at IS NULL THEN 1 END) as active_count
 FROM experiments 
-GROUP BY project;
+GROUP BY path;
 
 -- Best performing experiments view
 CREATE VIEW IF NOT EXISTS v_best_experiments AS
 SELECT 
     e.*,
-    RANK() OVER (PARTITION BY project, best_metric_name ORDER BY 
+    RANK() OVER (PARTITION BY path, best_metric_name ORDER BY 
         CASE WHEN best_metric_mode = 'max' THEN best_metric_value END DESC,
         CASE WHEN best_metric_mode = 'min' THEN best_metric_value END ASC
-    ) as rank_in_project,
+    ) as rank_in_path,
     RANK() OVER (PARTITION BY best_metric_name ORDER BY 
         CASE WHEN best_metric_mode = 'max' THEN best_metric_value END DESC,
         CASE WHEN best_metric_mode = 'min' THEN best_metric_value END ASC
@@ -205,8 +206,8 @@ WHERE status = 'finished'
 CREATE VIEW IF NOT EXISTS v_recent_activity AS
 SELECT 
     id,
-    project,
-    name,
+    path,
+    alias,
     status,
     created_at,
     updated_at,

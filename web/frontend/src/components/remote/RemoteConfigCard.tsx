@@ -19,19 +19,18 @@ import {
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
-  ThunderboltOutlined,
-  EditOutlined
+  SaveOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { RemoteConfig, SSHConnectionConfig } from '../../types/remote'
 import DismissibleAlert from '../DismissibleAlert'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 interface RemoteConfigCardProps {
   config: RemoteConfig
   sshConfig: SSHConnectionConfig
-  onConfirm: (remoteRoot: string, localPort?: number) => void
+  onConfirm: (profileName: string, remoteRoot: string, localPort?: number, remotePort?: number) => void
   onCancel: () => void
   loading?: boolean
 }
@@ -48,7 +47,17 @@ export default function RemoteConfigCard({
 
   const handleConfirm = async () => {
     const values = await form.validateFields()
-    onConfirm(values.remoteRoot, values.localPort)
+
+    const localPort =
+      values.localPort === undefined || values.localPort === null || values.localPort === ''
+        ? undefined
+        : Number(values.localPort)
+    const remotePort =
+      values.remotePort === undefined || values.remotePort === null || values.remotePort === ''
+        ? undefined
+        : Number(values.remotePort)
+
+    onConfirm(values.profileName, values.remoteRoot, localPort, remotePort)
   }
 
   return (
@@ -112,15 +121,26 @@ export default function RemoteConfigCard({
         form={form}
         layout="vertical"
         initialValues={{
-          remoteRoot: config.defaultStorageRoot,
+          profileName:
+            sshConfig.saveName ||
+            `${sshConfig.condaEnv || 'system'} - ${(sshConfig.remoteRoot || config.defaultStorageRoot)}`,
+          remoteRoot: sshConfig.remoteRoot || config.defaultStorageRoot,
           localPort: sshConfig.localPort,
-          remotePort: config.suggestedRemotePort
+          remotePort: sshConfig.remotePort || config.suggestedRemotePort
         }}
       >
         <Form.Item
+          label={t('remote.profile.name')}
+          name="profileName"
+          rules={[{ required: true, message: t('remote.form.required') }]}
+        >
+          <Input placeholder={t('remote.profile.namePlaceholder')} />
+        </Form.Item>
+
+        <Form.Item
           label={t('remote.config.confirmStorageRoot')}
           name="remoteRoot"
-          rules={[{ required: true, message: 'Please enter remote storage root' }]}
+          rules={[{ required: true, message: t('remote.form.required') }]}
         >
           <Input placeholder="/data/runicorn" />
         </Form.Item>
@@ -132,18 +152,25 @@ export default function RemoteConfigCard({
         >
           <Input type="number" placeholder="23301" />
         </Form.Item>
+
+        <Form.Item
+          label={t('remote.form.remotePort')}
+          name="remotePort"
+        >
+          <Input type="number" placeholder="23300" />
+        </Form.Item>
       </Form>
 
       {/* Action Buttons */}
       <Space style={{ marginTop: 16 }}>
         <Button
           type="primary"
-          icon={<ThunderboltOutlined />}
+          icon={<SaveOutlined />}
           onClick={handleConfirm}
           loading={loading}
           size="large"
         >
-          {t('remote.config.startViewer')}
+          {t('remote.form.saveConfig')}
         </Button>
         <Button onClick={onCancel} disabled={loading}>
           {t('remote.form.cancel')}

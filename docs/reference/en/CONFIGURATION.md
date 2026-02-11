@@ -5,8 +5,8 @@
 # Runicorn Configuration Reference
 
 **Document Type**: Reference  
-**Version**: v0.5.0  
-**Last Updated**: 2025-10-25
+**Version**: v0.6.0  
+**Last Updated**: 2026-01-15
 
 ---
 
@@ -22,7 +22,7 @@ Runicorn supports configuration via config files and environment variables. Conf
 ## Configuration File Format
 
 ```yaml
-# Runicorn Configuration v0.5.0
+# Runicorn Configuration v0.6.0
 
 storage:
   user_root_dir: ~/RunicornData
@@ -53,6 +53,26 @@ remote:
   log_level: INFO
   cleanup_temp_files: true
   viewer_log_retention_days: 7
+
+# Assets System (v0.6.0)
+assets:
+  snapshot_code: false
+  rnignore_file: .rnignore
+  archive_dir: ${user_root_dir}/archive
+  max_snapshot_size_mb: 500
+  enable_deduplication: true
+
+# Enhanced Logging (v0.6.0)
+enhanced_logging:
+  capture_console: false
+  tqdm_mode: smart
+  max_log_file_size_mb: 50
+  log_format: "%(asctime)s %(message)s"
+
+# Path Hierarchy (v0.6.0)
+paths:
+  max_path_length: 200
+  allowed_chars: "a-zA-Z0-9_-/"
 
 artifacts:
   enable_deduplication: true
@@ -99,7 +119,27 @@ experiments:
 
 ## Key Configuration Options
 
-### Remote Viewer (v0.5.0)
+### Assets System (v0.6.0)
+
+#### `snapshot_code`
+- **Type**: Boolean
+- **Default**: `false`
+- **Description**: Automatically snapshot workspace code on `rn.init()`
+
+#### `tqdm_mode` (under `enhanced_logging`)
+- **Type**: String
+- **Default**: `smart`
+- **Options**: `smart`, `all`, `none`
+- **Description**: How tqdm progress bars are captured in logs
+
+#### `capture_console` (under `enhanced_logging`)
+- **Type**: Boolean
+- **Default**: `false`
+- **Description**: Capture stdout/stderr to experiment logs
+
+---
+
+### Remote Viewer (v0.5.0+)
 
 #### `ssh_timeout`
 - **Type**: Integer (seconds)
@@ -138,6 +178,8 @@ experiments:
 | `RUNICORN_VIEWER_PORT` | `viewer.port` | `8080` |
 | `RUNICORN_LOG_LEVEL` | `viewer.log_level` | `DEBUG` |
 | `RUNICORN_REMOTE_TIMEOUT` | `remote.ssh_timeout` | `60` |
+| `RUNICORN_SSH_PATH` | SSH binary path (v0.6.0) | `/usr/local/bin/ssh` |
+| `RUNICORN_DIR` | `storage.user_root_dir` (alias) | `/data/runicorn` |
 
 **Usage**:
 ```bash

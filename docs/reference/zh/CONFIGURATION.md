@@ -5,8 +5,8 @@
 # Runicorn 配置参考
 
 **文档类型**: 参考  
-**版本**: v0.5.0  
-**最后更新**: 2025-10-25
+**版本**: v0.6.0  
+**最后更新**: 2026-01-15
 
 ---
 
@@ -22,7 +22,7 @@ Runicorn 支持通过配置文件和环境变量进行配置。配置文件位�
 ## 配置文件格式
 
 ```yaml
-# Runicorn 配置文件 v0.5.0
+# Runicorn 配置文件 v0.6.0
 
 # 存储配置
 storage:
@@ -91,6 +91,45 @@ remote:
   
   # Viewer 日志保留天数
   viewer_log_retention_days: 7
+
+# Assets 系统配置 (v0.6.0)
+assets:
+  # 初始化时自动快照工作区代码
+  snapshot_code: false
+  
+  # 快照忽略文件
+  rnignore_file: .rnignore
+  
+  # 归档目录
+  archive_dir: ${user_root_dir}/archive
+  
+  # 最大快照大小（MB）
+  max_snapshot_size_mb: 500
+  
+  # 启用 SHA256 去重
+  enable_deduplication: true
+
+# 增强日志配置 (v0.6.0)
+enhanced_logging:
+  # 捕获 stdout/stderr
+  capture_console: false
+  
+  # tqdm 进度条处理模式 (smart/all/none)
+  tqdm_mode: smart
+  
+  # 日志文件最大大小（MB）
+  max_log_file_size_mb: 50
+  
+  # 日志格式
+  log_format: "%(asctime)s %(message)s"
+
+# 路径层级配置 (v0.6.0)
+paths:
+  # 最大路径长度
+  max_path_length: 200
+  
+  # 允许的字符
+  allowed_chars: "a-zA-Z0-9_-/"
 
 # Artifacts 配置
 artifacts:
@@ -253,7 +292,27 @@ extensions:
 
 ---
 
-### Remote Viewer 配置（v0.5.0）
+### Assets 系统配置（v0.6.0）
+
+#### `snapshot_code`
+- **类型**: 布尔值
+- **默认值**: `false`
+- **说明**: 在 `rn.init()` 时自动快照工作区代码
+
+#### `tqdm_mode`（`enhanced_logging` 下）
+- **类型**: 字符串
+- **默认值**: `smart`
+- **选项**: `smart`, `all`, `none`
+- **说明**: tqdm 进度条在日志中的捕获方式
+
+#### `capture_console`（`enhanced_logging` 下）
+- **类型**: 布尔值
+- **默认值**: `false`
+- **说明**: 捕获 stdout/stderr 到实验日志
+
+---
+
+### Remote Viewer 配置（v0.5.0+）
 
 #### `ssh_timeout`
 - **类型**: 整数（秒）
@@ -315,6 +374,8 @@ Runicorn 支持通过环境变量覆盖配置：
 | `RUNICORN_VIEWER_PORT` | `viewer.port` | `8080` |
 | `RUNICORN_LOG_LEVEL` | `viewer.log_level` | `DEBUG` |
 | `RUNICORN_REMOTE_TIMEOUT` | `remote.ssh_timeout` | `60` |
+| `RUNICORN_SSH_PATH` | SSH 可执行文件路径 (v0.6.0) | `/usr/local/bin/ssh` |
+| `RUNICORN_DIR` | `storage.user_root_dir`（别名） | `/data/runicorn` |
 
 **使用示例**:
 ```bash
