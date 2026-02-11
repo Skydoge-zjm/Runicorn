@@ -107,9 +107,9 @@ docs/
 ### Reference
 
 - **[reference/](reference/)** - Technical reference materials
-  - [CONFIGURATION.md](reference/en/CONFIGURATION.md) - ⭐ Configuration reference (v0.5.0)
-  - [CLI_REFERENCE.md](reference/en/CLI_REFERENCE.md) - ⭐ CLI command reference (v0.5.0)
-  - [FAQ.md](reference/en/FAQ.md) - ⭐ Frequently asked questions (v0.5.0)
+- **[CONFIGURATION.md](reference/en/CONFIGURATION.md)** - ⭐ Configuration reference (v0.6.0)
+  - **[CLI_REFERENCE.md](reference/en/CLI_REFERENCE.md)** - ⭐ CLI command reference (v0.6.0)
+  - **[FAQ.md](reference/en/FAQ.md)** - ⭐ Frequently asked questions (v0.5.0)
   - [RATE_LIMIT_CONFIGURATION.md](reference/en/RATE_LIMIT_CONFIGURATION.md) - Rate limiting config
 
 ### Releases
@@ -117,6 +117,7 @@ docs/
 - **[releases/](releases/)** - Release information
   - [RELEASE_NOTES_v0.6.0.md](releases/en/RELEASE_NOTES_v0.6.0.md) - ⭐ v0.6.0 notes (Assets, Enhanced Logging, Path Hierarchy, SSH Backend)
   - [RELEASE_NOTES_v0.5.0.md](releases/en/RELEASE_NOTES_v0.5.0.md) - v0.5.0 notes (Remote Viewer)
+  - [RELEASE_NOTES_v0.4.1.md](releases/en/RELEASE_NOTES_v0.4.1.md) - v0.4.1 notes
   - [RELEASE_NOTES_v0.4.0.md](releases/en/RELEASE_NOTES_v0.4.0.md) - v0.4.0 notes
 
 ---

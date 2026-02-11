@@ -80,7 +80,7 @@ with api.connect() as client:
 - ✅ Type safety and auto-completion
 - ✅ Auto-retry and connection management
 - ✅ pandas DataFrame integration
-- ✅ Artifacts and Remote API extensions
+- ✅ Remote API extension
 
 **Documentation**: [python_client_api.md](./python_client_api.md)
 
@@ -94,14 +94,11 @@ HTTP REST API endpoints for Web UI and third-party integrations.
 |--------|-------------|---------------|-----------|
 | **Python Client** 🆕 | Programmatic Python access | [python_client_api.md](./python_client_api.md) | SDK |
 | **Runs API** | Experiment run management (CRUD, soft delete, restore) | [runs_api.md](./runs_api.md) | 6 endpoints |
-| **Artifacts API** | Model and dataset version control | [artifacts_api.md](./artifacts_api.md) | 7 endpoints |
 | **Metrics API** | Real-time metrics queries and visualization data | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |
-| **V2 API** | High-performance SQLite-based queries ⚡ | [v2_api.md](./v2_api.md) | 4 endpoints |
 | **Config API** | Configuration and preferences management | [config_api.md](./config_api.md) | 6 endpoints |
 | **Remote Viewer API** 🆕 | VSCode Remote-style remote access | [remote_api.md](./remote_api.md) | 12 endpoints |
-| **Manifest API** | High-performance Manifest-based sync 🚀 | [manifest_api.md](./manifest_api.md) | CLI + SDK |
 | **Logging API** 🆕 | Enhanced logging with console capture (v0.6.0) | [logging_api.md](./logging_api.md) | SDK |
-| **Paths API** 🆕 | Path-based hierarchy navigation (v0.6.0) | [paths_api.md](./paths_api.md) | 5 endpoints |
+| **Paths API** 🆕 | Path-based hierarchy navigation (v0.6.0) | [paths_api.md](./paths_api.md) | 5+3 endpoints |
 | **SSH API** | SSH connection management (deprecated) | [ssh_api.md](./ssh_api.md) | 12 endpoints |
 
 > ⚠️ **Deprecated**: Old SSH file sync API (`/api/unified/*`) has been replaced by Remote Viewer API. See [Migration Guide](../../guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md)
@@ -201,19 +198,7 @@ def api_call_with_retry(url):
 
 ## Versioning
 
-### API Versions
-
-- **V1 API** (`/api/*`): Stable, backward compatible, file-based
-- **V2 API** (`/api/v2/*`): High-performance, SQLite-based, recommended for new integrations
-
-### Version Strategy
-
-- **V1**: Maintained for backward compatibility, suitable for simple use cases
-- **V2**: Recommended for production use, offers 50-100x performance improvement
-
-### Migration Guide
-
-V1 to V2 migration: use `/api/v2/*` endpoints instead of `/api/*` for better performance.
+All API endpoints are under `/api/*`. The storage backend uses SQLite with connection pooling and WAL mode for high-performance queries.
 
 ---
 
@@ -230,12 +215,6 @@ GET /api/runs/{run_id}
 
 # Get run metrics
 GET /api/runs/{run_id}/metrics_step
-
-# List artifacts
-GET /api/artifacts?type=model
-
-# Get artifact versions
-GET /api/artifacts/{name}/versions
 
 # Connect to remote server (new)
 POST /api/remote/connect

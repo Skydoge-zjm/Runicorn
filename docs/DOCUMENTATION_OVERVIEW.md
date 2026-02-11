@@ -73,6 +73,8 @@ Practical guides for:
 
 **Total**: 7 guides × 2 languages = 14 files
 
+> ⚠️ `REMOTE_STORAGE_USER_GUIDE.md` (deprecated in v0.5.0) still exists for reference but is no longer recommended. Use Remote Viewer instead.
+
 ### Features
 
 - ✅ Step-by-step tutorials
@@ -102,8 +104,8 @@ Technical reference for:
 
 | Document | Purpose | Language |
 |----------|---------|----------|
-| `CONFIGURATION.md` | ⭐ Complete config reference (v0.5.0) | EN/ZH |
-| `CLI_REFERENCE.md` | ⭐ All CLI commands (v0.5.0) | EN/ZH |
+| `CONFIGURATION.md` | ⭐ Complete config reference (v0.6.0) | EN/ZH |
+| `CLI_REFERENCE.md` | ⭐ All CLI commands (v0.6.0) | EN/ZH |
 | `FAQ.md` | ⭐ 30+ common questions (v0.5.0) | EN/ZH |
 | `RATE_LIMIT_CONFIGURATION.md` | Rate limiting setup | EN/ZH |
 

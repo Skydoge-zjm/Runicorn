@@ -94,8 +94,8 @@ docs/
 
 | 文档 | 描述 | 受众 |
 |------|------|------|
-| [CONFIGURATION.md](reference/zh/CONFIGURATION.md) | ⭐ 配置参考（v0.5.0）| 所有用户 |
-| [CLI_REFERENCE.md](reference/zh/CLI_REFERENCE.md) | ⭐ CLI 命令参考（v0.5.0）| 所有用户 |
+| [CONFIGURATION.md](reference/zh/CONFIGURATION.md) | ⭐ 配置参考（v0.6.0）| 所有用户 |
+| [CLI_REFERENCE.md](reference/zh/CLI_REFERENCE.md) | ⭐ CLI 命令参考（v0.6.0）| 所有用户 |
 | [FAQ.md](reference/zh/FAQ.md) | ⭐ 常见问题（v0.5.0）| 所有用户 |
 | [RATE_LIMIT_CONFIGURATION.md](reference/zh/RATE_LIMIT_CONFIGURATION.md) | 速率限制配置 | 开发者 |
 
@@ -105,6 +105,7 @@ docs/
 |------|------|
 | [RELEASE_NOTES_v0.6.0.md](releases/zh/RELEASE_NOTES_v0.6.0.md) | ⭐ v0.6.0 发布说明（Assets、增强日志、路径层级、SSH 后端）|
 | [RELEASE_NOTES_v0.5.0.md](releases/zh/RELEASE_NOTES_v0.5.0.md) | v0.5.0 发布说明（Remote Viewer）|
+| [RELEASE_NOTES_v0.4.1.md](releases/zh/RELEASE_NOTES_v0.4.1.md) | v0.4.1 发布说明 |
 | [RELEASE_NOTES_v0.4.0.md](releases/zh/RELEASE_NOTES_v0.4.0.md) | v0.4.0 发布说明 |
 
 ### API 文档
@@ -123,11 +124,11 @@ docs/
 
 | 类别 | 位置 | 文件数 | 用途 |
 |------|------|--------|------|
-| **用户指南** | guides/ | 6 | 快速开始, Remote Viewer, 迁移指南 |
-| **技术参考** | reference/ | 6 | 配置, CLI, FAQ, 速率限制 |
-| **架构文档** | architecture/ | 9 | 系统设计, Remote Viewer 架构 |
-| **发布信息** | releases/ | 3+ | 版本历史, 变更日志 |
-| **API 文档** | api/ | 13 | REST API 参考（含 Remote API）|
+| **用户指南** | guides/ | 7 | 快速开始, Remote Viewer, Assets, 增强日志, 迁移指南 |
+| **技术参考** | reference/ | 4 | 配置, CLI, FAQ, 速率限制 |
+| **架构文档** | architecture/ | 10 | 系统设计, Remote Viewer, SSH 后端架构 |
+| **发布信息** | releases/ | 4 | 版本历史, 变更日志 |
+| **API 文档** | api/ | 15 | REST API 参考（含 Remote, Paths, Logging API）|
 | **用户指南网站** | user-guide/ | 7+ | MkDocs 网站源文件 |
 | **资源** | assets/ | 3+ | 图片和截图 |
 

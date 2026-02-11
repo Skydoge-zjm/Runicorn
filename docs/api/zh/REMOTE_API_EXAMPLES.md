@@ -1,7 +1,7 @@
 # Remote Viewer API 代码示例
 
-> **版本**: v0.5.4  
-> **最后更新**: 2025-12-22
+> **版本**: v0.6.0  
+> **最后更新**: 2026-01-15
 
 [English](../en/REMOTE_API_EXAMPLES.md) | [简体中文](REMOTE_API_EXAMPLES.md)
 

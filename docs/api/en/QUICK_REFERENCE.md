@@ -43,32 +43,6 @@ POST /api/runs/soft-delete
 Body: {"run_ids": ["run1", "run2"]}
 ```
 
-### Artifacts
-
-```bash
-# List artifacts
-GET /api/artifacts?type=model
-
-# Get versions
-GET /api/artifacts/{name}/versions
-
-# Get version details
-GET /api/artifacts/{name}/v{version}
-
-# Get lineage graph
-GET /api/artifacts/{name}/v{version}/lineage
-```
-
-### V2 API (High Performance)
-
-```bash
-# Advanced query
-GET /api/v2/experiments?project=demo&status=finished&page=1&per_page=50
-
-# Fast metrics
-GET /api/v2/experiments/{id}/metrics/fast?downsample=1000
-```
-
 ### Configuration
 
 ```bash
@@ -190,7 +164,6 @@ GET /api/paths/export?path=cv/yolo&format=zip
 | Endpoint Type | Limit |
 |---------------|-------|
 | Standard | 60/min |
-| V2 Queries | 100/min |
 | SSH Connect | 5/min |
 | Batch Delete | 10/min |
 

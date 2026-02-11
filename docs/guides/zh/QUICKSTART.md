@@ -138,51 +138,6 @@ run.finish()
 
 ---
 
-## 💾 模型版本控制
-
-> **注意**: Artifacts API 在 v0.6.0 中正在被新的资产系统替代。
-> 推荐使用 [资产系统指南](ASSETS_GUIDE.md) 中的方法。
-
-### 保存模型（旧版 Artifacts）
-
-```python
-import runicorn as rn
-
-run = rn.init(path="training")
-
-# 训练后
-# torch.save(model.state_dict(), "model.pth")
-
-# 保存为版本化 artifact
-artifact = rn.Artifact("my-model", type="model")
-artifact.add_file("model.pth")
-artifact.add_metadata({"accuracy": 0.95})
-
-version = run.log_artifact(artifact)  # v1, v2, v3...
-run.finish()
-```
-
-### 保存模型（新资产系统 - 推荐）
-
-```python
-import runicorn as rn
-from runicorn import snapshot_workspace
-from pathlib import Path
-
-run = rn.init(path="training")
-
-# 快照代码以确保可复现性
-snapshot_workspace(
-    root=Path("."),
-    out_zip=run.run_dir / "code.zip",
-)
-
-# 训练并保存模型
-# torch.save(model.state_dict(), "model.pth")
-
-run.finish()
-```
-
 ---
 
 ## 🌐 Remote Viewer (v0.5.0 新功能)
@@ -252,7 +207,6 @@ runicorn config --set-user-root "E:\RunicornData"
 - **[资产系统指南](ASSETS_GUIDE.md)** - SHA256 去重、工作区快照
 
 ### 核心功能
-- **[Artifacts 指南](ARTIFACTS_GUIDE.md)** - 模型版本控制（旧版）
 - **[Remote Viewer 指南](REMOTE_VIEWER_GUIDE.md)** - 远程服务器实时访问
 - **[演示示例](DEMO_EXAMPLES_GUIDE.md)** - 示例代码讲解
 
