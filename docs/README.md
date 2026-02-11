@@ -126,9 +126,9 @@ docs/
 ### I'm a User
 
 **Start here**:
-1. [QUICKSTART.md](QUICKSTART.md) - Get started in 5 minutes
+1. [QUICKSTART.md](guides/en/QUICKSTART.md) - Get started in 5 minutes
 2. [user-guide/](user-guide/) - Full user documentation
-3. [ARTIFACTS_GUIDE.md](ARTIFACTS_GUIDE.md) - Learn model versioning
+3. [ARTIFACTS_GUIDE.md](guides/en/ARTIFACTS_GUIDE.md) - Learn model versioning
 
 **Online**: Visit GitHub Pages (after deployment)
 
@@ -148,7 +148,7 @@ docs/
 ### I'm a Contributor
 
 **Start here**:
-1. [ARCHITECTURE.md](ARCHITECTURE.md) - Understand the system
+1. [SYSTEM_OVERVIEW.md](architecture/en/SYSTEM_OVERVIEW.md) - Understand the system
 2. [DOCUMENTATION_OVERVIEW.md](DOCUMENTATION_OVERVIEW.md) - Complete documentation map
 3. `../CONTRIBUTING.md` - Contribution guidelines
 4. Code in `src/runicorn/` - Review implementation
@@ -165,7 +165,7 @@ Located in `../examples/`:
 - `test_artifacts.py` - Artifacts usage
 - `remote_storage_demo.py` - Remote sync
 
-See [DEMO_EXAMPLES_GUIDE.md](DEMO_EXAMPLES_GUIDE.md) for details.
+See [DEMO_EXAMPLES_GUIDE.md](guides/en/DEMO_EXAMPLES_GUIDE.md) for details.
 
 ### Future Plans
 
@@ -180,7 +180,6 @@ For planned features and development roadmap:
 
 For version history, see:
 - **Main Changelog**: `../CHANGELOG.md` - User-facing changes
-- **Development Archive**: [CHANGELOG_ARCHIVE.md](CHANGELOG_ARCHIVE.md) - Technical details
 
 ---
 
@@ -188,8 +187,8 @@ For version history, see:
 
 - 📖 Search documentation
 - ❓ Check [user-guide/docs/reference/faq.md](user-guide/docs/reference/faq.md)
-- 🐛 [Report issues](https://github.com/yourusername/runicorn/issues)
-- 💬 [Ask questions](https://github.com/yourusername/runicorn/discussions)
+- 🐛 [Report issues](https://github.com/Skydoge-zjm/runicorn/issues)
+- 💬 [Ask questions](https://github.com/Skydoge-zjm/runicorn/discussions)
 
 ---
 
@@ -201,7 +200,7 @@ For version history, see:
 | Architecture (with SSH Backend) | 100% | ✅ Complete |
 | Reference (Config/CLI/FAQ) | 100% | ✅ Complete |
 | User Guides (with Enhanced Logging, Assets) | 95% | ✅ Near complete |
-| User Guide Website | 50% | 🔄 In progress |
+| User Guide Website | 90% | 🔄 In progress |
 | Tutorials | 40% | 🔄 Growing |
 
 ---

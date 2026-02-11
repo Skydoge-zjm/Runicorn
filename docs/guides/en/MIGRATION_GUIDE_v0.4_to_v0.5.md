@@ -464,7 +464,7 @@ Need help?
 - 🔧 [Troubleshooting](../../reference/en/TROUBLESHOOTING.md)
 
 **Community**:
-- 💬 [GitHub Issues](https://github.com/yourusername/runicorn/issues)
+- 💬 [GitHub Issues](https://github.com/Skydoge-zjm/runicorn/issues)
 - 📧 Email: support@runicorn.dev
 
 **When reporting issues, include**:

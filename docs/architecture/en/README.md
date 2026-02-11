@@ -4,8 +4,8 @@
 
 # Runicorn Architecture Documentation
 
-**Version**: v0.4.0  
-**Last Updated**: 2025-10-14  
+**Version**: v0.6.0  
+**Last Updated**: 2026-01-15  
 **Audience**: Developers, Contributors, Architects
 
 ---
@@ -59,6 +59,19 @@ This directory contains comprehensive architecture documentation for the Runicor
   - State management
   - Component hierarchy
   - Performance optimizations
+
+### Remote & Networking
+
+- **[REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)** - ⭐ Remote Viewer architecture (v0.5.0)
+  - SSH tunnel design
+  - Remote process management
+  - Health check mechanism
+  - Security model
+
+- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - ⭐ SSH backend multi-fallback design (v0.6.0)
+  - OpenSSH + AsyncSSH + Paramiko fallback chain
+  - Platform-specific strategy
+  - Connection management
 
 ### Deployment & Decisions
 

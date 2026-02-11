@@ -261,8 +261,6 @@ User-facing documentation:
 docs/user-guide/
 ├── mkdocs.yml               # Site configuration
 ├── requirements.txt         # Python dependencies
-├── DEPLOYMENT_GUIDE.md      # Deployment instructions
-│
 ├── docs/                    # Documentation source
 │   ├── index.md            # Homepage
 │   ├── getting-started/    # Quickstart, installation
@@ -270,7 +268,6 @@ docs/user-guide/
 │   ├── cli/                # CLI reference
 │   ├── ui/                 # Web UI guide
 │   ├── tutorials/          # Step-by-step tutorials
-│   ├── guides/             # How-to guides
 │   ├── reference/          # FAQ, glossary, best practices
 │   └── assets/             # Images, screenshots
 │
@@ -303,7 +300,7 @@ docs/user-guide/
 
 **Online** (after deployment):
 ```
-https://yourusername.github.io/runicorn
+https://Skydoge-zjm.github.io/runicorn
 ```
 
 **Local preview**:
@@ -356,7 +353,7 @@ mkdocs serve
 ### Contributor (Open source)
 
 **Use**:
-1. `docs/ARCHITECTURE.md` → Understand system design
+1. `docs/architecture/en/SYSTEM_OVERVIEW.md` → Understand system design
 2. `CONTRIBUTING.md` → Contribution process
 3. `docs/api/` → Understand APIs
 4. Code in `src/runicorn/` → Review implementation
@@ -389,163 +386,6 @@ mkdocs serve
 - ✅ **Migration**: 100% (0.4→0.5 guide complete)
 - ✅ **Web UI**: ~70% (core features documented)
 - ⏳ **Tutorials**: ~40% (4 complete, more planned)
-
----
-
-## 🔄 Maintenance Workflow
-
-### Regular Updates
-
-**Weekly**:
-- [ ] Check for user questions → Update FAQ
-- [ ] Review GitHub issues → Add to troubleshooting
-- [ ] Test all code examples still work
-
-**Per Release**:
-- [ ] Update version numbers
-- [ ] Document new features
-- [ ] Update API docs for endpoint changes
-- [ ] Add release notes to user guide
-- [ ] Update screenshots if UI changed
-
-**As Needed**:
-- [ ] Fix broken links
-- [ ] Update deprecated content
-- [ ] Improve unclear explanations
-- [ ] Add requested tutorials
-
-### Quality Checks
-
-**Before deploying**:
-```bash
-# Build with strict mode (fails on warnings)
-cd docs/user-guide
-mkdocs build --strict
-
-# Check for broken links
-# (Use link checker tool)
-
-# Spell check
-# (Use spell checker on markdown files)
-
-# Test code examples
-python test_all_examples.py
-```
-
----
-
-## 🚀 Deployment Status
-
-### Current Deployments
-
-| Documentation | Status | URL | Auto-Deploy |
-|---------------|--------|-----|-------------|
-| API Docs (Static) | ✅ File-based | `docs/api/` | No (static files) |
-| API Docs (Interactive) | ✅ Runtime | `http://127.0.0.1:23300/docs` | Yes (FastAPI) |
-| User Guide | 🔄 Pending | GitHub Pages | Yes (GitHub Actions) |
-| Architecture Docs | ✅ File-based | `docs/` | No (static files) |
-
-### Setup GitHub Pages
-
-See [DEPLOYMENT_GUIDE.md](user-guide/DEPLOYMENT_GUIDE.md) for step-by-step instructions.
-
-**Quick command**:
-```bash
-cd docs/user-guide
-mkdocs gh-deploy --force
-```
-
----
-
-## 🎓 Documentation Best Practices
-
-### Writing Style
-
-- ✅ Use simple, clear language
-- ✅ Provide context before technical details
-- ✅ Include working code examples
-- ✅ Add screenshots for UI features
-- ✅ Use admonitions for important notes
-- ❌ Avoid jargon without explanation
-- ❌ Don't assume prior knowledge
-
-### Code Examples
-
-```python
-# ✅ Good: Complete, runnable example
-import runicorn as rn
-
-run = rn.init(project="demo")
-run.log({"loss": 0.1}, step=1)
-run.finish()
-
-# ❌ Bad: Incomplete, won't run
-run.log(loss)  # Where does 'loss' come from?
-```
-
-### Navigation
-
-- ✅ Clear hierarchy (max 3 levels)
-- ✅ Logical grouping
-- ✅ Cross-references between related topics
-- ✅ "Next steps" at end of each page
-
----
-
-## 📞 Contact
-
-- **Documentation issues**: [GitHub Issues](https://github.com/yourusername/runicorn/issues) with `docs` label
-- **Feature requests**: [GitHub Discussions](https://github.com/yourusername/runicorn/discussions)
-- **Security issues**: See [SECURITY.md](../SECURITY.md)
-
----
-
-## 🎉 Summary
-
-Runicorn has **comprehensive, multi-layered documentation**:
-
-1. **API Docs** (docs/api/) - For developers and integrators
-2. **User Guide** (docs/user-guide/) - For end users and ML practitioners
-3. **Architecture** (docs/) - For contributors and maintainers
-
-Each system serves its audience with appropriate depth, language, and format.
-
----
-
-**Next Steps**:
-
-- 📖 Review [User Guide Deployment Guide](user-guide/DEPLOYMENT_GUIDE.md)
-- 🚀 Deploy to GitHub Pages
-- 📣 Share documentation URL with users
-
----
-
-**v0.6.0 Documentation Additions**:
-- ⭐ New Assets System documentation (SHA256 content-addressed storage, workspace snapshots)
-- ⭐ Enhanced Logging Guide (console capture, MetricLogger compatibility, tqdm modes)
-- ⭐ Path-based Hierarchy API documentation (VSCode-style navigation)
-- ⭐ SSH Backend Architecture documentation (OpenSSH + AsyncSSH + Paramiko fallback)
-- ⭐ Inline Compare View documentation (multi-run metric comparison)
-- ⭐ Logging API documentation (SDK parameters, get_logging_handler)
-- ⭐ Paths API documentation (/api/paths endpoints)
-- ⭐ Updated Remote API with SSH backend changes
-
-**v0.5.3 Documentation Additions**:
-- ⭐ Frontend performance optimization documentation
-- ⭐ Unified MetricChart component design (single-run + multi-run)
-- ⭐ Backend incremental cache system documentation
-- ⭐ LTTB downsampling API documentation
-- ⭐ Lazy chart loading with IntersectionObserver
-- ⭐ Cache statistics endpoint documentation
-
-**v0.5.0 Documentation Additions**:
-- ⭐ Remote Viewer complete documentation (user guide + architecture)
-- ⭐ Configuration reference (50+ options)
-- ⭐ CLI reference (6 commands, 30+ options)
-- ⭐ FAQ (30+ questions)
-- ⭐ Migration guide (0.4.x → 0.5.0)
-- ⭐ Remote API documentation (8+ endpoints)
-- ⭐ All docs now bilingual (English/Chinese)
 
 ---
 

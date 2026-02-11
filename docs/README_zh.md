@@ -55,8 +55,8 @@ docs/
 🤝 **贡献指南** - 查看 [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
 **技术文档**:
-- [reference/zh/ARCHITECTURE.md](reference/zh/ARCHITECTURE.md) - 系统架构
-- [reference/zh/SECURITY_AUDIT_REPORT.md](reference/zh/SECURITY_AUDIT_REPORT.md) - 安全指南
+- [SYSTEM_OVERVIEW.md](architecture/zh/SYSTEM_OVERVIEW.md) - 系统架构
+- [SECURITY.md](../SECURITY.md) - 安全指南
 - [api/zh/](api/zh/) - API 实现参考
 
 ---
@@ -149,9 +149,9 @@ docs/
 
 ### 我是贡献者
 
-1. **架构**: [reference/zh/ARCHITECTURE.md](reference/zh/ARCHITECTURE.md)
+1. **架构**: [SYSTEM_OVERVIEW.md](architecture/zh/SYSTEM_OVERVIEW.md)
 2. **贡献指南**: [../CONTRIBUTING.md](../CONTRIBUTING.md)
-3. **安全**: [reference/zh/SECURITY_AUDIT_REPORT.md](reference/zh/SECURITY_AUDIT_REPORT.md)
+3. **安全**: [SECURITY.md](../SECURITY.md)
 
 ---
 
@@ -173,7 +173,6 @@ docs/
 
 版本历史请查看:
 - **主变更日志**: `../CHANGELOG.md` - 面向用户的变更
-- **开发归档**: [releases/zh/CHANGELOG_ARCHIVE.md](releases/zh/CHANGELOG_ARCHIVE.md) - 技术细节
 
 ---
 
@@ -181,8 +180,8 @@ docs/
 
 - 📖 搜索文档
 - ❓ 查看 [user-guide/docs/reference/faq.md](user-guide/docs/reference/faq.md)
-- 🐛 [报告问题](https://github.com/yourusername/runicorn/issues)
-- 💬 [提问](https://github.com/yourusername/runicorn/discussions)
+- 🐛 [报告问题](https://github.com/Skydoge-zjm/runicorn/issues)
+- 💬 [提问](https://github.com/Skydoge-zjm/runicorn/discussions)
 
 ---
 
@@ -194,7 +193,7 @@ docs/
 | 架构文档（含 SSH 后端）| 100% | ✅ 完成 |
 | 参考文档（配置/CLI/FAQ）| 100% | ✅ 完成 |
 | 用户指南（含增强日志、Assets）| 95% | ✅ 近完成 |
-| 用户指南网站 | 50% | 🔄 进行中 |
+| 用户指南网站 | 90% | 🔄 进行中 |
 | 教程 | 40% | 🔄 增长中 |
 
 ---
