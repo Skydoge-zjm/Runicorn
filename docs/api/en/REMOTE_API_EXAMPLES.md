@@ -1,7 +1,7 @@
 # Remote Viewer API Code Examples
 
-> **Version**: v0.5.4  
-> **Last Updated**: 2025-12-22
+> **Version**: v0.6.0  
+> **Last Updated**: 2026-01-15
 
 [English](REMOTE_API_EXAMPLES.md) | [简体中文](../zh/REMOTE_API_EXAMPLES.md)
 
@@ -162,6 +162,7 @@ class RunicornRemoteClient:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+```
 
 ### Basic Usage Example
 

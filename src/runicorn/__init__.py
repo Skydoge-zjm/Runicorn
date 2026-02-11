@@ -19,9 +19,9 @@ try:
     if _version_file.exists():
         __version__ = _version_file.read_text().strip()
     else:
-        __version__ = "0.5.0.dev0"
+        __version__ = "0.6.0"
 except Exception:
-    __version__ = "0.5.0.dev0"
+    __version__ = "0.6.0"
 
 __all__ = [
     "Run",

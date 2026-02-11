@@ -17,7 +17,7 @@
 
 架构文档请查看: [../../architecture/](../../architecture/)
 
-安全指南请查看: [../../SECURITY.md](../../../SECURITY.md)
+安全指南请查看: [SECURITY.md](../../../SECURITY.md)
 
 ---
 

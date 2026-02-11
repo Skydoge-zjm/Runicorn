@@ -1,6 +1,6 @@
 # Runicorn v0.6.0 Release Notes
 
-> **Release Date**: 2025-01  
+> **Release Date**: 2026-01  
 > **Version**: v0.6.0  
 > **Author**: Runicorn Development Team
 
@@ -480,6 +480,6 @@ Thanks to all contributors and users who provided feedback for v0.6.0!
 
 **Author**: Runicorn Development Team  
 **Version**: v0.6.0  
-**Release Date**: 2025-01
+**Release Date**: 2026-01
 
 **[View Full CHANGELOG](../../CHANGELOG.md)** | **[Back to Documentation](../../README.md)**

@@ -138,51 +138,6 @@ run.finish()
 
 ---
 
-## 💾 Model Versioning
-
-> **Note**: The Artifacts API is being replaced by the new Assets system in v0.6.0. 
-> See [Assets Guide](ASSETS_GUIDE.md) for the recommended approach.
-
-### Save Model (Legacy Artifacts)
-
-```python
-import runicorn as rn
-
-run = rn.init(path="training")
-
-# After training
-# torch.save(model.state_dict(), "model.pth")
-
-# Save as versioned artifact
-artifact = rn.Artifact("my-model", type="model")
-artifact.add_file("model.pth")
-artifact.add_metadata({"accuracy": 0.95})
-
-version = run.log_artifact(artifact)  # v1, v2, v3...
-run.finish()
-```
-
-### Save Model (New Assets System - Recommended)
-
-```python
-import runicorn as rn
-from runicorn import snapshot_workspace
-from pathlib import Path
-
-run = rn.init(path="training")
-
-# Snapshot code for reproducibility
-snapshot_workspace(
-    root=Path("."),
-    out_zip=run.run_dir / "code.zip",
-)
-
-# Train and save model
-# torch.save(model.state_dict(), "model.pth")
-
-run.finish()
-```
-
 ---
 
 ## 🌐 Remote Viewer (v0.5.0 New Feature)
@@ -252,7 +207,6 @@ Or in Web UI: Settings (⚙️) → Data Directory
 - **[Assets Guide](ASSETS_GUIDE.md)** - SHA256 deduplication, workspace snapshots
 
 ### Core Features
-- **[Artifacts Guide](ARTIFACTS_GUIDE.md)** - Model version control (legacy)
 - **[Remote Viewer Guide](REMOTE_VIEWER_GUIDE.md)** - Real-time remote server access
 - **[Demo Examples](DEMO_EXAMPLES_GUIDE.md)** - Example code walkthrough
 

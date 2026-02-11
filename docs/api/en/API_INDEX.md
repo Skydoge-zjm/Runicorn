@@ -5,8 +5,8 @@
 # Complete API Index
 
 **Version**: v0.6.0  
-**Total Endpoints**: 60+ REST + Python Client  
-**Last Updated**: 2025-01-XX
+**Total Endpoints**: 35+ REST + Python Client  
+**Last Updated**: 2026-01-15
 
 ---
 
@@ -19,7 +19,6 @@
 | **RunicornClient** | Main client class | [📖](./python_client_api.md) |
 | **Experiments API** | Experiment query and management | [📖](./python_client_api.md#experiment-management) |
 | **Metrics API** | Metrics data access | [📖](./python_client_api.md#metrics-data) |
-| **Artifacts API** | Programmatic artifacts management | [📖](./python_client_api.md#artifacts-api) |
 | **Remote API** | Remote Viewer control | [📖](./python_client_api.md#remote-api) |
 | **Utils** | pandas DataFrame tools | [📖](./python_client_api.md#utility-functions) |
 
@@ -55,27 +54,6 @@ with api.connect() as client:
 | GET | `/api/runs/{run_id}/metrics_step` | Get step-based metrics (supports LTTB downsampling) | [📖](./metrics_api.md#get-step-metrics) |
 | GET | `/api/metrics/cache/stats` | Get incremental cache statistics | [📖](./metrics_api.md#cache-statistics) |
 | WS | `/api/runs/{run_id}/logs/ws` | Real-time log stream | [📖](./metrics_api.md#real-time-log-streaming) |
-
-### Artifacts API (Version Control)
-
-| Method | Endpoint | Description | Docs |
-|--------|----------|-------------|------|
-| GET | `/api/artifacts` | List artifacts | [📖](./artifacts_api.md#list-artifacts) |
-| GET | `/api/artifacts/{name}/versions` | List versions | [📖](./artifacts_api.md#list-artifact-versions) |
-| GET | `/api/artifacts/{name}/v{version}` | Get version detail | [📖](./artifacts_api.md#get-artifact-detail) |
-| GET | `/api/artifacts/{name}/v{version}/files` | List files | [📖](./artifacts_api.md#list-artifact-files) |
-| GET | `/api/artifacts/{name}/v{version}/lineage` | Get lineage graph | [📖](./artifacts_api.md#get-artifact-lineage) |
-| GET | `/api/artifacts/stats` | Get storage stats | [📖](./artifacts_api.md#get-storage-statistics) |
-| DELETE | `/api/artifacts/{name}/v{version}` | Delete version | [📖](./artifacts_api.md#delete-artifact-version) |
-
-### V2 API (High Performance) ⚡
-
-| Method | Endpoint | Description | Docs |
-|--------|----------|-------------|------|
-| GET | `/api/v2/experiments` | Advanced query | [📖](./v2_api.md#list-experiments) |
-| GET | `/api/v2/experiments/{id}` | Get detail | [📖](./v2_api.md#get-experiment-detail) |
-| GET | `/api/v2/experiments/{id}/metrics/fast` | Fast metrics | [📖](./v2_api.md#fast-metrics-retrieval) |
-| POST | `/api/v2/experiments/batch-delete` | Batch delete | [📖](./v2_api.md#batch-delete) |
 
 ### Config API (Settings)
 
@@ -142,11 +120,11 @@ with api.connect() as client:
 
 ### Projects API (Hierarchy - Legacy)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/projects` | List all projects |
-| GET | `/api/projects/{project}/names` | List experiment names in project |
-| GET | `/api/projects/{project}/names/{name}/runs` | List runs in experiment |
+| Method | Endpoint | Description | Docs |
+|--------|----------|-------------|------|
+| GET | `/api/projects` | List top-level path segments | [📖](./paths_api.md#get-apiprojects) |
+| GET | `/api/projects/{project}/names` | List second-level segments | [📖](./paths_api.md#get-apiprojectsprojectnames) |
+| GET | `/api/projects/{project}/names/{name}/runs` | List runs under project/name | [📖](./paths_api.md#get-apiprojectsprojectnamesname-runs) |
 
 ### Health & System
 
@@ -173,25 +151,6 @@ GET /api/runs/{run_id}/metrics_step
 
 # 4. Check GPU usage
 GET /api/gpu/telemetry
-```
-
-### Use Case: Manage Models
-
-```bash
-# 1. List all models
-GET /api/artifacts?type=model
-
-# 2. View version history
-GET /api/artifacts/resnet50-model/versions
-
-# 3. Get specific version
-GET /api/artifacts/resnet50-model/v3
-
-# 4. Check dependencies
-GET /api/artifacts/resnet50-model/v3/lineage
-
-# 5. Download files
-GET /api/artifacts/resnet50-model/v3/files
 ```
 
 ### Use Case: Remote Viewer (New)
@@ -222,17 +181,14 @@ Body: {"host": "gpu-server.com", "port": 22, "username": "mluser"}
 ### Use Case: Analytics
 
 ```bash
-# 1. Get all experiments (V2 for performance)
-GET /api/v2/experiments?per_page=1000
+# 1. Get all experiments
+GET /api/runs
 
 # 2. Filter by project
-GET /api/v2/experiments?project=image_classification
+GET /api/projects/{project}/names/{name}/runs
 
-# 3. Filter by performance
-GET /api/v2/experiments?best_metric_min=0.9&status=finished
-
-# 4. Get storage stats
-GET /api/artifacts/stats
+# 3. Export data
+GET /api/export?format=json
 ```
 
 ---
@@ -243,14 +199,9 @@ Based on 10,000 experiments:
 
 | Endpoint | Avg Response | P95 | Backend |
 |----------|-------------|-----|---------|
-| `GET /api/runs` | 5-8 seconds | 10s | File scan |
-| `GET /api/v2/experiments` | 50-80 ms | 120ms | SQLite |
+| `GET /api/runs` | 50-80 ms | 120ms | SQLite |
 | `GET /api/runs/{id}/metrics_step` | 100-300 ms | 500ms | File read + parse |
-| `GET /api/v2/experiments/{id}/metrics/fast` | 30-60 ms | 100ms | SQLite (cached) |
-| `GET /api/artifacts` | 200-400 ms | 600ms | File scan |
-| `GET /api/artifacts/stats` | 1-3 seconds | 5s | Recursive scan |
-
-**Recommendation**: Use V2 API for queries involving large numbers of experiments.
+| `GET /api/health` | < 5 ms | 10ms | In-memory |
 
 ---
 
@@ -307,16 +258,11 @@ X-RateLimit-Reset: 15
 # Basic GET
 curl http://127.0.0.1:23300/api/health
 
-# GET with query params
-curl "http://127.0.0.1:23300/api/artifacts?type=model"
-
 # POST with JSON body
 curl -X POST http://127.0.0.1:23300/api/runs/soft-delete \
   -H "Content-Type: application/json" \
   -d '{"run_ids": ["20250114_153045_a1b2c3"]}'
 
-# DELETE
-curl -X DELETE "http://127.0.0.1:23300/api/artifacts/old-model/v1?permanent=false"
 ```
 
 ### Using Postman
@@ -361,10 +307,8 @@ run = rn.init(project="demo", name="exp1")
 # Log metrics
 run.log({"loss": 0.1, "accuracy": 0.95}, step=100)
 
-# Save artifact
-artifact = rn.Artifact("my-model", type="model")
-artifact.add_file("model.pth")
-run.log_artifact(artifact)\nrun.finish()
+# Finish
+run.finish()
 ```
 
 See main [README.md](../../README.md) for full SDK documentation.
@@ -404,9 +348,10 @@ See main [README.md](../../README.md) for full SDK documentation.
 ### v0.6.0 (Current) 🚀
 **Major New Features**
 - ✅ **Enhanced Logging API**: Console capture, Python logging handler, MetricLogger compatibility
+- ✅ **Assets System**: SHA256 content-addressed workspace snapshots with deduplication
 - ✅ **Path Hierarchy API**: Flexible path-based experiment organization with tree navigation
 - ✅ **SSH Backend Architecture**: Multi-backend fallback (OpenSSH → AsyncSSH → Paramiko)
-- ✅ New endpoints: `/api/paths`, `/api/paths/tree`, `/api/paths/runs`, `/api/paths/soft-delete`, `/api/paths/export`
+- ✅ **SQLite Storage Backend**: High-performance storage with connection pooling and WAL mode
 
 ### v0.5.4 ⚡
 **Performance & UI Improvements**
@@ -437,8 +382,6 @@ See main [README.md](../../README.md) for full SDK documentation.
 - ✅ Connection health monitoring
 
 ### v0.4.0
-- ✅ Added V2 high-performance API
-- ✅ Added Artifacts API (version control)
 - ✅ Added Unified SSH API
 - ✅ Enhanced error responses
 - ✅ Added rate limiting

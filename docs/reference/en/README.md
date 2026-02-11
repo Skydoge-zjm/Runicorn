@@ -17,7 +17,7 @@ Technical documentation for developers and maintainers.
 
 For architecture documentation, see: [../../architecture/](../../architecture/)
 
-For security guidelines, see: [../../SECURITY.md](../../../SECURITY.md)
+For security guidelines, see: [SECURITY.md](../../../SECURITY.md)
 
 ---
 

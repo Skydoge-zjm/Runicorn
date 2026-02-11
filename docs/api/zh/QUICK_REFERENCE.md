@@ -24,8 +24,8 @@ with api.connect() as client:
     # 获取指标
     metrics = client.get_metrics(experiments[0]["id"])
     
-    # Artifacts
-    artifacts = client.artifacts.list_artifacts(type="model")
+    # Remote Viewer
+    client.remote.connect(host="gpu-server.com", username="user")
 ```
 
 **文档**: [python_client_api.md](./python_client_api.md)
@@ -64,58 +64,6 @@ GET /api/runs/{run_id}/metrics_step
 # 删除运行（软删除）
 POST /api/runs/soft-delete
 Body: {"run_ids": ["run1", "run2"]}
-```
-
-### Manifest-Based Sync 🚀
-
-```bash
-# 生成 manifest（服务器端）
-runicorn generate-manifest --verbose
-
-# 生成活跃 manifest（最近 1 小时）
-runicorn generate-manifest --active
-
-# 指定实验目录
-runicorn generate-manifest --root /data/experiments
-
-# 查看 manifest 统计
-jq '.statistics' .runicorn/full_manifest.json
-
-# Python SDK - 服务端
-from runicorn.manifest import ManifestGenerator, ManifestType
-generator = ManifestGenerator(Path("/data/experiments"))
-manifest, path = generator.generate(ManifestType.FULL)
-
-# Python SDK - 客户端（自动集成）
-from runicorn.remote_storage import MetadataSyncService
-service = MetadataSyncService(..., use_manifest_sync=True)
-service.sync_all()  # 自动使用 manifest，失败时回退
-```
-
-### Artifacts
-
-```bash
-# 列出 artifacts
-GET /api/artifacts?type=model
-
-# 获取版本
-GET /api/artifacts/{name}/versions
-
-# 获取版本详情
-GET /api/artifacts/{name}/v{version}
-
-# 获取血缘图
-GET /api/artifacts/{name}/v{version}/lineage
-```
-
-### V2 API (高性能)
-
-```bash
-# 高级查询
-GET /api/v2/experiments?project=demo&status=finished&page=1&per_page=50
-
-# 快速指标
-GET /api/v2/experiments/{id}/metrics/fast?downsample=1000
 ```
 
 ### 配置
@@ -178,6 +126,7 @@ metric_logger = MetricLogger()
 metric_logger.update(loss=0.5, accuracy=0.95)  # 自动记录到 Runicorn
 ```
 
+
 ### 路径层级 API 🆕 (v0.6.0)
 
 ```bash
@@ -239,7 +188,6 @@ GET /api/paths/export?path=cv/yolo&format=zip
 | 端点类型 | 限制 |
 |---------|------|
 | 标准 | 60/分钟 |
-| V2 查询 | 100/分钟 |
 | SSH 连接 | 5/分钟 |
 | 批量删除 | 10/分钟 |
 
