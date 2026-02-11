@@ -8,7 +8,7 @@ repo_url: https://github.com/Skydoge-zjm/Runicorn
 edit_uri: edit/main/docs/user-guide/docs/
 
 # Copyright
-copyright: Copyright &copy; 2025 Runicorn Team
+copyright: Copyright &copy; 2025-2026 Runicorn Team
 
 # Theme configuration
 theme:
@@ -18,7 +18,7 @@ theme:
     # Light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: blue
+      primary: indigo
       accent: indigo
       toggle:
         icon: material/brightness-7
@@ -26,24 +26,34 @@ theme:
     # Dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: blue
+      primary: indigo
       accent: indigo
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
   
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+  logo: assets/logo.png
+  favicon: assets/logo.png
+
   features:
     - navigation.instant
     - navigation.tracking
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
-    - navigation.expand
+    - navigation.indexes
     - navigation.top
+    - header.autohide
+    - toc.follow
     - search.suggest
     - search.highlight
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
   
   icon:
     repo: fontawesome/brands/github
@@ -80,6 +90,7 @@ markdown_extensions:
   - md_in_html
   - tables
   - footnotes
+  - meta
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
@@ -89,6 +100,7 @@ nav:
   - Home: index.md
   - Getting Started:
     - Quick Start: getting-started/quickstart.md
+    - Path-based Hierarchy: getting-started/path-hierarchy.md
     - Remote Viewer: getting-started/remote-viewer.md
     - Enhanced Logging: getting-started/enhanced-logging.md
     - Assets System: getting-started/assets-system.md
@@ -108,7 +120,9 @@ nav:
 # Plugins
 plugins:
   - search:
-      lang: en
+      lang:
+        - en
+        - zh
   - minify:
       minify_html: true
 
@@ -124,11 +138,7 @@ extra:
     provider: mike
     default: stable
 
-# Mermaid support
-extra_javascript:
-  - https://unpkg.com/mermaid@10/dist/mermaid.min.js
-
-# Custom CSS (uncomment when stylesheets/extra.css is created)
-# extra_css:
-#   - stylesheets/extra.css
+# Custom CSS
+extra_css:
+  - stylesheets/extra.css
 

@@ -1,6 +1,6 @@
 # Command Line Interface
 
-Runicorn provides a powerful CLI for managing experiments, artifacts, and configuration.
+Runicorn provides a powerful CLI for managing experiments, assets, and configuration.
 
 ---
 
@@ -28,7 +28,7 @@ runicorn --help
 | `config` | Manage configuration |
 | `export` | Export experiments |
 | `import` | Import experiments |
-| `artifacts` | Manage artifacts |
+| `delete` | Permanently delete runs and orphaned assets |
 | `export-data` | Export metrics to CSV/Excel |
 | `manage` | Advanced experiment management |
 | `rate-limit` | Configure rate limits |
@@ -73,20 +73,17 @@ runicorn export --project image_classification --out exports/images.tar.gz
 runicorn import --archive experiments.tar.gz
 ```
 
-### Artifacts
+### Delete Runs
 
 ```bash
-# List all artifacts
-runicorn artifacts --action list
+# Preview deletion (dry run)
+runicorn delete --run-id 20260115_100000_abc123 --dry-run
 
-# List versions
-runicorn artifacts --action versions --name resnet50-model
+# Delete a single run permanently
+runicorn delete --run-id 20260115_100000_abc123 --force
 
-# Get artifact info
-runicorn artifacts --action info --name resnet50-model --version 3
-
-# Storage statistics
-runicorn artifacts --action stats
+# Delete multiple runs
+runicorn delete --run-id run1 --run-id run2 --force
 ```
 
 ---
@@ -166,7 +163,7 @@ Available for all commands:
 runicorn viewer --storage "D:\TempStorage"
 
 # Show help for specific command
-runicorn artifacts --help
+runicorn delete --help
 ```
 
 ### Storage Override
@@ -212,11 +209,11 @@ function rconfig { runicorn config --show }
 rv  # Start viewer
 ```
 
-### Tip 2: Quick Stats
+### Tip 2: Quick Cleanup
 
 ```bash
-# One-liner to see artifact stats
-runicorn artifacts --action stats | grep -E "Total|Dedup"
+# Preview cleanup of experiments older than 30 days
+runicorn manage --action cleanup --days 30 --dry-run
 ```
 
 ### Tip 3: Scheduled Exports

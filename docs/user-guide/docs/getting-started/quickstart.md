@@ -12,7 +12,7 @@ Get Runicorn up and running in 5 minutes!
 pip install -U runicorn
 ```
 
-**Requirements**: Python 3.8 or higher
+**Requirements**: Python 3.10 or higher
 
 ??? tip "Using conda?"
     ```bash
@@ -27,7 +27,7 @@ pip install -U runicorn
 runicorn --version
 ```
 
-You should see: `runicorn 0.5.3` (or later)
+You should see: `runicorn 0.6.0` (or later)
 
 ---
 
@@ -42,8 +42,8 @@ import runicorn as rn
 import random
 import time
 
-# Initialize experiment
-run = rn.init(project="quickstart", name="demo_experiment")
+# Initialize experiment with path-based hierarchy
+run = rn.init(path="quickstart/demo_experiment")
 print(f"✓ Created experiment: {run.id}")
 
 # Set primary metric (optional)
@@ -110,38 +110,18 @@ runicorn viewer
 
 You should see your experiment in the list!
 
+<figure markdown>
+  ![Experiments List](../assets/experiment_list.png)
+  <figcaption>View all experiments in the Web UI</figcaption>
+</figure>
+
 ---
 
 ## Explore the Web Interface
 
-### 1. Experiments Page
+Click on any experiment to see interactive metric charts, real-time logs, logged images, and workspace assets.
 
-The Experiments page lets you view all your experiments in one place with filtering and search.
-
-**Features**:
-- 📋 List all experiments
-- 🔍 Filter by project/status
-- 📊 View best metrics
-- 🗑️ Soft delete (recycle bin)
-
-### 2. Experiment Detail
-
-Click on any experiment to see:
-
-- 📈 **Interactive Charts** - Training curves with zoom/pan
-- 📝 **Real-time Logs** - Live log streaming
-- 🖼️ **Images** - Logged images and visualizations
-- 💾 **Artifacts** - Associated models and datasets
-
-### 3. Artifacts Page
-
-The Artifacts page provides Git-like version control for your ML models and datasets.
-
-**Features**:
-- 📦 List all models and datasets
-- 🔄 Version history
-- 🌳 Dependency graph (lineage)
-- 💾 Storage statistics
+See [Web UI Overview](../ui/overview.md) for a full tour of all pages and features.
 
 ---
 
@@ -171,7 +151,7 @@ runicorn config --set-user-root "E:\RunicornData"
 import runicorn as rn
 
 run = rn.init(
-    project="demo",
+    path="demo",
     storage="E:\\RunicornData"  # Explicit path
 )
 ```
@@ -183,7 +163,7 @@ Runicorn determines storage location in this order:
 1. `rn.init(storage="...")` - Highest priority
 2. Environment variable `RUNICORN_DIR`
 3. User config (set via UI/CLI)
-4. `./runicorn/` in current directory - Lowest priority
+4. `./.runicorn/` in current directory - Lowest priority
 
 ---
 
@@ -204,25 +184,7 @@ Runicorn determines storage location in this order:
 
     - 📖 Search this documentation
     - ❓ Check [FAQ](../reference/faq.md)
-    - 🐛 [Report issues](https://github.com/yourusername/runicorn/issues)
-    - 💬 Ask in [GitHub Discussions](https://github.com/yourusername/runicorn/discussions)
+    - 🐛 [Report issues](https://github.com/Skydoge-zjm/Runicorn/issues)
+    - 💬 Ask in [GitHub Discussions](https://github.com/Skydoge-zjm/Runicorn/discussions)
 
----
-
-## System Requirements
-
-| Component | Requirement |
-|-----------|-------------|
-| **Python** | 3.8, 3.9, 3.10, 3.11, 3.12, 3.13 |
-| **OS** | Windows 10+, Linux (any), macOS 10.14+ |
-| **RAM** | 2 GB minimum, 4 GB recommended |
-| **Disk** | 100 MB for software + storage for your experiments |
-| **GPU** | Optional (for GPU monitoring, requires `nvidia-smi`) |
-
----
-
-<div align="center">
-  <p><strong>Ready to dive deeper?</strong></p>
-  <p><a href="first-experiment.md">Create Your First Real Experiment →</a></p>
-</div>
 

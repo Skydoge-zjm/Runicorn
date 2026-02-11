@@ -28,7 +28,7 @@ The home page displays all your experiments in a sortable, filterable table.
 
 **Features**:
 
-- 🔍 **Search** — Filter by project, name, status
+- 🔍 **Search** — Filter by path, status, alias
 - 📊 **Best Metrics** — See primary metric at a glance
 - 🏷️ **Status Badges** — Running, Finished, Failed, Interrupted
 - 🗑️ **Soft Delete** — Move to recycle bin (recoverable)
@@ -40,8 +40,7 @@ The home page displays all your experiments in a sortable, filterable table.
 | Column | Description |
 |--------|-------------|
 | ID | Unique experiment identifier |
-| Project | Project name |
-| Name | Experiment name |
+| Path | Experiment path (hierarchical) |
 | Status | Current status with animated badge |
 | Created | Creation timestamp |
 | Duration | Total runtime |
@@ -77,30 +76,58 @@ Compare multiple experiments on the same chart:
 
 - **Logs** — Real-time log streaming
 - **Images** — Logged images and visualizations
-- **Artifacts** — Associated models and datasets
+- **Assets** — Workspace snapshots and stored files
 - **Config** — Environment and configuration info
 
 ---
 
-### 📦 Artifacts Page
+### 🌳 Path Tree Panel (v0.6.0)
 
-Git-like version control for ML models and datasets.
+VSCode-style hierarchical navigation for experiments organized by path.
 
 **Features**:
 
-- 📦 **List Artifacts** — All versioned assets
-- 🔢 **Version History** — v1, v2, v3... with metadata
-- 🌳 **Lineage Graph** — Interactive dependency visualization
-- 📊 **Storage Stats** — Deduplication savings
+- 🗂️ **Tree Navigation** — Browse experiments by path hierarchy
+- 📊 **Path Statistics** — Run counts per path node
+- 🔍 **Quick Filter** — Filter runs by clicking any path node
+- 📥 **Batch Export** — Export all runs under a path
+- 🗑️ **Batch Delete** — Soft-delete all runs under a path
 
-**Actions**:
+---
 
-| Action | Description |
-|--------|-------------|
-| View | See artifact details and metadata |
-| Download | Get artifact files |
-| Delete | Remove artifact version |
-| Compare | Compare versions |
+### 📊 Inline Compare View (v0.6.0)
+
+Compare metrics across multiple runs side-by-side.
+
+<figure markdown>
+  ![Inline Compare View](../assets/comparison.png)
+  <figcaption>Compare multiple runs with synchronized charts</figcaption>
+</figure>
+
+**Features**:
+
+- 📈 **Multi-Run Charts** — Overlay metrics from different runs
+- 🔗 **Linked Axes** — Synchronized zooming with ECharts
+- 🎯 **Common Metrics** — Auto-detect shared metric keys
+- 🎨 **Color Coding** — Distinct colors for each run
+
+---
+
+### 💻 Performance Monitor
+
+Real-time system performance monitoring — CPU, memory, disk, and GPU.
+
+<figure markdown>
+  ![Performance Monitor](../assets/hardware_monitor.png)
+  <figcaption>Real-time GPU metrics monitoring</figcaption>
+</figure>
+
+**Tabs**:
+
+- **CPU** — Usage, frequency, per-core stats
+- **Memory & Disk** — RAM usage, disk I/O
+- **GPU Metrics** — Utilization, VRAM, power, temperature
+- **GPU Telemetry** — Historical GPU usage charts
 
 ---
 
@@ -170,7 +197,7 @@ The UI is responsive and works on tablets, though desktop is recommended for the
 
 ## Next Steps
 
-- [Performance Tips](performance.md) — Optimize for large experiments
+- [Remote Viewer Guide](../getting-started/remote-viewer.md) — Access remote experiments
 - [FAQ](../reference/faq.md) — Common questions
 - [Python SDK](../sdk/overview.md) — Track experiments programmatically
 

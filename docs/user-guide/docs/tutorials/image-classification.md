@@ -6,7 +6,7 @@ Learn how to track a complete image classification experiment using Runicorn wit
 
 - ✅ Track training progress
 - ✅ Log images and visualizations
-- ✅ Save model checkpoints as artifacts
+- ✅ Snapshot workspace with code versioning
 - ✅ Compare multiple runs
 - ✅ Export results
 
@@ -38,9 +38,9 @@ import numpy as np
 
 # Initialize experiment
 run = rn.init(
-    project="image_classification",
-    name="cifar10_resnet18",
-    capture_env=True  # Capture Git, packages, system info
+    path="image_classification/cifar10_resnet18",
+    snapshot_code=True,     # Snapshot workspace code
+    capture_console=True    # Capture console output
 )
 
 # Log configuration
@@ -235,31 +235,14 @@ run.log_text("Training completed!")
 
 ---
 
-## Step 5: Save Model as Artifact
+## Step 5: Save Model and Summary
 
 ```python
 # Save final model
 final_model_path = "resnet18_cifar10_final.pth"
 torch.save(model.state_dict(), final_model_path)
 
-# Create artifact
-artifact = rn.Artifact("cifar10-resnet18", type="model")
-artifact.add_file(final_model_path)
-artifact.add_metadata({
-    "architecture": "ResNet18",
-    "dataset": "CIFAR-10",
-    "num_classes": 10,
-    "input_size": "32x32",
-    "final_test_accuracy": test_acc,
-    "best_test_accuracy": best_test_acc,
-    "total_epochs": 50,
-    "optimizer": "Adam",
-    "learning_rate": 0.001
-})
-artifact.add_tags("baseline", "resnet18", "cifar10")
-
-version = run.log_artifact(artifact)
-run.log_text(f"✓ Model saved as artifact v{version}")
+run.log_text(f"✓ Model saved to {final_model_path}")
 
 # Save final summary
 run.summary({
@@ -267,7 +250,7 @@ run.summary({
     "best_test_accuracy": best_test_acc,
     "total_epochs": 50,
     "total_training_time": time.time() - epoch_start,
-    "model_artifact": f"cifar10-resnet18:v{version}"
+    "model_path": final_model_path
 })
 
 run.finish()
@@ -293,8 +276,8 @@ runicorn viewer
    - Accuracy progression
    - Learning rate schedule
    - Real-time logs
-3. **Artifacts tab**: See your saved model
-4. **Download model**: Click on artifact to download
+3. **Assets tab**: See workspace code snapshot
+4. **Summary**: View saved model path and best metrics
 
 ---
 
@@ -303,32 +286,19 @@ runicorn viewer
 Create a new script `inference.py`:
 
 ```python
-import runicorn as rn
 import torch
 from torchvision.models import resnet18
-from PIL import Image
-import torchvision.transforms as transforms
 
-# Initialize inference run
-run = rn.init(project="image_classification", name="inference")
-
-# Load model artifact
-artifact = run.use_artifact("cifar10-resnet18:latest")
-model_dir = artifact.download()
-
-# Load model
+# Load model directly
 model = resnet18(num_classes=10)
-state_dict = torch.load(model_dir / "resnet18_cifar10_final.pth")
+state_dict = torch.load("resnet18_cifar10_final.pth")
 model.load_state_dict(state_dict)
 model.eval()
 
-print(f"✓ Loaded model: {artifact.full_name}")
-print(f"  Accuracy: {artifact.get_metadata().metadata['final_test_accuracy']:.2f}%")
+print("✓ Model loaded successfully")
 
 # Run inference
 # ... your inference code ...
-
-run.finish()
 ```
 
 ---
@@ -341,11 +311,11 @@ Run the same experiment with different hyperparameters:
 
 ```python
 # Experiment 1: Baseline
-run1 = rn.init(project="image_classification", name="resnet18_lr0.001")
+run1 = rn.init(path="image_classification/resnet18_lr0-001")
 # ... training with lr=0.001 ...
 
 # Experiment 2: Higher learning rate
-run2 = rn.init(project="image_classification", name="resnet18_lr0.01")
+run2 = rn.init(path="image_classification/resnet18_lr0-01")
 # ... training with lr=0.01 ...
 ```
 
@@ -358,12 +328,12 @@ Then compare in Web UI:
 
 ```python
 # ResNet34
-run = rn.init(project="image_classification", name="cifar10_resnet34")
+run = rn.init(path="image_classification/cifar10_resnet34")
 model = torchvision.models.resnet34(num_classes=10)
 # ... training ...
 
 # EfficientNet
-run = rn.init(project="image_classification", name="cifar10_efficientnet")
+run = rn.init(path="image_classification/cifar10_efficientnet")
 model = torchvision.models.efficientnet_b0(num_classes=10)
 # ... training ...
 ```
@@ -376,14 +346,14 @@ Download complete example:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/runicorn.git
+git clone https://github.com/Skydoge-zjm/Runicorn.git
 
 # Run example
 cd runicorn/examples
 python image_classification_tutorial.py
 ```
 
-Or view on GitHub: [image_classification_tutorial.py](https://github.com/yourusername/runicorn/blob/main/examples/image_classification_tutorial.py)
+Or view on GitHub: [image_classification_tutorial.py](https://github.com/Skydoge-zjm/Runicorn/blob/main/examples/image_classification_tutorial.py)
 
 ---
 

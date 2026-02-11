@@ -32,7 +32,7 @@ Yes! After installation, Runicorn works completely offline.
 
 ### What are the system requirements?
 
-- **Python**: 3.8 or higher
+- **Python**: 3.10 or higher
 - **OS**: Windows 10+, Linux (any), macOS 10.14+
 - **RAM**: 2 GB minimum, 4 GB recommended
 - **Disk**: 100 MB for software + storage for experiments
@@ -85,7 +85,7 @@ Minimal changes required:
 # Add 4 lines to your code:
 import runicorn as rn
 
-run = rn.init(project="demo")           # Line 1: Initialize
+run = rn.init(path="demo")              # Line 1: Initialize
 run.log({"loss": 0.1}, step=1)          # Line 2: Log metrics
 run.finish()                            # Line 3: Finish
 ```
@@ -98,7 +98,7 @@ Yes! Runicorn is framework-agnostic:
 import runicorn as rn
 import tensorflow as tf
 
-run = rn.init(project="tf_demo")
+run = rn.init(path="tf_demo")
 
 # Your TensorFlow code
 model = tf.keras.Sequential([...])
@@ -125,7 +125,7 @@ import runicorn as rn
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 
-run = rn.init(project="sklearn_demo")
+run = rn.init(path="sklearn_demo")
 
 # Train model
 model = RandomForestClassifier()
@@ -138,6 +138,20 @@ run.log({"accuracy": accuracy})
 run.summary({"model": "RandomForest", "final_accuracy": accuracy})
 run.finish()
 ```
+
+### How do I use console capture? (v0.6.0)
+
+```python
+import runicorn as rn
+
+run = rn.init(path="demo", capture_console=True)
+print("Training started...")  # Captured to logs.txt
+run.finish()
+```
+
+Control tqdm capture with `tqdm_mode`: `"smart"` (default, final state only), `"all"`, or `"none"`.
+
+See [Enhanced Logging Guide](../getting-started/enhanced-logging.md) for Python logging handler integration.
 
 ### How do I view my experiments?
 
@@ -164,78 +178,36 @@ Then access from other computers: `http://YOUR_IP:8000`
 
 ---
 
-## Artifacts & Model Versioning
+## Assets & Storage
 
-### What are Artifacts?
+### What is the Assets System?
 
-Artifacts are versioned ML assets (models, datasets, configs). Think of it as **Git for machine learning files**.
+The Assets System (v0.6.0) provides SHA256 content-addressed storage for workspace snapshots and files, with automatic deduplication (50-90% space savings).
 
-### How do I save a model as an artifact?
-
-```python
-import runicorn as rn
-
-run = rn.init(project="demo")
-
-# Save your model file
-torch.save(model.state_dict(), "model.pth")
-
-# Create artifact
-artifact = rn.Artifact("my-model", type="model")
-artifact.add_file("model.pth")
-artifact.add_metadata({"accuracy": 0.95})
-
-# Save with version control
-version = run.log_artifact(artifact)  # Returns v1, v2, v3...
-print(f"Model saved as v{version}")
-
-run.finish()
-```
-
-### How do I load a saved model?
+### How do I snapshot my workspace code?
 
 ```python
 import runicorn as rn
 
-run = rn.init(project="inference")
-
-# Load artifact
-artifact = run.use_artifact("my-model:latest")  # Or "my-model:v3"
-model_path = artifact.download()
-
-# Load model
-import torch
-state_dict = torch.load(model_path / "model.pth")
-model.load_state_dict(state_dict)
-
+run = rn.init(path="demo", snapshot_code=True)
+# Training code...
 run.finish()
+# Workspace snapshot saved automatically
 ```
+
+See [Assets System Guide](../getting-started/assets-system.md) for manual snapshots and blob storage.
 
 ### How much storage does Runicorn use?
 
-Runicorn uses **content deduplication** to save 50-90% storage:
+Runicorn uses **SHA256 content deduplication** — identical files are stored only once.
 
-- **Without dedup**: 100 model checkpoints × 1 GB = 100 GB
-- **With dedup**: ~10-20 GB (similar models share common layers)
+Typical savings:
 
-Check your stats:
+- **50–70%** for regular projects
+- **80–90%** for projects with many checkpoints
 
-```bash
-runicorn artifacts --action stats
 ```
-
-### Can I delete old artifact versions?
-
-Yes:
-
-**Soft delete** (reversible):
-```bash
-runicorn artifacts --action delete --name old-model --version 1
-```
-
-**Permanent delete**:
-```bash
-runicorn artifacts --action delete --name old-model --version 1 --permanent
+Example: 10 experiments × 500MB = 5GB → Deduplicated: ~1GB
 ```
 
 ---
@@ -280,7 +252,7 @@ Then use Runicorn SDK in your training scripts:
 import runicorn as rn
 
 run = rn.init(
-    project="training",
+    path="training",
     storage="/data/runicorn"  # Consistent storage path
 )
 
@@ -358,7 +330,7 @@ import torch.distributed as dist
 
 # Initialize experiment on rank 0 only
 if dist.get_rank() == 0:
-    run = rn.init(project="distributed_training")
+    run = rn.init(path="distributed_training")
     
     # Log from master process
     run.log({"train_loss": loss})
@@ -392,7 +364,7 @@ Yes!
 # In Jupyter cell
 import runicorn as rn
 
-run = rn.init(project="notebook_demo")
+run = rn.init(path="notebook_demo")
 
 # Your notebook code
 # ...
@@ -415,13 +387,8 @@ GPU monitoring is automatic—just train your model and check the GPU panel in t
 
 ### Can I export my data?
 
-Yes, multiple export formats:
-
 ```bash
-# Export experiments (full data)
-runicorn export --project demo --out demo.tar.gz
-
-# Export metrics only (CSV)
+# Export metrics (CSV)
 runicorn export-data --run-id <ID> --format csv --output metrics.csv
 
 # Export metrics (Excel with charts)
@@ -430,23 +397,13 @@ runicorn export-data --run-id <ID> --format excel --output report.xlsx
 
 ### Can I delete experiments?
 
-Yes, with **soft delete** (recycle bin):
+**Web UI** — Select experiments → Delete → Recycle Bin (recoverable). Empty Recycle Bin for permanent deletion.
 
-**Web UI**:
-1. Select experiments
-2. Click "Delete" button
-3. Experiments move to Recycle Bin
-4. Restore from Recycle Bin if needed
-
-**CLI**:
+**CLI** — Permanent deletion:
 ```bash
-# Soft delete via API requires custom script
-# Or use Web UI for deletion
+runicorn delete --run-id 20260115_100000_abc123 --dry-run   # Preview
+runicorn delete --run-id 20260115_100000_abc123 --force      # Delete
 ```
-
-**Permanent deletion**:
-- Empty Recycle Bin in Web UI
-- Or manually delete run directories
 
 ### How do I backup my data?
 
@@ -477,7 +434,7 @@ git commit -m "Backup"
 ### Viewer won't start
 
 **Check**:
-1. Is Python 3.8+ installed? `python --version`
+1. Is Python 3.10+ installed? `python --version`
 2. Is Runicorn installed? `pip list | grep runicorn`
 3. Is port 23300 available? Try: `runicorn viewer --port 8080`
 
@@ -503,15 +460,9 @@ runicorn viewer
 
 ### Out of disk space
 
-Check artifact storage stats:
-
-```bash
-runicorn artifacts --action stats
-```
-
 **Cleanup options**:
-1. Delete old artifact versions
-2. Empty recycle bin
+1. Delete old runs: `runicorn delete --run-id <ID> --force`
+2. Empty recycle bin in Web UI
 3. Export and archive old experiments
 
 ---
@@ -535,16 +486,16 @@ import runicorn as rn
 import wandb
 
 # Initialize both
-rn_run = rn.init(project="demo")
+rn_run = rn.init(path="demo")
 wandb.init(project="demo")
 
 # Log to both
 metrics = {"loss": 0.1, "accuracy": 0.95}
-run.log(metrics)
+rn_run.log(metrics)
 wandb.log(metrics)
 
 # Finish both
-run.finish()
+rn_run.finish()
 wandb.finish()
 ```
 
@@ -611,147 +562,7 @@ runicorn viewer --storage "E:\Project2" --port 23301
 
 ## Still Have Questions?
 
-- 📖 See [Python SDK Overview](../sdk/overview.md) for programming guide
-- 🔧 See [CLI Overview](../cli/overview.md) for command-line usage
-- 💬 Ask on [GitHub Discussions](https://github.com/Skydoge-zjm/Runicorn/discussions)
-- 🐛 [Report bugs](https://github.com/Skydoge-zjm/Runicorn/issues)
-
----
-
-<div align="center">
-  <p><strong>Can't find your answer?</strong></p>
-  <p><a href="https://github.com/yourusername/runicorn/discussions">Ask the Community →</a></p>
-</div>
-
-
-
----
-
-## v0.6.0 Features
-
-### How do I use console capture?
-
-Enable `capture_console` when initializing:
-
-```python
-import runicorn as rn
-
-run = rn.init(project="demo", capture_console=True)
-
-# All print() output is captured
-print("Training started...")
-
-run.finish()
-# Output saved to logs.txt
-```
-
-**Learn more**: [Enhanced Logging Guide](../getting-started/enhanced-logging.md)
-
-### How do I integrate with Python logging?
-
-Use `get_logging_handler()`:
-
-```python
-import runicorn as rn
-import logging
-
-run = rn.init(project="demo")
-
-logger = logging.getLogger(__name__)
-logger.addHandler(run.get_logging_handler())
-
-logger.info("Training started")  # Saved to logs.txt
-
-run.finish()
-```
-
-### What are the tqdm modes?
-
-Control how tqdm progress bars are captured:
-
-- `"smart"` (default) - Only save final states (clean logs)
-- `"all"` - Save every update (verbose)
-- `"none"` - Skip all tqdm output
-
-```python
-run = rn.init(project="demo", capture_console=True, tqdm_mode="smart")
-```
-
-### How do I snapshot my workspace?
-
-Use `snapshot_workspace()`:
-
-```python
-import runicorn as rn
-
-run = rn.init(project="demo")
-
-# Snapshot workspace
-manifest = rn.snapshot_workspace(
-    run_id=run.id,
-    include_patterns=["*.py", "*.yaml"],
-    exclude_patterns=["*.pyc", "__pycache__"]
-)
-
-run.finish()
-```
-
-**Learn more**: [Assets System Guide](../getting-started/assets-system.md)
-
-### What is blob storage?
-
-Blob storage is SHA256 content-addressed storage with automatic deduplication:
-
-```python
-import runicorn as rn
-
-run = rn.init(project="demo")
-
-# Store file as blob
-blob_id = run.store_blob("model.pth")
-
-# Get blob path
-blob_path = run.get_blob_path(blob_id)
-
-run.finish()
-```
-
-**Benefits**:
-- Automatic deduplication (50-90% space savings)
-- Content-addressed (same content = same blob ID)
-- Efficient storage for large files
-
-### How do I use .rnignore?
-
-Create `.rnignore` in your project root:
-
-```gitignore
-# Python
-__pycache__/
-*.pyc
-
-# Data
-data/
-*.csv
-
-# Models
-*.pth
-*.ckpt
-```
-
-Files matching these patterns are excluded from snapshots.
-
-### How much space does deduplication save?
-
-Typical savings:
-- **50-70%** for regular projects
-- **80-90%** for projects with many checkpoints
-- **95%+** for projects with identical config files
-
-Example:
-```
-Before: 10 experiments × 500MB = 5GB
-After:  Deduplicated storage = 1GB (80% savings)
-```
-
----
+- [Python SDK Overview](../sdk/overview.md) — Programming guide
+- [CLI Overview](../cli/overview.md) — Command-line usage
+- [GitHub Discussions](https://github.com/Skydoge-zjm/Runicorn/discussions) — Ask the community
+- [Report bugs](https://github.com/Skydoge-zjm/Runicorn/issues) — Issue tracker

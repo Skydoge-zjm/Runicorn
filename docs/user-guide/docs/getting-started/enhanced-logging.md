@@ -27,7 +27,7 @@ import runicorn as rn
 
 # Enable console capture
 run = rn.init(
-    project="demo",
+    path="demo",
     capture_console=True
 )
 
@@ -48,7 +48,7 @@ Connect your existing logger:
 import runicorn as rn
 import logging
 
-run = rn.init(project="demo")
+run = rn.init(path="demo")
 
 # Get Runicorn's logging handler
 logger = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ import runicorn as rn
 from tqdm import tqdm
 
 run = rn.init(
-    project="demo",
+    path="demo",
     capture_console=True,
     tqdm_mode="smart"  # Filter tqdm updates
 )
@@ -102,13 +102,13 @@ Control how tqdm progress bars are captured:
 
 ```python
 # Smart mode (default) - Clean logs
-run = rn.init(project="demo", capture_console=True, tqdm_mode="smart")
+run = rn.init(path="demo", capture_console=True, tqdm_mode="smart")
 
 # All mode - Verbose logs
-run = rn.init(project="demo", capture_console=True, tqdm_mode="all")
+run = rn.init(path="demo", capture_console=True, tqdm_mode="all")
 
 # None mode - No progress bars
-run = rn.init(project="demo", capture_console=True, tqdm_mode="none")
+run = rn.init(path="demo", capture_console=True, tqdm_mode="none")
 ```
 
 ---
@@ -133,8 +133,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize with console capture
 run = rn.init(
-    project="image_classification",
-    name="resnet50_training",
+    path="image_classification/resnet50_training",
     capture_console=True,
     tqdm_mode="smart"
 )
@@ -226,7 +225,7 @@ Total epochs: 100
     Always use `tqdm_mode="smart"` for clean, readable logs:
     
     ```python
-    run = rn.init(project="demo", capture_console=True, tqdm_mode="smart")
+    run = rn.init(path="demo", capture_console=True, tqdm_mode="smart")
     ```
 
 !!! tip "Tip: Combine with Python Logging"
@@ -257,14 +256,14 @@ Total epochs: 100
 
 **Check if console capture is enabled**:
 ```python
-run = rn.init(project="demo", capture_console=True)  # Must be True
+run = rn.init(path="demo", capture_console=True)  # Must be True
 ```
 
 ### Too many tqdm updates in logs?
 
 **Use smart mode**:
 ```python
-run = rn.init(project="demo", capture_console=True, tqdm_mode="smart")
+run = rn.init(path="demo", capture_console=True, tqdm_mode="smart")
 ```
 
 ### Logger not working?
@@ -295,7 +294,7 @@ If you're upgrading from v0.5.x, here's how to migrate:
 ```python
 import runicorn as rn
 
-run = rn.init(project="demo")
+run = rn.init(path="demo")
 
 # Manual logging
 with open("training.log", "w") as f:
@@ -309,7 +308,7 @@ run.finish()
 import runicorn as rn
 
 # Enable console capture
-run = rn.init(project="demo", capture_console=True)
+run = rn.init(path="demo", capture_console=True)
 
 # Automatic logging
 print("Training started")  # Automatically captured
