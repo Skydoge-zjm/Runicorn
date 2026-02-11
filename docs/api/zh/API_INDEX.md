@@ -4,9 +4,9 @@
 
 # 完整 API 索引
 
-**版本**: v0.5.4  
-**总端点数**: 53+ REST + Python Client  
-**最后更新**: 2025-12-22
+**版本**: v0.6.0  
+**总端点数**: 60+ REST + Python Client  
+**最后更新**: 2025-01-XX
 
 ---
 
@@ -117,7 +117,30 @@ with api.connect() as client:
 | GET | `/api/remote/viewer/sessions` | 列出 Viewer 会话 | [📖](./remote_api.md#get-apiremoteviewersessions) |
 | GET | `/api/remote/viewer/status/{session_id}` | 按 session_id 获取 Viewer 状态 | [📖](./remote_api.md#get-apiremoteviewerstatussession_id) |
 
-### Manifest API (高性能同步) 🚀
+### 增强日志 API 🆕 (v0.6.0)
+
+**新增**: 控制台捕获和 Python logging 集成
+
+| 组件 | 描述 | 文档 |
+|------|------|------|
+| `capture_console` | SDK 参数，用于 stdout/stderr 捕获 | [📖](./logging_api.md#sdk-参数) |
+| `tqdm_mode` | 智能 tqdm 过滤 (smart/all/none) | [📖](./logging_api.md#sdk-参数) |
+| `get_logging_handler()` | Python logging.Handler 集成 | [📖](./logging_api.md#日志处理器) |
+| `MetricLogger` | torchvision 兼容的指标记录器 | [📖](./logging_api.md#metriclogger-兼容层) |
+
+### 路径层级 API 🆕 (v0.6.0)
+
+**新增**: 灵活的基于路径的实验组织
+
+| 方法 | 端点 | 描述 | 文档 |
+|------|------|------|------|
+| GET | `/api/paths` | 列出所有路径（可含统计） | [📖](./paths_api.md#get-apipaths) |
+| GET | `/api/paths/tree` | 获取路径树结构 | [📖](./paths_api.md#get-apipathstree) |
+| GET | `/api/paths/runs` | 按路径过滤列出运行 | [📖](./paths_api.md#get-apipathsruns) |
+| POST | `/api/paths/soft-delete` | 按路径批量软删除 | [📖](./paths_api.md#post-apipathssoft-delete) |
+| GET | `/api/paths/export` | 按路径导出运行 (JSON/ZIP) | [📖](./paths_api.md#get-apipathsexport) |
+
+### Projects API (层级 - 旧版兼容)
 
 | 类型 | 命令/方法 | 描述 | 文档 |
 |------|-----------|------|------|
@@ -385,8 +408,14 @@ run = rn.init(project="demo", name="exp1")
 
 ## API 变更日志
 
-### v0.5.4 (当前) 
- **性能与 UI 改进**
+### v0.6.0 (当前) 🚀
+**重大新功能**
+- ✅ **增强日志 API**: 控制台捕获、Python logging 处理器、MetricLogger 兼容
+- ✅ **路径层级 API**: 灵活的基于路径的实验组织，支持树形导航
+- ✅ **SSH 后端架构**: 多后端回退 (OpenSSH → AsyncSSH → Paramiko)
+- ✅ 新端点: `/api/paths`, `/api/paths/tree`, `/api/paths/runs`, `/api/paths/soft-delete`, `/api/paths/export`
+
+### v0.5.4 ⚡
  - ✅ **统一 MetricChart**：单组件支持单实验和多实验视图
  - ✅ **图表懒加载**：基于 IntersectionObserver 的图表渲染
  - ✅ **高级 memo 优化**：数据指纹比较防止不必要的重渲染
@@ -427,7 +456,7 @@ run = rn.init(project="demo", name="exp1")
 
 ### 未来版本
 
-**v0.6.0**（计划中）:
+**v0.7.0**（计划中）:
 - Windows 远程服务器支持
 - GraphQL API 支持
 - Webhook 通知

@@ -4,7 +4,7 @@
 
 # Runicorn API Quick Reference
 
-**Version**: v0.5.4  
+**Version**: v0.6.0  
 **Base URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -103,6 +103,50 @@ GET /api/remote/sessions
 # Disconnect
 POST /api/remote/disconnect
 Body: {"host": "gpu-server.com", "port": 22, "username": "user"}
+```
+
+### Enhanced Logging API 🆕 (v0.6.0)
+
+```python
+import runicorn
+import logging
+
+# Enable console capture
+run = runicorn.init(
+    path="my/experiment",
+    capture_console=True,  # Capture stdout/stderr
+    tqdm_mode="smart"      # smart/all/none
+)
+
+# Python logging integration
+logger = logging.getLogger(__name__)
+logger.addHandler(run.get_logging_handler())
+logger.info("This goes to logs.txt")
+
+# MetricLogger (torchvision compatible)
+from runicorn.log_compat.torchvision import MetricLogger
+metric_logger = MetricLogger()
+metric_logger.update(loss=0.5, accuracy=0.95)  # Auto-logged to Runicorn
+```
+
+### Path Hierarchy API 🆕 (v0.6.0)
+
+```bash
+# List all paths with statistics
+GET /api/paths?include_stats=true
+
+# Get path tree structure
+GET /api/paths/tree
+
+# List runs under a path
+GET /api/paths/runs?path=cv/yolo
+
+# Batch soft delete by path
+POST /api/paths/soft-delete
+Body: {"path": "old_experiments", "exact": false}
+
+# Export runs by path
+GET /api/paths/export?path=cv/yolo&format=zip
 ```
 
 ---
@@ -340,7 +384,9 @@ For detailed API documentation, see:
 - **[v2_api.md](./v2_api.md)** - High-performance queries
 - **[metrics_api.md](./metrics_api.md)** - Metrics and logs
 - **[config_api.md](./config_api.md)** - Configuration
-- **[remote_api.md](./remote_api.md)** - Remote Viewer API 🆕
+- **[remote_api.md](./remote_api.md)** - Remote Viewer API
+- **[logging_api.md](./logging_api.md)** - Enhanced Logging API 🆕
+- **[paths_api.md](./paths_api.md)** - Path Hierarchy API 🆕
 
 ---
 
@@ -348,5 +394,5 @@ For detailed API documentation, see:
 
 ---
 
-**Last Updated**: 2025-10-25
+**Last Updated**: 2025-01-XX
 

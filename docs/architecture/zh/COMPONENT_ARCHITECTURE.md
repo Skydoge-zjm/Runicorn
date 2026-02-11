@@ -419,11 +419,14 @@ App
 │   ├── Content
 │   │   └── Routes
 │   │       ├── ExperimentPage
+│   │       │   ├── PathTreePanel (v0.6.0)
 │   │       │   ├── ExperimentTable
+│   │       │   ├── CompareRunsPanel (v0.6.0)
+│   │       │   ├── CompareChartsView (v0.6.0)
 │   │       │   └── RecycleBin
 │   │       ├── RunDetailPage
 │   │       │   ├── MetricChart（多个）
-│   │       │   ├── LogsViewer（WebSocket）
+│   │       │   ├── LogsViewer（WebSocket, ANSI）
 │   │       │   └── RunArtifacts
 │   │       ├── ArtifactsPage
 │   │       │   └── ArtifactTable
@@ -447,6 +450,160 @@ App
 ```
 
 **localStorage**: 持久化用户偏好
+
+---
+
+## 新前端组件（v0.6.0）
+
+### PathTreePanel
+
+**文件**: `web/frontend/src/components/PathTreePanel.tsx`
+
+**职责**: VSCode 风格的实验层级路径导航
+
+**特性**:
+- 带文件夹图标的层级路径显示
+- 每个路径的运行计数徽章（带运行中指示器动画）
+- 搜索/过滤功能
+- 右键上下文菜单用于批量操作（删除、导出）
+- 键盘导航支持
+- 使用 framer-motion 的平滑动画
+- 展开状态持久化到 localStorage
+
+**Props**:
+```typescript
+interface PathTreePanelProps {
+  selectedPath: string | null
+  onSelectPath: (path: string | null) => void
+  onBatchDelete?: (path: string) => void
+  onBatchExport?: (path: string) => void
+  style?: React.CSSProperties
+}
+```
+
+**API 集成**:
+- `GET /api/paths?include_stats=true` - 获取带统计的路径树
+
+**设计模式**: 受控组件，外部状态管理
+
+---
+
+### CompareChartsView
+
+**文件**: `web/frontend/src/components/CompareChartsView.tsx`
+
+**职责**: 显示选中运行的指标比较图表
+
+**特性**:
+- 自动检测共同指标（存在于 ≥2 个运行中）
+- 指标可见性切换（显示/隐藏单个指标）
+- ECharts 组同步用于联动缩放/平移
+- 通过 `legend.selected` 优化运行可见性性能
+- 响应式网格布局（大屏幕 2 列）
+- 使用 framer-motion 的动画图表出现
+
+**Props**:
+```typescript
+interface CompareChartsViewProps {
+  runIds: string[]
+  visibleRunIds: Set<string>
+  metricsMap: Map<string, MetricsData>
+  runLabels: Map<string, string>
+  colors: string[]
+  loading: boolean
+}
+```
+
+**性能优化**:
+- 使用 `legend.selected` 切换系列可见性而非重新渲染
+- 从比较中排除 X 轴键（step, iter, batch, global_step, time, epoch）
+- 记忆化的共同指标计算
+
+**设计模式**: 展示组件，派生状态
+
+---
+
+### CompareRunsPanel
+
+**文件**: `web/frontend/src/components/CompareRunsPanel.tsx`
+
+**职责**: 比较模式下显示选中运行信息的左侧面板
+
+**特性**:
+- 颜色点匹配图表线条颜色
+- 运行状态指示器（finished/failed/running）
+- 眼睛图标切换图表中的运行可见性
+- 点击导航到运行详情页
+- 存在运行中实验时的自动刷新指示器
+- 添加更多运行按钮
+
+**Props**:
+```typescript
+interface CompareRunsPanelProps {
+  runs: CompareRunInfo[]
+  colors: string[]
+  visibleRunIds: Set<string>
+  onToggleRunVisibility: (runId: string) => void
+  onAddRuns: () => void
+  onBack: () => void
+  style?: React.CSSProperties
+}
+
+interface CompareRunInfo {
+  runId: string
+  path: string
+  alias: string | null
+  status: string
+}
+```
+
+**设计模式**: 受控组件，回调 props
+
+---
+
+### LogsViewer（增强）
+
+**文件**: `web/frontend/src/components/LogsViewer.tsx`
+
+**职责**: 带 ANSI 颜色支持的实时日志查看
+
+**v0.6.0 增强**:
+- **ANSI 颜色支持**: 通过 `ansi-to-html` 完整终端颜色渲染
+- **行号**: 编号行便于参考
+- **搜索功能**: 关键词搜索带高亮
+- **智能 tqdm 过滤**: 启发式检测 tqdm 进度条
+- **自动滚动切换**: 启用/禁用自动滚动到底部
+- **复制/清除**: 复制所有日志或清除显示
+
+**关键实现**:
+```typescript
+// 带终端风格颜色的 ANSI 转换器
+const ansiConverter = new AnsiToHtml({
+  fg: '#e6e9ef',
+  bg: '#0b1020',
+  colors: {
+    0: '#1d1f21',   // black
+    1: '#cc6666',   // red
+    2: '#b5bd68',   // green
+    // ... 更多颜色
+  },
+})
+
+// tqdm 检测启发式
+function isTqdmLine(s: string): boolean {
+  // 匹配: " 45%|███████████▍            | 45/100 [00:12<00:15,  3.45it/s]"
+  if (/\d{1,3}%\|[█▏▎▍▌▋▊▉#\-\s]+\|/.test(s)) return true
+  // ... 更多模式
+  return false
+}
+```
+
+**WebSocket 连接**:
+- 指数退避重连（500ms 基础，10s 最大）
+- 连接状态指示器（connected/connecting/disconnected）
+- 最大 5000 行缓冲
+
+**设计模式**: 有状态组件，WebSocket 生命周期管理
 
 ---
 

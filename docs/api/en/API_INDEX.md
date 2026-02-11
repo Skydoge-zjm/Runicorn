@@ -4,9 +4,9 @@
 
 # Complete API Index
 
-**Version**: v0.5.4  
-**Total Endpoints**: 53+ REST + Python Client  
-**Last Updated**: 2025-12-22
+**Version**: v0.6.0  
+**Total Endpoints**: 60+ REST + Python Client  
+**Last Updated**: 2025-01-XX
 
 ---
 
@@ -117,7 +117,30 @@ with api.connect() as client:
 | GET | `/api/remote/viewer/sessions` | List Viewer sessions | [📖](./remote_api.md#get-apiremoteviewersessions) |
 | GET | `/api/remote/viewer/status/{session_id}` | Get Viewer status by session_id | [📖](./remote_api.md#get-apiremoteviewerstatussession_id) |
 
-### Projects API (Hierarchy)
+### Enhanced Logging API 🆕 (v0.6.0)
+
+**New**: Console capture and Python logging integration
+
+| Component | Description | Docs |
+|-----------|-------------|------|
+| `capture_console` | SDK parameter for stdout/stderr capture | [📖](./logging_api.md#sdk-parameters) |
+| `tqdm_mode` | Smart tqdm filtering (smart/all/none) | [📖](./logging_api.md#sdk-parameters) |
+| `get_logging_handler()` | Python logging.Handler integration | [📖](./logging_api.md#logging-handler) |
+| `MetricLogger` | torchvision-compatible metric logger | [📖](./logging_api.md#metriclogger-compatibility) |
+
+### Path Hierarchy API 🆕 (v0.6.0)
+
+**New**: Flexible path-based experiment organization
+
+| Method | Endpoint | Description | Docs |
+|--------|----------|-------------|------|
+| GET | `/api/paths` | List all paths with optional stats | [📖](./paths_api.md#get-apipaths) |
+| GET | `/api/paths/tree` | Get path tree structure | [📖](./paths_api.md#get-apipathstree) |
+| GET | `/api/paths/runs` | List runs filtered by path | [📖](./paths_api.md#get-apipathsruns) |
+| POST | `/api/paths/soft-delete` | Batch soft delete by path | [📖](./paths_api.md#post-apipathssoft-delete) |
+| GET | `/api/paths/export` | Export runs by path (JSON/ZIP) | [📖](./paths_api.md#get-apipathsexport) |
+
+### Projects API (Hierarchy - Legacy)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -378,7 +401,14 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ## 📝 API Changelog
 
-### v0.5.4 (Current) ⚡
+### v0.6.0 (Current) 🚀
+**Major New Features**
+- ✅ **Enhanced Logging API**: Console capture, Python logging handler, MetricLogger compatibility
+- ✅ **Path Hierarchy API**: Flexible path-based experiment organization with tree navigation
+- ✅ **SSH Backend Architecture**: Multi-backend fallback (OpenSSH → AsyncSSH → Paramiko)
+- ✅ New endpoints: `/api/paths`, `/api/paths/tree`, `/api/paths/runs`, `/api/paths/soft-delete`, `/api/paths/export`
+
+### v0.5.4 ⚡
 **Performance & UI Improvements**
 - ✅ **Unified MetricChart**: Single component for single-run and multi-run views
 - ✅ **Lazy chart loading**: IntersectionObserver-based chart rendering
@@ -420,7 +450,7 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ### Future Versions
 
-**v0.6.0** (Planned):
+**v0.7.0** (Planned):
 - Windows remote server support
 - GraphQL API support
 - Webhook notifications

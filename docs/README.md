@@ -4,8 +4,8 @@
 
 # Runicorn Documentation
 
-**Version**: v0.5.3  
-**Last Updated**: 2025-11-28
+**Version**: v0.6.0  
+**Last Updated**: 2026-01-15
 
 ---
 
@@ -73,20 +73,23 @@ docs/
   - [QUICKSTART.md](guides/en/QUICKSTART.md) - 5-minute quick start
   - [REMOTE_VIEWER_GUIDE.md](guides/en/REMOTE_VIEWER_GUIDE.md) - ⭐ Remote Viewer guide (v0.5.0)
   - [ARTIFACTS_GUIDE.md](guides/en/ARTIFACTS_GUIDE.md) - Model versioning
-  - [MIGRATION_GUIDE_v0.4_to_v0.5.md](guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md) - ⭐ Migration guide 0.4→0.5
+  - [ENHANCED_LOGGING_GUIDE.md](guides/en/ENHANCED_LOGGING_GUIDE.md) - ⭐ Console capture, logging handler (v0.6.0)
+  - [ASSETS_GUIDE.md](guides/en/ASSETS_GUIDE.md) - ⭐ SHA256 content-addressed storage (v0.6.0)
+  - [MIGRATION_GUIDE_v0.4_to_v0.5.md](guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md) - Migration guide 0.4→0.5
   - [DEMO_EXAMPLES_GUIDE.md](guides/en/DEMO_EXAMPLES_GUIDE.md) - Examples
 - **[user-guide/](user-guide/)** - Complete user documentation website (MkDocs)
 
 ### Architecture
 
 - **[architecture/](architecture/)** - System architecture documentation
-  - [SYSTEM_OVERVIEW.md](architecture/en/SYSTEM_OVERVIEW.md) - System overview (with v0.5.0 arch)
+  - [SYSTEM_OVERVIEW.md](architecture/en/SYSTEM_OVERVIEW.md) - System overview (with v0.6.0 modules)
   - [REMOTE_VIEWER_ARCHITECTURE.md](architecture/en/REMOTE_VIEWER_ARCHITECTURE.md) - ⭐ Remote Viewer architecture (v0.5.0)
-  - [COMPONENT_ARCHITECTURE.md](architecture/en/COMPONENT_ARCHITECTURE.md) - Component design
+  - [SSH_BACKEND_ARCHITECTURE.md](architecture/en/SSH_BACKEND_ARCHITECTURE.md) - ⭐ SSH backend multi-fallback design (v0.6.0)
+  - [COMPONENT_ARCHITECTURE.md](architecture/en/COMPONENT_ARCHITECTURE.md) - Component design (with PathTreePanel, CompareChartsView)
   - [STORAGE_DESIGN.md](architecture/en/STORAGE_DESIGN.md) - Storage architecture
   - [DATA_FLOW.md](architecture/en/DATA_FLOW.md) - Data processing pipeline
   - [API_DESIGN.md](architecture/en/API_DESIGN.md) - API layer design
-  - [FRONTEND_ARCHITECTURE.md](architecture/en/FRONTEND_ARCHITECTURE.md) - Frontend design
+  - [FRONTEND_ARCHITECTURE.md](architecture/en/FRONTEND_ARCHITECTURE.md) - Frontend design (with new components)
   - [DEPLOYMENT.md](architecture/en/DEPLOYMENT.md) - Deployment options
   - [DESIGN_DECISIONS.md](architecture/en/DESIGN_DECISIONS.md) - Technical decisions
 
@@ -96,6 +99,9 @@ docs/
   - [README.md](api/en/README.md) - API overview
   - [QUICK_REFERENCE.md](api/en/QUICK_REFERENCE.md) - Quick lookup
   - [API_INDEX.md](api/en/API_INDEX.md) - Complete endpoint index
+  - [logging_api.md](api/en/logging_api.md) - ⭐ Enhanced Logging API (v0.6.0)
+  - [paths_api.md](api/en/paths_api.md) - ⭐ Path-based Hierarchy API (v0.6.0)
+  - [remote_api.md](api/en/remote_api.md) - ⭐ Remote Viewer API (v0.5.0+, updated SSH backend)
   - Module docs: runs, artifacts, v2, metrics, config, ssh
 
 ### Reference
@@ -109,7 +115,8 @@ docs/
 ### Releases
 
 - **[releases/](releases/)** - Release information
-  - [RELEASE_NOTES_v0.5.0.md](releases/en/RELEASE_NOTES_v0.5.0.md) - ⭐ v0.5.0 notes (Remote Viewer)
+  - [RELEASE_NOTES_v0.6.0.md](releases/en/RELEASE_NOTES_v0.6.0.md) - ⭐ v0.6.0 notes (Assets, Enhanced Logging, Path Hierarchy, SSH Backend)
+  - [RELEASE_NOTES_v0.5.0.md](releases/en/RELEASE_NOTES_v0.5.0.md) - v0.5.0 notes (Remote Viewer)
   - [RELEASE_NOTES_v0.4.0.md](releases/en/RELEASE_NOTES_v0.4.0.md) - v0.4.0 notes
 
 ---
@@ -190,16 +197,16 @@ For version history, see:
 
 | Category | Completion | Status |
 |----------|------------|--------|
-| API Docs (with Remote) | 100% | ✅ Complete |
-| Architecture (with Remote) | 100% | ✅ Complete |
+| API Docs (with Remote, Paths, Logging) | 100% | ✅ Complete |
+| Architecture (with SSH Backend) | 100% | ✅ Complete |
 | Reference (Config/CLI/FAQ) | 100% | ✅ Complete |
-| User Guides (with Migration) | 90% | 🔄 Near complete |
-| User Guide Website | 40% | 🔄 In progress |
-| Tutorials | 30% | 🔄 Growing |
+| User Guides (with Enhanced Logging, Assets) | 95% | ✅ Near complete |
+| User Guide Website | 50% | 🔄 In progress |
+| Tutorials | 40% | 🔄 Growing |
 
 ---
 
-**Last Updated**: 2025-10-25  
+**Last Updated**: 2026-01-15  
 **Maintained By**: Runicorn Documentation Team  
-**v0.5.0 Highlights**: Remote Viewer (VSCode Remote-style), Complete Config/CLI/FAQ Reference
+**v0.6.0 Highlights**: New Assets System (SHA256 storage), Enhanced Logging (console capture, MetricLogger), Path-based Hierarchy, SSH Backend Architecture (OpenSSH + AsyncSSH + Paramiko fallback)
 

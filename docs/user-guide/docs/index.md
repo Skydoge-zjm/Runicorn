@@ -3,7 +3,7 @@
 <div align="center">
   <img src="assets/logo.png" alt="Runicorn Logo" width="200">
   <h3>🦄 Local ML Experiment Tracking & Model Versioning</h3>
-  <p><strong>v0.5.3</strong> • 100% Offline • Privacy-First • Self-Hosted</p>
+  <p><strong>v0.6.0</strong> • 100% Offline • Privacy-First • Self-Hosted</p>
   
   <p>
     <a href="https://pypi.org/project/runicorn/"><img src="https://img.shields.io/pypi/v/runicorn?color=blue&label=PyPI" alt="PyPI"></a>
@@ -13,27 +13,33 @@
 
 ---
 
-## ✨ What's New in v0.5.x
+## ✨ What's New in v0.6.0
 
 <div class="grid cards" markdown>
 
--   :material-remote-desktop:{ .lg .middle } __Remote Viewer (v0.5.0)__
+-   :material-package-variant:{ .lg .middle } __New Assets System (v0.6.0)__
 
     ---
 
-    VSCode-style remote access via SSH tunnel. View experiments on remote GPU servers without file sync!
+    SHA256 content-addressed storage with 50-90% deduplication. Workspace snapshots and blob storage.
 
--   :material-lightning-bolt:{ .lg .middle } __Performance (v0.5.2)__
-
-    ---
-
-    LTTB downsampling & incremental caching. Handle 100k+ data points smoothly.
-
--   :material-palette:{ .lg .middle } __UI Beautification (v0.5.3)__
+-   :material-text-box-outline:{ .lg .middle } __Enhanced Logging (v0.6.0)__
 
     ---
 
-    Unified chart component, lazy loading, fancy metric cards, and animated status badges.
+    Console capture, Python logging handler, MetricLogger compatibility, smart tqdm filtering.
+
+-   :material-file-tree:{ .lg .middle } __Path-based Hierarchy (v0.6.0)__
+
+    ---
+
+    VSCode-style PathTreePanel navigation with batch operations and export.
+
+-   :material-compare:{ .lg .middle } __Inline Compare View (v0.6.0)__
+
+    ---
+
+    Multi-run metric comparison with ECharts, common metrics detection.
 
 </div>
 

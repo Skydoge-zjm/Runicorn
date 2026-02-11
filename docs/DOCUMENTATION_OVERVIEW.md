@@ -1,10 +1,10 @@
 # Runicorn Documentation System Overview
 
-**Version**: v0.5.3  
-**Last Updated**: 2025-11-28  
+**Version**: v0.6.0  
+**Last Updated**: 2026-01-15  
 **Purpose**: Complete overview of all documentation in the Runicorn project
 
-**v0.5.3 Highlights**: Frontend performance optimization, unified MetricChart, backend incremental caching, LTTB downsampling
+**v0.6.0 Highlights**: New Assets System (SHA256 content-addressed storage), Enhanced Logging (console capture, MetricLogger), Path-based Hierarchy (VSCode-style navigation), Inline Compare View, New SSH Backend Architecture (OpenSSH + AsyncSSH + Paramiko fallback)
 
 ---
 
@@ -66,10 +66,12 @@ Practical guides for:
 | `QUICKSTART.md` | 5-minute quick start | EN/ZH |
 | `REMOTE_VIEWER_GUIDE.md` | ⭐ Remote Viewer usage (v0.5.0) | EN/ZH |
 | `ARTIFACTS_GUIDE.md` | Model versioning | EN/ZH |
-| `MIGRATION_GUIDE_v0.4_to_v0.5.md` | ⭐ Migration guide (v0.5.0) | EN/ZH |
+| `ENHANCED_LOGGING_GUIDE.md` | ⭐ Console capture, logging handler, MetricLogger (v0.6.0) | EN/ZH |
+| `ASSETS_GUIDE.md` | ⭐ SHA256 content-addressed storage, workspace snapshots (v0.6.0) | EN/ZH |
+| `MIGRATION_GUIDE_v0.4_to_v0.5.md` | Migration guide (v0.5.0) | EN/ZH |
 | `DEMO_EXAMPLES_GUIDE.md` | Example code explanations | EN/ZH |
 
-**Total**: 6 guides × 2 languages = 12 files
+**Total**: 7 guides × 2 languages = 14 files
 
 ### Features
 
@@ -143,6 +145,7 @@ System design documentation:
 |----------|---------|----------|
 | `SYSTEM_OVERVIEW.md` | High-level architecture | EN/ZH |
 | `REMOTE_VIEWER_ARCHITECTURE.md` | ⭐ Remote Viewer design (v0.5.0) | EN/ZH |
+| `SSH_BACKEND_ARCHITECTURE.md` | ⭐ SSH backend multi-fallback design (v0.6.0) | EN/ZH |
 | `COMPONENT_ARCHITECTURE.md` | Component design | EN/ZH |
 | `STORAGE_DESIGN.md` | Storage architecture | EN/ZH |
 | `DATA_FLOW.md` | Data processing pipeline | EN/ZH |
@@ -151,7 +154,7 @@ System design documentation:
 | `DEPLOYMENT.md` | Deployment options | EN/ZH |
 | `DESIGN_DECISIONS.md` | Technical decisions | EN/ZH |
 
-**Total**: 9 docs × 2 languages = 18 files
+**Total**: 10 docs × 2 languages = 20 files
 
 ### Features
 
@@ -187,18 +190,20 @@ Technical reference for:
 |----------|---------|-----------|
 | `README.md` | API overview | - |
 | `QUICK_REFERENCE.md` | Quick lookup | All |
-| `API_INDEX.md` | Complete index | 40+ |
+| `API_INDEX.md` | Complete index | 50+ |
 | `runs_api.md` | Experiment CRUD | 6 |
 | `artifacts_api.md` | Model versioning | 7 |
 | `v2_api.md` | High-performance queries | 4 |
 | `metrics_api.md` | Metrics & logs | 4 |
 | `config_api.md` | Configuration | 6 |
 | `ssh_api.md` | Remote sync (deprecated) | 12 |
-| `remote_api.md` | ⭐ Remote Viewer API (v0.5.0) | 8+ |
+| `remote_api.md` | ⭐ Remote Viewer API (v0.5.0+) | 8+ |
+| `logging_api.md` | ⭐ Enhanced Logging API (v0.6.0) | SDK |
+| `paths_api.md` | ⭐ Path-based Hierarchy API (v0.6.0) | 5 |
 | `runicorn_api.postman_collection.json` | Postman import | All |
 
-**Total**: 13 API modules × 2 languages = 26 files  
-**Content**: 45,000+ words, 120+ code examples
+**Total**: 15 API modules × 2 languages = 30 files  
+**Content**: 50,000+ words, 150+ code examples
 
 ### Features
 
@@ -366,24 +371,24 @@ mkdocs serve
 
 | Category | Files | Words | Code Examples |
 |----------|-------|-------|---------------|
-| **User Guides** | 12 | 12,000+ | 40+ |
+| **User Guides** | 14 | 15,000+ | 50+ |
 | **Reference Docs** | 8 | 15,000+ | 60+ |
-| **Architecture** | 18 | 20,000+ | 30+ |
-| **API Docs** | 26 | 45,000+ | 120+ |
+| **Architecture** | 20 | 25,000+ | 40+ |
+| **API Docs** | 30 | 50,000+ | 150+ |
 | **User Guide (Website)** | 40+ | TBD | 100+ |
-| **Total** | **104+** | **92,000+** | **350+** |
+| **Total** | **112+** | **105,000+** | **400+** |
 
 ### Coverage
 
 - ✅ **Python SDK**: 100% (all functions documented)
 - ✅ **CLI Commands**: 100% (comprehensive CLI reference)
-- ✅ **REST API**: 100% (48+ endpoints including Remote API)
-- ✅ **Architecture**: 100% (including Remote Viewer architecture)
+- ✅ **REST API**: 100% (50+ endpoints including Remote API, Paths API, Logging API)
+- ✅ **Architecture**: 100% (including Remote Viewer, SSH Backend architecture)
 - ✅ **Configuration**: 100% (complete config reference)
 - ✅ **FAQ**: 100% (30+ questions answered)
 - ✅ **Migration**: 100% (0.4→0.5 guide complete)
-- ✅ **Web UI**: ~60% (core features documented)
-- ⏳ **Tutorials**: ~30% (3 complete, more planned)
+- ✅ **Web UI**: ~70% (core features documented)
+- ⏳ **Tutorials**: ~40% (4 complete, more planned)
 
 ---
 
@@ -514,6 +519,16 @@ Each system serves its audience with appropriate depth, language, and format.
 - 📣 Share documentation URL with users
 
 ---
+
+**v0.6.0 Documentation Additions**:
+- ⭐ New Assets System documentation (SHA256 content-addressed storage, workspace snapshots)
+- ⭐ Enhanced Logging Guide (console capture, MetricLogger compatibility, tqdm modes)
+- ⭐ Path-based Hierarchy API documentation (VSCode-style navigation)
+- ⭐ SSH Backend Architecture documentation (OpenSSH + AsyncSSH + Paramiko fallback)
+- ⭐ Inline Compare View documentation (multi-run metric comparison)
+- ⭐ Logging API documentation (SDK parameters, get_logging_handler)
+- ⭐ Paths API documentation (/api/paths endpoints)
+- ⭐ Updated Remote API with SSH backend changes
 
 **v0.5.3 Documentation Additions**:
 - ⭐ Frontend performance optimization documentation

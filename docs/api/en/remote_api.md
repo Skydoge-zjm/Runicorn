@@ -1,7 +1,7 @@
 # Remote Viewer API Reference
 
-> **Version**: v0.5.4  
-> **Last Updated**: 2025-12-22  
+> **Version**: v0.6.0  
+> **Last Updated**: 2025-01-XX  
 > **Base URL**: `http://127.0.0.1:23300`
 
 [English](remote_api.md) | [简体中文](../zh/remote_api.md)
@@ -11,6 +11,7 @@
 ## 📖 Table of Contents
 
 - [Overview](#overview)
+- [SSH Backend Architecture](#ssh-backend-architecture)
 - [Host Key Verification (HTTP 409)](#host-key-verification-http-409)
 - [Authentication](#authentication)
 - [Connection Management](#connection-management)
@@ -35,6 +36,7 @@ The Remote Viewer API provides complete functionality for connecting to remote s
 - 🚀 **Viewer Lifecycle**: Start, monitor, and stop remote Viewer
 - 💓 **Health Monitoring**: Real-time connection and Viewer status checks
 - 🔒 **Security**: All communication via SSH encryption
+- 🔄 **Multi-Backend Architecture**: Automatic fallback chain for maximum compatibility (v0.6.0)
 
 ### Workflow
 
@@ -45,6 +47,119 @@ The Remote Viewer API provides complete functionality for connecting to remote s
 4. GET /api/remote/viewer/status/{id}    # Monitor a session
 5. POST /api/remote/disconnect           # Disconnect SSH connection
 ```
+
+---
+
+## SSH Backend Architecture
+
+> **New in v0.6.0**: Multi-backend fallback architecture for improved compatibility and stability.
+
+### Design Overview
+
+Runicorn v0.6.0 introduces a new SSH backend architecture that separates **connection** and **tunneling** concerns:
+
+| Layer | Implementation | Description |
+|-------|----------------|-------------|
+| **Connection** | Paramiko (always) | SSH connection, command execution, SFTP |
+| **Tunneling** | AutoBackend | Local port forwarding with fallback chain |
+
+### AutoBackend Fallback Chain
+
+The `AutoBackend` class automatically selects the best available tunnel implementation:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     AutoBackend                              │
+├─────────────────────────────────────────────────────────────┤
+│  1. OpenSSH Tunnel (preferred)                              │
+│     └─ Uses system OpenSSH client (ssh command)             │
+│     └─ Requires: ssh + ssh-keyscan in PATH                  │
+│     └─ Does NOT support password authentication             │
+│                                                              │
+│  2. AsyncSSH Tunnel (fallback)                              │
+│     └─ Pure Python async implementation                      │
+│     └─ Requires: asyncssh package                           │
+│     └─ Supports all authentication methods                   │
+│                                                              │
+│  3. Paramiko Tunnel (final fallback)                        │
+│     └─ Pure Python synchronous implementation               │
+│     └─ Always available                                      │
+│     └─ Supports all authentication methods                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Backend Selection Logic
+
+```python
+# Pseudocode for backend selection
+def create_tunnel(connection, local_port, remote_port):
+    # Try OpenSSH first (best performance, native integration)
+    try:
+        return OpenSSHTunnel(...)
+    except (SSHNotFound, PasswordAuthRequired, HostKeyError):
+        pass  # Fall through (except HostKeyError which is re-raised)
+    
+    # Try AsyncSSH second (async, good performance)
+    try:
+        return AsyncSSHTunnel(...)
+    except (AsyncSSHNotAvailable, HostKeyError):
+        pass  # Fall through (except HostKeyError which is re-raised)
+    
+    # Final fallback to Paramiko (always works)
+    return ParamikoTunnel(...)
+```
+
+### OpenSSH Backend Details
+
+When available, OpenSSH provides the best performance and native OS integration:
+
+**Requirements**:
+- `ssh` command in PATH (or set via `RUNICORN_SSH_PATH`)
+- `ssh-keyscan` command in PATH (for host key retrieval)
+- SSH key authentication (password auth not supported)
+
+**Features**:
+- Uses `BatchMode=yes` for non-interactive operation
+- `ExitOnForwardFailure=yes` for reliable tunnel setup
+- `StrictHostKeyChecking=yes` with Runicorn-managed known_hosts
+- `ServerAliveInterval=30` for connection keepalive
+
+**Command Example**:
+```bash
+ssh -N -L 127.0.0.1:8080:localhost:23300 \
+    -p 22 \
+    -o ExitOnForwardFailure=yes \
+    -o BatchMode=yes \
+    -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile=/path/to/runicorn/known_hosts \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    user@remote-server
+```
+
+### Environment Variable
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RUNICORN_SSH_PATH` | Path to ssh executable | Auto-detect from PATH |
+
+**Example**:
+```bash
+# Use a specific OpenSSH installation
+export RUNICORN_SSH_PATH="/usr/local/bin/ssh"
+
+# Or on Windows with Git Bash
+set RUNICORN_SSH_PATH=C:\Program Files\Git\usr\bin\ssh.exe
+```
+
+### Security Features
+
+All backends enforce strict security:
+
+1. **Host Key Verification**: Always enabled, uses Runicorn-managed `known_hosts`
+2. **No Auto-Accept**: Unknown host keys trigger HTTP 409 for user confirmation
+3. **Changed Key Detection**: Warns when host key differs from known value
+4. **Local Binding**: Tunnels bind to `127.0.0.1` only (not exposed to network)
 
 ---
 
@@ -571,7 +686,7 @@ In some cases (e.g. host key verification), `detail` is a structured object (see
 ---
 
 **Author**: Runicorn Development Team  
-**Version**: v0.5.4  
-**Last Updated**: 2025-12-22
+**Version**: v0.6.0  
+**Last Updated**: 2025-01-XX
 
 **[Back to API Index](API_INDEX.md)** | **[View Quick Reference](QUICK_REFERENCE.md)**

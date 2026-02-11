@@ -1,7 +1,7 @@
 # Remote Viewer API 参考文档
 
-> **版本**: v0.5.4  
-> **最后更新**: 2025-12-22  
+> **版本**: v0.6.0  
+> **最后更新**: 2025-01-XX  
 > **Base URL**: `http://127.0.0.1:23300`
 
 [English](../en/remote_api.md) | [简体中文](remote_api.md)
@@ -11,6 +11,7 @@
 ## 📖 目录
 
 - [概述](#概述)
+- [SSH 后端架构](#ssh-后端架构)
 - [Host Key 校验（HTTP 409）](#host-key-校验http-409)
 - [认证](#认证)
 - [连接管理](#连接管理)
@@ -35,6 +36,7 @@ Remote Viewer API 提供了通过 SSH 连接远程服务器并启动 Remote View
 - 🚀 **Viewer 生命周期**: 启动、监控、停止远程 Viewer
 - 💓 **健康监控**: 实时连接和 Viewer 状态检查
 - 🔒 **安全**: 所有通信通过 SSH 加密
+- 🔄 **多后端架构**: 自动回退链以获得最大兼容性 (v0.6.0)
 
 ### 工作流程
 
@@ -45,6 +47,119 @@ Remote Viewer API 提供了通过 SSH 连接远程服务器并启动 Remote View
 4. GET /api/remote/viewer/status/{id}     # 查询某个会话状态
 5. POST /api/remote/disconnect            # 断开 SSH 连接
 ```
+
+---
+
+## SSH 后端架构
+
+> **v0.6.0 新增**: 多后端回退架构，提升兼容性和稳定性。
+
+### 设计概述
+
+Runicorn v0.6.0 引入了新的 SSH 后端架构，将**连接**和**隧道**关注点分离：
+
+| 层 | 实现 | 描述 |
+|---|------|------|
+| **连接** | Paramiko（始终） | SSH 连接、命令执行、SFTP |
+| **隧道** | AutoBackend | 本地端口转发，带回退链 |
+
+### AutoBackend 回退链
+
+`AutoBackend` 类自动选择最佳可用的隧道实现：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     AutoBackend                              │
+├─────────────────────────────────────────────────────────────┤
+│  1. OpenSSH 隧道（首选）                                     │
+│     └─ 使用系统 OpenSSH 客户端（ssh 命令）                   │
+│     └─ 要求: PATH 中有 ssh + ssh-keyscan                    │
+│     └─ 不支持密码认证                                        │
+│                                                              │
+│  2. AsyncSSH 隧道（回退）                                    │
+│     └─ 纯 Python 异步实现                                    │
+│     └─ 要求: asyncssh 包                                     │
+│     └─ 支持所有认证方式                                      │
+│                                                              │
+│  3. Paramiko 隧道（最终回退）                                │
+│     └─ 纯 Python 同步实现                                    │
+│     └─ 始终可用                                              │
+│     └─ 支持所有认证方式                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 后端选择逻辑
+
+```python
+# 后端选择伪代码
+def create_tunnel(connection, local_port, remote_port):
+    # 首先尝试 OpenSSH（最佳性能，原生集成）
+    try:
+        return OpenSSHTunnel(...)
+    except (SSHNotFound, PasswordAuthRequired, HostKeyError):
+        pass  # 继续（HostKeyError 除外，会重新抛出）
+    
+    # 其次尝试 AsyncSSH（异步，性能良好）
+    try:
+        return AsyncSSHTunnel(...)
+    except (AsyncSSHNotAvailable, HostKeyError):
+        pass  # 继续（HostKeyError 除外，会重新抛出）
+    
+    # 最终回退到 Paramiko（始终可用）
+    return ParamikoTunnel(...)
+```
+
+### OpenSSH 后端详情
+
+当可用时，OpenSSH 提供最佳性能和原生操作系统集成：
+
+**要求**:
+- PATH 中有 `ssh` 命令（或通过 `RUNICORN_SSH_PATH` 设置）
+- PATH 中有 `ssh-keyscan` 命令（用于获取主机密钥）
+- SSH 密钥认证（不支持密码认证）
+
+**特性**:
+- 使用 `BatchMode=yes` 进行非交互操作
+- `ExitOnForwardFailure=yes` 确保可靠的隧道建立
+- `StrictHostKeyChecking=yes` 配合 Runicorn 管理的 known_hosts
+- `ServerAliveInterval=30` 保持连接活跃
+
+**命令示例**:
+```bash
+ssh -N -L 127.0.0.1:8080:localhost:23300 \
+    -p 22 \
+    -o ExitOnForwardFailure=yes \
+    -o BatchMode=yes \
+    -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile=/path/to/runicorn/known_hosts \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    user@remote-server
+```
+
+### 环境变量
+
+| 变量 | 描述 | 默认值 |
+|------|------|--------|
+| `RUNICORN_SSH_PATH` | ssh 可执行文件路径 | 从 PATH 自动检测 |
+
+**示例**:
+```bash
+# 使用特定的 OpenSSH 安装
+export RUNICORN_SSH_PATH="/usr/local/bin/ssh"
+
+# 或在 Windows 上使用 Git Bash
+set RUNICORN_SSH_PATH=C:\Program Files\Git\usr\bin\ssh.exe
+```
+
+### 安全特性
+
+所有后端都强制执行严格的安全措施：
+
+1. **主机密钥验证**: 始终启用，使用 Runicorn 管理的 `known_hosts`
+2. **不自动接受**: 未知主机密钥触发 HTTP 409 以供用户确认
+3. **密钥变更检测**: 当主机密钥与已知值不同时发出警告
+4. **本地绑定**: 隧道仅绑定到 `127.0.0.1`（不暴露到网络）
 
 ---
 
@@ -455,7 +570,7 @@ Runicorn Viewer 使用 FastAPI 的标准错误响应：
 ---
 
 **作者**: Runicorn Development Team  
-**版本**: v0.5.4  
-**最后更新**: 2025-12-22
+**版本**: v0.6.0  
+**最后更新**: 2025-01-XX
 
 **[返回 API 索引](API_INDEX.md)** | **[查看快速参考](QUICK_REFERENCE.md)**

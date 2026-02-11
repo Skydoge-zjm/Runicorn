@@ -4,7 +4,7 @@
 
 # Runicorn API 快速参考
 
-**版本**: v0.5.4  
+**版本**: v0.6.0  
 **基础 URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -152,6 +152,50 @@ GET /api/remote/sessions
 # 断开连接
 POST /api/remote/disconnect
 Body: {"host": "gpu-server.com", "port": 22, "username": "user"}
+```
+
+### 增强日志 API 🆕 (v0.6.0)
+
+```python
+import runicorn
+import logging
+
+# 启用控制台捕获
+run = runicorn.init(
+    path="my/experiment",
+    capture_console=True,  # 捕获 stdout/stderr
+    tqdm_mode="smart"      # smart/all/none
+)
+
+# Python logging 集成
+logger = logging.getLogger(__name__)
+logger.addHandler(run.get_logging_handler())
+logger.info("这会写入 logs.txt")
+
+# MetricLogger (torchvision 兼容)
+from runicorn.log_compat.torchvision import MetricLogger
+metric_logger = MetricLogger()
+metric_logger.update(loss=0.5, accuracy=0.95)  # 自动记录到 Runicorn
+```
+
+### 路径层级 API 🆕 (v0.6.0)
+
+```bash
+# 列出所有路径（含统计）
+GET /api/paths?include_stats=true
+
+# 获取路径树结构
+GET /api/paths/tree
+
+# 列出某路径下的运行
+GET /api/paths/runs?path=cv/yolo
+
+# 按路径批量软删除
+POST /api/paths/soft-delete
+Body: {"path": "old_experiments", "exact": false}
+
+# 按路径导出运行
+GET /api/paths/export?path=cv/yolo&format=zip
 ```
 
 ---
@@ -389,7 +433,9 @@ response = requests.get(
 - **[v2_api.md](./v2_api.md)** - 高性能查询
 - **[metrics_api.md](./metrics_api.md)** - 指标和日志
 - **[config_api.md](./config_api.md)** - 配置
-- **[remote_api.md](./remote_api.md)** - Remote Viewer API 🆕
+- **[remote_api.md](./remote_api.md)** - Remote Viewer API
+- **[logging_api.md](./logging_api.md)** - 增强日志 API 🆕
+- **[paths_api.md](./paths_api.md)** - 路径层级 API 🆕
 - **[manifest_api.md](./manifest_api.md)** - Manifest-based 同步 🚀
 
 ---
@@ -398,6 +444,6 @@ response = requests.get(
 
 ---
 
-**最后更新**: 2025-10-25
+**最后更新**: 2025-01-XX
 
 
