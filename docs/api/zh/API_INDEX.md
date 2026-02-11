@@ -4,9 +4,9 @@
 
 # 完整 API 索引
 
-**版本**: v0.5.3  
-**总端点数**: 53+ REST + Python Client  
-**最后更新**: 2025-11-28
+**版本**: v0.6.0  
+**总端点数**: 35+ REST + Python Client  
+**最后更新**: 2026-01-15
 
 ---
 
@@ -19,7 +19,6 @@
 | **RunicornClient** | 主客户端类 | [📖](./python_client_api.md) |
 | **Experiments API** | 实验查询和管理 | [📖](./python_client_api.md#实验管理) |
 | **Metrics API** | 指标数据访问 | [📖](./python_client_api.md#指标数据) |
-| **Artifacts API** | Artifacts 程序化管理 | [📖](./python_client_api.md#artifacts-api) |
 | **Remote API** | 远程 Viewer 控制 | [📖](./python_client_api.md#remote-api) |
 | **Utils** | pandas DataFrame 工具 | [📖](./python_client_api.md#工具函数) |
 
@@ -56,27 +55,6 @@ with api.connect() as client:
 | GET | `/api/metrics/cache/stats` | 获取增量缓存统计 | [📖](./metrics_api.md#缓存统计) |
 | WS | `/api/runs/{run_id}/logs/ws` | 实时日志流 | [📖](./metrics_api.md#实时日志流) |
 
-### Artifacts API (版本控制)
-
-| 方法 | 端点 | 描述 | 文档 |
-|------|------|------|------|
-| GET | `/api/artifacts` | 列出 artifacts | [📖](./artifacts_api.md#列出-artifacts) |
-| GET | `/api/artifacts/{name}/versions` | 列出版本 | [📖](./artifacts_api.md#列出-artifact-版本) |
-| GET | `/api/artifacts/{name}/v{version}` | 获取版本详情 | [📖](./artifacts_api.md#获取-artifact-详情) |
-| GET | `/api/artifacts/{name}/v{version}/files` | 列出文件 | [📖](./artifacts_api.md#列出-artifact-文件) |
-| GET | `/api/artifacts/{name}/v{version}/lineage` | 获取血缘图 | [📖](./artifacts_api.md#获取-artifact-血缘) |
-| GET | `/api/artifacts/stats` | 获取存储统计 | [📖](./artifacts_api.md#获取存储统计) |
-| DELETE | `/api/artifacts/{name}/v{version}` | 删除版本 | [📖](./artifacts_api.md#删除-artifact-版本) |
-
-### V2 API (高性能) ⚡
-
-| 方法 | 端点 | 描述 | 文档 |
-|------|------|------|------|
-| GET | `/api/v2/experiments` | 高级查询 | [📖](./v2_api.md#列出实验) |
-| GET | `/api/v2/experiments/{id}` | 获取详情 | [📖](./v2_api.md#获取实验详情) |
-| GET | `/api/v2/experiments/{id}/metrics/fast` | 快速指标 | [📖](./v2_api.md#快速指标检索) |
-| POST | `/api/v2/experiments/batch-delete` | 批量删除 | [📖](./v2_api.md#批量删除) |
-
 ### Config API (设置)
 
 | 方法 | 端点 | 描述 | 文档 |
@@ -90,22 +68,22 @@ with api.connect() as client:
 
 ### Remote Viewer API (远程访问) 🆕
 
-**v0.5.0 新增**: VSCode Remote 风格的远程服务器访问
+**v0.5.4**: VSCode Remote 风格的远程服务器访问
 
 #### 连接管理
 
 | 方法 | 端点 | 描述 | 文档 |
 |------|------|------|------|
 | POST | `/api/remote/connect` | 建立 SSH 连接 | [📖](./remote_api.md#post-apiremoteconnect) |
-| GET | `/api/remote/connections` | 列出所有连接 | [📖](./remote_api.md#get-apiremoteconnections) |
-| DELETE | `/api/remote/connections/{id}` | 断开连接 | [📖](./remote_api.md#delete-apiremoteconnectionsid) |
+| GET | `/api/remote/sessions` | 列出 SSH 会话 | [📖](./remote_api.md#get-apiremotesessions) |
+| POST | `/api/remote/disconnect` | 断开会话 | [📖](./remote_api.md#post-apiremotedisconnect) |
+| GET | `/api/remote/status` | 远程状态 | [📖](./remote_api.md#get-apiremotestatus) |
 
 #### 环境检测
 
 | 方法 | 端点 | 描述 | 文档 |
 |------|------|------|------|
-| GET | `/api/remote/environments` | 列出 Python 环境 | [📖](./remote_api.md#get-apiremoteenvironments) |
-| POST | `/api/remote/environments/detect` | 重新检测环境 | [📖](./remote_api.md#post-apiremoteenvironmentsdetect) |
+| GET | `/api/remote/conda-envs` | 列出 Python 环境 | [📖](./remote_api.md#get-apiremoteconda-envs) |
 | GET | `/api/remote/config` | 获取远程配置 | [📖](./remote_api.md#get-apiremoteconfig) |
 
 #### Remote Viewer 管理
@@ -114,43 +92,39 @@ with api.connect() as client:
 |------|------|------|------|
 | POST | `/api/remote/viewer/start` | 启动 Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstart) |
 | POST | `/api/remote/viewer/stop` | 停止 Remote Viewer | [📖](./remote_api.md#post-apiremoteviewerstop) |
-| GET | `/api/remote/viewer/status` | 获取 Viewer 状态 | [📖](./remote_api.md#get-apiremoteviewerstatus) |
-| GET | `/api/remote/viewer/logs` | 获取 Viewer 日志 | [📖](./remote_api.md#get-apiremoteviewerlogs) |
+| GET | `/api/remote/viewer/sessions` | 列出 Viewer 会话 | [📖](./remote_api.md#get-apiremoteviewersessions) |
+| GET | `/api/remote/viewer/status/{session_id}` | 按 session_id 获取 Viewer 状态 | [📖](./remote_api.md#get-apiremoteviewerstatussession_id) |
 
-#### 健康检查
+### 增强日志 API 🆕 (v0.6.0)
+
+**新增**: 控制台捕获和 Python logging 集成
+
+| 组件 | 描述 | 文档 |
+|------|------|------|
+| `capture_console` | SDK 参数，用于 stdout/stderr 捕获 | [📖](./logging_api.md#sdk-参数) |
+| `tqdm_mode` | 智能 tqdm 过滤 (smart/all/none) | [📖](./logging_api.md#sdk-参数) |
+| `get_logging_handler()` | Python logging.Handler 集成 | [📖](./logging_api.md#日志处理器) |
+| `MetricLogger` | torchvision 兼容的指标记录器 | [📖](./logging_api.md#metriclogger-兼容层) |
+
+### 路径层级 API 🆕 (v0.6.0)
+
+**新增**: 灵活的基于路径的实验组织
 
 | 方法 | 端点 | 描述 | 文档 |
 |------|------|------|------|
-| GET | `/api/remote/health` | 连接健康状态 | [📖](./remote_api.md#get-apiremotehealth) |
-| GET | `/api/remote/ping` | 测试连接延迟 | [📖](./remote_api.md#get-apiremoteping) |
+| GET | `/api/paths` | 列出所有路径（可含统计） | [📖](./paths_api.md#get-apipaths) |
+| GET | `/api/paths/tree` | 获取路径树结构 | [📖](./paths_api.md#get-apipathstree) |
+| GET | `/api/paths/runs` | 按路径过滤列出运行 | [📖](./paths_api.md#get-apipathsruns) |
+| POST | `/api/paths/soft-delete` | 按路径批量软删除 | [📖](./paths_api.md#post-apipathssoft-delete) |
+| GET | `/api/paths/export` | 按路径导出运行 (JSON/ZIP) | [📖](./paths_api.md#get-apipathsexport) |
 
-### Manifest API (高性能同步) 🚀
+### Projects API (层级 - 旧版兼容)
 
-| 类型 | 命令/方法 | 描述 | 文档 |
-|------|-----------|------|------|
-| CLI | `runicorn generate-manifest` | 生成 sync manifest | [📖](./manifest_api.md#cli-命令) |
-| CLI | `runicorn generate-manifest --active` | 生成活跃 manifest | [📖](./manifest_api.md#cli-命令) |
-| Python | `ManifestGenerator.generate()` | 服务端生成 manifest | [📖](./manifest_api.md#服务端manifestgenerator) |
-| Python | `ManifestSyncClient.sync()` | 客户端 manifest sync | [📖](./manifest_api.md#客户端manifestsyncclient) |
-| Python | `MetadataSyncService(..., use_manifest_sync=True)` | 自动集成 | [📖](./manifest_api.md#集成到-metadatasyncservice) |
-
-### Manifest API (高性能同步) 🚀
-
-| 类型 | 命令/方法 | 描述 | 文档 |
-|------|-----------|------|------|
-| CLI | `runicorn generate-manifest` | 生成 sync manifest | [📖](./manifest_api.md#cli-命令) |
-| CLI | `runicorn generate-manifest --active` | 生成活跃 manifest | [📖](./manifest_api.md#cli-命令) |
-| Python | `ManifestGenerator.generate()` | 服务端生成 manifest | [📖](./manifest_api.md#服务端manifestgenerator) |
-| Python | `ManifestSyncClient.sync()` | 客户端 manifest sync | [📖](./manifest_api.md#客户端manifestsyncclient) |
-| Python | `MetadataSyncService(..., use_manifest_sync=True)` | 自动集成 | [📖](./manifest_api.md#集成到-metadatasyncservice) |
-
-### Projects API (层级)
-
-| 方法 | 端点 | 描述 |
-|------|------|------|
-| GET | `/api/projects` | 列出所有项目 |
-| GET | `/api/projects/{project}/names` | 列出项目中的实验名称 |
-| GET | `/api/projects/{project}/names/{name}/runs` | 列出实验中的运行 |
+| 方法 | 端点 | 描述 | 文档 |
+|------|------|------|------|
+| GET | `/api/projects` | 列出顶层路径段 | [📖](./paths_api.md#get-apiprojects) |
+| GET | `/api/projects/{project}/names` | 列出第二层路径段 | [📖](./paths_api.md#get-apiprojectsprojectnames) |
+| GET | `/api/projects/{project}/names/{name}/runs` | 列出 project/name 下的运行 | [📖](./paths_api.md#get-apiprojectsprojectnamesname-runs) |
 
 ### Health & System
 
@@ -179,63 +153,42 @@ GET /api/runs/{run_id}/metrics_step
 GET /api/gpu/telemetry
 ```
 
-### 用例: 管理模型
-
-```bash
-# 1. 列出所有模型
-GET /api/artifacts?type=model
-
-# 2. 查看版本历史
-GET /api/artifacts/resnet50-model/versions
-
-# 3. 获取特定版本
-GET /api/artifacts/resnet50-model/v3
-
-# 4. 检查依赖关系
-GET /api/artifacts/resnet50-model/v3/lineage
-
-# 5. 下载文件
-GET /api/artifacts/resnet50-model/v3/files
-```
-
 ### 用例: Remote Viewer (新)
 
 ```bash
 # 1. 连接到远程服务器
 POST /api/remote/connect
-Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
+Body: {"host": "gpu-server.com", "port": 22, "username": "mluser", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true}
 
 # 2. 检测 Python 环境
-GET /api/remote/environments?connection_id=conn_1a2b3c4d
+GET /api/remote/conda-envs?connection_id=user@host:port
 
 # 3. 启动 Remote Viewer
 POST /api/remote/viewer/start
-Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
+Body: {"host": "gpu-server.com", "port": 22, "username": "mluser", "private_key_path": "~/.ssh/id_rsa", "use_agent": true, "remote_root": "~/runicorn_data", "local_port": null, "remote_port": null, "conda_env": "system"}
 
 # 4. 监控状态
-GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
+GET /api/remote/viewer/status/{session_id}
 
 # 5. 访问远程数据
 # 浏览器打开: http://localhost:8081
 
 # 6. 断开连接
-DELETE /api/remote/connections/conn_1a2b3c4d
+POST /api/remote/disconnect
+Body: {"host": "gpu-server.com", "port": 22, "username": "mluser"}
 ```
 
 ### 用例: 分析
 
 ```bash
-# 1. 获取所有实验（使用 V2 以提高性能）
-GET /api/v2/experiments?per_page=1000
+# 1. 获取所有实验
+GET /api/runs
 
 # 2. 按项目过滤
-GET /api/v2/experiments?project=image_classification
+GET /api/projects/{project}/names/{name}/runs
 
-# 3. 按性能过滤
-GET /api/v2/experiments?best_metric_min=0.9&status=finished
-
-# 4. 获取存储统计
-GET /api/artifacts/stats
+# 3. 导出数据
+GET /api/export?format=json
 ```
 
 ---
@@ -246,14 +199,9 @@ GET /api/artifacts/stats
 
 | 端点 | 平均响应 | P95 | 后端 |
 |------|---------|-----|------|
-| `GET /api/runs` | 5-8 秒 | 10秒 | 文件扫描 |
-| `GET /api/v2/experiments` | 50-80 毫秒 | 120毫秒 | SQLite |
+| `GET /api/runs` | 50-80 毫秒 | 120毫秒 | SQLite |
 | `GET /api/runs/{id}/metrics_step` | 100-300 毫秒 | 500毫秒 | 文件读取+解析 |
-| `GET /api/v2/experiments/{id}/metrics/fast` | 30-60 毫秒 | 100毫秒 | SQLite（缓存）|
-| `GET /api/artifacts` | 200-400 毫秒 | 600毫秒 | 文件扫描 |
-| `GET /api/artifacts/stats` | 1-3 秒 | 5秒 | 递归扫描 |
-
-**建议**: 对于涉及大量实验的查询，使用 V2 API。
+| `GET /api/health` | < 5 毫秒 | 10毫秒 | 内存 |
 
 ---
 
@@ -310,16 +258,11 @@ X-RateLimit-Reset: 15
 # 基本 GET
 curl http://127.0.0.1:23300/api/health
 
-# 带查询参数的 GET
-curl "http://127.0.0.1:23300/api/artifacts?type=model"
-
 # 带 JSON 体的 POST
 curl -X POST http://127.0.0.1:23300/api/runs/soft-delete \
   -H "Content-Type: application/json" \
   -d '{"run_ids": ["20250114_153045_a1b2c3"]}'
 
-# DELETE
-curl -X DELETE "http://127.0.0.1:23300/api/artifacts/old-model/v1?permanent=false"
 ```
 
 ### 使用 Postman
@@ -362,6 +305,12 @@ import runicorn as rn
 run = rn.init(project="demo", name="exp1")
 
 # 记录指标
+run.log({"loss": 0.1, "accuracy": 0.95}, step=100)
+
+# 完成
+run.finish()
+```
+
 > 🔔 **注意**: 欢迎为其他语言（JavaScript、R、Julia）贡献社区库。查看 [CONTRIBUTING.md](../../CONTRIBUTING.md)。
 
 ---
@@ -389,13 +338,20 @@ run = rn.init(project="demo", name="exp1")
 
 ---
 
-## 📝 API 变更日志
+## API 变更日志
 
-### v0.5.3 (当前) ⚡
-**性能与 UI 改进**
-- ✅ **统一 MetricChart**：单组件支持单实验和多实验视图
-- ✅ **图表懒加载**：基于 IntersectionObserver 的图表渲染
-- ✅ **高级 memo 优化**：数据指纹比较防止不必要的重渲染
+### v0.6.0 (当前) 🚀
+**重大新功能**
+- ✅ **增强日志 API**: 控制台捕获、Python logging 处理器、MetricLogger 兼容
+- ✅ **资产系统**: SHA256 内容寻址工作区快照，支持去重
+- ✅ **路径层级 API**: 灵活的基于路径的实验组织，支持树形导航
+- ✅ **SSH 后端架构**: 多后端回退 (OpenSSH → AsyncSSH → Paramiko)
+- ✅ **SQLite 存储后端**: 高性能存储，支持连接池和 WAL 模式
+
+### v0.5.4 ⚡
+ - ✅ **统一 MetricChart**：单组件支持单实验和多实验视图
+ - ✅ **图表懒加载**：基于 IntersectionObserver 的图表渲染
+ - ✅ **高级 memo 优化**：数据指纹比较防止不必要的重渲染
 - ✅ 前端美化：精美的指标卡片、动画状态徽章
 
 ### v0.5.2
@@ -420,8 +376,6 @@ run = rn.init(project="demo", name="exp1")
 - ✅ 连接健康监控
 
 ### v0.4.0
-- ✅ 添加 V2 高性能 API
-- ✅ 添加 Artifacts API（版本控制）
 - ✅ 添加统一 SSH API
 - ✅ 增强错误响应
 - ✅ 添加速率限制
@@ -433,7 +387,7 @@ run = rn.init(project="demo", name="exp1")
 
 ### 未来版本
 
-**v0.6.0**（计划中）:
+**v0.7.0**（计划中）:
 - Windows 远程服务器支持
 - GraphQL API 支持
 - Webhook 通知

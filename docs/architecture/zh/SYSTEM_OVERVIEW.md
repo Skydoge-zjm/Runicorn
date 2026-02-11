@@ -5,8 +5,8 @@
 # Runicorn 系统概述
 
 **文档类型**: 架构  
-**版本**: v0.5.0  
-**最后更新**: 2025-10-25
+**版本**: v0.6.0  
+**最后更新**: 2025-01-XX
 
 ---
 
@@ -300,7 +300,105 @@
 
 ---
 
-### 6. Remote Viewer 系统（v0.5.0 新增）
+### 6. Assets 系统（v0.6.0 新增）
+
+**职责**: 工作区快照和内容寻址 blob 存储
+
+**组件**:
+- **快照管理器** (`snapshot.py`): 使用 SHA256 指纹创建工作区快照
+- **Blob 存储** (`blob_store.py`): 带自动去重的内容寻址存储
+- **指纹计算器** (`fingerprint.py`): 快速文件哈希用于变更检测
+- **忽略解析器** (`ignore.py`): `.rnignore` 文件解析（gitignore 兼容）
+- **输出扫描器** (`outputs_scan.py`): 自动输出文件检测
+- **Assets JSON** (`assets_json.py`): 清单文件处理
+
+**核心特性**:
+- 基于 SHA256 的内容去重（节省 50-90% 存储空间）
+- 增量快照（仅变更文件）
+- 基于清单的恢复
+- 孤立 blob 清理
+
+**设计模式**: 内容寻址存储，写时复制
+
+---
+
+### 7. 控制台捕获系统（v0.6.0 新增）
+
+**职责**: 捕获 stdout/stderr 和 Python logging 输出
+
+**组件**:
+- **日志管理器** (`log_manager.py`): 中央日志协调
+- **捕获** (`capture.py`): TeeWriter 用于 stdout/stderr 拦截
+- **日志处理器** (`logging_handler.py`): Python `logging` 模块集成
+
+**核心特性**:
+- 透明的 stdout/stderr 捕获
+- 通过 `run.get_logging_handler()` 集成 Python logging handler
+- 智能 tqdm 过滤（模式: smart/all/none）
+- 实时 WebSocket 流
+
+**设计模式**: 装饰器模式用于流拦截
+
+---
+
+### 8. 日志兼容层（v0.6.0 新增）
+
+**职责**: 常见 ML 日志库的直接替换
+
+**组件**:
+- **MetricLogger** (`log_compat/torchvision.py`): torchvision.MetricLogger 兼容 API
+
+**核心特性**:
+- 与 torchvision 的 MetricLogger API 兼容
+- 自动指标聚合（avg, median, max, value）
+- 与现有训练脚本无缝集成
+
+**设计模式**: 适配器模式
+
+---
+
+### 9. 索引系统（v0.6.0 新增）
+
+**职责**: 快速实验和运行索引
+
+**组件**:
+- **索引数据库** (`index/db.py`): 基于 SQLite 的快速查找索引
+
+**核心特性**:
+- 加速实验列表
+- 基于路径的过滤
+- 状态聚合
+
+---
+
+### 10. 工作区管理（v0.6.0 新增）
+
+**职责**: 工作区根目录检测和配置
+
+**组件**:
+- **根目录检测器** (`workspace/root.py`): 查找工作区根目录
+
+**核心特性**:
+- 自动工作区检测（查找 `.runicorn/` 或 `runicorn.yaml`）
+- 支持嵌套工作区
+
+---
+
+### 11. 运行时配置（v0.6.0 新增）
+
+**职责**: 加载和管理运行时配置
+
+**组件**:
+- **配置加载器** (`rnconfig/loader.py`): YAML/JSON 配置加载
+
+**核心特性**:
+- `runicorn.yaml` 支持
+- 环境变量覆盖
+- 默认值回退
+
+---
+
+### 12. Remote Viewer 系统（v0.5.0+，v0.6.0 增强）
 
 **职责**: VSCode Remote 风格的远程访问
 
@@ -311,6 +409,11 @@
 - **SSH 隧道管理**: 端口转发和隧道维护
 - **健康检查器**: 连接和 Viewer 状态监控
 
+**v0.6.0 增强**:
+- **多后端 SSH 架构**: OpenSSH → AsyncSSH → Paramiko 回退链
+- **严格主机密钥验证**: Runicorn 管理的 known_hosts 与 409 确认协议
+- **AutoBackend 选择器**: 自动选择最佳后端
+
 **设计模式**: 代理模式，远程过程调用（RPC）
 
 **优势**:
@@ -319,6 +422,8 @@
 - ✅ 自动环境检测和管理
 - ✅ 安全的 SSH 隧道通信
 - ✅ 零配置，自动清理
+
+详见 **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** 了解后端设计详情。
 
 ---
 
@@ -518,7 +623,32 @@ user_root_dir/
 
 ## 已实现的架构演进
 
-### v0.5.0（当前）✅
+### v0.6.0（当前）✅
+
+- **Assets 系统**: 基于 SHA256 的内容寻址存储与去重
+  - 带指纹的工作区快照
+  - Blob 存储实现高效存储
+  - 基于清单的恢复
+- **增强日志**: 控制台捕获和 Python logging 集成
+  - TeeWriter 用于 stdout/stderr 捕获
+  - `get_logging_handler()` 用于 Python logging
+  - MetricLogger 兼容层
+  - 智能 tqdm 过滤
+- **路径层级**: VSCode 风格的路径树导航
+  - PathTreePanel 组件
+  - `/api/paths` 端点
+  - 批量操作（删除、导出）
+- **内联比较视图**: 多运行指标比较
+  - CompareChartsView 与 ECharts
+  - 共同指标自动检测
+  - 可见性切换
+- **SSH 后端架构**: 多后端回退链
+  - OpenSSH → AsyncSSH → Paramiko
+  - 严格主机密钥验证
+  - 409 确认协议
+- **新模块**: `assets/`、`console/`、`log_compat/`、`index/`、`workspace/`、`rnconfig/`
+
+### v0.5.0 ✅
 
 - **Remote Viewer**: VSCode Remote 风格的远程访问
   - SSH 隧道 + 临时 Viewer 实例
@@ -535,6 +665,7 @@ user_root_dir/
 - **[STORAGE_DESIGN.md](STORAGE_DESIGN.md)** - 存储层深入
 - **[DATA_FLOW.md](DATA_FLOW.md)** - 数据如何流经系统
 - **[DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)** - 为何做出这些选择
+- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - SSH 后端设计（v0.6.0）
 
 ---
 

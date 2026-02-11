@@ -15,6 +15,9 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
+    supportedLngs: ['en', 'zh'],
+    nonExplicitSupportedLngs: true,
+    load: 'languageOnly',
     fallbackLng: 'en',
     interpolation: { escapeValue: false },
     detection: { order: ['querystring', 'localStorage', 'navigator'], caches: ['localStorage'] },

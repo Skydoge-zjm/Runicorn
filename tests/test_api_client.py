@@ -72,31 +72,6 @@ def test_basic_usage():
     client.close()
     print(f"\n✅ All tests passed!")
 
-
-def test_artifacts_api():
-    """Test Artifacts API."""
-    print("\n" + "="*60)
-    print("Testing Artifacts API")
-    print("="*60)
-    
-    try:
-        client = api.connect()
-        print(f"✅ Connected to Viewer")
-    except api.ConnectionError as e:
-        print(f"❌ Failed to connect: {e}")
-        return
-    
-    # List artifacts
-    print(f"\n📦 Listing Artifacts")
-    artifacts = client.artifacts.list_artifacts(limit=5)
-    print(f"   Found {len(artifacts)} artifacts")
-    
-    for artifact in artifacts[:3]:
-        print(f"   - {artifact['name']} v{artifact['version']} ({artifact['type']})")
-    
-    client.close()
-
-
 def test_remote_api():
     """Test Remote API."""
     print("\n" + "="*60)
@@ -157,7 +132,6 @@ if __name__ == "__main__":
     
     # Run tests
     test_basic_usage()
-    test_artifacts_api()
     test_remote_api()
     demo_context_manager()
     

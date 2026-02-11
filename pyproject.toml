@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runicorn"
-version = "0.5.3"
+version = "0.6.0"
 description = "Local experiment tracking with model versioning - self-hosted W&B alternative with Artifacts"
 readme = "README.md"
 authors = [{ name = "Runicorn Authors" }]
@@ -15,8 +15,6 @@ keywords = [
 ]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -28,17 +26,19 @@ classifiers = [
   "Environment :: Web Environment",
   "Operating System :: OS Independent",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
   "fastapi>=0.110,<1.0",
   "uvicorn[standard]>=0.23,<0.31",
   "pydantic>=2,<3",
   "aiofiles>=23,<24",
   "filelock>=3.12",
+  "asyncssh>=2.22,<3",
   "paramiko>=3.3,<4",
   "psutil>=5.8.0",
   "httpx",
   "cryptography>=41.0.0",
+  "tomli>=2.0.1",
 ]
 
 [project.optional-dependencies]
@@ -77,10 +77,24 @@ line-length = 100
 select = ["E","F","W","I"]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.10"
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 ignore_missing_imports = true
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit", "tests/integration", "tests/e2e"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+markers = [
+  "unit: unit tests (no network, no subprocess)",
+  "integration: integration tests (may create app/TestClient, no real SSH required)",
+  "e2e: end-to-end tests (requires external environment)",
+  "requires_ssh: requires a real SSH server",
+  "requires_openssh: requires local OpenSSH tools (ssh/ssh-keyscan)",
+  "slow: slow tests",
+]
 
 

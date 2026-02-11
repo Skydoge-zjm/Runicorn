@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
+from dataclasses import dataclass, asdict, fields as dataclass_fields
 
 
 @dataclass
@@ -20,12 +21,12 @@ class ExperimentRecord:
     """
     # Primary identification
     id: str
-    project: str
-    name: str
+    path: str  # Flexible hierarchy path (e.g., "cv/detection/yolo")
+    alias: Optional[str] = None  # Optional user-friendly alias (can be repeated)
     
     # Timestamps
-    created_at: float
-    updated_at: float
+    created_at: float = 0.0
+    updated_at: float = 0.0
     started_at: Optional[float] = None
     ended_at: Optional[float] = None
     
@@ -63,7 +64,18 @@ class ExperimentRecord:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ExperimentRecord':
         """Create from dictionary."""
-        return cls(**data)
+        # Handle legacy data with project/name fields
+        if 'project' in data and 'name' in data and 'path' not in data:
+            data['path'] = f"{data.pop('project')}/{data.pop('name')}"
+        elif 'project' in data:
+            data.pop('project', None)
+        if 'name' in data:
+            data.pop('name', None)
+        
+        # Filter to only known fields
+        known_fields = {f.name for f in dataclass_fields(cls)}
+        filtered_data = {k: v for k, v in data.items() if k in known_fields}
+        return cls(**filtered_data)
     
     def is_active(self) -> bool:
         """Check if experiment is active (not deleted)."""
@@ -80,6 +92,17 @@ class ExperimentRecord:
         elif self.started_at and self.status == "running":
             return time.time() - self.started_at
         return None
+    
+    @property
+    def short_id(self) -> str:
+        """Get short ID (last 6 characters of run_id)."""
+        return self.id[-6:] if len(self.id) >= 6 else self.id
+    
+    def path_parts(self) -> List[str]:
+        """Split path into parts."""
+        if not self.path or self.path == "/":
+            return []
+        return [p for p in self.path.split("/") if p]
 
 
 @dataclass
@@ -115,8 +138,9 @@ class QueryParams:
     Parameters for experiment queries.
     """
     # Filters
-    project: Optional[str] = None
-    name: Optional[str] = None
+    path: Optional[str] = None  # Filter by path prefix
+    path_exact: bool = False  # If True, match exact path; if False, match prefix
+    alias: Optional[str] = None  # Filter by alias (fuzzy match)
     status: Optional[List[str]] = None
     tags: Optional[List[str]] = None
     created_after: Optional[float] = None

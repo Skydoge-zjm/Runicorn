@@ -24,12 +24,6 @@ export default {
   'settings.system_info.misses': 'Misses',
   'settings.system_info.cache_size': 'Cache Size',
   
-  'settings.system_info.artifacts_stats': 'Artifacts Statistics',
-  'settings.system_info.total_artifacts': 'Total Artifacts',
-  'settings.system_info.total_versions': 'Total Versions',
-  'settings.system_info.deduplication': 'Deduplication',
-  'settings.system_info.space_saved': 'Space Saved',
-  
   'settings.system_info.help_text': 'This information is useful for debugging and support. Click "Copy All" to copy all details to clipboard.',
   
   'settings.drawer.title': 'Settings',

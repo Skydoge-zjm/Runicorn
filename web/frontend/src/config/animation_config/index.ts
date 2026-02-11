@@ -8,7 +8,6 @@
 import commonConfig, { pageTransitionVariants, staggerContainerVariants, staggerItemVariants } from './common'
 import experimentsConfig from './experiments'
 import runDetailConfig from './run_detail'
-import artifactsConfig from './artifacts'
 import remoteConfig from './remote'
 import componentConfig from './components'
 import colorCfg, { createGradient, createRadialGradient } from './colors'
@@ -17,7 +16,6 @@ import colorCfg, { createGradient, createRadialGradient } from './colors'
 export const animationConfig = commonConfig
 export const experimentsPageConfig = experimentsConfig
 export const runDetailPageConfig = runDetailConfig
-export const artifactsPageConfig = artifactsConfig
 export const remotePageConfig = remoteConfig
 export const componentAnimationConfig = componentConfig
 export const colorConfig = colorCfg
@@ -35,7 +33,6 @@ export default {
   animationConfig,
   experimentsPageConfig,
   runDetailPageConfig,
-  artifactsPageConfig,
   remotePageConfig,
   componentAnimationConfig,
   colorConfig

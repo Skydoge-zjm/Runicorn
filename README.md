@@ -95,12 +95,13 @@ runicorn viewer  # → Click "Remote" → SSH credentials → Done!
 
 ---
 
-## 🆕 v0.5.3 (Latest)
+## 🆕 v0.6.0 (Latest)
 
-- ⚡ **LTTB Downsampling** — 100k+ data points
-- 💾 **Incremental Cache** — 300x faster parsing
-- 🚀 **Lazy Loading** — Faster page load
-- 🎯 **Unified Charts** — Single component for all scenarios
+- 📦 **New Assets System** — SHA256 content-addressed storage with 50-90% deduplication
+- 📝 **Enhanced Logging** — Console capture, Python logging handler, MetricLogger compatibility
+- 🌳 **Path-based Hierarchy** — VSCode-style navigation with PathTreePanel
+- 📊 **Inline Compare View** — Multi-run metric comparison with ECharts
+- 🔐 **SSH Backend Architecture** — OpenSSH → AsyncSSH → Paramiko fallback chain
 
 ---
 
@@ -110,4 +111,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-**Version**: v0.5.3 | **Last Updated**: 2025-11-28
+**Version**: v0.6.0 | **Last Updated**: 2026-01-15

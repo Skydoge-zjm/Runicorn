@@ -4,7 +4,59 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.5.3 - 2025-11-28
+## <span class="rn-badge">v0.6.0</span> — 2026-01-15
+
+### 📦 New Assets System
+
+- **NEW**: SHA256 content-addressed storage with automatic deduplication (50-90% space savings)
+- **NEW**: `snapshot_workspace()` for capturing workspace state
+- **NEW**: Blob storage with `store_blob()` and `get_blob_path()`
+- **NEW**: `restore_from_manifest()` for workspace restoration
+- **NEW**: `.rnignore` support for excluding files from snapshots
+- **NEW**: `delete_run_completely()` and `cleanup_orphaned_blobs()` for cleanup
+
+### 📝 Enhanced Logging
+
+- **NEW**: Console capture with `capture_console=True` parameter
+- **NEW**: `run.get_logging_handler()` for Python logging integration
+- **NEW**: `MetricLogger` compatibility layer (from `runicorn.log_compat.torchvision`)
+- **NEW**: Smart tqdm filtering with `tqdm_mode` parameter (smart/all/none)
+- **IMPROVED**: Automatic log file format with timestamps
+
+### 🌳 Path-based Hierarchy
+
+- **NEW**: `PathTreePanel` component for VSCode-style navigation
+- **NEW**: `/api/paths` endpoint for listing paths with statistics
+- **NEW**: `/api/paths/tree` endpoint for tree structure
+- **NEW**: `/api/paths/runs` endpoint for filtering runs by path
+- **NEW**: `/api/paths/soft-delete` for batch soft deletion
+- **NEW**: `/api/paths/export` for batch export
+
+### 📊 Inline Compare View
+
+- **NEW**: `CompareChartsView` component for multi-run metric comparison
+- **NEW**: `CompareRunsPanel` with common metrics detection
+- **NEW**: ECharts linked axis for synchronized zooming
+- **IMPROVED**: Unified chart component for single and multi-run views
+
+### 🔐 SSH Backend Architecture
+
+- **NEW**: `AutoBackend` with fallback chain: OpenSSH → AsyncSSH → Paramiko
+- **NEW**: Separation of connection (Paramiko) and tunneling (multi-backend)
+- **NEW**: `RUNICORN_SSH_PATH` environment variable for custom SSH path
+- **NEW**: Strict host key verification with 409 confirmation protocol
+- **IMPROVED**: Better error handling and backend detection
+
+### 🎨 Frontend Improvements
+
+- **NEW**: LogsViewer with ANSI color support
+- **NEW**: Line numbers in log viewer
+- **NEW**: Search functionality in logs
+- **IMPROVED**: Performance optimizations for large log files
+
+---
+
+## <span class="rn-badge">v0.5.3</span> — 2025-11-28
 
 ### ⚡ Frontend Performance & UI Improvements
 
@@ -32,7 +84,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.5.2 - 2025-11-25
+## <span class="rn-badge">v0.5.2</span> — 2025-11-25
 
 ### ⚡ Backend Performance Improvements
 
@@ -59,7 +111,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.5.1 - 2025-11-20
+## <span class="rn-badge">v0.5.1</span> — 2025-11-20
 
 ### 🐛 Bug Fixes & Minor Improvements
 
@@ -69,7 +121,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.5.0 - 2025-10-25
+## <span class="rn-badge">v0.5.0</span> — 2025-10-25
 
 ### 🚀 Major New Feature: Remote Viewer
 
@@ -110,9 +162,12 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.4.0 - 2025-10-03
+## <span class="rn-badge">v0.4.0</span> — 2025-10-03
 
-### 🎉 Major New Feature: Artifacts (Model Versioning)
+### 🎉 Artifacts (Model Versioning)
+
+!!! warning "Deprecated in v0.6.0"
+    The Artifacts API (`rn.Artifact`, `run.log_artifact`, `run.use_artifact`) has been replaced by the [Assets System](../getting-started/assets-system.md) in v0.6.0. See the Assets guide for the current approach.
 
 #### Core Features
 
@@ -142,7 +197,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.3.1 - 2025-09-15
+## <span class="rn-badge">v0.3.1</span> — 2025-09-15
 
 ### Initial Release
 
@@ -173,6 +228,6 @@ All notable changes to Runicorn.
 ---
 
 <div align="center">
-  <p><strong>Latest version: v0.5.3</strong></p>
+  <p><strong>Latest version: <span class="rn-badge">v0.6.0</span></strong></p>
   <p><code>pip install -U runicorn</code></p>
 </div>

@@ -5,8 +5,8 @@
 # Runicorn CLI Reference
 
 **Document Type**: Reference  
-**Version**: v0.5.0  
-**Last Updated**: 2025-10-25
+**Version**: v0.6.0  
+**Last Updated**: 2026-01-15
 
 ---
 
@@ -26,10 +26,12 @@ runicorn --help
 |---------|-------------|---------|
 | `viewer` | Start web viewer | `runicorn viewer` |
 | `config` | Manage configuration | `runicorn config --show` |
-| `export` | Export experiment data | `runicorn export --format json` |
-| `import` | Import experiment data | `runicorn import data.zip` |
-| `clean` | Clean up data | `runicorn clean --zombie` |
-| `version` | Show version info | `runicorn --version` |
+| `export` | Export runs to .tar.gz archive | `runicorn export --out backup.tar.gz` |
+| `import` | Import runs from archive | `runicorn import --archive backup.tar.gz` |
+| `export-data` | Export run metrics to CSV/Excel | `runicorn export-data --run-id ID --format csv` |
+| `manage` | Manage experiments (tag, search, delete, cleanup) | `runicorn manage --action search` |
+| `rate-limit` | Manage API rate limits | `runicorn rate-limit --action show` |
+| `delete` | Permanently delete runs and orphaned assets | `runicorn delete --run-id ID` |
 
 ---
 
@@ -45,6 +47,11 @@ runicorn viewer [OPTIONS]
 
 ### Options
 
+#### `--storage PATH`
+- **Description**: Storage root directory
+- **Default**: Uses `RUNICORN_DIR` env var, global config, or legacy `./.runicorn`
+- **Example**: `runicorn viewer --storage /data/experiments`
+
 #### `--host TEXT`
 - **Description**: Bind host address
 - **Default**: `127.0.0.1`
@@ -53,27 +60,21 @@ runicorn viewer [OPTIONS]
 #### `--port INTEGER`
 - **Description**: Listen port
 - **Default**: `23300`
-- **Range**: `1024-65535`
 - **Example**: `runicorn viewer --port 8080`
 
-#### `--storage-root PATH`
-- **Description**: Data storage root directory
-- **Default**: `~/RunicornData`
-- **Example**: `runicorn viewer --storage-root /data/experiments`
+#### `--reload`
+- **Description**: Enable auto-reload (development only)
+- **Example**: `runicorn viewer --reload`
 
-#### `--no-open-browser`
-- **Description**: Don't auto-open browser
-- **Example**: `runicorn viewer --no-open-browser`
+#### `--remote-mode` ⭐ v0.5.0
+- **Description**: Start in remote mode (bind to 127.0.0.1, enable auto-shutdown)
+- **Example**: `runicorn viewer --remote-mode --port 45342`
 
 #### `--log-level TEXT`
 - **Description**: Log level
 - **Options**: `DEBUG`, `INFO`, `WARNING`, `ERROR`
 - **Default**: `INFO`
 - **Example**: `runicorn viewer --log-level DEBUG`
-
-#### `--remote-mode` ⭐ v0.5.0
-- **Description**: Start in remote mode (usually auto-invoked)
-- **Example**: `runicorn viewer --remote-mode --port 45342`
 
 ### Examples
 
@@ -82,10 +83,10 @@ runicorn viewer [OPTIONS]
 runicorn viewer
 
 # Custom port and storage
-runicorn viewer --port 8080 --storage-root /data/ml
+runicorn viewer --port 8080 --storage /data/ml
 
 # Debug mode
-runicorn viewer --log-level DEBUG --no-open-browser
+runicorn viewer --log-level DEBUG
 
 # LAN sharing (⚠️ security warning)
 runicorn viewer --host 0.0.0.0
@@ -98,52 +99,40 @@ runicorn viewer --host 0.0.0.0
 ### Usage
 
 ```bash
-runicorn config [COMMAND] [OPTIONS]
+runicorn config [OPTIONS]
 ```
 
-### Commands
+### Options
 
 #### `--show`
-Display current configuration
+Display current configuration (default if no other option is given).
+
 ```bash
 runicorn config --show
 ```
 
-#### `--edit`
-Open config file in editor
-```bash
-runicorn config --edit
-```
-
 #### `--set-user-root PATH`
-Set user data root directory
+Set the per-user root directory for all projects.
+
 ```bash
 runicorn config --set-user-root /data/experiments
 ```
 
-#### `--reset`
-Reset configuration to defaults
-```bash
-runicorn config --reset
-```
+### Examples
 
-#### `--validate`
-Validate configuration file
 ```bash
-runicorn config --validate
-```
+# Show current config
+runicorn config --show
 
-#### `--path`
-Show config file path
-```bash
-runicorn config --path
+# Set storage root
+runicorn config --set-user-root ~/my_experiments
 ```
 
 ---
 
-## `runicorn export` - Export Data
+## `runicorn export` - Export Runs
 
-Export experiment data to various formats.
+Export runs into a `.tar.gz` archive for offline transfer.
 
 ### Usage
 
@@ -153,138 +142,216 @@ runicorn export [OPTIONS]
 
 ### Options
 
-- `--format TEXT`: Export format (`json`, `csv`, `tensorboard`, `zip`)
-- `--output PATH`: Output file path
-- `--project TEXT`: Export specific project only
-- `--run-id TEXT`: Export specific run only
-- `--include-artifacts`: Include artifact files
-- `--compress`: Compress output
+- `--storage PATH`: Storage root directory (default: from config or `RUNICORN_DIR`)
+- `--project TEXT`: Filter by project name
+- `--name TEXT`: Filter by experiment name
+- `--run-id TEXT`: Export specific run ID (can be specified multiple times)
+- `--out PATH`: Output archive path (default: `runicorn_export_<timestamp>.tar.gz`)
 
 ### Examples
 
 ```bash
-# Export all data (JSON)
-runicorn export --format json --output all_experiments.json
+# Export all runs
+runicorn export --out backup.tar.gz
 
-# Export to CSV
-runicorn export --format csv --project training --output results.csv
+# Export specific project
+runicorn export --project training --out training_backup.tar.gz
 
-# Export to TensorBoard
-runicorn export --format tensorboard --output ./tb_logs/
+# Export specific runs
+runicorn export --run-id 20260115_120000_abc123 --run-id 20260115_130000_def456
 
-# Export with artifacts
-runicorn export \
-  --run-id 20251025_143022_a1b2c3 \
-  --include-artifacts \
-  --compress \
-  --output backup.zip
+# Export from custom storage
+runicorn export --storage /data/ml --out archive.tar.gz
 ```
 
 ---
 
-## `runicorn import` - Import Data
+## `runicorn import` - Import Runs
 
-Import experiment data from export files.
+Import runs from a `.zip` or `.tar.gz` archive into storage.
 
 ### Usage
 
 ```bash
-runicorn import [FILE] [OPTIONS]
+runicorn import --archive FILE [OPTIONS]
 ```
 
 ### Options
 
-- `--merge`: Merge with existing data (skip conflicts)
-- `--overwrite`: Overwrite existing data
-- `--dry-run`: Preview import without executing
+- `--storage PATH`: Target storage root (default: from config or `RUNICORN_DIR`)
+- `--archive PATH`: **(Required)** Path to the `.zip` or `.tar.gz` archive to import
 
 ### Examples
 
 ```bash
-# Import ZIP file
-runicorn import experiment_backup.zip
+# Import archive
+runicorn import --archive backup.tar.gz
 
-# Import with overwrite
-runicorn import data.json --overwrite
-
-# Preview import
-runicorn import data.zip --dry-run
+# Import to specific storage
+runicorn import --archive backup.zip --storage /data/experiments
 ```
 
 ---
 
-## `runicorn clean` - Clean Up Data
+## `runicorn export-data` - Export Metrics
 
-Clean expired or unused data.
+Export run metrics to CSV, Excel, Markdown, or HTML format.
 
 ### Usage
 
 ```bash
-runicorn clean [OPTIONS]
+runicorn export-data --run-id ID [OPTIONS]
 ```
 
 ### Options
 
-- `--zombie`: Clean zombie experiments (>48h running)
-- `--temp`: Clean temporary files
-- `--cache`: Clean cache files
-- `--dedup`: Clean orphaned dedup files
-- `--older-than DAYS`: Clean data older than specified days
-- `--dry-run`: Preview cleanup
-- `--force`: Force cleanup without confirmation
+- `--storage PATH`: Storage root directory
+- `--run-id TEXT`: **(Required)** Run ID to export
+- `--format TEXT`: Export format: `csv` (default), `excel`, `markdown`, `html`
+- `--output PATH`: Output file path (default: auto-generated)
 
 ### Examples
 
 ```bash
-# Clean zombie experiments
-runicorn clean --zombie
+# Export as CSV (stdout)
+runicorn export-data --run-id 20260115_120000_abc123
 
-# Clean all temp files
-runicorn clean --temp --cache
+# Export as Excel
+runicorn export-data --run-id 20260115_120000_abc123 --format excel --output results.xlsx
 
-# Clean old data (preview)
-runicorn clean --older-than 30 --dry-run
-
-# Force clean dedup pool
-runicorn clean --dedup --force
+# Export as HTML report
+runicorn export-data --run-id 20260115_120000_abc123 --format html --output report.html
 ```
 
 ---
 
-## `runicorn version` - Version Info
+## `runicorn manage` - Manage Experiments
 
-Display version information and system status.
+Tag, search, delete, or clean up experiments.
 
 ### Usage
 
 ```bash
-runicorn --version
-# or
-runicorn version
+runicorn manage --action ACTION [OPTIONS]
 ```
 
-### Example Output
+### Actions
 
+#### `--action tag`
+Add tags to an experiment.
+
+```bash
+runicorn manage --action tag --run-id ID --tags "baseline,v2"
 ```
-Runicorn 0.5.0
 
-Platform: Linux-5.15.0-x86_64
-Python: 3.10.12
-Storage: /home/user/RunicornData (42.3 GB used)
-Database: V2 API enabled
-Remote Viewer: Available
+#### `--action search`
+Search experiments by project, tags, or text.
+
+```bash
+runicorn manage --action search --project vision --tags "baseline"
+runicorn manage --action search --text "resnet"
+```
+
+#### `--action delete`
+Delete a specific experiment.
+
+```bash
+runicorn manage --action delete --run-id ID
+```
+
+#### `--action cleanup`
+Clean up old experiments.
+
+```bash
+# Preview cleanup (dry run)
+runicorn manage --action cleanup --days 30 --dry-run
+
+# Actually clean up
+runicorn manage --action cleanup --days 90
+```
+
+### Options
+
+- `--storage PATH`: Storage root directory
+- `--run-id TEXT`: Run ID (for tag/delete actions)
+- `--tags TEXT`: Comma-separated tags (for tag/search actions)
+- `--project TEXT`: Filter by project (for search action)
+- `--text TEXT`: Search text (for search action)
+- `--days INTEGER`: Days threshold for cleanup (default: 30)
+- `--dry-run`: Preview cleanup without deleting
+
+---
+
+## `runicorn rate-limit` - Manage API Rate Limits
+
+Manage Viewer API rate limiting configuration.
+
+### Usage
+
+```bash
+runicorn rate-limit --action ACTION [OPTIONS]
+```
+
+### Actions
+
+| Action | Description |
+|--------|-------------|
+| `show` | Show full rate limit config (JSON) |
+| `list` | List all configured limits |
+| `get` | Get limit for specific endpoint |
+| `set` | Set limit for an endpoint |
+| `remove` | Remove limit for an endpoint |
+| `settings` | Update global settings |
+| `reset` | Reset to default configuration |
+| `validate` | Validate configuration |
+
+### Examples
+
+```bash
+# Show config
+runicorn rate-limit --action show
+
+# Set limit for an endpoint
+runicorn rate-limit --action set --endpoint /api/remote/connect --max-requests 5 --window 60
+
+# Enable rate limiting
+runicorn rate-limit --action settings --enable
+
+# Validate config
+runicorn rate-limit --action validate
 ```
 
 ---
 
-## Global Options
+## `runicorn delete` - Delete Runs with Assets
 
-All commands support:
+Permanently delete runs and clean up orphaned assets (blobs).
 
-- `--help`: Show help
-- `--version`: Show version
-- `--quiet`: Quiet mode
-- `--verbose`: Verbose mode
+### Usage
+
+```bash
+runicorn delete --run-id ID [OPTIONS]
+```
+
+### Options
+
+- `--storage PATH`: Storage root directory
+- `--run-id TEXT`: **(Required)** Run ID to delete (can be specified multiple times)
+- `--dry-run`: Preview deletion without actually deleting
+- `--force`: Skip confirmation prompt
+
+### Examples
+
+```bash
+# Preview deletion
+runicorn delete --run-id 20260115_120000_abc123 --dry-run
+
+# Delete with confirmation
+runicorn delete --run-id 20260115_120000_abc123
+
+# Force delete multiple runs
+runicorn delete --run-id run1 --run-id run2 --force
+```
 
 ---
 
@@ -292,19 +359,19 @@ All commands support:
 
 | Variable | Affects | Example |
 |----------|---------|---------|
-| `RUNICORN_USER_ROOT_DIR` | `--storage-root` | `/data/experiments` |
-| `RUNICORN_VIEWER_PORT` | `--port` | `8080` |
-| `RUNICORN_LOG_LEVEL` | `--log-level` | `DEBUG` |
-| `EDITOR` | `config --edit` | `vim` |
+| `RUNICORN_DIR` | `--storage` for all commands | `/data/experiments` |
+| `RUNICORN_USER_ROOT_DIR` | Global storage root | `/data/experiments` |
+| `RUNICORN_SSH_PATH` | SSH binary path (v0.6.0) | `/usr/local/bin/ssh` |
+| `EDITOR` | Config editing | `vim` |
 
 **Usage**:
 ```bash
 # Linux/macOS
-export RUNICORN_USER_ROOT_DIR=/data/ml
+export RUNICORN_DIR=/data/ml
 runicorn viewer
 
 # Windows PowerShell
-$env:RUNICORN_USER_ROOT_DIR="E:\ML"
+$env:RUNICORN_DIR="E:\ML"
 runicorn viewer
 ```
 
@@ -315,7 +382,6 @@ runicorn viewer
 ### First-time Setup
 
 ```bash
-runicorn --version
 runicorn config --set-user-root ~/my_experiments
 runicorn viewer
 ```
@@ -324,7 +390,7 @@ runicorn viewer
 
 ```bash
 # On remote server
-runicorn viewer --no-open-browser
+runicorn viewer --remote-mode
 
 # On local machine (SSH tunnel)
 ssh -L 23300:localhost:23300 user@remote-server
@@ -337,26 +403,23 @@ ssh -L 23300:localhost:23300 user@remote-server
 
 ```bash
 # Old server
-runicorn export --format zip --include-artifacts --output backup.zip
+runicorn export --out backup.tar.gz
 
 # Transfer to new server
-scp backup.zip user@new-server:/tmp/
+scp backup.tar.gz user@new-server:/tmp/
 
 # New server
-runicorn import /tmp/backup.zip
+runicorn import --archive /tmp/backup.tar.gz
 ```
 
 ### Periodic Cleanup
 
 ```bash
-#!/bin/bash
-# cleanup.sh
-runicorn clean --zombie --force
-runicorn clean --temp --cache --force
-runicorn clean --older-than 90 --dry-run
+# Preview what would be deleted
+runicorn manage --action cleanup --days 90 --dry-run
 
-# Add to cron:
-# 0 2 * * 0  /path/to/cleanup.sh
+# Clean up old experiments
+runicorn manage --action cleanup --days 90
 ```
 
 ---
@@ -367,45 +430,6 @@ runicorn clean --older-than 90 --dry-run
 |------|---------|-------------|
 | `0` | Success | Command executed successfully |
 | `1` | General error | Command failed |
-| `2` | Config error | Invalid or missing config |
-| `3` | Permission error | Insufficient permissions |
-| `4` | Resource unavailable | Port occupied or path missing |
-
----
-
-## Shell Aliases
-
-### Bash/Zsh (~/.bashrc or ~/.zshrc)
-
-```bash
-alias rv='runicorn viewer'
-alias rc='runicorn config'
-alias rexp='runicorn export'
-alias rimp='runicorn import'
-```
-
-### PowerShell (profile)
-
-```powershell
-Set-Alias rv 'runicorn viewer'
-function rc { runicorn config $args }
-```
-
----
-
-## Shell Completion
-
-### Bash
-
-```bash
-eval "$(_RUNICORN_COMPLETE=bash_source runicorn)"
-```
-
-### Zsh
-
-```bash
-eval "$(_RUNICORN_COMPLETE=zsh_source runicorn)"
-```
 
 ---
 
@@ -454,5 +478,3 @@ chmod 600 ~/.config/runicorn/config.yaml
 ---
 
 **Back to**: [Reference Docs](README.md) | [Main Docs](../../README.md)
-
-

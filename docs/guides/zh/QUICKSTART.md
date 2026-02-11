@@ -4,6 +4,8 @@
 
 # Runicorn 快速上手指南
 
+> **版本**: v0.6.0
+
 5 分钟了解核心功能。
 
 ---
@@ -14,7 +16,7 @@
 pip install runicorn
 ```
 
-**要求**: Python 3.8+
+**要求**: Python 3.10+
 
 ---
 
@@ -25,13 +27,21 @@ pip install runicorn
 ```python
 import runicorn as rn
 
-# 初始化实验
-run = rn.init(project="my_project", name="experiment_1")
+# 初始化实验，启用控制台捕获 (v0.6.0)
+run = rn.init(
+    path="my_project/experiment_1",
+    capture_console=True,  # 捕获 print 输出到 logs.txt
+)
+
+# 所有 print 输出自动捕获
+print("开始训练...")
 
 # 记录指标
 for epoch in range(10):
     loss = 1.0 / (1 + epoch)
     accuracy = 0.5 + epoch * 0.05
+    
+    print(f"Epoch {epoch}: loss={loss:.4f}, acc={accuracy:.2f}")
     
     run.log({
         "loss": loss,
@@ -57,48 +67,76 @@ runicorn viewer
 
 在 Web 界面中：
 
-- **实验列表**: 查看所有运行
+- **实验列表**: 查看所有运行，支持路径层级导航
 - **实验详情**: 点击查看图表和日志
-- **指标图表**: 交互式训练曲线
-- **实时日志**: 实时日志流
+- **指标图表**: 交互式训练曲线，支持内联比较
+- **实时日志**: 实时日志流，支持 ANSI 颜色
+- **路径树导航**: VSCode 风格的文件夹导航 (v0.6.0)
 
 ---
 
-## 💾 模型版本控制
+## 📝 增强日志 (v0.6.0 新功能)
 
-### 保存模型
-
-```python
-import runicorn as rn
-
-run = rn.init(project="training")
-
-# 训练后
-# torch.save(model.state_dict(), "model.pth")
-
-# 保存为版本化 artifact
-artifact = rn.Artifact("my-model", type="model")
-artifact.add_file("model.pth")
-artifact.add_metadata({"accuracy": 0.95})
-
-version = run.log_artifact(artifact)  # v1, v2, v3...
-run.finish()
-```
-
-### 加载模型
+自动捕获所有控制台输出，无需修改代码：
 
 ```python
 import runicorn as rn
+from tqdm import tqdm
 
-run = rn.init(project="inference")
+# 启用控制台捕获
+run = rn.init(path="training", capture_console=True, tqdm_mode="smart")
 
-# 加载模型
-artifact = run.use_artifact("my-model:latest")
-model_path = artifact.download()
+print("开始训练...")
 
-# 使用模型...
+# tqdm 进度条智能处理
+for batch in tqdm(dataloader, desc="训练中"):
+    loss = train_step(batch)
+    run.log({"loss": loss})
+
 run.finish()
 ```
+
+**特性**:
+- ✅ 自动捕获 `print()` 到 `logs.txt`
+- ✅ 智能 tqdm 处理（无日志膨胀）
+- ✅ 通过 `run.get_logging_handler()` 集成 Python logging
+- ✅ CV 项目的 MetricLogger 兼容
+
+**完整指南**: [增强日志指南](ENHANCED_LOGGING_GUIDE.md)
+
+---
+
+## 📦 资产系统 (v0.6.0 新功能)
+
+高效的工作区快照，支持 SHA256 去重：
+
+```python
+import runicorn as rn
+from runicorn import snapshot_workspace
+from pathlib import Path
+
+run = rn.init(path="training")
+
+# 快照代码以确保可复现性
+result = snapshot_workspace(
+    root=Path("."),
+    out_zip=run.run_dir / "code_snapshot.zip",
+)
+print(f"捕获了 {result['file_count']} 个文件")
+
+# 训练...
+run.finish()
+```
+
+**特性**:
+- ✅ SHA256 内容寻址存储
+- ✅ 通过去重节省 50-90% 存储空间
+- ✅ `.rnignore` 支持（类似 `.gitignore`）
+- ✅ 基于清单的恢复
+
+**完整指南**: [资产系统指南](ASSETS_GUIDE.md)
+
+---
 
 ---
 
@@ -164,9 +202,15 @@ runicorn config --set-user-root "E:\RunicornData"
 
 ## 📚 了解更多
 
-- **[Artifacts 指南](ARTIFACTS_GUIDE.md)** - 模型版本控制
+### v0.6.0 新功能
+- **[增强日志指南](ENHANCED_LOGGING_GUIDE.md)** - 控制台捕获、Python logging 集成
+- **[资产系统指南](ASSETS_GUIDE.md)** - SHA256 去重、工作区快照
+
+### 核心功能
 - **[Remote Viewer 指南](REMOTE_VIEWER_GUIDE.md)** - 远程服务器实时访问
 - **[演示示例](DEMO_EXAMPLES_GUIDE.md)** - 示例代码讲解
+
+### 迁移
 - **[迁移指南](MIGRATION_GUIDE_v0.4_to_v0.5.md)** - 从 0.4.x 升级到 0.5.0
 
 ---

@@ -13,6 +13,11 @@ Access experiments on remote GPU servers without file sync — VSCode Remote-sty
 - ✅ **Secure** — All traffic goes through SSH tunnel
 - ✅ **Easy setup** — Just SSH credentials + Python environment
 
+<figure markdown>
+  ![Remote Viewer](../assets/remote.png)
+  <figcaption>Connect to remote servers via SSH tunnel</figcaption>
+</figure>
+
 !!! info "Architecture"
     Remote Viewer works like VSCode Remote Development. A Viewer process runs on your remote server, and you access it through an SSH tunnel. Your data never leaves the server!
 
@@ -22,7 +27,7 @@ Access experiments on remote GPU servers without file sync — VSCode Remote-sty
 
 ### On Remote Server
 
-1. **Python 3.8+** installed
+1. **Python 3.10+** installed
 2. **Runicorn** installed in a Python environment:
    ```bash
    # Conda environment
@@ -143,7 +148,7 @@ Warning: No compatible Python environments found
    pip install runicorn
    ```
 2. Check if environment is activated before running detection
-3. Verify Python version is 3.8+
+3. Verify Python version is 3.10+
 
 ### Viewer Won't Start
 
@@ -180,7 +185,7 @@ If you experience slow response times:
     Always use a consistent storage path on remote server:
     ```python
     run = rn.init(
-        project="training",
+        path="training",
         storage="/data/runicorn"  # Consistent path
     )
     ```
@@ -211,7 +216,7 @@ If you experience slow response times:
 
 ---
 
-<div align="center">
-  <p><strong>Ready to train on remote servers?</strong></p>
-  <p>Start the viewer and connect to your GPU server! 🚀</p>
+<div class="rn-page-nav">
+  <a href="../sdk/overview.md">Python SDK →</a> &middot;
+  <a href="../cli/overview.md">CLI Reference →</a>
 </div>

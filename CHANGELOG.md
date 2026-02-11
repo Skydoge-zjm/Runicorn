@@ -2,6 +2,123 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2025-01
+
+### 🚀 Major New Features
+
+#### New Assets System
+- **NEW**: SHA256 content-addressed storage with automatic deduplication (50-90% storage savings)
+- **NEW**: `snapshot_workspace()` - Create workspace snapshots with `.rnignore` support
+- **NEW**: Blob store for efficient content-addressed storage
+- **NEW**: `restore_from_manifest()` - Restore any snapshot to its original state
+- **NEW**: `archive_file()` / `archive_dir()` - Archive files with SHA256 deduplication
+- **NEW**: `cleanup_orphaned_blobs()` - Clean up orphaned blobs
+- **NEW**: New modules: `assets/`, `index/`, `workspace/`, `rnconfig/`
+- **REMOVED**: Old `artifacts/` module (replaced by `assets/`)
+
+#### Enhanced Logging System
+- **NEW**: Console capture - Automatically capture all `print()` and logging output
+- **NEW**: `capture_console=True` parameter for `rn.init()`
+- **NEW**: tqdm handling modes: `"smart"` (recommended), `"all"`, `"none"`
+- **NEW**: `run.get_logging_handler()` - Python logging integration
+- **NEW**: `MetricLogger` compatibility layer - Drop-in replacement for torchvision's MetricLogger
+- **NEW**: New modules: `console/`, `log_compat/`
+
+#### Path-based Hierarchy
+- **NEW**: Flexible path-based organization replacing rigid `project/name` structure
+- **NEW**: `PathTreePanel` - VSCode-style tree navigation for experiments
+- **NEW**: `GET /api/paths` - List all paths with optional statistics
+- **NEW**: `GET /api/paths/tree` - Get hierarchical tree structure
+- **NEW**: `GET /api/paths/runs` - Filter runs by path prefix
+- **NEW**: `POST /api/paths/soft-delete` - Batch soft-delete runs by path
+- **NEW**: `GET /api/paths/export` - Batch export runs by path
+- **NEW**: Run count badges, search & filter, right-click menu, keyboard navigation
+
+#### Inline Compare View
+- **NEW**: Compare multiple experiments directly in the experiment list page
+- **NEW**: `CompareChartsView` / `CompareRunsPanel` components
+- **NEW**: Common metrics auto-detection (metrics shared by 2+ runs)
+- **NEW**: Color-coded runs with ECharts linking (synchronized tooltip and zoom)
+- **NEW**: Visibility toggle for individual runs or metrics
+- **NEW**: Auto-refresh for running experiments
+
+#### New SSH Backend Architecture
+- **NEW**: Multi-backend fallback architecture for improved reliability
+- **NEW**: `AutoBackend` class with fallback chain: OpenSSH → AsyncSSH → Paramiko
+- **NEW**: Connection layer always uses Paramiko (`SSHConnection`)
+- **NEW**: `OpenSSHTunnel` - Uses system OpenSSH client (preferred)
+- **NEW**: `AsyncSSHTunnel` - Pure Python async implementation
+- **NEW**: `SSHTunnel` (Paramiko) - Final fallback, always available
+- **NEW**: Strict host key verification with Runicorn-managed known_hosts
+- **NEW**: 409 confirmation protocol for unknown/changed host keys
+- **NEW**: `RUNICORN_SSH_PATH` environment variable for custom SSH path
+- **NEW**: New modules: `known_hosts.py`, `ssh_backend.py`, `host_key.py`
+
+#### Frontend Improvements
+- **NEW**: ANSI color support in LogsViewer
+- **NEW**: Line numbers in log viewer
+- **NEW**: Search functionality in logs with highlighting
+- **NEW**: Auto-scroll follow mode for live logs
+- **NEW**: Virtual scrolling for 100k+ lines
+
+### 💥 Breaking Changes
+
+#### API Changes
+| Old API | New API | Notes |
+|---------|---------|-------|
+| `project` parameter | `path` parameter | Use path-based hierarchy |
+| `name` parameter | `path` parameter | Combine into single path |
+| `/api/projects` | `/api/paths` | New endpoint structure |
+| `/api/projects/{p}/names` | `/api/paths/tree` | Tree structure |
+
+#### Module Changes
+| Removed | Replacement |
+|---------|-------------|
+| `artifacts/` module | `assets/` module |
+| Old `project/name` fields | `path` field |
+
+#### SDK Parameter Changes
+```python
+# Old (v0.5.x)
+run = rn.init(project="cv", name="yolo")
+
+# New (v0.6.0)
+run = rn.init(path="cv/yolo")
+```
+
+### 🐛 Bug Fixes
+
+- **FIXED**: WebSocket connection stability in Remote Viewer
+- **FIXED**: Memory leak in long-running metric logging
+- **FIXED**: tqdm output causing log file bloat
+- **FIXED**: SSH tunnel reconnection issues
+- **FIXED**: Path traversal vulnerability in file operations
+- **FIXED**: Race condition in concurrent metric writes
+
+### 📚 Documentation
+
+- **NEW**: Enhanced Logging Guide
+- **NEW**: Assets Guide
+- **NEW**: SSH Backend Architecture documentation
+- **NEW**: Paths API Reference
+- **NEW**: Logging API Reference
+- **UPDATED**: Quick Start Guide
+- **UPDATED**: API Index
+- **UPDATED**: System Overview
+
+### ⚠️ Known Limitations
+
+- Console capture starts after `rn.init()` - early prints may be missed
+- Maximum path length: 200 characters
+- OpenSSH backend requires `ssh` and `ssh-keyscan` in PATH
+- Password authentication not supported with OpenSSH tunnel
+
+### 🔄 Migration Guide
+
+See [Release Notes v0.6.0](docs/releases/en/RELEASE_NOTES_v0.6.0.md) for detailed migration instructions.
+
+---
+
 ## [0.5.3] - 2025-11-28
 
 ### ⚡ Frontend Performance & UI Improvements

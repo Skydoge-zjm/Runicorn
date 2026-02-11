@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from .sdk import Run, init
+from .sdk import Run, init, get_active_run
+from .registry import get_config
+from .enabled import enabled, is_enabled, reset_enabled, set_enabled
+from .rnconfig import get_effective_rnconfig
+from .assets import snapshot_workspace
 
 # Version information
 try:
@@ -15,22 +19,23 @@ try:
     if _version_file.exists():
         __version__ = _version_file.read_text().strip()
     else:
-        __version__ = "0.5.0.dev0"
+        __version__ = "0.6.0"
 except Exception:
-    __version__ = "0.5.0.dev0"
+    __version__ = "0.6.0"
 
 __all__ = [
     "Run",
     "init",
+    "get_active_run",
+    "get_config",
+    "snapshot_workspace",
+    "enabled",
+    "is_enabled",
+    "set_enabled",
+    "reset_enabled",
+    "get_effective_rnconfig",
     "__version__",
 ]
-
-# Optional artifacts import
-try:
-    from .artifacts import Artifact, ArtifactType
-    __all__.extend(["Artifact", "ArtifactType"])
-except ImportError:
-    pass
 
 # Optional imports for extended functionality
 try:

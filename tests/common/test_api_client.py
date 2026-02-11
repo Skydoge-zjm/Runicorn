@@ -175,32 +175,6 @@ def test_config_api(client):
         print(f"❌ Error: {e}")
 
 
-def test_artifacts_api(client):
-    """Test Artifacts API."""
-    print("\n" + "="*60)
-    print("Test 7: Artifacts API")
-    print("="*60)
-    
-    try:
-        # List all artifacts
-        artifacts = client.artifacts.list_artifacts()
-        print(f"✅ Found {len(artifacts)} artifacts")
-        
-        if artifacts:
-            print(f"\n   Recent artifacts:")
-            for artifact in artifacts[:3]:
-                print(f"   - {artifact['name']} v{artifact['version']}")
-                print(f"     Type: {artifact.get('type', 'unknown')}")
-                print(f"     Size: {artifact.get('size_bytes', 0) / 1024:.1f} KB")
-        
-        # List by type
-        model_artifacts = client.artifacts.list_artifacts(type="model")
-        print(f"\n   Model artifacts: {len(model_artifacts)}")
-        
-    except Exception as e:
-        print(f"❌ Error: {e}")
-
-
 def test_remote_api(client):
     """Test Remote API."""
     print("\n" + "="*60)
@@ -364,7 +338,6 @@ def main():
         metrics = test_get_metrics(client, experiments)
         test_list_projects(client)
         test_config_api(client)
-        test_artifacts_api(client)
         test_remote_api(client)
         test_data_export(client, experiments)
         test_error_handling(client)
