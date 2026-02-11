@@ -4,7 +4,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.6.0 - 2026-01-15
+## <span class="rn-badge">v0.6.0</span> — 2026-01-15
 
 ### 📦 New Assets System
 
@@ -56,7 +56,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.5.3 - 2025-11-28
+## <span class="rn-badge">v0.5.3</span> — 2025-11-28
 
 ### ⚡ Frontend Performance & UI Improvements
 
@@ -84,7 +84,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.5.2 - 2025-11-25
+## <span class="rn-badge">v0.5.2</span> — 2025-11-25
 
 ### ⚡ Backend Performance Improvements
 
@@ -111,7 +111,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.5.1 - 2025-11-20
+## <span class="rn-badge">v0.5.1</span> — 2025-11-20
 
 ### 🐛 Bug Fixes & Minor Improvements
 
@@ -121,7 +121,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.5.0 - 2025-10-25
+## <span class="rn-badge">v0.5.0</span> — 2025-10-25
 
 ### 🚀 Major New Feature: Remote Viewer
 
@@ -162,7 +162,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.4.0 - 2025-10-03
+## <span class="rn-badge">v0.4.0</span> — 2025-10-03
 
 ### 🎉 Artifacts (Model Versioning)
 
@@ -197,7 +197,7 @@ All notable changes to Runicorn.
 
 ---
 
-## v0.3.1 - 2025-09-15
+## <span class="rn-badge">v0.3.1</span> — 2025-09-15
 
 ### Initial Release
 
@@ -228,6 +228,6 @@ All notable changes to Runicorn.
 ---
 
 <div align="center">
-  <p><strong>Latest version: v0.6.0</strong></p>
+  <p><strong>Latest version: <span class="rn-badge">v0.6.0</span></strong></p>
   <p><code>pip install -U runicorn</code></p>
 </div>

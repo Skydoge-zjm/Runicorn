@@ -139,7 +139,7 @@ run.summary({"model": "RandomForest", "final_accuracy": accuracy})
 run.finish()
 ```
 
-### How do I use console capture? (v0.6.0)
+### How do I use console capture? <span class="rn-badge">v0.6.0</span>
 
 ```python
 import runicorn as rn
@@ -182,7 +182,7 @@ Then access from other computers: `http://YOUR_IP:8000`
 
 ### What is the Assets System?
 
-The Assets System (v0.6.0) provides SHA256 content-addressed storage for workspace snapshots and files, with automatic deduplication (50-90% space savings).
+The Assets System <span class="rn-badge">v0.6.0</span> provides SHA256 content-addressed storage for workspace snapshots and files, with automatic deduplication (50-90% space savings).
 
 ### How do I snapshot my workspace code?
 
@@ -212,7 +212,7 @@ Example: 10 experiments × 500MB = 5GB → Deduplicated: ~1GB
 
 ---
 
-## Remote Viewer (v0.5.0+)
+## Remote Viewer <span class="rn-badge">v0.5.0+</span>
 
 ### How do I view experiments on a remote server?
 
@@ -290,7 +290,7 @@ If you have 1000+ experiments, use the **V2 API** for 100x faster queries.
 
 **Solution**: Frontend automatically uses V2 API when available.
 
-### How do I handle experiments with 100k+ data points? (v0.5.2+)
+### How do I handle experiments with 100k+ data points? <span class="rn-badge">v0.5.2+</span>
 
 Use **LTTB downsampling**:
 

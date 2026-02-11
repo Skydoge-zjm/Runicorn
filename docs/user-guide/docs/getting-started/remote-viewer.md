@@ -216,7 +216,7 @@ If you experience slow response times:
 
 ---
 
-<div align="center">
-  <p><strong>Ready to train on remote servers?</strong></p>
-  <p>Start the viewer and connect to your GPU server! 🚀</p>
+<div class="rn-page-nav">
+  <a href="../sdk/overview.md">Python SDK →</a> &middot;
+  <a href="../cli/overview.md">CLI Reference →</a>
 </div>

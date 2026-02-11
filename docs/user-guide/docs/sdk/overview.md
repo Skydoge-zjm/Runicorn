@@ -34,6 +34,8 @@ Every experiment follows this lifecycle:
 
 Create a new experiment run.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def init(
@@ -50,6 +52,7 @@ def init(
     tqdm_mode: str = "smart"
 ) -> Run
 ```
+</div>
 
 **Key Parameters**:
 
@@ -92,6 +95,8 @@ run = rn.init(path="demo", capture_console=True, tqdm_mode="smart")
 
 Record training metrics at each step.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def log(
@@ -102,6 +107,7 @@ def log(
     **kwargs
 ) -> None
 ```
+</div>
 
 **Parameters**:
 
@@ -139,10 +145,13 @@ run.finish()
 
 Log text messages and progress updates to `logs.txt`.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def log_text(text: str) -> None
 ```
+</div>
 
 **Example**:
 ```python
@@ -157,6 +166,8 @@ run.log_text("✓ Training completed")
 
 Get a logging handler to integrate with Python's logging module.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def get_logging_handler(
@@ -164,6 +175,7 @@ def get_logging_handler(
     fmt: str = None
 ) -> RunicornLoggingHandler
 ```
+</div>
 
 **Parameters**:
 
@@ -193,6 +205,8 @@ run.finish()
 
 Log images for visualization.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def log_image(
@@ -204,6 +218,7 @@ def log_image(
     quality: int = 90
 ) -> str
 ```
+</div>
 
 **Parameters**:
 
@@ -242,10 +257,13 @@ run.finish()
 
 Set which metric to track automatically.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def set_primary_metric(metric_name: str, mode: str = "max") -> None
 ```
+</div>
 
 **Parameters**:
 
@@ -271,6 +289,8 @@ run.finish()
 
 Record experiment configuration, CLI arguments, and config files.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def log_config(
@@ -280,6 +300,7 @@ def log_config(
     config_files: list[str | Path] = None
 ) -> None
 ```
+</div>
 
 **Example**:
 ```python
@@ -309,6 +330,8 @@ run.finish()
 
 Record dataset metadata with optional archiving.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def log_dataset(
@@ -323,6 +346,7 @@ def log_dataset(
     max_archive_files: int = 2_000_000
 ) -> None
 ```
+</div>
 
 **Example**:
 ```python
@@ -343,6 +367,8 @@ run.finish()
 
 Record pretrained model information with optional archiving.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def log_pretrained(
@@ -355,6 +381,7 @@ def log_pretrained(
     force_save: bool = False
 ) -> None
 ```
+</div>
 
 **Example**:
 ```python
@@ -385,10 +412,13 @@ run.finish()
 
 Record final results and metadata.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def summary(update: dict) -> None
 ```
+</div>
 
 **Example**:
 ```python
@@ -407,10 +437,13 @@ run.summary({
 
 Mark experiment as finished.
 
+<div class="rn-sig" markdown>
+
 **Signature**:
 ```python
 def finish(status: str = "finished") -> None
 ```
+</div>
 
 **Parameters**:
 
@@ -685,6 +718,6 @@ run.finish()
 
 ---
 
-<div align="center">
-  <p><a href="../getting-started/path-hierarchy.md">Learn About Path Hierarchy →</a></p>
+<div class="rn-page-nav">
+  <a href="../getting-started/path-hierarchy.md">Learn About Path Hierarchy →</a>
 </div>

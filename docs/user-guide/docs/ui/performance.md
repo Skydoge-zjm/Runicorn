@@ -258,7 +258,7 @@ MetricChart Component
 
 ---
 
-<div align="center">
-  <p><strong>Need more speed?</strong></p>
-  <p>Check the <a href="../reference/faq.md">FAQ</a> or <a href="https://github.com/Skydoge-zjm/Runicorn/issues">report an issue</a>.</p>
+<div class="rn-page-nav">
+  <a href="../reference/faq.md">FAQ →</a> &middot;
+  <a href="https://github.com/Skydoge-zjm/Runicorn/issues">Report an Issue →</a>
 </div>

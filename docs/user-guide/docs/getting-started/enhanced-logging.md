@@ -327,6 +327,6 @@ run.finish()
 
 ---
 
-<div align="center">
-  <p><a href="../sdk/overview.md">Back to SDK Overview →</a></p>
+<div class="rn-page-nav">
+  <a href="../sdk/overview.md">Back to SDK Overview →</a>
 </div>

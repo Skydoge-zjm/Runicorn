@@ -364,8 +364,8 @@ Or view on GitHub: [image_classification_tutorial.py](https://github.com/Skydoge
 
 ---
 
-<div align="center">
-  <p><strong>Ready for more?</strong></p>
-  <p><a href="../reference/faq.md">Check FAQ →</a></p>
+<div class="rn-page-nav">
+  <a href="../reference/faq.md">FAQ →</a> &middot;
+  <a href="../sdk/overview.md">Python SDK →</a>
 </div>
 
