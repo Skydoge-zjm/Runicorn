@@ -199,6 +199,6 @@ run = rn.init(
 
 ---
 
-<div align="center">
-  <p><a href="../sdk/overview.md">Explore the Python SDK →</a></p>
+<div class="rn-page-nav">
+  <a href="../sdk/overview.md">Explore the Python SDK →</a>
 </div>

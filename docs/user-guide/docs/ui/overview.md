@@ -203,7 +203,7 @@ The UI is responsive and works on tablets, though desktop is recommended for the
 
 ---
 
-<div align="center">
-  <p><strong>Explore your experiments with the modern UI!</strong></p>
-  <p><code>runicorn viewer</code> → <a href="http://127.0.0.1:23300">http://127.0.0.1:23300</a></p>
+<div class="rn-page-nav">
+  <a href="../getting-started/remote-viewer.md">Remote Viewer →</a> &middot;
+  <a href="../sdk/overview.md">Python SDK →</a>
 </div>

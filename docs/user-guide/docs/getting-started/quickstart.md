@@ -132,29 +132,29 @@ See [Web UI Overview](../ui/overview.md) for a full tour of all pages and featur
 !!! warning "Important First Step"
     The first time you run Runicorn, configure where to store your data.
 
-**Option 1: Web UI**
+=== "Web UI"
 
-1. Click the ⚙️ Settings icon (top-right)
-2. Go to "Data Directory" tab
-3. Enter path: `E:\RunicornData` (or your preferred location)
-4. Click "Save Data Directory"
+    1. Click the ⚙️ Settings icon (top-right)
+    2. Go to "Data Directory" tab
+    3. Enter path: `E:\RunicornData` (or your preferred location)
+    4. Click "Save Data Directory"
 
-**Option 2: Command Line**
+=== "Command Line"
 
-```bash
-runicorn config --set-user-root "E:\RunicornData"
-```
+    ```bash
+    runicorn config --set-user-root "E:\RunicornData"
+    ```
 
-**Option 3: Code**
+=== "Python Code"
 
-```python
-import runicorn as rn
+    ```python
+    import runicorn as rn
 
-run = rn.init(
-    path="demo",
-    storage="E:\\RunicornData"  # Explicit path
-)
-```
+    run = rn.init(
+        path="demo",
+        storage="E:\\RunicornData"  # Explicit path
+    )
+    ```
 
 ### Storage Priority
 

@@ -187,27 +187,29 @@ runicorn export --storage "D:\OldData" --out old_experiments.tar.gz
 
 ### Tip 1: Create Aliases
 
-**Bash/Linux**:
-```bash
-# Add to ~/.bashrc or ~/.zshrc
-alias rv='runicorn viewer'
-alias rconfig='runicorn config --show'
-alias rexport='runicorn export --out'
+=== "Bash / Zsh"
 
-# Usage
-rv  # Start viewer
-rconfig  # Show config
-```
+    ```bash
+    # Add to ~/.bashrc or ~/.zshrc
+    alias rv='runicorn viewer'
+    alias rconfig='runicorn config --show'
+    alias rexport='runicorn export --out'
 
-**PowerShell/Windows**:
-```powershell
-# Add to $PROFILE
-function rv { runicorn viewer }
-function rconfig { runicorn config --show }
+    # Usage
+    rv  # Start viewer
+    rconfig  # Show config
+    ```
 
-# Usage
-rv  # Start viewer
-```
+=== "PowerShell"
+
+    ```powershell
+    # Add to $PROFILE
+    function rv { runicorn viewer }
+    function rconfig { runicorn config --show }
+
+    # Usage
+    rv  # Start viewer
+    ```
 
 ### Tip 2: Quick Cleanup
 
@@ -243,19 +245,26 @@ Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "RunicornBack
 
 **Usage**:
 
-```bash
-# Linux/Mac
-export RUNICORN_DIR="/data/runicorn"
-runicorn viewer
+=== "Linux / macOS"
 
-# Windows (PowerShell)
-$env:RUNICORN_DIR = "E:\RunicornData"
-runicorn viewer
+    ```bash
+    export RUNICORN_DIR="/data/runicorn"
+    runicorn viewer
+    ```
 
-# Windows (CMD)
-set RUNICORN_DIR=E:\RunicornData
-runicorn viewer
-```
+=== "PowerShell"
+
+    ```powershell
+    $env:RUNICORN_DIR = "E:\RunicornData"
+    runicorn viewer
+    ```
+
+=== "CMD"
+
+    ```cmd
+    set RUNICORN_DIR=E:\RunicornData
+    runicorn viewer
+    ```
 
 ---
 
@@ -347,7 +356,7 @@ kill -9 <PID>
 
 ---
 
-<div align="center">
-  <p><a href="../sdk/overview.md">Explore Python SDK →</a></p>
+<div class="rn-page-nav">
+  <a href="../sdk/overview.md">Explore Python SDK →</a>
 </div>
 
