@@ -623,3 +623,135 @@ runicorn viewer --storage "E:\Project2" --port 23301
   <p><a href="https://github.com/yourusername/runicorn/discussions">Ask the Community →</a></p>
 </div>
 
+
+
+---
+
+## v0.6.0 Features
+
+### How do I use console capture?
+
+Enable `capture_console` when initializing:
+
+```python
+import runicorn as rn
+
+run = rn.init(project="demo", capture_console=True)
+
+# All print() output is captured
+print("Training started...")
+
+run.finish()
+# Output saved to logs.txt
+```
+
+**Learn more**: [Enhanced Logging Guide](../getting-started/enhanced-logging.md)
+
+### How do I integrate with Python logging?
+
+Use `get_logging_handler()`:
+
+```python
+import runicorn as rn
+import logging
+
+run = rn.init(project="demo")
+
+logger = logging.getLogger(__name__)
+logger.addHandler(run.get_logging_handler())
+
+logger.info("Training started")  # Saved to logs.txt
+
+run.finish()
+```
+
+### What are the tqdm modes?
+
+Control how tqdm progress bars are captured:
+
+- `"smart"` (default) - Only save final states (clean logs)
+- `"all"` - Save every update (verbose)
+- `"none"` - Skip all tqdm output
+
+```python
+run = rn.init(project="demo", capture_console=True, tqdm_mode="smart")
+```
+
+### How do I snapshot my workspace?
+
+Use `snapshot_workspace()`:
+
+```python
+import runicorn as rn
+
+run = rn.init(project="demo")
+
+# Snapshot workspace
+manifest = rn.snapshot_workspace(
+    run_id=run.id,
+    include_patterns=["*.py", "*.yaml"],
+    exclude_patterns=["*.pyc", "__pycache__"]
+)
+
+run.finish()
+```
+
+**Learn more**: [Assets System Guide](../getting-started/assets-system.md)
+
+### What is blob storage?
+
+Blob storage is SHA256 content-addressed storage with automatic deduplication:
+
+```python
+import runicorn as rn
+
+run = rn.init(project="demo")
+
+# Store file as blob
+blob_id = run.store_blob("model.pth")
+
+# Get blob path
+blob_path = run.get_blob_path(blob_id)
+
+run.finish()
+```
+
+**Benefits**:
+- Automatic deduplication (50-90% space savings)
+- Content-addressed (same content = same blob ID)
+- Efficient storage for large files
+
+### How do I use .rnignore?
+
+Create `.rnignore` in your project root:
+
+```gitignore
+# Python
+__pycache__/
+*.pyc
+
+# Data
+data/
+*.csv
+
+# Models
+*.pth
+*.ckpt
+```
+
+Files matching these patterns are excluded from snapshots.
+
+### How much space does deduplication save?
+
+Typical savings:
+- **50-70%** for regular projects
+- **80-90%** for projects with many checkpoints
+- **95%+** for projects with identical config files
+
+Example:
+```
+Before: 10 experiments × 500MB = 5GB
+After:  Deduplicated storage = 1GB (80% savings)
+```
+
+---

@@ -41,7 +41,9 @@ def init(
     name: str = None,
     storage: str = None,
     run_id: str = None,
-    capture_env: bool = True
+    capture_env: bool = True,
+    capture_console: bool = False,  # v0.6.0
+    tqdm_mode: str = "smart"        # v0.6.0
 ) -> Run
 ```
 
@@ -54,6 +56,8 @@ def init(
 | `storage` | str | None | Storage root path (overrides config) |
 | `run_id` | str | None | Custom run ID (auto-generated if None) |
 | `capture_env` | bool | True | Capture Git info, dependencies, system info |
+| `capture_console` | bool | False | **v0.6.0** Capture stdout/stderr to logs.txt |
+| `tqdm_mode` | str | "smart" | **v0.6.0** tqdm handling: "smart", "all", "none" |
 
 **Returns**: `Run` object
 
@@ -72,6 +76,14 @@ run = rn.init(project="demo", storage="E:\\MLData")
 
 # Without environment capture (faster)
 run = rn.init(project="demo", capture_env=False)
+
+# v0.6.0: With console capture
+run = rn.init(project="demo", capture_console=True)
+# All print() and stderr output will be saved to logs.txt
+
+# v0.6.0: With tqdm handling
+run = rn.init(project="demo", capture_console=True, tqdm_mode="smart")
+# tqdm progress bars are intelligently filtered
 ```
 
 ---
@@ -145,6 +157,43 @@ run = rn.init(project="demo")
 run.log_text("Starting training...")
 run.log_text(f"Epoch 1/100, loss=0.5")
 run.log_text("✓ Training completed")
+
+run.finish()
+```
+
+---
+
+### `run.get_logging_handler()` - Python Logging Integration
+
+**v0.6.0** Get a logging handler to integrate with Python's logging module.
+
+**Signature**:
+```python
+def get_logging_handler(level: int = logging.INFO) -> logging.Handler
+```
+
+**Parameters**:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `level` | int | logging.INFO | Minimum log level to capture |
+
+**Example**:
+```python
+import runicorn as rn
+import logging
+
+run = rn.init(project="demo")
+
+# Add Runicorn handler to your logger
+logger = logging.getLogger(__name__)
+logger.addHandler(run.get_logging_handler())
+logger.setLevel(logging.INFO)
+
+# Now all logging calls are saved to logs.txt
+logger.info("Training started")
+logger.warning("Learning rate is high")
+logger.error("Out of memory")
 
 run.finish()
 ```
@@ -315,6 +364,65 @@ except Exception as e:
     run.log_text(f"Error: {e}")
     run.finish(status="failed")
 ```
+
+---
+
+## v0.6.0 New Features
+
+### Enhanced Logging
+
+Automatically capture console output and integrate with Python logging:
+
+```python
+import runicorn as rn
+import logging
+
+# Enable console capture
+run = rn.init(project="demo", capture_console=True, tqdm_mode="smart")
+
+# All print() output is captured
+print("Training started...")
+
+# Integrate with Python logging
+logger = logging.getLogger(__name__)
+logger.addHandler(run.get_logging_handler())
+logger.info("Epoch 1 completed")
+
+# tqdm progress bars are intelligently handled
+from tqdm import tqdm
+for i in tqdm(range(100)):
+    train_step()
+
+run.finish()
+# All output is saved to logs.txt
+```
+
+**Learn more**: [Enhanced Logging Guide](../getting-started/enhanced-logging.md)
+
+### Assets System
+
+Snapshot your workspace with SHA256 content-addressed storage:
+
+```python
+import runicorn as rn
+
+run = rn.init(project="demo")
+
+# Snapshot entire workspace
+manifest = rn.snapshot_workspace(
+    run_id=run.id,
+    include_patterns=["*.py", "config.yaml"],
+    exclude_patterns=["*.pyc", "__pycache__"]
+)
+
+# Store individual blobs
+blob_id = run.store_blob("model.pth")
+model_path = run.get_blob_path(blob_id)
+
+run.finish()
+```
+
+**Learn more**: [Assets System Guide](../getting-started/assets-system.md)
 
 ---
 

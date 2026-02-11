@@ -90,6 +90,8 @@ nav:
   - Getting Started:
     - Quick Start: getting-started/quickstart.md
     - Remote Viewer: getting-started/remote-viewer.md
+    - Enhanced Logging: getting-started/enhanced-logging.md
+    - Assets System: getting-started/assets-system.md
   - Python SDK:
     - Overview: sdk/overview.md
   - Command Line:
