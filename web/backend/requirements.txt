@@ -2,4 +2,5 @@ fastapi>=0.110,<1.0
 uvicorn[standard]>=0.23,<0.31
 pydantic>=2,<3
 aiofiles>=23,<24
+asyncssh>=2.22,<3
 paramiko>=3.3,<4

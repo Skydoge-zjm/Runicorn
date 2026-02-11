@@ -2,7 +2,7 @@
   "info": {
     "name": "Runicorn API",
     "description": "Complete API collection for Runicorn experiment tracking platform",
-    "version": "0.5.0",
+    "version": "0.5.4",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -23,12 +23,17 @@
     },
     {
       "key": "connection_id",
-      "value": "conn_1a2b3c4d",
+      "value": "mluser@gpu-server.com:22",
       "type": "string"
     },
     {
-      "key": "env_name",
-      "value": "pytorch-env",
+      "key": "conda_env",
+      "value": "system",
+      "type": "string"
+    },
+    {
+      "key": "session_id",
+      "value": "session_123",
       "type": "string"
     }
   ],
@@ -303,78 +308,8 @@
       ]
     },
     {
-      "name": "SSH/Remote API (Deprecated)",
-      "item": [
-        {
-          "name": "Connect to Remote",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"host\": \"192.168.1.100\",\n  \"port\": 22,\n  \"username\": \"user\",\n  \"password\": \"secret123\",\n  \"use_agent\": false\n}"
-            },
-            "url": "{{baseUrl}}/unified/connect"
-          }
-        },
-        {
-          "name": "Get Connection Status",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/unified/status"
-          }
-        },
-        {
-          "name": "List Remote Directory",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/unified/listdir?path=/data/runicorn"
-          }
-        },
-        {
-          "name": "Configure Smart Mode",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"mode\": \"smart\",\n  \"remote_root\": \"/data/runicorn\",\n  \"auto_sync\": true,\n  \"sync_interval_minutes\": 5\n}"
-            },
-            "url": "{{baseUrl}}/unified/configure_mode"
-          }
-        },
-        {
-          "name": "Disconnect",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "url": "{{baseUrl}}/unified/disconnect"
-          }
-        }
-      ]
-    },
-    {
       "name": "Remote Viewer API",
-      "description": "VSCode Remote-style remote server access (v0.5.0)",
+      "description": "VSCode Remote-style remote server access (v0.5.4)",
       "item": [
         {
           "name": "Connection Management",
@@ -391,43 +326,22 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"host\": \"gpu-server.com\",\n  \"port\": 22,\n  \"username\": \"mluser\",\n  \"auth_method\": \"key\",\n  \"private_key_path\": \"~/.ssh/id_rsa\"\n}"
+                  "raw": "{\n  \"host\": \"gpu-server.com\",\n  \"port\": 22,\n  \"username\": \"mluser\",\n  \"password\": null,\n  \"private_key\": null,\n  \"private_key_path\": \"~/.ssh/id_rsa\",\n  \"passphrase\": null,\n  \"use_agent\": true\n}"
                 },
                 "url": "{{baseUrl}}/remote/connect",
                 "description": "Establish SSH connection to remote server"
               }
             },
             {
-              "name": "List All Connections",
+              "name": "List Sessions",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/remote/connections",
-                "description": "Get list of all active remote connections"
+                "url": "{{baseUrl}}/remote/sessions",
+                "description": "Get list of all active SSH sessions"
               }
             },
             {
               "name": "Disconnect",
-              "request": {
-                "method": "DELETE",
-                "url": "{{baseUrl}}/remote/connections/{{connection_id}}?cleanup_viewer=true",
-                "description": "Disconnect from remote server and optionally cleanup viewer"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Environment Detection",
-          "item": [
-            {
-              "name": "List Python Environments",
-              "request": {
-                "method": "GET",
-                "url": "{{baseUrl}}/remote/environments?connection_id={{connection_id}}&filter=runicorn_only",
-                "description": "List available Python environments on remote server"
-              }
-            },
-            {
-              "name": "Re-detect Environments",
               "request": {
                 "method": "POST",
                 "header": [
@@ -438,18 +352,93 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"connection_id\": \"{{connection_id}}\",\n  \"force_refresh\": true\n}"
+                  "raw": "{\n  \"host\": \"gpu-server.com\",\n  \"port\": 22,\n  \"username\": \"mluser\"\n}"
                 },
-                "url": "{{baseUrl}}/remote/environments/detect",
-                "description": "Force re-detection of Python environments"
+                "url": "{{baseUrl}}/remote/disconnect",
+                "description": "Disconnect an SSH session"
               }
             },
+            {
+              "name": "Remote Status",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/status",
+                "description": "Get overall remote status (connections + viewer sessions)"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Host Key Verification",
+          "item": [
+            {
+              "name": "List Known Hosts",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/known-hosts/list",
+                "description": "List entries in Runicorn-managed known_hosts"
+              }
+            },
+            {
+              "name": "Accept Host Key",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"host\": \"gpu-server.com\",\n  \"port\": 22,\n  \"key_type\": \"ssh-ed25519\",\n  \"public_key\": \"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...\",\n  \"fingerprint_sha256\": \"SHA256:...\"\n}"
+                },
+                "url": "{{baseUrl}}/remote/known-hosts/accept",
+                "description": "Accept and store a host key in Runicorn-managed known_hosts"
+              }
+            },
+            {
+              "name": "Remove Known Host",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"host\": \"gpu-server.com\",\n  \"port\": 22,\n  \"key_type\": \"ssh-ed25519\"\n}"
+                },
+                "url": "{{baseUrl}}/remote/known-hosts/remove",
+                "description": "Remove an entry from Runicorn-managed known_hosts"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Environment Detection",
+          "item": [
+            {
+              "name": "List Conda Environments",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/conda-envs?connection_id={{connection_id}}",
+                "description": "List Python environments on the remote server"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Remote Config",
+          "item": [
             {
               "name": "Get Remote Config",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/remote/config?connection_id={{connection_id}}&env_name={{env_name}}",
-                "description": "Get Runicorn configuration from remote environment"
+                "url": "{{baseUrl}}/remote/config?connection_id={{connection_id}}&conda_env={{conda_env}}",
+                "description": "Get Runicorn configuration for a remote environment"
               }
             }
           ]
@@ -469,10 +458,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"connection_id\": \"{{connection_id}}\",\n  \"env_name\": \"{{env_name}}\",\n  \"auto_open\": true,\n  \"viewer_port\": 8081\n}"
+                  "raw": "{\n  \"host\": \"gpu-server.com\",\n  \"port\": 22,\n  \"username\": \"mluser\",\n  \"password\": null,\n  \"private_key\": null,\n  \"private_key_path\": \"~/.ssh/id_rsa\",\n  \"passphrase\": null,\n  \"use_agent\": true,\n  \"remote_root\": \"~/runicorn_data\",\n  \"local_port\": null,\n  \"remote_port\": null,\n  \"conda_env\": \"{{conda_env}}\"\n}"
                 },
                 "url": "{{baseUrl}}/remote/viewer/start",
-                "description": "Start Remote Viewer on remote server with SSH tunnel"
+                "description": "Start remote viewer session with SSH tunnel"
               }
             },
             {
@@ -487,47 +476,78 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"connection_id\": \"{{connection_id}}\",\n  \"cleanup\": true\n}"
+                  "raw": "{\n  \"session_id\": \"{{session_id}}\"\n}"
                 },
                 "url": "{{baseUrl}}/remote/viewer/stop",
-                "description": "Stop running Remote Viewer and close SSH tunnel"
+                "description": "Stop a remote viewer session"
               }
             },
             {
-              "name": "Get Viewer Status",
+              "name": "List Viewer Sessions",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/remote/viewer/status?connection_id={{connection_id}}",
-                "description": "Get current status of Remote Viewer"
+                "url": "{{baseUrl}}/remote/viewer/sessions",
+                "description": "List active remote viewer sessions"
               }
             },
             {
-              "name": "Get Viewer Logs",
+              "name": "Get Viewer Session Status",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/remote/viewer/logs?connection_id={{connection_id}}&lines=100",
-                "description": "Get last N lines of Remote Viewer logs"
+                "url": "{{baseUrl}}/remote/viewer/status/{{session_id}}",
+                "description": "Get remote viewer session status by session_id"
               }
             }
           ]
         },
         {
-          "name": "Health Checks",
+          "name": "Remote File System",
           "item": [
             {
-              "name": "Connection Health Check",
+              "name": "List Remote Directory",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/remote/health?connection_id={{connection_id}}",
-                "description": "Check if SSH connection is healthy"
+                "url": "{{baseUrl}}/remote/fs/list?connection_id={{connection_id}}&path=~",
+                "description": "List remote directory contents"
               }
             },
             {
-              "name": "Ping Connection",
+              "name": "Check Path Exists",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/remote/ping?connection_id={{connection_id}}",
-                "description": "Test connection latency"
+                "url": "{{baseUrl}}/remote/fs/exists?connection_id={{connection_id}}&path=~/runicorn_data",
+                "description": "Check if a remote path exists"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Saved Connections",
+          "item": [
+            {
+              "name": "Get Saved Connections",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/remote/connections/saved",
+                "description": "List saved connections from connections.json"
+              }
+            },
+            {
+              "name": "Save Connections",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "[\n  {\n    \"name\": \"Lab Server\",\n    \"host\": \"gpu-server.com\",\n    \"port\": 22,\n    \"username\": \"mluser\",\n    \"password\": null,\n    \"private_key\": null,\n    \"private_key_path\": \"~/.ssh/id_rsa\",\n    \"passphrase\": null,\n    \"use_agent\": true\n  }\n]"
+                },
+                "url": "{{baseUrl}}/remote/connections/saved",
+                "description": "Save connections to connections.json"
               }
             }
           ]

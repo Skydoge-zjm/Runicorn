@@ -30,7 +30,6 @@
 The Python API Client provides a clean wrapper around the Runicorn Viewer REST API, enabling you to:
 
 - 📊 Query and analyze experiment data
-- 📦 Manage Artifact versions
 - 🔌 Control Remote Viewer sessions
 - 📤 Export data in various formats
 - 🐼 Integrate with pandas DataFrames
@@ -41,7 +40,7 @@ The Python API Client provides a clean wrapper around the Runicorn Viewer REST A
 - ✅ **Auto Retry**: Built-in request retry mechanism
 - ✅ **Context Manager**: Support `with` statement for automatic cleanup
 - ✅ **DataFrame Integration**: Built-in pandas conversion tools
-- ✅ **Modular Design**: Artifacts and Remote APIs as independent extensions
+- ✅ **Modular Design**: Remote API as independent extension
 
 ---
 
@@ -150,7 +149,6 @@ client = RunicornClient(
 | `base_url` | `str` | Viewer base URL |
 | `timeout` | `int` | Request timeout |
 | `session` | `requests.Session` | HTTP session object |
-| `artifacts` | `ArtifactsAPI` | Artifacts API extension |
 | `remote` | `RemoteAPI` | Remote API extension |
 
 ---
@@ -326,57 +324,6 @@ with open("metrics.csv", "wb") as f:
 ---
 
 ## Extended APIs
-
-### Artifacts API
-
-Access via `client.artifacts`.
-
-#### list_artifacts()
-
-List all artifacts.
-
-```python
-client.artifacts.list_artifacts(
-    type: Optional[str] = None,
-    limit: Optional[int] = None,
-    offset: Optional[int] = None
-) -> List[Dict[str, Any]]
-```
-
-**Example**:
-```python
-# List all artifacts
-artifacts = client.artifacts.list_artifacts()
-
-# Filter by type
-models = client.artifacts.list_artifacts(type="model")
-datasets = client.artifacts.list_artifacts(type="dataset")
-```
-
----
-
-#### get_artifact()
-
-Get artifact details.
-
-```python
-client.artifacts.get_artifact(artifact_id: str) -> Dict[str, Any]
-```
-
-**Parameters**:
-- `artifact_id`: Artifact ID (format: `name:version` or `name:vN`)
-
-**Example**:
-```python
-artifact = client.artifacts.get_artifact("my-model:v3")
-
-print(f"Name: {artifact['name']}")
-print(f"Version: {artifact['version']}")
-print(f"Type: {artifact['type']}")
-print(f"Size: {artifact['size_bytes'] / 1024 / 1024:.2f} MB")
-```
-
----
 
 ### Remote API
 
@@ -573,28 +520,6 @@ with api.connect() as client:
         filepath.write_bytes(data)
         
         print(f"✓ Exported: {filename}")
-```
-
-### Example 3: Manage Artifacts
-
-```python
-import runicorn.api as api
-
-with api.connect() as client:
-    # List all models
-    models = client.artifacts.list_artifacts(type="model")
-    
-    for model in models:
-        print(f"\nModel: {model['name']}")
-        
-        # Get all versions
-        versions = client.artifacts.list_versions(model['name'])
-        print(f"  Versions: {len(versions)}")
-        
-        # Show latest version
-        latest = versions[0]
-        print(f"  Latest: v{latest['version']}")
-        print(f"  Size: {latest['size_bytes'] / 1024 / 1024:.2f} MB")
 ```
 
 ---

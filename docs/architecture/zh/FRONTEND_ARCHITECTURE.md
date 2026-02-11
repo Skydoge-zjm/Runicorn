@@ -6,8 +6,8 @@
 
 **文档类型**: 架构  
 **目的**: React 应用设计和模式  
-**版本**: v0.5.3  
-**最后更新**: 2025-11-28
+**版本**: v0.6.0  
+**最后更新**: 2025-01-XX
 
 ---
 
@@ -30,7 +30,10 @@ src/
 │   ├── MetricChart.tsx
 │   ├── LogsViewer.tsx
 │   ├── LineageGraph.tsx
-│   └── SettingsDrawer.tsx
+│   ├── SettingsDrawer.tsx
+│   ├── PathTreePanel.tsx      # v0.6.0 - 路径树导航
+│   ├── CompareChartsView.tsx  # v0.6.0 - 多运行比较
+│   └── CompareRunsPanel.tsx   # v0.6.0 - 比较模式面板
 │
 ├── contexts/              # React Context
 │   └── SettingsContext.tsx
@@ -378,6 +381,112 @@ const metrics = await getStepMetrics(runId, settings.maxDataPoints)
 - 减少大型实验的数据传输（100k+ 点 → 2k 点）
 - LTTB 保留数据的视觉特征
 - 可通过 UI 设置配置
+
+---
+
+## 新前端功能（v0.6.0）🆕
+
+### 路径树导航
+
+**组件**: `PathTreePanel.tsx`
+
+ExperimentPage 现在包含 VSCode 风格的路径树面板用于层级导航：
+
+```typescript
+// 带 PathTreePanel 的 ExperimentPage 布局
+<Layout>
+  <Sider width={240}>
+    <PathTreePanel
+      selectedPath={selectedPath}
+      onSelectPath={setSelectedPath}
+      onBatchDelete={handleBatchDelete}
+      onBatchExport={handleBatchExport}
+    />
+  </Sider>
+  <Content>
+    <ExperimentTable pathFilter={selectedPath} />
+  </Content>
+</Layout>
+```
+
+**特性**:
+- 带展开/折叠的层级文件夹结构
+- 运行计数徽章带运行中指示器动画
+- 搜索/过滤路径
+- 右键上下文菜单用于批量操作
+- 展开状态持久化到 localStorage
+
+### 内联比较视图
+
+**组件**: `CompareRunsPanel.tsx`, `CompareChartsView.tsx`
+
+直接在实验列表页面进行多运行比较：
+
+```typescript
+// 比较模式布局
+{compareMode ? (
+  <Layout>
+    <Sider width={280}>
+      <CompareRunsPanel
+        runs={selectedRuns}
+        colors={chartColors}
+        visibleRunIds={visibleRunIds}
+        onToggleRunVisibility={toggleRunVisibility}
+        onBack={() => setCompareMode(false)}
+      />
+    </Sider>
+    <Content>
+      <CompareChartsView
+        runIds={selectedRunIds}
+        visibleRunIds={visibleRunIds}
+        metricsMap={metricsMap}
+        runLabels={runLabels}
+        colors={chartColors}
+        loading={loading}
+      />
+    </Content>
+  </Layout>
+) : (
+  <ExperimentTable onCompare={enterCompareMode} />
+)}
+```
+
+**核心特性**:
+- 自动检测选中运行的共同指标
+- 切换单个运行/指标可见性
+- ECharts 组同步用于联动缩放
+- 颜色编码的运行标识
+
+### 增强的 LogsViewer
+
+**组件**: `LogsViewer.tsx`
+
+带完整 ANSI 颜色支持的终端风格日志查看器：
+
+```typescript
+// ANSI 颜色渲染
+const ansiConverter = new AnsiToHtml({
+  fg: '#e6e9ef',
+  bg: '#0b1020',
+  colors: { /* 终端颜色调色板 */ }
+})
+
+// 带行号和搜索高亮的渲染
+{displayLines.map((line, index) => (
+  <div className="log-line">
+    <span className="line-number">{index + 1}</span>
+    <span dangerouslySetInnerHTML={{ __html: ansiConverter.toHtml(line) }} />
+  </div>
+))}
+```
+
+**特性**:
+- 完整 ANSI 转义码支持（颜色、粗体等）
+- 行号便于参考
+- 关键词搜索带高亮
+- 智能 tqdm 进度条过滤
+- 自动滚动切换
+- 复制全部 / 清除按钮
 
 ---
 

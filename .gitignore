@@ -49,6 +49,8 @@ web/frontend/*.tsbuildinfo
 .vscode/
 .cursor/
 .windsurf/
+.kiro/
+.warprules
 .DS_Store
 Thumbs.db
 
@@ -77,6 +79,7 @@ desktop/tauri/sidecar/dist/
 
 # --- Documentation ---
 docs/future/
+docs/user-guide/site/
 
 # --- Examples ---
 examples/

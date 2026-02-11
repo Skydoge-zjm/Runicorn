@@ -471,12 +471,12 @@ class SQLiteStorageBackend(StorageBackend):
         try:
             conn.execute("""
                 INSERT INTO experiments (
-                    id, project, name, created_at, updated_at, status,
+                    id, path, alias, created_at, updated_at, status,
                     pid, python_version, platform, hostname, run_dir,
                     best_metric_name, best_metric_value, best_metric_step, best_metric_mode
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                experiment.id, experiment.project, experiment.name,
+                experiment.id, experiment.path, experiment.alias,
                 experiment.created_at, experiment.updated_at, experiment.status,
                 experiment.pid, experiment.python_version, experiment.platform, 
                 experiment.hostname, experiment.run_dir,
@@ -571,13 +571,19 @@ class SQLiteStorageBackend(StorageBackend):
         if not query.include_deleted:
             where_clauses.append("deleted_at IS NULL")
         
-        if query.project:
-            where_clauses.append("project = ?")
-            params.append(query.project)
+        if query.path:
+            if query.path_exact:
+                where_clauses.append("path = ?")
+                params.append(query.path)
+            else:
+                # Prefix match: path starts with query.path
+                where_clauses.append("(path = ? OR path LIKE ?)")
+                params.append(query.path)
+                params.append(f"{query.path}/%")
         
-        if query.name:
-            where_clauses.append("name = ?") 
-            params.append(query.name)
+        if query.alias:
+            where_clauses.append("alias LIKE ?")
+            params.append(f"%{query.alias}%")
         
         if query.status:
             placeholders = ",".join("?" * len(query.status))
@@ -593,7 +599,8 @@ class SQLiteStorageBackend(StorageBackend):
             params.append(query.created_before)
         
         if query.search_text:
-            where_clauses.append("(project LIKE ? OR name LIKE ? OR id LIKE ?)")
+            # Search in path, alias, and id
+            where_clauses.append("(path LIKE ? OR alias LIKE ? OR id LIKE ?)")
             search_pattern = f"%{query.search_text}%"
             params.extend([search_pattern, search_pattern, search_pattern])
         
@@ -628,7 +635,6 @@ class SQLiteStorageBackend(StorageBackend):
     
     async def count_experiments(self, query: QueryParams) -> int:
         """Count experiments matching query."""
-        # Similar to list_experiments but with COUNT(*)
         sql_parts = ["SELECT COUNT(*) FROM experiments"]
         where_clauses = []
         params = []
@@ -637,11 +643,40 @@ class SQLiteStorageBackend(StorageBackend):
         if not query.include_deleted:
             where_clauses.append("deleted_at IS NULL")
         
-        if query.project:
-            where_clauses.append("project = ?")
-            params.append(query.project)
+        if query.path:
+            if query.path_exact:
+                where_clauses.append("path = ?")
+                params.append(query.path)
+            else:
+                where_clauses.append("(path = ? OR path LIKE ?)")
+                params.append(query.path)
+                params.append(f"{query.path}/%")
         
-        # ... (other conditions same as list_experiments)
+        if query.alias:
+            where_clauses.append("alias LIKE ?")
+            params.append(f"%{query.alias}%")
+        
+        if query.status:
+            placeholders = ",".join("?" * len(query.status))
+            where_clauses.append(f"status IN ({placeholders})")
+            params.extend(query.status)
+        
+        if query.created_after:
+            where_clauses.append("created_at >= ?")
+            params.append(query.created_after)
+        
+        if query.created_before:
+            where_clauses.append("created_at <= ?")
+            params.append(query.created_before)
+        
+        if query.search_text:
+            where_clauses.append("(path LIKE ? OR alias LIKE ? OR id LIKE ?)")
+            search_pattern = f"%{query.search_text}%"
+            params.extend([search_pattern, search_pattern, search_pattern])
+        
+        if query.best_metric_range:
+            where_clauses.append("best_metric_value BETWEEN ? AND ?")
+            params.extend(query.best_metric_range)
         
         if where_clauses:
             sql_parts.append("WHERE " + " AND ".join(where_clauses))

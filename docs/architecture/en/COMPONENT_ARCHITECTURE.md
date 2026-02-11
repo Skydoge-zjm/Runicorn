@@ -419,11 +419,14 @@ App
 │   ├── Content
 │   │   └── Routes
 │   │       ├── ExperimentPage
+│   │       │   ├── PathTreePanel (v0.6.0)
 │   │       │   ├── ExperimentTable
+│   │       │   ├── CompareRunsPanel (v0.6.0)
+│   │       │   ├── CompareChartsView (v0.6.0)
 │   │       │   └── RecycleBin
 │   │       ├── RunDetailPage
 │   │       │   ├── MetricChart (multiple)
-│   │       │   ├── LogsViewer (WebSocket)
+│   │       │   ├── LogsViewer (WebSocket, ANSI)
 │   │       │   └── RunArtifacts
 │   │       ├── ArtifactsPage
 │   │       │   └── ArtifactTable
@@ -447,6 +450,160 @@ App
 ```
 
 **localStorage**: Persistent user preferences
+
+---
+
+## New Frontend Components (v0.6.0)
+
+### PathTreePanel
+
+**File**: `web/frontend/src/components/PathTreePanel.tsx`
+
+**Responsibility**: VSCode-style hierarchical path navigation for experiments
+
+**Features**:
+- Hierarchical path display with folder icons
+- Run count badges per path (with running indicator animation)
+- Search/filter functionality
+- Right-click context menu for batch operations (delete, export)
+- Keyboard navigation support
+- Smooth animations with framer-motion
+- Expanded state persistence in localStorage
+
+**Props**:
+```typescript
+interface PathTreePanelProps {
+  selectedPath: string | null
+  onSelectPath: (path: string | null) => void
+  onBatchDelete?: (path: string) => void
+  onBatchExport?: (path: string) => void
+  style?: React.CSSProperties
+}
+```
+
+**API Integration**:
+- `GET /api/paths?include_stats=true` - Fetch path tree with statistics
+
+**Design Pattern**: Controlled component with external state management
+
+---
+
+### CompareChartsView
+
+**File**: `web/frontend/src/components/CompareChartsView.tsx`
+
+**Responsibility**: Display metric comparison charts for selected runs
+
+**Features**:
+- Auto-detect common metrics (present in ≥2 runs)
+- Metric visibility toggles (show/hide individual metrics)
+- ECharts group synchronization for linked zoom/pan
+- Performance optimization via `legend.selected` for run visibility
+- Responsive grid layout (2 columns on large screens)
+- Animated chart appearance with framer-motion
+
+**Props**:
+```typescript
+interface CompareChartsViewProps {
+  runIds: string[]
+  visibleRunIds: Set<string>
+  metricsMap: Map<string, MetricsData>
+  runLabels: Map<string, string>
+  colors: string[]
+  loading: boolean
+}
+```
+
+**Performance Optimization**:
+- Uses `legend.selected` to toggle series visibility instead of re-rendering
+- Excludes X-axis keys from comparison (step, iter, batch, global_step, time, epoch)
+- Memoized common metrics calculation
+
+**Design Pattern**: Presentational component with derived state
+
+---
+
+### CompareRunsPanel
+
+**File**: `web/frontend/src/components/CompareRunsPanel.tsx`
+
+**Responsibility**: Left panel showing selected runs info in compare mode
+
+**Features**:
+- Color dot matching chart line colors
+- Run status indicators (finished/failed/running)
+- Eye icon to toggle run visibility in charts
+- Click to navigate to run detail page
+- Auto-refresh indicator when running experiments exist
+- Add more runs button
+
+**Props**:
+```typescript
+interface CompareRunsPanelProps {
+  runs: CompareRunInfo[]
+  colors: string[]
+  visibleRunIds: Set<string>
+  onToggleRunVisibility: (runId: string) => void
+  onAddRuns: () => void
+  onBack: () => void
+  style?: React.CSSProperties
+}
+
+interface CompareRunInfo {
+  runId: string
+  path: string
+  alias: string | null
+  status: string
+}
+```
+
+**Design Pattern**: Controlled component with callback props
+
+---
+
+### LogsViewer (Enhanced)
+
+**File**: `web/frontend/src/components/LogsViewer.tsx`
+
+**Responsibility**: Real-time log viewing with ANSI color support
+
+**v0.6.0 Enhancements**:
+- **ANSI Color Support**: Full terminal color rendering via `ansi-to-html`
+- **Line Numbers**: Numbered lines for easy reference
+- **Search Functionality**: Keyword search with highlighting
+- **Smart tqdm Filtering**: Heuristic detection of tqdm progress bars
+- **Auto-scroll Toggle**: Enable/disable auto-scroll to bottom
+- **Copy/Clear**: Copy all logs or clear display
+
+**Key Implementation**:
+```typescript
+// ANSI converter with terminal-like colors
+const ansiConverter = new AnsiToHtml({
+  fg: '#e6e9ef',
+  bg: '#0b1020',
+  colors: {
+    0: '#1d1f21',   // black
+    1: '#cc6666',   // red
+    2: '#b5bd68',   // green
+    // ... more colors
+  },
+})
+
+// tqdm detection heuristic
+function isTqdmLine(s: string): boolean {
+  // Matches: " 45%|███████████▍            | 45/100 [00:12<00:15,  3.45it/s]"
+  if (/\d{1,3}%\|[█▏▎▍▌▋▊▉#\-\s]+\|/.test(s)) return true
+  // ... more patterns
+  return false
+}
+```
+
+**WebSocket Connection**:
+- Exponential backoff reconnection (500ms base, 10s max)
+- Connection status indicator (connected/connecting/disconnected)
+- Max 5000 lines buffer
+
+**Design Pattern**: Stateful component with WebSocket lifecycle management
 
 ---
 

@@ -6,13 +6,40 @@ Provides unified remote access via SSH for Remote Viewer mode.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from fastapi import APIRouter, HTTPException, Request, Body
 from pydantic import BaseModel, Field
 
+from ...remote.host_key import HostKeyConfirmationRequiredError, HostKeyProblem
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _build_host_key_confirmation_required_detail(problem: HostKeyProblem) -> Dict[str, Any]:
+    """Build a stable 409 payload for host key confirmation."""
+
+    host_key: Dict[str, Any] = {
+        "host": problem.host,
+        "port": problem.port,
+        "known_hosts_host": problem.known_hosts_host,
+        "key_type": problem.key_type,
+        "fingerprint_sha256": problem.fingerprint_sha256,
+        "public_key": problem.public_key,
+        "reason": problem.reason,
+    }
+
+    if problem.expected_fingerprint_sha256 is not None:
+        host_key["expected_fingerprint_sha256"] = problem.expected_fingerprint_sha256
+    if problem.expected_public_key is not None:
+        host_key["expected_public_key"] = problem.expected_public_key
+
+    return {
+        "code": "HOST_KEY_CONFIRMATION_REQUIRED",
+        "message": "Host key verification failed",
+        "host_key": host_key,
+    }
 
 
 # ==================== Request/Response Models ====================
@@ -43,6 +70,29 @@ class RemoteViewerStartRequest(BaseModel):
     local_port: Optional[int] = Field(None, description="Local port (auto-detect if None)")
     remote_port: Optional[int] = Field(None, description="Remote port (auto-detect if None)")
     conda_env: Optional[str] = Field(None, description="Conda environment name")
+
+
+class KnownHostsAcceptRequest(BaseModel):
+    host: str
+    port: int = Field(..., ge=1, le=65535)
+    key_type: str
+    public_key: str = Field(..., min_length=1, max_length=8192)
+    fingerprint_sha256: str
+
+
+class KnownHostsRemoveRequest(BaseModel):
+    host: str
+    port: int = Field(..., ge=1, le=65535)
+    key_type: str
+
+
+class KnownHostsEntry(BaseModel):
+    host: str
+    port: int
+    known_hosts_host: str
+    key_type: str
+    key_base64: str
+    fingerprint_sha256: str
 
 
 # ==================== Connection Management ====================
@@ -103,12 +153,140 @@ async def connect_remote(request: Request, payload: SSHConnectRequest) -> Dict[s
             "connected": connection.is_connected,
         }
         
+    except HostKeyConfirmationRequiredError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=_build_host_key_confirmation_required_detail(e.problem),
+        )
+        
     except Exception as e:
         logger.error(f"SSH connection failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Connection failed: {str(e)}"
         )
+
+
+@router.post("/remote/known-hosts/accept")
+async def accept_known_host(payload: KnownHostsAcceptRequest) -> Dict[str, Any]:
+    try:
+        from ...remote.known_hosts import (
+            KnownHostsStore,
+            compute_fingerprint_sha256,
+            parse_openssh_public_key,
+        )
+    except ImportError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Remote module not available: {e}",
+        )
+
+    if not payload.host:
+        raise HTTPException(status_code=400, detail="Invalid host")
+    if not payload.key_type:
+        raise HTTPException(status_code=400, detail="Invalid key_type")
+    if not payload.fingerprint_sha256:
+        raise HTTPException(status_code=400, detail="Invalid fingerprint_sha256")
+
+    if "\n" in payload.public_key or "\r" in payload.public_key:
+        raise HTTPException(status_code=400, detail="Invalid public_key")
+    if "\n" in payload.host or "\r" in payload.host or any(ch.isspace() for ch in payload.host):
+        raise HTTPException(status_code=400, detail="Invalid host")
+    if "," in payload.host:
+        raise HTTPException(status_code=400, detail="Invalid host")
+    if "\n" in payload.key_type or "\r" in payload.key_type or any(ch.isspace() for ch in payload.key_type):
+        raise HTTPException(status_code=400, detail="Invalid key_type")
+    if (
+        "\n" in payload.fingerprint_sha256
+        or "\r" in payload.fingerprint_sha256
+        or any(ch.isspace() for ch in payload.fingerprint_sha256)
+    ):
+        raise HTTPException(status_code=400, detail="Invalid fingerprint_sha256")
+
+    try:
+        parsed_key = parse_openssh_public_key(payload.public_key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid public_key: {str(e)}")
+
+    if parsed_key.key_type != payload.key_type:
+        raise HTTPException(status_code=400, detail="key_type does not match public_key")
+
+    computed_fingerprint = compute_fingerprint_sha256(parsed_key.key_bytes)
+    if computed_fingerprint != payload.fingerprint_sha256:
+        raise HTTPException(
+            status_code=400,
+            detail="fingerprint_sha256 does not match public_key",
+        )
+
+    store = KnownHostsStore.from_runicorn_config()
+    try:
+        store.upsert_host_key(
+            host=payload.host,
+            port=payload.port,
+            key_type=payload.key_type,
+            key_base64=parsed_key.key_base64,
+        )
+    except Exception as e:
+        logger.error(f"Failed to write known_hosts: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to write known_hosts: {str(e)}",
+        )
+
+    return {"ok": True}
+
+
+@router.get("/remote/known-hosts/list")
+async def list_known_hosts() -> Dict[str, List[KnownHostsEntry]]:
+    try:
+        from ...remote.known_hosts import KnownHostsStore
+    except ImportError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Remote module not available: {e}",
+        )
+
+    store = KnownHostsStore.from_runicorn_config()
+    try:
+        entries = store.list_host_keys()
+    except Exception as e:
+        logger.error(f"Failed to list known_hosts: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list known_hosts: {str(e)}",
+        )
+
+    return {"entries": [KnownHostsEntry(**entry) for entry in entries]}
+
+
+@router.post("/remote/known-hosts/remove")
+async def remove_known_host(payload: KnownHostsRemoveRequest) -> Dict[str, Any]:
+    try:
+        from ...remote.known_hosts import KnownHostsStore
+    except ImportError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Remote module not available: {e}",
+        )
+
+    if not payload.host:
+        raise HTTPException(status_code=400, detail="Invalid host")
+    if not payload.key_type:
+        raise HTTPException(status_code=400, detail="Invalid key_type")
+
+    store = KnownHostsStore.from_runicorn_config()
+    try:
+        changed = store.remove_host_key(
+            host=payload.host, port=payload.port, key_type=payload.key_type
+        )
+    except Exception as e:
+        logger.error(f"Failed to remove known_hosts entry: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to remove known_hosts entry: {str(e)}",
+        )
+
+    return {"ok": True, "changed": changed}
 
 
 @router.get("/remote/sessions")
@@ -123,7 +301,14 @@ async def list_sessions(request: Request) -> Dict[str, Any]:
         return {"sessions": []}
     
     pool: SSHConnectionPool = request.app.state.connection_pool
-    connections = pool.list_connections()
+    try:
+        connections = pool.list_connections()
+    except Exception as e:
+        logger.error(f"Failed to list sessions: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list sessions: {str(e)}",
+        )
     
     return {"sessions": connections}
 
@@ -150,7 +335,14 @@ async def disconnect_remote(
         return {"ok": False, "message": "No connection pool"}
     
     pool: SSHConnectionPool = request.app.state.connection_pool
-    removed = pool.remove(host, port, username)
+    try:
+        removed = pool.remove(host, port, username)
+    except Exception as e:
+        logger.error(f"Failed to disconnect: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to disconnect: {str(e)}",
+        )
     
     if removed:
         return {"ok": True, "message": "Connection removed"}
@@ -246,6 +438,12 @@ async def start_remote_viewer(
             "session": session.to_dict(),
             "message": f"Remote Viewer ready at http://localhost:{session.local_port}",
         }
+        
+    except HostKeyConfirmationRequiredError as e:
+        raise HTTPException(
+            status_code=409,
+            detail=_build_host_key_confirmation_required_detail(e.problem),
+        )
         
     except Exception as e:
         logger.error(f"Failed to start Remote Viewer: {e}", exc_info=True)

@@ -10,10 +10,12 @@ from typing import List, Set
 
 # Whitelist of allowed column names for experiments table
 ALLOWED_EXPERIMENT_COLUMNS = {
-    'name', 'project', 'status', 'start_time', 'end_time',
-    'duration', 'tags', 'config', 'metrics_summary', 'best_metric',
-    'best_metric_value', 'best_metric_step', 'environment', 'notes',
-    'updated_at', 'is_deleted', 'deleted_at', 'deleted_reason'
+    'path', 'alias', 'status', 'started_at', 'ended_at',
+    'duration_seconds', 'best_metric_name', 'best_metric_value', 
+    'best_metric_step', 'best_metric_mode', 'exit_reason',
+    'updated_at', 'deleted_at', 'delete_reason',
+    'pid', 'python_version', 'platform', 'hostname', 'run_dir',
+    'metric_count'
 }
 
 # Pattern for valid column names (alphanumeric + underscore only)

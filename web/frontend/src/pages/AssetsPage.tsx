@@ -1,0 +1,383 @@
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import { Card, Row, Col, Statistic, Tabs, Table, Space, Button, Tag, Input, Select, Switch, Typography, Tooltip, Checkbox } from 'antd'
+import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
+import { ReloadOutlined, EyeOutlined, DatabaseOutlined, SyncOutlined } from '@ant-design/icons'
+import { useAssetsIndex } from '../hooks/useAssetsIndex'
+import { useSettings } from '../contexts/SettingsContext'
+import { formatRelativeTime } from '../utils/format'
+import { getStorageStats, StorageStats } from '../api'
+
+const { Text } = Typography
+
+export default function AssetsPage() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const { settings, setSettings } = useSettings()
+  const { index, loading, stats, refresh } = useAssetsIndex()
+  const [storageStats, setStorageStats] = useState<StorageStats | null>(null)
+
+  // Use global settings for autoRefresh
+  const autoRefresh = settings.autoRefresh
+  const setAutoRefresh = useCallback((checked: boolean) => {
+    setSettings({ ...settings, autoRefresh: checked })
+  }, [settings, setSettings])
+
+  // Fetch storage stats
+  const fetchStorageStats = useCallback(() => {
+    getStorageStats().then(setStorageStats).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetchStorageStats()
+  }, [fetchStorageStats])
+
+  // Auto-refresh functionality
+  useEffect(() => {
+    if (!autoRefresh) return
+    
+    const interval = window.setInterval(() => {
+      refresh()
+      fetchStorageStats()
+    }, settings.refreshInterval * 1000)
+    
+    return () => window.clearInterval(interval)
+  }, [autoRefresh, settings.refreshInterval, refresh, fetchStorageStats])
+
+  const [repoType, setRepoType] = useState<string>('all')
+  const [onlyArchived, setOnlyArchived] = useState(false)
+  const [onlyRelated, setOnlyRelated] = useState(true)
+  const [pathFilter, setPathFilter] = useState<string>('all')
+  const [sortMode, setSortMode] = useState<'recent' | 'name'>('recent')
+  const [repoSearch, setRepoSearch] = useState('')
+
+  const pathOptions = useMemo(() => {
+    const paths = Array.from(new Set((index?.runs || []).map((r) => String(r.path || 'default')))).sort()
+    return [{ value: 'all', label: t('assets.filters.path') || 'Path' }, ...paths.map((p) => ({ value: p, label: p }))]
+  }, [index?.runs, t])
+
+  const repoRows = useMemo(() => {
+    const rows = index?.repo || []
+    const q = repoSearch.trim().toLowerCase()
+
+    const filtered = rows.filter((r) => {
+      if (repoType !== 'all' && r.kind !== repoType) return false
+      if (onlyArchived && !r.saved) return false
+      if (onlyRelated && (r.runs_count || 0) <= 0) return false
+      if (pathFilter !== 'all' && !(r.paths || []).includes(pathFilter)) return false
+      if (!q) return true
+      const hay = `${r.name} ${r.kind} ${(r.paths || []).join(' ')} ${r.source_uri || ''} ${r.archive_path || ''} ${r.description || ''} ${r.context || ''} ${r.source_type || ''}`.toLowerCase()
+      return hay.includes(q)
+    })
+
+    if (sortMode === 'name') {
+      return filtered.slice().sort((a, b) => a.name.localeCompare(b.name))
+    }
+    return filtered.slice().sort((a, b) => {
+      const ta = a.last_used_time || 0
+      const tb = b.last_used_time || 0
+      if (ta !== tb) return tb - ta
+      return a.name.localeCompare(b.name)
+    })
+  }, [index?.repo, repoSearch, repoType, onlyArchived, onlyRelated, pathFilter, sortMode])
+
+  const overviewRows = useMemo(() => index?.experiments || [], [index?.experiments])
+
+  return (
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%',
+      overflow: 'hidden',
+      padding: 16,
+    }}>
+      {/* Header: Title + Stats - fixed height */}
+      <Card style={{ flexShrink: 0, marginBottom: 16 }}>
+        <Row gutter={16} align="middle">
+          <Col flex="auto">
+            <Space direction="vertical" size={0}>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>{t('assets.title') || 'Assets'}</div>
+              <Text type="secondary">{t('assets.subtitle') || ''}</Text>
+            </Space>
+          </Col>
+          <Col>
+            <Space>
+              <Button 
+                icon={autoRefresh ? <SyncOutlined spin /> : <ReloadOutlined />} 
+                onClick={() => { refresh(); fetchStorageStats() }} 
+                loading={loading}
+              >
+                {autoRefresh ? t('runs.refreshing') : (t('assets.actions.refresh_index') || 'Refresh Index')}
+              </Button>
+              <Checkbox
+                checked={autoRefresh}
+                onChange={(e) => setAutoRefresh(e.target.checked)}
+              >
+                {t('experiments.auto_refresh') || 'Auto-refresh'}
+              </Checkbox>
+            </Space>
+          </Col>
+        </Row>
+
+        <Row gutter={16} style={{ marginTop: 16 }}>
+          <Col xs={24} sm={12} md={4}>
+            <Statistic title={t('experiments.total_runs') || 'Total Runs'} value={stats.totalRuns} />
+          </Col>
+          <Col xs={24} sm={12} md={5}>
+            <Statistic title={t('assets.table.runs') || 'Runs with Assets'} value={stats.runsWithAssets} />
+          </Col>
+          <Col xs={24} sm={12} md={5}>
+            <Statistic title={t('assets.table.assets_total') || 'Assets'} value={stats.totalAssets} />
+          </Col>
+          <Col xs={24} sm={12} md={5}>
+            <Statistic title={t('assets.table.archived') || 'Archived'} value={stats.archivedAssets} />
+          </Col>
+          <Col xs={24} sm={12} md={5}>
+            <Tooltip title={t('storage.archive_tooltip') || 'CAS blobs + manifests + outputs'}>
+              <Statistic 
+                title={t('storage.archive_size') || 'Archive Size'} 
+                value={storageStats?.archive.size_human || '-'}
+                prefix={<DatabaseOutlined />}
+              />
+            </Tooltip>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Main content: Tabs with tables - fills remaining space */}
+      <Card
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+        bodyStyle={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 24px 24px' }}
+      >
+        <Tabs
+          items={[
+            {
+              key: 'overview',
+              label: t('assets.tab.overview') || 'Overview',
+              children: (
+                <Table
+                  dataSource={overviewRows}
+                  rowKey={(r: any) => r.key}
+                  size="middle"
+                  pagination={{ pageSize: 20 }}
+                  expandable={{
+                    expandedRowRender: (r: any) => (
+                      <Space wrap>
+                        {(r.run_ids || []).map((rid: string) => (
+                          <Button key={rid} size="small" type="link" onClick={() => navigate(`/runs/${rid}`)}>
+                            {rid}
+                          </Button>
+                        ))}
+                      </Space>
+                    ),
+                    rowExpandable: (r: any) => Array.isArray(r.run_ids) && r.run_ids.length > 0,
+                  }}
+                  columns={[
+                    { title: t('assets.table.path') || 'Path', dataIndex: 'path', key: 'path', width: 280 },
+                    { title: t('assets.table.runs') || 'Runs', dataIndex: 'runs_count', key: 'runs_count', width: 100 },
+                    { title: t('assets.table.assets_total') || 'Assets', dataIndex: 'assets_total', key: 'assets_total', width: 110 },
+                    { title: t('assets.table.archived') || 'Archived', dataIndex: 'archived_total', key: 'archived_total', width: 110 },
+                    {
+                      title: t('assets.table.code') || 'Code',
+                      key: 'code',
+                      width: 90,
+                      render: (_: any, r: any) => r.by_kind?.code || 0,
+                    },
+                    {
+                      title: t('assets.table.config') || 'Config',
+                      key: 'config',
+                      width: 90,
+                      render: (_: any, r: any) => r.by_kind?.config || 0,
+                    },
+                    {
+                      title: t('assets.table.datasets') || 'Datasets',
+                      key: 'dataset',
+                      width: 100,
+                      render: (_: any, r: any) => r.by_kind?.dataset || 0,
+                    },
+                    {
+                      title: t('assets.table.pretrained') || 'Pretrained',
+                      key: 'pretrained',
+                      width: 110,
+                      render: (_: any, r: any) => r.by_kind?.pretrained || 0,
+                    },
+                    {
+                      title: t('assets.table.outputs') || 'Outputs',
+                      key: 'output',
+                      width: 100,
+                      render: (_: any, r: any) => r.by_kind?.output || 0,
+                    },
+                  ]}
+                />
+              ),
+            },
+            {
+              key: 'repo',
+              label: t('assets.tab.repository') || 'Repository',
+              children: (
+                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  <Row gutter={12} align="middle">
+                    <Col flex="220px">
+                      <Select
+                        value={repoType}
+                        onChange={(v) => setRepoType(v)}
+                        style={{ width: '100%' }}
+                        options={[
+                          { value: 'all', label: t('assets.filters.type') || 'Type' },
+                          { value: 'code', label: 'code' },
+                          { value: 'config', label: 'config' },
+                          { value: 'dataset', label: 'dataset' },
+                          { value: 'pretrained', label: 'pretrained' },
+                          { value: 'output', label: 'output' },
+                        ]}
+                      />
+                    </Col>
+                    <Col flex="220px">
+                      <Select value={pathFilter} onChange={setPathFilter} style={{ width: '100%' }} options={pathOptions} />
+                    </Col>
+                    <Col flex="auto">
+                      <Input
+                        value={repoSearch}
+                        onChange={(e) => setRepoSearch(e.target.value)}
+                        placeholder={t('assets.filters.search') || 'Search'}
+                      />
+                    </Col>
+                    <Col>
+                      <Space>
+                        <span>{t('assets.filters.only_archived') || 'Archived only'}</span>
+                        <Switch checked={onlyArchived} onChange={setOnlyArchived} />
+                      </Space>
+                    </Col>
+                    <Col>
+                      <Space>
+                        <span>{t('assets.filters.only_related') || 'Only related runs'}</span>
+                        <Switch checked={onlyRelated} onChange={setOnlyRelated} />
+                      </Space>
+                    </Col>
+                    <Col flex="220px">
+                      <Select
+                        value={sortMode}
+                        onChange={(v) => setSortMode(v)}
+                        style={{ width: '100%' }}
+                        options={[
+                          { value: 'recent', label: t('assets.filters.sort_recent') || 'Sort: Recent' },
+                          { value: 'name', label: t('assets.filters.sort_name') || 'Sort: Name' },
+                        ]}
+                      />
+                    </Col>
+                  </Row>
+
+                  <Table
+                    dataSource={repoRows}
+                    rowKey={(r: any) => r.key}
+                    size="middle"
+                    pagination={{ pageSize: 20 }}
+                    columns={[
+                      {
+                        title: t('assets.repo.kind') || 'Type',
+                        dataIndex: 'kind',
+                        key: 'kind',
+                        width: 120,
+                        render: (v: string) => <Tag>{v}</Tag>,
+                      },
+                      {
+                        title: t('assets.repo.asset') || 'Asset',
+                        dataIndex: 'name',
+                        key: 'name',
+                        width: 220,
+                        render: (v: string, r: any) => (
+                          <Space direction="vertical" size={0} style={{ maxWidth: 260 }}>
+                            <Text ellipsis title={v} strong>
+                              {v}
+                            </Text>
+                            {Array.isArray(r.paths) && r.paths.length > 0 ? (
+                              <Space wrap size={4}>
+                                {r.paths.slice(0, 3).map((p: string) => (
+                                  <Tag key={p}>{p}</Tag>
+                                ))}
+                                {r.paths.length > 3 ? <Tag>+{r.paths.length - 3}</Tag> : null}
+                              </Space>
+                            ) : null}
+                          </Space>
+                        ),
+                      },
+                      {
+                        title: t('assets.repo.saved') || 'Archived',
+                        dataIndex: 'saved',
+                        key: 'saved',
+                        width: 110,
+                        render: (v: boolean) =>
+                          v ? <Tag color="green">{t('assets.tag.saved') || 'saved'}</Tag> : <Tag>{t('assets.tag.ref') || 'ref'}</Tag>,
+                      },
+                      {
+                        title: t('assets.repo.last_used') || 'Last Used',
+                        dataIndex: 'last_used_time',
+                        key: 'last_used_time',
+                        width: 140,
+                        render: (v: number | undefined) => <Text type="secondary">{v ? formatRelativeTime(v) : '-'}</Text>,
+                      },
+                      {
+                        title: t('assets.repo.description') || 'Description',
+                        dataIndex: 'description',
+                        key: 'description',
+                        width: 220,
+                        render: (v: string | undefined) => (v ? <Text ellipsis style={{ maxWidth: 240 }} title={v}>{v}</Text> : <span style={{ color: '#999' }}>-</span>),
+                      },
+                      {
+                        title: t('assets.repo.context') || 'Context',
+                        dataIndex: 'context',
+                        key: 'context',
+                        width: 120,
+                        render: (v: string | undefined) => (v ? <Tag>{v}</Tag> : <span style={{ color: '#999' }}>-</span>),
+                      },
+                      {
+                        title: t('assets.repo.source_type') || 'Source Type',
+                        dataIndex: 'source_type',
+                        key: 'source_type',
+                        width: 140,
+                        render: (v: string | undefined) => (v ? <Tag>{v}</Tag> : <span style={{ color: '#999' }}>-</span>),
+                      },
+                      {
+                        title: t('assets.repo.source') || 'Source',
+                        dataIndex: 'source_uri',
+                        key: 'source_uri',
+                        render: (v: string | undefined) => (v ? <Text ellipsis style={{ maxWidth: 360 }} title={v}>{v}</Text> : <span style={{ color: '#999' }}>-</span>),
+                      },
+                      {
+                        title: t('assets.repo.archive') || 'Archive Path',
+                        dataIndex: 'archive_path',
+                        key: 'archive_path',
+                        render: (v: string | undefined) => (v ? <Text ellipsis style={{ maxWidth: 360 }} title={v}>{v}</Text> : <span style={{ color: '#999' }}>-</span>),
+                      },
+                      { title: t('assets.repo.runs_count') || 'Runs', dataIndex: 'runs_count', key: 'runs_count', width: 90 },
+                      {
+                        title: t('assets.repo.actions') || 'Actions',
+                        key: 'actions',
+                        width: 120,
+                        render: (_: any, r: any) => (
+                          <Button
+                            type="link"
+                            icon={<EyeOutlined />}
+                            onClick={() => navigate(`/assets/${r.encoded}`)}
+                          >
+                            {t('assets.actions.view_asset') || 'View'}
+                          </Button>
+                        ),
+                      },
+                    ]}
+                  />
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Card>
+    </div>
+  )
+}

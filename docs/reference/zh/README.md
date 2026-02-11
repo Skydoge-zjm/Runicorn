@@ -10,11 +10,14 @@
 
 ## 可用参考文档
 
+- **[CONFIGURATION.md](CONFIGURATION.md)** - ⭐ 配置参考 (v0.5.0)
+- **[CLI_REFERENCE.md](CLI_REFERENCE.md)** - ⭐ CLI 命令参考 (v0.5.0)
+- **[FAQ.md](FAQ.md)** - ⭐ 常见问题 (v0.5.0)
 - **[RATE_LIMIT_CONFIGURATION.md](RATE_LIMIT_CONFIGURATION.md)** - API 速率限制配置
 
 架构文档请查看: [../../architecture/](../../architecture/)
 
-安全指南请查看: [../../SECURITY.md](../../../SECURITY.md)
+安全指南请查看: [SECURITY.md](../../../SECURITY.md)
 
 ---
 

@@ -1,8 +1,8 @@
 # Remote Viewer API Reference
 
-> **Version**: v0.5.0  
-> **Last Updated**: 2025-10-25  
-> **Base URL**: `http://localhost:23300`
+> **Version**: v0.6.0  
+> **Last Updated**: 2025-01-XX  
+> **Base URL**: `http://127.0.0.1:23300`
 
 [English](remote_api.md) | [简体中文](../zh/remote_api.md)
 
@@ -11,11 +11,16 @@
 ## 📖 Table of Contents
 
 - [Overview](#overview)
+- [SSH Backend Architecture](#ssh-backend-architecture)
+- [Host Key Verification (HTTP 409)](#host-key-verification-http-409)
 - [Authentication](#authentication)
 - [Connection Management](#connection-management)
-- [Environment Detection](#environment-detection)
+- [Known Hosts Management](#known-hosts-management)
+- [Environment & Config](#environment--config)
 - [Remote Viewer Management](#remote-viewer-management)
-- [Health Checks](#health-checks)
+- [Remote File System](#remote-file-system)
+- [Status](#status)
+- [Saved Connections](#saved-connections)
 - [Error Handling](#error-handling)
 
 ---
@@ -31,16 +36,164 @@ The Remote Viewer API provides complete functionality for connecting to remote s
 - 🚀 **Viewer Lifecycle**: Start, monitor, and stop remote Viewer
 - 💓 **Health Monitoring**: Real-time connection and Viewer status checks
 - 🔒 **Security**: All communication via SSH encryption
+- 🔄 **Multi-Backend Architecture**: Automatic fallback chain for maximum compatibility (v0.6.0)
 
 ### Workflow
 
 ```
-1. POST /api/remote/connect          # Establish SSH connection
-2. GET /api/remote/environments      # Detect Python environments
-3. POST /api/remote/viewer/start     # Start Remote Viewer
-4. GET /api/remote/viewer/status     # Monitor status
-5. DELETE /api/remote/connections/id # Disconnect
+1. POST /api/remote/connect              # Establish SSH connection
+2. (optional) GET /api/remote/conda-envs # List envs for UI selection
+3. POST /api/remote/viewer/start         # Start Remote Viewer + create SSH tunnel
+4. GET /api/remote/viewer/status/{id}    # Monitor a session
+5. POST /api/remote/disconnect           # Disconnect SSH connection
 ```
+
+---
+
+## SSH Backend Architecture
+
+> **New in v0.6.0**: Multi-backend fallback architecture for improved compatibility and stability.
+
+### Design Overview
+
+Runicorn v0.6.0 introduces a new SSH backend architecture that separates **connection** and **tunneling** concerns:
+
+| Layer | Implementation | Description |
+|-------|----------------|-------------|
+| **Connection** | Paramiko (always) | SSH connection, command execution, SFTP |
+| **Tunneling** | AutoBackend | Local port forwarding with fallback chain |
+
+### AutoBackend Fallback Chain
+
+The `AutoBackend` class automatically selects the best available tunnel implementation:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     AutoBackend                              │
+├─────────────────────────────────────────────────────────────┤
+│  1. OpenSSH Tunnel (preferred)                              │
+│     └─ Uses system OpenSSH client (ssh command)             │
+│     └─ Requires: ssh + ssh-keyscan in PATH                  │
+│     └─ Does NOT support password authentication             │
+│                                                              │
+│  2. AsyncSSH Tunnel (fallback)                              │
+│     └─ Pure Python async implementation                      │
+│     └─ Requires: asyncssh package                           │
+│     └─ Supports all authentication methods                   │
+│                                                              │
+│  3. Paramiko Tunnel (final fallback)                        │
+│     └─ Pure Python synchronous implementation               │
+│     └─ Always available                                      │
+│     └─ Supports all authentication methods                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Backend Selection Logic
+
+```python
+# Pseudocode for backend selection
+def create_tunnel(connection, local_port, remote_port):
+    # Try OpenSSH first (best performance, native integration)
+    try:
+        return OpenSSHTunnel(...)
+    except (SSHNotFound, PasswordAuthRequired, HostKeyError):
+        pass  # Fall through (except HostKeyError which is re-raised)
+    
+    # Try AsyncSSH second (async, good performance)
+    try:
+        return AsyncSSHTunnel(...)
+    except (AsyncSSHNotAvailable, HostKeyError):
+        pass  # Fall through (except HostKeyError which is re-raised)
+    
+    # Final fallback to Paramiko (always works)
+    return ParamikoTunnel(...)
+```
+
+### OpenSSH Backend Details
+
+When available, OpenSSH provides the best performance and native OS integration:
+
+**Requirements**:
+- `ssh` command in PATH (or set via `RUNICORN_SSH_PATH`)
+- `ssh-keyscan` command in PATH (for host key retrieval)
+- SSH key authentication (password auth not supported)
+
+**Features**:
+- Uses `BatchMode=yes` for non-interactive operation
+- `ExitOnForwardFailure=yes` for reliable tunnel setup
+- `StrictHostKeyChecking=yes` with Runicorn-managed known_hosts
+- `ServerAliveInterval=30` for connection keepalive
+
+**Command Example**:
+```bash
+ssh -N -L 127.0.0.1:8080:localhost:23300 \
+    -p 22 \
+    -o ExitOnForwardFailure=yes \
+    -o BatchMode=yes \
+    -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile=/path/to/runicorn/known_hosts \
+    -o ServerAliveInterval=30 \
+    -o ServerAliveCountMax=3 \
+    user@remote-server
+```
+
+### Environment Variable
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RUNICORN_SSH_PATH` | Path to ssh executable | Auto-detect from PATH |
+
+**Example**:
+```bash
+# Use a specific OpenSSH installation
+export RUNICORN_SSH_PATH="/usr/local/bin/ssh"
+
+# Or on Windows with Git Bash
+set RUNICORN_SSH_PATH=C:\Program Files\Git\usr\bin\ssh.exe
+```
+
+### Security Features
+
+All backends enforce strict security:
+
+1. **Host Key Verification**: Always enabled, uses Runicorn-managed `known_hosts`
+2. **No Auto-Accept**: Unknown host keys trigger HTTP 409 for user confirmation
+3. **Changed Key Detection**: Warns when host key differs from known value
+4. **Local Binding**: Tunnels bind to `127.0.0.1` only (not exposed to network)
+
+---
+
+## Host Key Verification (HTTP 409)
+
+When SSH host key verification fails (unknown host key or host key changed), the API returns:
+
+- HTTP status: `409 Conflict`
+- Response body:
+
+```json
+{
+  "detail": {
+    "code": "HOST_KEY_CONFIRMATION_REQUIRED",
+    "message": "Host key verification failed",
+    "host_key": {
+      "host": "example.com",
+      "port": 22,
+      "known_hosts_host": "example.com",
+      "key_type": "ssh-ed25519",
+      "fingerprint_sha256": "SHA256:...",
+      "public_key": "ssh-ed25519 AAAA...",
+      "reason": "unknown"
+    }
+  }
+}
+```
+
+If `reason` is `"changed"`, the payload may include:
+
+- `expected_fingerprint_sha256`
+- `expected_public_key`
+
+To proceed, the client should call `POST /api/remote/known-hosts/accept` and then retry the original request.
 
 ---
 
@@ -74,10 +227,11 @@ Content-Type: application/json
 | `host` | string | ✅ | Remote server address (domain or IP) |
 | `port` | integer | ❌ | SSH port (default: 22) |
 | `username` | string | ✅ | SSH username |
-| `auth_method` | string | ✅ | Authentication method: `"key"`, `"password"`, `"agent"` |
-| `private_key_path` | string | ⚠️ | Private key path (required if auth_method="key") |
-| `password` | string | ⚠️ | SSH password (required if auth_method="password") |
-| `timeout` | integer | ❌ | Connection timeout in seconds (default: 30) |
+| `password` | string \/ null | ❌ | SSH password (optional) |
+| `private_key` | string \/ null | ❌ | Private key content (optional) |
+| `private_key_path` | string \/ null | ❌ | Private key path (optional) |
+| `passphrase` | string \/ null | ❌ | Passphrase for private key (optional) |
+| `use_agent` | boolean | ❌ | Use SSH agent (default: true) |
 
 #### Request Examples
 
@@ -89,8 +243,11 @@ curl -X POST http://localhost:23300/api/remote/connect \
     "host": "gpu-server.com",
     "port": 22,
     "username": "mluser",
-    "auth_method": "key",
-    "private_key_path": "~/.ssh/id_rsa"
+    "password": null,
+    "private_key": null,
+    "private_key_path": "~/.ssh/id_rsa",
+    "passphrase": null,
+    "use_agent": true
   }'
 ```
 
@@ -104,8 +261,11 @@ response = requests.post(
         "host": "gpu-server.com",
         "port": 22,
         "username": "mluser",
-        "auth_method": "key",
-        "private_key_path": "~/.ssh/id_rsa"
+        "password": None,
+        "private_key": None,
+        "private_key_path": "~/.ssh/id_rsa",
+        "passphrase": None,
+        "use_agent": True,
     }
 )
 
@@ -122,8 +282,11 @@ const response = await fetch('http://localhost:23300/api/remote/connect', {
     host: 'gpu-server.com',
     port: 22,
     username: 'mluser',
-    auth_method: 'key',
-    private_key_path: '~/.ssh/id_rsa'
+    password: null,
+    private_key: null,
+    private_key_path: '~/.ssh/id_rsa',
+    passphrase: null,
+    use_agent: true
   })
 });
 
@@ -136,62 +299,74 @@ const connectionId = result.connection_id;
 **Success Response** (200 OK):
 ```json
 {
-  "success": true,
-  "connection_id": "conn_1a2b3c4d",
+  "ok": true,
+  "connection_id": "mluser@gpu-server.com:22",
   "host": "gpu-server.com",
   "port": 22,
   "username": "mluser",
-  "status": "connected",
-  "server_info": {
-    "hostname": "gpu-server-01",
-    "os": "Linux",
-    "python_version": "3.10.8"
-  },
-  "created_at": "2025-10-25T10:30:00Z"
+  "connected": true
 }
 ```
 
 **Error Response** (400/401/500):
 ```json
 {
-  "success": false,
-  "error": "authentication_failed",
-  "message": "SSH authentication failed: Invalid private key"
+  "detail": "Connection failed: <reason>"
 }
 ```
 
-#### Error Codes
+**Host Key Error** (409 Conflict):
 
-| Status Code | Error Code | Description |
-|-------------|------------|-------------|
-| 400 | `invalid_parameters` | Missing required parameters |
-| 401 | `authentication_failed` | SSH authentication failed |
-| 408 | `connection_timeout` | Connection timeout |
-| 500 | `ssh_error` | SSH connection error |
+```json
+{
+  "detail": {
+    "code": "HOST_KEY_CONFIRMATION_REQUIRED",
+    "message": "Host key verification failed",
+    "host_key": {
+      "host": "example.com",
+      "port": 22,
+      "known_hosts_host": "example.com",
+      "key_type": "ssh-ed25519",
+      "fingerprint_sha256": "SHA256:...",
+      "public_key": "ssh-ed25519 AAAA...",
+      "reason": "unknown"
+    }
+  }
+}
+```
+
+#### Status Codes
+
+| Status Code | Meaning |
+|-------------|---------|
+| 409 | Host key confirmation required (see 409 payload above) |
+| 500 | Connection failed (`detail` contains error message) |
+| 503 | Remote module not available |
+| 422 | Validation error (FastAPI / Pydantic) |
 
 ---
 
-### GET /api/remote/connections
+### GET /api/remote/sessions
 
 Get a list of all active remote connections.
 
 #### Request
 
-**URL**: `GET /api/remote/connections`
+**URL**: `GET /api/remote/sessions`
 
 #### Request Examples
 
 **cURL**:
 ```bash
-curl http://localhost:23300/api/remote/connections
+curl http://localhost:23300/api/remote/sessions
 ```
 
 **Python**:
 ```python
 import requests
 
-response = requests.get("http://localhost:23300/api/remote/connections")
-connections = response.json()["connections"]
+response = requests.get("http://localhost:23300/api/remote/sessions")
+sessions = response.json()["sessions"]
 ```
 
 #### Response
@@ -199,129 +374,43 @@ connections = response.json()["connections"]
 **Success Response** (200 OK):
 ```json
 {
-  "success": true,
-  "connections": [
+  "sessions": [
     {
-      "connection_id": "conn_1a2b3c4d",
+      "key": "mluser@gpu-server.com:22",
       "host": "gpu-server.com",
-      "status": "connected",
-      "viewer": {
-        "status": "running",
-        "url": "http://localhost:8081"
-      }
+      "port": 22,
+      "username": "mluser",
+      "connected": true
     }
-  ],
-  "total": 1
+  ]
 }
 ```
 
 ---
 
-### DELETE /api/remote/connections/{id}
+### POST /api/remote/disconnect
 
 Disconnect a specified remote connection.
 
 #### Request
 
-**URL**: `DELETE /api/remote/connections/{connection_id}`
-
-**Query Parameters**:
-- `cleanup_viewer` (boolean): Also cleanup Remote Viewer (default: true)
-
-#### Request Examples
-
-**cURL**:
-```bash
-curl -X DELETE "http://localhost:23300/api/remote/connections/conn_1a2b3c4d?cleanup_viewer=true"
-```
-
-#### Response
-
-**Success Response** (200 OK):
-```json
-{
-  "success": true,
-  "message": "Connection disconnected successfully",
-  "connection_id": "conn_1a2b3c4d"
-}
-```
-
----
-
-## Environment Detection
-
-### GET /api/remote/environments
-
-List Python environments detected on the remote server.
-
-#### Request
-
-**URL**: `GET /api/remote/environments`
-
-**Query Parameters**:
-- `connection_id` (string, required): Connection ID
-- `filter` (string, optional): Filter criteria: `"all"` or `"runicorn_only"`
-
-#### Request Examples
-
-**cURL**:
-```bash
-curl "http://localhost:23300/api/remote/environments?connection_id=conn_1a2b3c4d"
-```
-
-**Python**:
-```python
-import requests
-
-response = requests.get(
-    "http://localhost:23300/api/remote/environments",
-    params={"connection_id": "conn_1a2b3c4d"}
-)
-
-environments = response.json()["environments"]
-```
-
-#### Response
-
-**Success Response** (200 OK):
-```json
-{
-  "success": true,
-  "environments": [
-    {
-      "name": "pytorch-env",
-      "type": "conda",
-      "python_version": "3.9.15",
-      "runicorn_installed": true,
-      "runicorn_version": "0.5.0",
-      "storage_root": "/data/experiments"
-    }
-  ],
-  "total": 1
-}
-```
-
----
-
-### POST /api/remote/environments/detect
-
-Re-detect Python environments on the remote server.
-
-#### Request
-
-**URL**: `POST /api/remote/environments/detect`
+**URL**: `POST /api/remote/disconnect`
 
 **Body Parameters**:
-- `connection_id` (string, required): Connection ID
-- `force_refresh` (boolean, optional): Force cache refresh
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `host` | string | ✅ | Remote host |
+| `port` | integer | ❌ | SSH port (default: 22) |
+| `username` | string | ✅ | SSH username |
 
 #### Request Examples
 
 **cURL**:
 ```bash
-curl -X POST http://localhost:23300/api/remote/environments/detect \
+curl -X POST http://localhost:23300/api/remote/disconnect \
   -H "Content-Type: application/json" \
-  -d '{"connection_id": "conn_1a2b3c4d", "force_refresh": true}'
+  -d '{"host": "gpu-server.com", "port": 22, "username": "mluser"}'
 ```
 
 #### Response
@@ -329,44 +418,136 @@ curl -X POST http://localhost:23300/api/remote/environments/detect \
 **Success Response** (200 OK):
 ```json
 {
-  "success": true,
-  "message": "Environments detected successfully",
-  "environments_found": 3
+  "ok": true,
+  "message": "Connection removed"
 }
 ```
 
 ---
+
+## Known Hosts Management
+
+### POST /api/remote/known-hosts/accept
+
+Accept a host key and write it into Runicorn-managed `known_hosts`.
+
+**URL**: `POST /api/remote/known-hosts/accept`
+
+**Body Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `host` | string | ✅ | Remote host |
+| `port` | integer | ✅ | SSH port |
+| `key_type` | string | ✅ | Public key type (e.g. `ssh-ed25519`) |
+| `public_key` | string | ✅ | OpenSSH public key (`<type> <base64>`) |
+| `fingerprint_sha256` | string | ✅ | Fingerprint returned from 409 payload |
+
+**Response**:
+
+```json
+{"ok": true}
+```
+
+### GET /api/remote/known-hosts/list
+
+List all entries in Runicorn-managed `known_hosts`.
+
+**URL**: `GET /api/remote/known-hosts/list`
+
+**Response**:
+
+```json
+{
+  "entries": [
+    {
+      "host": "gpu-server.com",
+      "port": 22,
+      "known_hosts_host": "gpu-server.com",
+      "key_type": "ssh-ed25519",
+      "key_base64": "AAAA...",
+      "fingerprint_sha256": "SHA256:..."
+    }
+  ]
+}
+```
+
+### POST /api/remote/known-hosts/remove
+
+Remove a specific `known_hosts` entry.
+
+**URL**: `POST /api/remote/known-hosts/remove`
+
+**Body**:
+
+```json
+{"host": "gpu-server.com", "port": 22, "key_type": "ssh-ed25519"}
+```
+
+**Response**:
+
+```json
+{"ok": true, "changed": true}
+```
+
+---
+
+## Environment & Config
+
+### GET /api/remote/conda-envs
+
+List Python environments on the remote server.
+
+**URL**: `GET /api/remote/conda-envs`
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `connection_id` | string | ✅ | Connection ID (`user@host:port`) |
+
+**Response**:
+
+```json
+{
+  "ok": true,
+  "envs": [
+    {
+      "name": "base",
+      "type": "conda",
+      "python_version": "3.11.9",
+      "path": "/opt/conda/bin/python",
+      "is_default": true
+    }
+  ]
+}
+```
 
 ### GET /api/remote/config
 
-Get the Runicorn configuration from the remote server.
-
-#### Request
+Get remote runtime information and suggested defaults.
 
 **URL**: `GET /api/remote/config`
 
 **Query Parameters**:
-- `connection_id` (string, required): Connection ID
-- `env_name` (string, required): Environment name
 
-#### Request Examples
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `connection_id` | string | ✅ | Connection ID (`user@host:port`) |
+| `conda_env` | string | ❌ | Conda env name (default: `system`) |
 
-**cURL**:
-```bash
-curl "http://localhost:23300/api/remote/config?connection_id=conn_1a2b3c4d&env_name=pytorch-env"
-```
+**Response**:
 
-#### Response
-
-**Success Response** (200 OK):
 ```json
 {
-  "success": true,
-  "config": {
-    "user_root_dir": "/data/experiments",
-    "viewer_port": 23300
-  },
-  "runicorn_version": "0.5.0"
+  "ok": true,
+  "condaEnv": "system",
+  "pythonVersion": "Python 3.11.9",
+  "runicornVersion": "0.5.4",
+  "defaultStorageRoot": "/home/user/runicorn_data",
+  "storageRootExists": true,
+  "suggestedRemotePort": 23300,
+  "connectionId": "user@host:22"
 }
 ```
 
@@ -376,253 +557,136 @@ curl "http://localhost:23300/api/remote/config?connection_id=conn_1a2b3c4d&env_n
 
 ### POST /api/remote/viewer/start
 
-Start Remote Viewer on the remote server.
-
-#### Request
+Start Remote Viewer session with SSH tunnel.
 
 **URL**: `POST /api/remote/viewer/start`
 
 **Body Parameters**:
-- `connection_id` (string, required): Connection ID
-- `env_name` (string, required): Python environment name
-- `remote_root` (string, optional): Remote storage root directory
-- `auto_open` (boolean, optional): Auto-open browser (default: true)
 
-#### Request Examples
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `host` | string | ✅ | Remote host |
+| `port` | integer | ❌ | SSH port (default: 22) |
+| `username` | string | ✅ | SSH username |
+| `password` | string \/ null | ❌ | SSH password |
+| `private_key` | string \/ null | ❌ | Private key content |
+| `private_key_path` | string \/ null | ❌ | Private key path |
+| `passphrase` | string \/ null | ❌ | Private key passphrase |
+| `use_agent` | boolean | ❌ | Use SSH agent (default: true) |
+| `remote_root` | string | ✅ | Remote storage root directory |
+| `local_port` | integer \/ null | ❌ | Local forwarded port (auto if null) |
+| `remote_port` | integer \/ null | ❌ | Remote Viewer port (auto if null) |
+| `conda_env` | string \/ null | ❌ | Conda env name (optional) |
 
-**cURL**:
-```bash
-curl -X POST http://localhost:23300/api/remote/viewer/start \
-  -H "Content-Type: application/json" \
-  -d '{
-    "connection_id": "conn_1a2b3c4d",
-    "env_name": "pytorch-env",
-    "auto_open": true
-  }'
-```
+**Response**:
 
-**Python**:
-```python
-import requests
-
-response = requests.post(
-    "http://localhost:23300/api/remote/viewer/start",
-    json={
-        "connection_id": "conn_1a2b3c4d",
-        "env_name": "pytorch-env",
-        "auto_open": True
-    }
-)
-
-viewer_info = response.json()
-print(f"Viewer URL: {viewer_info['viewer']['url']}")
-```
-
-#### Response
-
-**Success Response** (200 OK):
 ```json
 {
-  "success": true,
-  "message": "Remote Viewer started successfully",
-  "viewer": {
+  "ok": true,
+  "session": {
+    "sessionId": "abcd1234",
+    "localPort": 18080,
+    "remotePort": 19090,
+    "remoteRoot": "/data/experiments",
     "status": "running",
-    "local_port": 8081,
-    "url": "http://localhost:8081",
-    "started_at": "2025-10-25T10:40:00Z"
-  }
+    "url": "http://localhost:18080"
+  },
+  "message": "Remote Viewer ready at http://localhost:18080"
 }
 ```
-
----
 
 ### POST /api/remote/viewer/stop
 
-Stop Remote Viewer on the remote server.
-
-#### Request
+Stop a Remote Viewer session.
 
 **URL**: `POST /api/remote/viewer/stop`
 
-**Body Parameters**:
-- `connection_id` (string, required): Connection ID
-- `cleanup` (boolean, optional): Cleanup temporary files (default: true)
+**Body**:
 
-#### Request Examples
-
-**cURL**:
-```bash
-curl -X POST http://localhost:23300/api/remote/viewer/stop \
-  -H "Content-Type: application/json" \
-  -d '{"connection_id": "conn_1a2b3c4d"}'
-```
-
-#### Response
-
-**Success Response** (200 OK):
 ```json
-{
-  "success": true,
-  "message": "Remote Viewer stopped successfully"
-}
+{"session_id": "abcd1234"}
 ```
+
+### GET /api/remote/viewer/sessions
+
+List active Remote Viewer sessions.
+
+**URL**: `GET /api/remote/viewer/sessions`
+
+### GET /api/remote/viewer/status/{session_id}
+
+Get a session status.
+
+**URL**: `GET /api/remote/viewer/status/{session_id}`
 
 ---
 
-### GET /api/remote/viewer/status
+## Remote File System
 
-Get the current status of Remote Viewer.
+### GET /api/remote/fs/list
 
-#### Request
+List a remote directory via SFTP.
 
-**URL**: `GET /api/remote/viewer/status`
+**URL**: `GET /api/remote/fs/list`
 
 **Query Parameters**:
-- `connection_id` (string, required): Connection ID
 
-#### Request Examples
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `connection_id` | string | ✅ | Connection ID (`user@host:port`) |
+| `path` | string | ❌ | Remote path (default: `~`) |
 
-**cURL**:
-```bash
-curl "http://localhost:23300/api/remote/viewer/status?connection_id=conn_1a2b3c4d"
-```
+### GET /api/remote/fs/exists
 
-#### Response
+Check if a remote path exists.
 
-**Success Response** (200 OK):
-```json
-{
-  "success": true,
-  "viewer": {
-    "status": "running",
-    "url": "http://localhost:8081",
-    "uptime_seconds": 3600,
-    "health": "healthy"
-  }
-}
-```
+**URL**: `GET /api/remote/fs/exists`
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `connection_id` | string | ✅ | Connection ID (`user@host:port`) |
+| `path` | string | ✅ | Remote path |
 
 ---
 
-### GET /api/remote/viewer/logs
+## Status
 
-Get log output from Remote Viewer.
+### GET /api/remote/status
 
-#### Request
+Get overall remote status.
 
-**URL**: `GET /api/remote/viewer/logs`
-
-**Query Parameters**:
-- `connection_id` (string, required): Connection ID
-- `lines` (integer, optional): Number of log lines (default: 100)
-
-#### Request Examples
-
-**cURL**:
-```bash
-curl "http://localhost:23300/api/remote/viewer/logs?connection_id=conn_1a2b3c4d&lines=50"
-```
-
-#### Response
-
-**Success Response** (200 OK):
-```json
-{
-  "success": true,
-  "logs": [
-    "[2025-10-25 10:40:00] INFO: Starting Remote Viewer",
-    "[2025-10-25 10:40:01] INFO: Viewer listening on port 45342"
-  ],
-  "total_lines": 2
-}
-```
+**URL**: `GET /api/remote/status`
 
 ---
 
-## Health Checks
+## Saved Connections
 
-### GET /api/remote/health
+### GET /api/remote/connections/saved
 
-Get the health status of a connection.
+Load saved SSH connections.
 
-#### Request
+### POST /api/remote/connections/saved
 
-**URL**: `GET /api/remote/health`
-
-**Query Parameters**:
-- `connection_id` (string, required): Connection ID
-
-#### Response
-
-**Success Response** (200 OK):
-```json
-{
-  "success": true,
-  "health": "healthy",
-  "checks": {
-    "ssh_connection": "pass",
-    "viewer_process": "pass",
-    "tunnel_active": "pass"
-  }
-}
-```
-
----
-
-### GET /api/remote/ping
-
-Test remote connection latency.
-
-#### Request
-
-**URL**: `GET /api/remote/ping`
-
-**Query Parameters**:
-- `connection_id` (string, required): Connection ID
-
-#### Response
-
-**Success Response** (200 OK):
-```json
-{
-  "success": true,
-  "latency_ms": 45,
-  "timestamp": "2025-10-25T11:00:00Z"
-}
-```
+Save SSH connections.
 
 ---
 
 ## Error Handling
 
-All API endpoints return a unified error response format when errors occur.
-
-### Error Response Format
+Runicorn Viewer uses FastAPI error responses:
 
 ```json
-{
-  "success": false,
-  "error": "error_code",
-  "message": "Human-readable error message"
-}
+{"detail": "<message>"}
 ```
 
-### Common Error Codes
-
-| HTTP Status | Error Code | Description |
-|-------------|------------|-------------|
-| 400 | `invalid_parameters` | Invalid request parameters |
-| 401 | `authentication_failed` | SSH authentication failed |
-| 404 | `connection_not_found` | Connection not found |
-| 404 | `environment_not_found` | Environment not found |
-| 408 | `connection_timeout` | Connection timeout |
-| 409 | `viewer_already_running` | Viewer already running |
-| 500 | `internal_error` | Internal server error |
+In some cases (e.g. host key verification), `detail` is a structured object (see HTTP 409 section).
 
 ---
 
 **Author**: Runicorn Development Team  
-**Version**: v0.5.0  
-**Last Updated**: 2025-10-25
+**Version**: v0.6.0  
+**Last Updated**: 2025-01-XX
 
 **[Back to API Index](API_INDEX.md)** | **[View Quick Reference](QUICK_REFERENCE.md)**

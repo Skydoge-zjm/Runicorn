@@ -4,7 +4,7 @@
 
 # Runicorn API Quick Reference
 
-**Version**: v0.5.0  
+**Version**: v0.6.0  
 **Base URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -43,32 +43,6 @@ POST /api/runs/soft-delete
 Body: {"run_ids": ["run1", "run2"]}
 ```
 
-### Artifacts
-
-```bash
-# List artifacts
-GET /api/artifacts?type=model
-
-# Get versions
-GET /api/artifacts/{name}/versions
-
-# Get version details
-GET /api/artifacts/{name}/v{version}
-
-# Get lineage graph
-GET /api/artifacts/{name}/v{version}/lineage
-```
-
-### V2 API (High Performance)
-
-```bash
-# Advanced query
-GET /api/v2/experiments?project=demo&status=finished&page=1&per_page=50
-
-# Fast metrics
-GET /api/v2/experiments/{id}/metrics/fast?downsample=1000
-```
-
 ### Configuration
 
 ```bash
@@ -85,23 +59,68 @@ Body: {"path": "E:\\RunicornData"}
 ```bash
 # Connect to remote server
 POST /api/remote/connect
-Body: {"host": "gpu-server.com", "username": "user", "auth_method": "key", "private_key_path": "~/.ssh/id_rsa"}
+Body: {"host": "gpu-server.com", "port": 22, "username": "user", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true}
 
 # List Python environments
-GET /api/remote/environments?connection_id=conn_1a2b3c4d
+GET /api/remote/conda-envs?connection_id=user@gpu-server.com:22
 
 # Start Remote Viewer
 POST /api/remote/viewer/start
-Body: {"connection_id": "conn_1a2b3c4d", "env_name": "pytorch-env", "auto_open": true}
+Body: {"host": "gpu-server.com", "port": 22, "username": "user", "password": null, "private_key": null, "private_key_path": "~/.ssh/id_rsa", "passphrase": null, "use_agent": true, "remote_root": "/data/experiments", "local_port": null, "remote_port": null, "conda_env": null}
 
 # Get Viewer status
-GET /api/remote/viewer/status?connection_id=conn_1a2b3c4d
+GET /api/remote/viewer/status/{session_id}
 
-# Health check
-GET /api/remote/health?connection_id=conn_1a2b3c4d
+# List SSH sessions
+GET /api/remote/sessions
 
 # Disconnect
-DELETE /api/remote/connections/conn_1a2b3c4d
+POST /api/remote/disconnect
+Body: {"host": "gpu-server.com", "port": 22, "username": "user"}
+```
+
+### Enhanced Logging API 🆕 (v0.6.0)
+
+```python
+import runicorn
+import logging
+
+# Enable console capture
+run = runicorn.init(
+    path="my/experiment",
+    capture_console=True,  # Capture stdout/stderr
+    tqdm_mode="smart"      # smart/all/none
+)
+
+# Python logging integration
+logger = logging.getLogger(__name__)
+logger.addHandler(run.get_logging_handler())
+logger.info("This goes to logs.txt")
+
+# MetricLogger (torchvision compatible)
+from runicorn.log_compat.torchvision import MetricLogger
+metric_logger = MetricLogger()
+metric_logger.update(loss=0.5, accuracy=0.95)  # Auto-logged to Runicorn
+```
+
+### Path Hierarchy API 🆕 (v0.6.0)
+
+```bash
+# List all paths with statistics
+GET /api/paths?include_stats=true
+
+# Get path tree structure
+GET /api/paths/tree
+
+# List runs under a path
+GET /api/paths/runs?path=cv/yolo
+
+# Batch soft delete by path
+POST /api/paths/soft-delete
+Body: {"path": "old_experiments", "exact": false}
+
+# Export runs by path
+GET /api/paths/export?path=cv/yolo&format=zip
 ```
 
 ---
@@ -145,7 +164,6 @@ DELETE /api/remote/connections/conn_1a2b3c4d
 | Endpoint Type | Limit |
 |---------------|-------|
 | Standard | 60/min |
-| V2 Queries | 100/min |
 | SSH Connect | 5/min |
 | Batch Delete | 10/min |
 
@@ -339,7 +357,9 @@ For detailed API documentation, see:
 - **[v2_api.md](./v2_api.md)** - High-performance queries
 - **[metrics_api.md](./metrics_api.md)** - Metrics and logs
 - **[config_api.md](./config_api.md)** - Configuration
-- **[remote_api.md](./remote_api.md)** - Remote Viewer API 🆕
+- **[remote_api.md](./remote_api.md)** - Remote Viewer API
+- **[logging_api.md](./logging_api.md)** - Enhanced Logging API 🆕
+- **[paths_api.md](./paths_api.md)** - Path Hierarchy API 🆕
 
 ---
 
@@ -347,5 +367,5 @@ For detailed API documentation, see:
 
 ---
 
-**Last Updated**: 2025-10-25
+**Last Updated**: 2025-01-XX
 

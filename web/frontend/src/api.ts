@@ -13,6 +13,18 @@ export async function getRunDetail(id: string) {
   return res.json()
 }
 
+export async function getRunAssets(id: string) {
+  const res = await fetch(url(`/runs/${id}/assets`))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export function downloadRunAssetUrl(runId: string, absolutePath: string, filename?: string) {
+  const qs = new URLSearchParams({ path: absolutePath })
+  if (filename) qs.set('filename', filename)
+  return url(`/runs/${runId}/assets/download?${qs.toString()}`)
+}
+
 export async function getMetrics(id: string, downsample?: number) {
   const params = downsample ? `?downsample=${downsample}` : ''
   const res = await fetch(url(`/runs/${id}/metrics${params}`))
@@ -347,8 +359,8 @@ export async function listDeletedRuns() {
   if (!res.ok) throw new Error(await res.text())
   return res.json() as Promise<{ deleted_runs: Array<{
     id: string
-    project: string
-    name: string
+    path: string
+    alias: string | null
     created_time: number
     deleted_at: number
     delete_reason: string
@@ -377,305 +389,147 @@ export async function emptyRecycleBin() {
   return res.json() as Promise<{ permanently_deleted: number; message: string }>
 }
 
-// ========== Artifacts API ==========
-
-export async function listArtifacts(type?: string) {
-  const q = type ? `?type=${type}` : ''
-  const res = await fetch(url(`/artifacts${q}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<any[]>
+// ----- Permanent delete with asset cleanup -----
+export interface AssetRefInfo {
+  asset_id: string
+  asset_type: string
+  name: string | null
+  fingerprint: string | null
+  role: string
+  ref_count: number
+  other_runs?: string[]
 }
 
-export async function listArtifactVersions(name: string, type?: string) {
-  const q = type ? `?type=${type}` : ''
-  const res = await fetch(url(`/artifacts/${name}/versions${q}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<any[]>
+export interface RunAssetRefs {
+  run_id: string
+  orphaned_assets: AssetRefInfo[]
+  shared_assets: AssetRefInfo[]
+  orphaned_count: number
+  shared_count: number
 }
 
-export async function getArtifactDetail(name: string, version: number, type?: string) {
-  const q = type ? `?type=${type}` : ''
-  const res = await fetch(url(`/artifacts/${name}/v${version}${q}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<any>
+export interface PermanentDeleteResult {
+  success: boolean
+  run_id: string
+  run_dir_deleted: boolean
+  orphaned_assets: Array<{
+    asset_id: string
+    asset_type: string
+    name: string | null
+    fingerprint: string | null
+    role: string
+  }>
+  kept_assets: Array<{
+    asset_id: string
+    asset_type: string
+    name: string | null
+    fingerprint: string | null
+    role: string
+  }>
+  blobs_deleted: number
+  manifests_deleted: number
+  bytes_freed: number
+  errors: string[]
 }
 
-export async function getArtifactFiles(name: string, version: number, type?: string) {
-  const q = type ? `?type=${type}` : ''
-  const res = await fetch(url(`/artifacts/${name}/v${version}/files${q}`))
+export async function getRunAssetRefs(runId: string): Promise<RunAssetRefs> {
+  const res = await fetch(url(`/runs/${runId}/assets/refs`))
   if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ files: any[]; references: any[]; total_size: number }>
+  return res.json()
 }
 
-export async function getArtifactLineage(
-  name: string, 
-  version: number, 
-  type?: string,
-  maxDepth: number = 3
-) {
-  const params = new URLSearchParams({ max_depth: maxDepth.toString() })
-  if (type) params.set('type', type)
-  const res = await fetch(url(`/artifacts/${name}/v${version}/lineage?${params.toString()}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ root_artifact: string; nodes: any[]; edges: any[] }>
-}
-
-export async function getArtifactsStats() {
-  const res = await fetch(url('/artifacts/stats'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<any>
-}
-
-export async function deleteArtifactVersion(
-  name: string, 
-  version: number, 
-  type?: string,
-  permanent: boolean = false
-) {
-  const params = new URLSearchParams({ permanent: permanent.toString() })
-  if (type) params.set('type', type)
-  const res = await fetch(url(`/artifacts/${name}/v${version}?${params.toString()}`), {
-    method: 'DELETE'
+export async function permanentDeleteRun(runId: string, dryRun: boolean = false): Promise<PermanentDeleteResult> {
+  const res = await fetch(url(`/runs/${runId}/permanent?dry_run=${dryRun}`), {
+    method: 'DELETE',
   })
   if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ success: boolean; message: string }>
+  return res.json()
 }
 
-// ========== Remote Storage API ==========
-
-// ----- Connection Management -----
-export interface RemoteConfig {
-  host: string
-  port: number
-  username: string
-  password?: string
-  private_key?: string
-  private_key_path?: string
-  passphrase?: string
-  use_agent: boolean
-  remote_root: string
-  auto_sync: boolean
-  sync_interval_seconds: number
-}
-
-export async function remoteConnect(config: RemoteConfig) {
-  const res = await fetch(url('/remote/connect'), {
+export async function permanentDeleteRunsBatch(runIds: string[], dryRun: boolean = false): Promise<{
+  deleted_count: number
+  total_runs: number
+  total_blobs_deleted: number
+  total_bytes_freed: number
+  dry_run: boolean
+  results: Record<string, PermanentDeleteResult>
+}> {
+  const res = await fetch(url('/runs/permanent-delete'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config)
+    body: JSON.stringify({ run_ids: runIds, dry_run: dryRun })
   })
   if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{
-    ok: boolean
-    status: string
-    host: string
-    username: string
-    remote_root: string
-    cache_dir: string
-    structure_verified: Record<string, boolean>
-    auto_sync: boolean
-    sync_interval_seconds: number
-  }>
+  return res.json()
 }
 
-export async function remoteDisconnect() {
-  const res = await fetch(url('/remote/disconnect'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; status: string; message: string }>
-}
-
-export async function getRemoteStatus() {
-  const res = await fetch(url('/remote/status'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{
-    mode: string
-    connected: boolean
-    status: string
-    sync_progress?: {
-      status: string
-      started_at?: number
-      completed_at?: number
-      total_files: number
-      synced_files: number
-      total_bytes: number
-      synced_bytes: number
-      current_file: string
-      progress_percent: number
-      errors: string[]
+// ----- Storage stats -----
+export interface StorageStats {
+  storage_root: string
+  total: {
+    size_bytes: number
+    size_human: string
+  }
+  archive: {
+    size_bytes: number
+    size_human: string
+    blobs: {
+      size_bytes: number
+      size_human: string
+      file_count: number
     }
-    stats?: {
-      connected: boolean
-      last_sync?: number
-      total_artifacts: number
-      cached_artifacts: number
-      cache_size_bytes: number
-      remote_size_bytes: number
-      sync_count: number
-      error_count: number
+    manifests: {
+      size_bytes: number
+      size_human: string
+      file_count: number
+      by_category: Record<string, {
+        size_bytes: number
+        size_human: string
+        file_count: number
+      }>
     }
-  }>
+    outputs: {
+      size_bytes: number
+      size_human: string
+      file_count: number
+    }
+  }
+  runs: {
+    size_bytes: number
+    size_human: string
+    projects_count: number
+    experiments_count: number
+    runs_count: number
+  }
+  index: {
+    size_bytes: number
+    size_human: string
+  }
 }
 
-export async function getStorageMode() {
-  const res = await fetch(url('/remote/mode'))
+export async function getStorageStats(): Promise<StorageStats> {
+  const res = await fetch(url('/storage/stats'))
   if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{
-    mode: string
-    remote_available: boolean
-    remote_connected: boolean
-  }>
+  return res.json()
 }
 
-export async function switchStorageMode(mode: 'local' | 'remote') {
-  const res = await fetch(url('/remote/mode/switch'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode })
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; mode: string; message: string }>
-}
-
-// ----- Metadata Synchronization -----
-export async function remoteSyncMetadata() {
-  const res = await fetch(url('/remote/sync'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; message: string; info: string }>
-}
-
-// ----- File Downloads -----
-export async function remoteDownloadArtifact(
-  name: string,
-  version: number,
-  type?: string,
-  targetDir?: string
-) {
-  const params = new URLSearchParams()
-  if (type) params.set('type', type)
-  
-  const body = targetDir ? JSON.stringify({ target_dir: targetDir }) : null
-  
-  const res = await fetch(url(`/remote/download/${name}/v${version}?${params.toString()}`), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{
-    ok: boolean
-    task_id: string
-    artifact: string
-    message: string
-  }>
-}
-
-export async function getDownloadStatus(taskId: string) {
-  const res = await fetch(url(`/remote/download/${taskId}/status`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{
-    task_id: string
-    artifact_name: string
-    artifact_type: string
-    artifact_version: number
-    target_dir: string
-    total_files: number
-    downloaded_files: number
-    total_bytes: number
-    downloaded_bytes: number
-    progress_percent: number
-    status: string
-    error?: string
-  }>
-}
-
-export async function cancelDownload(taskId: string) {
-  const res = await fetch(url(`/remote/download/${taskId}`), {
-    method: 'DELETE'
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; message: string }>
-}
-
-export async function listDownloads() {
-  const res = await fetch(url('/remote/downloads'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{
-    downloads: Array<any>
-    active_count: number
-    total_count: number
-  }>
-}
-
-// ----- Cache Management -----
-export async function clearRemoteCache() {
-  const res = await fetch(url('/remote/cache/clear'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; message: string }>
-}
-
-export async function cleanupRemoteCache() {
-  const res = await fetch(url('/remote/cache/cleanup'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; files_removed: number; message: string }>
-}
-
-// ----- Remote Operations -----
-export async function setRemoteAlias(
-  name: string,
-  version: number,
-  alias: string,
-  type?: string
-) {
-  const params = new URLSearchParams()
-  if (type) params.set('type', type)
-  
-  const res = await fetch(url(`/remote/artifacts/${name}/v${version}/alias?${params.toString()}`), {
-    method: 'POST',
+// ----- Run update helpers -----
+export async function updateRunAlias(runId: string, alias: string | null): Promise<{ ok: boolean; alias: string | null }> {
+  const res = await fetch(url(`/runs/${runId}`), {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ alias })
   })
   if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; message: string }>
+  return res.json()
 }
 
-export async function addRemoteTags(
-  name: string,
-  version: number,
-  tags: string[],
-  type?: string
-) {
-  const params = new URLSearchParams()
-  if (type) params.set('type', type)
-  
-  const res = await fetch(url(`/remote/artifacts/${name}/v${version}/tags?${params.toString()}`), {
-    method: 'POST',
+export async function updateRunTags(runId: string, tags: string[]): Promise<{ ok: boolean; tags: string[] }> {
+  const res = await fetch(url(`/runs/${runId}`), {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ tags })
   })
   if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; message: string }>
-}
-
-// ----- Diagnostics -----
-export async function verifyRemoteConnection() {
-  const res = await fetch(url('/remote/verify'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{
-    connected: boolean
-    structure?: Record<string, boolean>
-    adapter_status?: string
-    error?: string
-  }>
+  return res.json()
 }

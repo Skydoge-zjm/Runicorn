@@ -4,8 +4,8 @@
 
 # Runicorn 文档
 
-**版本**: v0.5.3  
-**最后更新**: 2025-11-28
+**版本**: v0.6.0  
+**最后更新**: 2026-01-15
 
 ---
 
@@ -55,8 +55,8 @@ docs/
 🤝 **贡献指南** - 查看 [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
 **技术文档**:
-- [reference/zh/ARCHITECTURE.md](reference/zh/ARCHITECTURE.md) - 系统架构
-- [reference/zh/SECURITY_AUDIT_REPORT.md](reference/zh/SECURITY_AUDIT_REPORT.md) - 安全指南
+- [SYSTEM_OVERVIEW.md](architecture/zh/SYSTEM_OVERVIEW.md) - 系统架构
+- [SECURITY.md](../SECURITY.md) - 安全指南
 - [api/zh/](api/zh/) - API 实现参考
 
 ---
@@ -69,21 +69,24 @@ docs/
 |------|------|------|
 | [QUICKSTART.md](guides/zh/QUICKSTART.md) | 5分钟快速开始 | 所有用户 |
 | [REMOTE_VIEWER_GUIDE.md](guides/zh/REMOTE_VIEWER_GUIDE.md) | ⭐ Remote Viewer 使用指南（v0.5.0）| 用户 |
+| [ENHANCED_LOGGING_GUIDE.md](guides/zh/ENHANCED_LOGGING_GUIDE.md) | ⭐ 控制台捕获、日志处理器（v0.6.0）| 用户 |
+| [ASSETS_GUIDE.md](guides/zh/ASSETS_GUIDE.md) | ⭐ SHA256 内容寻址存储（v0.6.0）| 用户 |
 | [ARTIFACTS_GUIDE.md](guides/zh/ARTIFACTS_GUIDE.md) | 模型版本控制指南 | 用户 |
-| [MIGRATION_GUIDE_v0.4_to_v0.5.md](guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md) | ⭐ 迁移指南 0.4→0.5 | 用户 |
+| [MIGRATION_GUIDE_v0.4_to_v0.5.md](guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md) | 迁移指南 0.4→0.5 | 用户 |
 | [DEMO_EXAMPLES_GUIDE.md](guides/zh/DEMO_EXAMPLES_GUIDE.md) | 示例代码讲解 | 用户 |
 
 ### 架构文档
 
 | 文档 | 描述 | 受众 |
 |------|------|------|
-| [SYSTEM_OVERVIEW.md](architecture/zh/SYSTEM_OVERVIEW.md) | 系统概述（含 v0.5.0 架构）| 架构师，贡献者 |
+| [SYSTEM_OVERVIEW.md](architecture/zh/SYSTEM_OVERVIEW.md) | 系统概述（含 v0.6.0 模块）| 架构师，贡献者 |
 | [REMOTE_VIEWER_ARCHITECTURE.md](architecture/zh/REMOTE_VIEWER_ARCHITECTURE.md) | ⭐ Remote Viewer 架构（v0.5.0）| 架构师，开发者 |
-| [COMPONENT_ARCHITECTURE.md](architecture/zh/COMPONENT_ARCHITECTURE.md) | 组件架构 | 开发者 |
+| [SSH_BACKEND_ARCHITECTURE.md](architecture/zh/SSH_BACKEND_ARCHITECTURE.md) | ⭐ SSH 后端多回退架构（v0.6.0）| 架构师，开发者 |
+| [COMPONENT_ARCHITECTURE.md](architecture/zh/COMPONENT_ARCHITECTURE.md) | 组件架构（含 PathTreePanel, CompareChartsView）| 开发者 |
 | [STORAGE_DESIGN.md](architecture/zh/STORAGE_DESIGN.md) | 存储设计 | 开发者 |
 | [DATA_FLOW.md](architecture/zh/DATA_FLOW.md) | 数据流 | 开发者 |
 | [API_DESIGN.md](architecture/zh/API_DESIGN.md) | API 设计 | 后端开发者 |
-| [FRONTEND_ARCHITECTURE.md](architecture/zh/FRONTEND_ARCHITECTURE.md) | 前端架构 | 前端开发者 |
+| [FRONTEND_ARCHITECTURE.md](architecture/zh/FRONTEND_ARCHITECTURE.md) | 前端架构（含新组件）| 前端开发者 |
 | [DEPLOYMENT.md](architecture/zh/DEPLOYMENT.md) | 部署架构 | 运维 |
 | [DESIGN_DECISIONS.md](architecture/zh/DESIGN_DECISIONS.md) | 设计决策 | 架构师 |
 
@@ -91,8 +94,8 @@ docs/
 
 | 文档 | 描述 | 受众 |
 |------|------|------|
-| [CONFIGURATION.md](reference/zh/CONFIGURATION.md) | ⭐ 配置参考（v0.5.0）| 所有用户 |
-| [CLI_REFERENCE.md](reference/zh/CLI_REFERENCE.md) | ⭐ CLI 命令参考（v0.5.0）| 所有用户 |
+| [CONFIGURATION.md](reference/zh/CONFIGURATION.md) | ⭐ 配置参考（v0.6.0）| 所有用户 |
+| [CLI_REFERENCE.md](reference/zh/CLI_REFERENCE.md) | ⭐ CLI 命令参考（v0.6.0）| 所有用户 |
 | [FAQ.md](reference/zh/FAQ.md) | ⭐ 常见问题（v0.5.0）| 所有用户 |
 | [RATE_LIMIT_CONFIGURATION.md](reference/zh/RATE_LIMIT_CONFIGURATION.md) | 速率限制配置 | 开发者 |
 
@@ -100,7 +103,9 @@ docs/
 
 | 文档 | 描述 |
 |------|------|
-| [RELEASE_NOTES_v0.5.0.md](releases/zh/RELEASE_NOTES_v0.5.0.md) | ⭐ v0.5.0 发布说明（Remote Viewer）|
+| [RELEASE_NOTES_v0.6.0.md](releases/zh/RELEASE_NOTES_v0.6.0.md) | ⭐ v0.6.0 发布说明（Assets、增强日志、路径层级、SSH 后端）|
+| [RELEASE_NOTES_v0.5.0.md](releases/zh/RELEASE_NOTES_v0.5.0.md) | v0.5.0 发布说明（Remote Viewer）|
+| [RELEASE_NOTES_v0.4.1.md](releases/zh/RELEASE_NOTES_v0.4.1.md) | v0.4.1 发布说明 |
 | [RELEASE_NOTES_v0.4.0.md](releases/zh/RELEASE_NOTES_v0.4.0.md) | v0.4.0 发布说明 |
 
 ### API 文档
@@ -119,11 +124,11 @@ docs/
 
 | 类别 | 位置 | 文件数 | 用途 |
 |------|------|--------|------|
-| **用户指南** | guides/ | 6 | 快速开始, Remote Viewer, 迁移指南 |
-| **技术参考** | reference/ | 6 | 配置, CLI, FAQ, 速率限制 |
-| **架构文档** | architecture/ | 9 | 系统设计, Remote Viewer 架构 |
-| **发布信息** | releases/ | 3+ | 版本历史, 变更日志 |
-| **API 文档** | api/ | 13 | REST API 参考（含 Remote API）|
+| **用户指南** | guides/ | 7 | 快速开始, Remote Viewer, Assets, 增强日志, 迁移指南 |
+| **技术参考** | reference/ | 4 | 配置, CLI, FAQ, 速率限制 |
+| **架构文档** | architecture/ | 10 | 系统设计, Remote Viewer, SSH 后端架构 |
+| **发布信息** | releases/ | 4 | 版本历史, 变更日志 |
+| **API 文档** | api/ | 15 | REST API 参考（含 Remote, Paths, Logging API）|
 | **用户指南网站** | user-guide/ | 7+ | MkDocs 网站源文件 |
 | **资源** | assets/ | 3+ | 图片和截图 |
 
@@ -145,9 +150,9 @@ docs/
 
 ### 我是贡献者
 
-1. **架构**: [reference/zh/ARCHITECTURE.md](reference/zh/ARCHITECTURE.md)
+1. **架构**: [SYSTEM_OVERVIEW.md](architecture/zh/SYSTEM_OVERVIEW.md)
 2. **贡献指南**: [../CONTRIBUTING.md](../CONTRIBUTING.md)
-3. **安全**: [reference/zh/SECURITY_AUDIT_REPORT.md](reference/zh/SECURITY_AUDIT_REPORT.md)
+3. **安全**: [SECURITY.md](../SECURITY.md)
 
 ---
 
@@ -169,7 +174,6 @@ docs/
 
 版本历史请查看:
 - **主变更日志**: `../CHANGELOG.md` - 面向用户的变更
-- **开发归档**: [releases/zh/CHANGELOG_ARCHIVE.md](releases/zh/CHANGELOG_ARCHIVE.md) - 技术细节
 
 ---
 
@@ -177,8 +181,8 @@ docs/
 
 - 📖 搜索文档
 - ❓ 查看 [user-guide/docs/reference/faq.md](user-guide/docs/reference/faq.md)
-- 🐛 [报告问题](https://github.com/yourusername/runicorn/issues)
-- 💬 [提问](https://github.com/yourusername/runicorn/discussions)
+- 🐛 [报告问题](https://github.com/Skydoge-zjm/runicorn/issues)
+- 💬 [提问](https://github.com/Skydoge-zjm/runicorn/discussions)
 
 ---
 
@@ -186,16 +190,16 @@ docs/
 
 | 类别 | 完成度 | 状态 |
 |------|--------|------|
-| API 文档（含 Remote）| 100% | ✅ 完成 |
-| 架构文档（含 Remote）| 100% | ✅ 完成 |
+| API 文档（含 Remote、Paths、Logging）| 100% | ✅ 完成 |
+| 架构文档（含 SSH 后端）| 100% | ✅ 完成 |
 | 参考文档（配置/CLI/FAQ）| 100% | ✅ 完成 |
-| 用户指南（含迁移）| 90% | 🔄 近完成 |
-| 用户指南网站 | 40% | 🔄 进行中 |
-| 教程 | 30% | 🔄 增长中 |
+| 用户指南（含增强日志、Assets）| 95% | ✅ 近完成 |
+| 用户指南网站 | 90% | 🔄 进行中 |
+| 教程 | 40% | 🔄 增长中 |
 
 ---
 
-**最后更新**: 2025-10-25  
+**最后更新**: 2026-01-15  
 **维护者**: Runicorn 文档团队  
-**v0.5.0 亮点**: Remote Viewer（VSCode Remote 风格）、完整的配置/CLI/FAQ 参考
+**v0.6.0 亮点**: 新 Assets 系统（SHA256 存储）、增强日志（控制台捕获、MetricLogger）、路径层级导航、SSH 后端架构（OpenSSH + AsyncSSH + Paramiko 回退）
 

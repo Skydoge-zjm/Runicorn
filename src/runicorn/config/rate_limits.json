@@ -67,12 +67,6 @@
       "burst_size": null,
       "description": "Sync operations - moderate restriction"
     },
-    "/api/artifacts": {
-      "max_requests": 10000,
-      "window_seconds": 60,
-      "burst_size": null,
-      "description": "Artifact listing and queries"
-    },
     "/api/runs": {
       "max_requests": 10000,
       "window_seconds": 60,

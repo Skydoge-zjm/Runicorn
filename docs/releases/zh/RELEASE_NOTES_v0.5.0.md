@@ -331,8 +331,8 @@ runicorn viewer
 
 ### 报告问题
 
-- **GitHub Issues**: [提交 Bug 报告](https://github.com/yourusername/runicorn/issues)
-- **功能请求**: [提交功能建议](https://github.com/yourusername/runicorn/discussions)
+- **GitHub Issues**: [提交 Bug 报告](https://github.com/Skydoge-zjm/runicorn/issues)
+- **功能请求**: [提交功能建议](https://github.com/Skydoge-zjm/runicorn/discussions)
 
 ---
 
@@ -364,8 +364,8 @@ pip install -U runicorn
 
 ### GitHub Releases
 
-- [v0.5.0 源码](https://github.com/yourusername/runicorn/archive/v0.5.0.tar.gz)
-- [Windows 桌面应用](https://github.com/yourusername/runicorn/releases/v0.5.0)
+- [v0.5.0 源码](https://github.com/Skydoge-zjm/runicorn/archive/v0.5.0.tar.gz)
+- [Windows 桌面应用](https://github.com/Skydoge-zjm/runicorn/releases/v0.5.0)
 
 ---
 

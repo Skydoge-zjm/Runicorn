@@ -6,15 +6,16 @@ Manages remote viewer sessions with SSH tunnel.
 from __future__ import annotations
 
 import logging
-import re
 import threading
 import time
 import uuid
 from typing import Optional, Dict
 
-from ..connection import SSHConnection, SSHConfig
+from ..connection import SSHConnection
+from ..host_key import HostKeyConfirmationRequiredError
+from ..ssh_backend import SshBackend, AutoBackend
 from .session import RemoteViewerSession
-from .tunnel import SSHTunnel, find_available_port
+from .tunnel import find_available_port
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,12 @@ class RemoteViewerManager:
     - Session lifecycle management
     """
     
-    def __init__(self):
+    def __init__(self, backend: Optional[SshBackend] = None):
         self._sessions: Dict[str, RemoteViewerSession] = {}
         self._lock = threading.Lock()
+        # Prefer OpenSSH for port forwarding when possible.
+        # Fallback logic is handled inside AutoBackend.
+        self._backend = backend or AutoBackend()
     
     def start_remote_viewer(
         self,
@@ -132,24 +136,57 @@ class RemoteViewerManager:
             )
             
             # Start tunnel in separate thread
-            tunnel = SSHTunnel(
-                ssh_transport=connection._client.get_transport(),
+            tunnel = self._backend.create_tunnel(
+                connection=connection,
                 local_port=local_port,
                 remote_host="127.0.0.1",
                 remote_port=remote_port,
                 stop_event=session._stop_event,
             )
-            
+
+            # Capture tunnel errors (especially HostKeyConfirmationRequiredError) and
+            # re-raise them in the main thread, so that API layer can return HTTP 409.
+            tunnel_error: Dict[str, BaseException] = {}
+
+            def _tunnel_runner() -> None:
+                try:
+                    tunnel.start()
+                except BaseException as e:
+                    tunnel_error["error"] = e
+                    # Ensure stop signal is set so that the session can be cleaned up.
+                    try:
+                        session._stop_event.set()
+                    except Exception:
+                        pass
+
             tunnel_thread = threading.Thread(
-                target=tunnel.start,
+                target=_tunnel_runner,
                 daemon=True,
-                name=f"tunnel-{session_id}"
+                name=f"tunnel-{session_id}",
             )
             tunnel_thread.start()
             session.tunnel_thread = tunnel_thread
             
-            # Wait a bit and verify tunnel
-            time.sleep(1)
+            # Verify tunnel startup.
+            # We poll for a short time so that early failures (host key, bind errors, etc.)
+            # can be reported back to the API caller.
+            deadline_s = 2.0
+            t0 = time.time()
+            while time.time() - t0 < deadline_s:
+                err = tunnel_error.get("error")
+                if err is not None:
+                    break
+                if not tunnel_thread.is_alive():
+                    break
+                time.sleep(0.05)
+
+            err = tunnel_error.get("error")
+            if err is not None:
+                # Raise host key confirmation errors to the API layer.
+                if isinstance(err, HostKeyConfirmationRequiredError):
+                    raise err
+                raise RuntimeError(f"SSH tunnel failed: {str(err)}") from err
+
             if not tunnel_thread.is_alive():
                 raise RuntimeError("SSH tunnel failed to start")
             
@@ -230,6 +267,12 @@ class RemoteViewerManager:
                 if not session.is_active
             ]
             for sid in dead_sessions:
+                # Stop the session before removing it to avoid leaking tunnel threads
+                # (OpenSSH tunnel is a subprocess managed by the tunnel thread).
+                try:
+                    self._sessions[sid].stop()
+                except Exception:
+                    pass
                 del self._sessions[sid]
                 count += 1
         

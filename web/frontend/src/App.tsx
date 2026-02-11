@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
+import enUS from 'antd/locale/en_US'
+import zhCN from 'antd/locale/zh_CN'
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
-import { SettingOutlined, CloudSyncOutlined, ExperimentOutlined, DatabaseOutlined, CloudServerOutlined, DashboardOutlined } from '@ant-design/icons'
+import { SettingOutlined, ExperimentOutlined, CloudServerOutlined, DashboardOutlined, AppstoreOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
 import ExperimentPage from './pages/ExperimentPage'
-import ArtifactsPage from './pages/ArtifactsPage'
-import ArtifactDetailPage from './pages/ArtifactDetailPage'
+import AssetsPage from './pages/AssetsPage'
+import AssetDetailPage from './pages/AssetDetailPage'
 import RemoteViewerPage from './pages/RemoteViewerPage'
 import PerformanceMonitorPage from './pages/PerformanceMonitorPage'
 import { PageTransition } from './components/animations/PageTransition'
@@ -21,7 +23,7 @@ export default function App() {
   const getSelectedKey = () => {
     if (location.pathname.startsWith('/performance')) return 'performance'
     if (location.pathname.startsWith('/remote')) return 'remote'
-    if (location.pathname.startsWith('/artifacts')) return 'artifacts'
+    if (location.pathname.startsWith('/assets')) return 'assets'
     if (location.pathname.startsWith('/runs/')) return 'experiments'  // Detail page also under experiments
     return 'experiments'  // Default to experiments
   }
@@ -185,23 +187,29 @@ export default function App() {
   }, [settings.autoRefresh, settings.refreshInterval])
 
   return (
-    <ConfigProvider theme={{ 
-      algorithm: algorithms as any, 
-      token: {
-        ...tokenOverrides,
-        motion: settings.animationsEnabled
-      }
-    }}>
+    <ConfigProvider
+      locale={i18n.language?.startsWith('zh') ? zhCN : enUS}
+      theme={{
+        algorithm: algorithms as any,
+        token: {
+          ...tokenOverrides,
+          motion: settings.animationsEnabled,
+        },
+      }}
+    >
       <SettingsProvider value={{ settings, setSettings }}>
         <div style={bgStyle} />
         <Layout style={{ 
-          minHeight: '100vh', 
+          height: '100vh',
+          overflow: 'hidden',  // Prevent page-level scrolling
           position: 'relative', 
           zIndex: 1, 
           background: 'transparent',
-          transition: settings.animationsEnabled ? 'all 0.3s ease' : 'none'
+          transition: settings.animationsEnabled ? 'all 0.3s ease' : 'none',
+          display: 'flex',
+          flexDirection: 'column',
         }}>
-          <Header style={{ display: 'flex', alignItems: 'center' }}>
+          <Header style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
             <div style={{ color: '#fff', fontWeight: 700, marginRight: 24 }}>{t('app.title')}</div>
             <Menu
               theme="dark"
@@ -209,7 +217,7 @@ export default function App() {
               selectedKeys={selected}
               items={[
                 { key: 'experiments', icon: <ExperimentOutlined />, label: <Link to="/">{t('menu.experiments')}</Link> },
-                { key: 'artifacts', icon: <DatabaseOutlined />, label: <Link to="/artifacts">{t('menu.artifacts')}</Link> },
+                { key: 'assets', icon: <AppstoreOutlined />, label: <Link to="/assets">{t('menu.assets')}</Link> },
                 { key: 'performance', icon: <DashboardOutlined />, label: <Link to="/performance">{t('menu.performance')}</Link> },
                 { key: 'remote', icon: <CloudServerOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
               ]}
@@ -229,21 +237,35 @@ export default function App() {
               <Button type="link" icon={<SettingOutlined style={{ color: '#fff' }} />} onClick={() => setSettingsOpen(true)} />
             </div>
           </Header>
-          <Content style={{ padding: '24px' }}>
-            <div style={{ ...wrapperStyle, padding: 24, minHeight: 360 }}>
+          <Content style={{ 
+            flex: 1,
+            padding: '16px 24px',
+            overflow: 'hidden',  // Content area doesn't scroll
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,  // Important for flex child
+          }}>
+            <div style={{ 
+              ...wrapperStyle, 
+              padding: 0,
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              minHeight: 0,
+            }}>
               <PageTransition>
                 <Routes>
                   <Route path="/" element={<ExperimentPage />} />
                   <Route path="/runs/:id" element={<RunDetailPage />} />
-                  <Route path="/artifacts" element={<ArtifactsPage />} />
-                  <Route path="/artifacts/:name" element={<ArtifactDetailPage />} />
+                  <Route path="/assets" element={<AssetsPage />} />
+                  <Route path="/assets/:id" element={<AssetDetailPage />} />
                   <Route path="/performance" element={<PerformanceMonitorPage />} />
                   <Route path="/remote" element={<RemoteViewerPage />} />
                 </Routes>
               </PageTransition>
             </div>
           </Content>
-          <Footer style={{ textAlign: 'center' }}> {new Date().getFullYear()} {t('app.title')}</Footer>
         </Layout>
         <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} value={settings} onChange={setSettings} />
       </SettingsProvider>

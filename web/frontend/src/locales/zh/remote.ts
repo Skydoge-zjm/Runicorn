@@ -27,6 +27,8 @@ export default {
   'remote.form.savePassword': '同时保存密码（不安全，请谨慎使用）',
   'remote.form.saveName': '配置名称',
   'remote.form.saveNamePlaceholder': 'GPU 服务器 - 实验室',
+  'remote.profile.name': '连接名称',
+  'remote.profile.namePlaceholder': '例如：实验环境A',
   'remote.form.browse': '浏览...',
   'remote.form.connect': '连接并启动 Viewer',
   'remote.form.testConnection': '测试连接',
@@ -60,12 +62,19 @@ export default {
   
   // 保存的连接
   'remote.saved.title': '已保存的连接',
+  'remote.saved.addServer': '新增服务器',
+  'remote.saved.noServers': '暂无保存的服务器',
+  'remote.saved.addConnection': '新建连接',
+  'remote.saved.noConnections': '暂无连接配置',
   'remote.saved.empty': '暂无保存的连接配置',
   'remote.saved.emptyHint': '连接成功后勾选"保存配置"即可保存',
   'remote.saved.quickStart': '快速启动',
   'remote.saved.connectOnly': '仅连接',
   'remote.saved.edit': '编辑',
   'remote.saved.delete': '删除',
+
+  // 安全
+  'remote.security.advanced': '高级/安全',
   
   // 消息提示
   'remote.message.connectSuccess': 'SSH 连接成功',
@@ -78,7 +87,9 @@ export default {
   'remote.message.disconnectFailed': '断开连接失败',
   'remote.message.testSuccess': '连接测试成功',
   'remote.message.testFailed': '连接测试失败',
+  'remote.message.quickStartStarting': '正在连接并启动远程服务，请稍候...',
   'remote.message.configSaved': '配置已保存',
+  'remote.message.saveFailed': '保存失败',
   'remote.message.configDeleted': '配置已删除',
   'remote.message.confirmDelete': '确定要删除此连接配置吗？',
   'remote.message.confirmDisconnect': '确定要断开连接吗？这将停止远程 Viewer。',
@@ -94,6 +105,31 @@ export default {
   'remote.error.connectionTimeout': '连接超时',
   'remote.error.invalidConfig': '配置无效',
   'remote.error.unknown': '未知错误',
+
+  // Host Key Confirmation
+  'remote.hostKey.title': '主机密钥确认',
+  'remote.hostKey.reasonUnknown': '该主机的密钥尚未被信任，是否信任并继续？',
+  'remote.hostKey.reasonChanged': '警告：该主机的密钥已发生变化，可能存在安全风险。',
+  'remote.hostKey.target': '目标',
+  'remote.hostKey.keyType': '密钥类型',
+  'remote.hostKey.fingerprint': '指纹 (SHA256)',
+  'remote.hostKey.publicKey': '公钥',
+  'remote.hostKey.expectedFingerprint': '期望指纹 (SHA256)',
+  'remote.hostKey.expectedPublicKey': '期望公钥',
+  'remote.hostKey.trustAndContinue': '信任并继续',
+  'remote.hostKey.cancel': '取消',
+  'remote.hostKey.expand': '展开',
+  
+  // Known Hosts Management
+  'remote.knownHosts.title': '已知主机',
+  'remote.knownHosts.refresh': '刷新',
+  'remote.knownHosts.empty': '暂无已知主机',
+  'remote.knownHosts.actions': '操作',
+  'remote.knownHosts.remove': '移除',
+  'remote.knownHosts.removeConfirm': '确认移除此主机密钥？',
+  'remote.knownHosts.removeSuccess': '已移除主机密钥',
+  'remote.knownHosts.removeFailed': '移除主机密钥失败',
+  'remote.knownHosts.loadFailed': '加载已知主机失败',
   
   // 使用帮助
   'remote.help.title': '使用帮助',

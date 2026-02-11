@@ -333,12 +333,7 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
     """
     await websocket.accept()
     
-    # Get storage root based on storage mode
-    storage_mode = getattr(websocket.app.state, 'storage_mode', 'local')
-    if storage_mode == "remote" and hasattr(websocket.app.state, 'remote_adapter'):
-        storage_root = websocket.app.state.remote_adapter.cache.metadata_dir / "experiments"
-    else:
-        storage_root = websocket.app.state.storage_root
+    storage_root = websocket.app.state.storage_root
     
     entry = find_run_dir_by_id(storage_root, run_id)
     

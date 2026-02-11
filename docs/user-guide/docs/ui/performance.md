@@ -171,7 +171,7 @@ run.log({"loss": loss}, step=step)  # 100x more data
 
 ### For Many Experiments (1000+)
 
-1. **Use projects** — Organize experiments into projects for filtering
+1. **Use path hierarchy** — Organize experiments with descriptive paths for filtering
 2. **Archive old experiments** — Export and remove completed experiments
 3. **Use V2 API** — Frontend automatically uses faster queries
 
@@ -258,7 +258,7 @@ MetricChart Component
 
 ---
 
-<div align="center">
-  <p><strong>Need more speed?</strong></p>
-  <p>Check the <a href="../reference/faq.md">FAQ</a> or <a href="https://github.com/Skydoge-zjm/Runicorn/issues">report an issue</a>.</p>
+<div class="rn-page-nav">
+  <a href="../reference/faq.md">FAQ →</a> &middot;
+  <a href="https://github.com/Skydoge-zjm/Runicorn/issues">Report an Issue →</a>
 </div>
