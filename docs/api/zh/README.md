@@ -4,7 +4,7 @@
 
 # Runicorn API 文档
 
-**版本**: v0.5.4  
+**版本**: v0.6.0  
 **基础 URL**: `http://127.0.0.1:23300/api`  
 **协议**: HTTP/1.1  
 **格式**: JSON  
@@ -43,7 +43,7 @@ GET /api/health
 响应:
 {
   "status": "ok",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "timestamp": 1704067200.0
 }
 ```
@@ -100,8 +100,11 @@ HTTP REST API 端点，用于 Web UI 和第三方集成。
 | **Config API** | 配置和偏好设置管理 | [config_api.md](./config_api.md) | 6个端点 |
 | **Remote Viewer API** 🆕 | VSCode Remote 风格的远程访问 | [remote_api.md](./remote_api.md) | 12个端点 |
 | **Manifest API** | 高性能 Manifest-based 同步 🚀 | [manifest_api.md](./manifest_api.md) | CLI + SDK |
+| **Logging API** 🆕 | 增强日志与控制台捕获 (v0.6.0) | [logging_api.md](./logging_api.md) | SDK |
+| **Paths API** 🆕 | 路径层级导航 (v0.6.0) | [paths_api.md](./paths_api.md) | 5个端点 |
+| **SSH API** | SSH 连接管理（已弃用）| [ssh_api.md](./ssh_api.md) | 12个端点 |
 
-> ⚠️ **弃用**: 旧的 SSH 文件同步 API (`/api/unified/*`) 已被 Remote Viewer API 替代。查看 [迁移指南](./MIGRATION_GUIDE_v0.4_to_v0.5.md)
+> ⚠️ **弃用**: 旧的 SSH 文件同步 API (`/api/unified/*`) 已被 Remote Viewer API 替代。查看 [迁移指南](../../guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md)
 
 **快速参考**: 查看 [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) 获取常用操作
 
@@ -210,7 +213,7 @@ def api_call_with_retry(url):
 
 ### 迁移指南
 
-查看 [V1_TO_V2_MIGRATION.md](./V1_TO_V2_MIGRATION.md) 获取详细迁移说明。
+V1 到 V2 迁移：使用 `/api/v2/*` 端点替代 `/api/*` 以获得更好性能。
 
 ---
 
@@ -270,7 +273,7 @@ ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 
 ---
 
-**最后更新**: 2025-10-25  
+**最后更新**: 2026-01-15  
 **维护者**: Runicorn 开发团队
 
 

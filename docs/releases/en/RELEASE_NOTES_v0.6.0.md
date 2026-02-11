@@ -462,8 +462,8 @@ pip install -U "runicorn[images]"
 
 ### GitHub Releases
 
-- [v0.6.0 Source Code](https://github.com/yourusername/runicorn/archive/v0.6.0.tar.gz)
-- [Windows Desktop App](https://github.com/yourusername/runicorn/releases/v0.6.0)
+- [v0.6.0 Source Code](https://github.com/Skydoge-zjm/runicorn/archive/v0.6.0.tar.gz)
+- [Windows Desktop App](https://github.com/Skydoge-zjm/runicorn/releases/v0.6.0)
 
 ---
 
