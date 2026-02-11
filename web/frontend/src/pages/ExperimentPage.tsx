@@ -1,26 +1,35 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Table, Button, Card, Space, Input, Select, Tag, Statistic, Row, Col, message, Modal, Tooltip, Empty, Dropdown, Badge, Checkbox, notification } from 'antd'
-import { SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, LineChartOutlined, EyeOutlined, DownOutlined, FileExcelOutlined, FileTextOutlined, FilterOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, FilePdfOutlined, HeartOutlined, UndoOutlined, ExperimentOutlined, ThunderboltOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { Table, Button, Card, Space, Input, Select, Tag, Statistic, message, Modal, Tooltip, Empty, Dropdown, Badge, Checkbox, notification, theme } from 'antd'
+import { SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, LineChartOutlined, EyeOutlined, DownOutlined, FileExcelOutlined, FileTextOutlined, FilterOutlined, SyncOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, FilePdfOutlined, HeartOutlined, UndoOutlined, ExperimentOutlined, ThunderboltOutlined, MenuFoldOutlined, MenuUnfoldOutlined, CopyOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
+import { Resizable, ResizeCallbackData as ResizableCallbackData } from 'react-resizable'
 import { useSettings } from '../contexts/SettingsContext'
-import { checkAllStatus, softDeleteRuns } from '../api'
+import { checkAllStatus, softDeleteRuns, getStepMetrics, getRunDetail, updateRunAlias, updateRunTags } from '../api'
 import RecycleBin from '../components/RecycleBin'
+import PathTreePanel from '../components/PathTreePanel'
+import AddTagModal from '../components/AddTagModal'
+import CompareRunsPanel, { CompareRunInfo } from '../components/CompareRunsPanel'
+import CompareChartsView from '../components/CompareChartsView'
 import { ExperimentListSkeleton } from '../components/LoadingSkeleton'
 import ResizableTitle from '../components/ResizableTitle'
 import { useColumnWidths } from '../hooks/useColumnWidths'
-import FancyStatCard from '../components/fancy/FancyStatCard'
 import FancyEmpty from '../components/fancy/FancyEmpty'
 import AnimatedStatusBadge from '../components/fancy/AnimatedStatusBadge'
 import { useSuccessConfetti } from '../hooks/useSuccessConfetti'
-import { StaggerContainer, StaggerItem } from '../components/animations/PageTransition'
-import { experimentsPageConfig } from '../config/animation_config'
 import logger from '../utils/logger'
 import type { ColumnsType, TableProps } from 'antd/es/table'
 import type { SorterResult } from 'antd/es/table/interface'
+import type { MetricsData } from '../components/MetricChart'
 import '../styles/resizable-table.css'
 import '../styles/enhanced-table.css'
+
+// ECharts default color palette
+const ECHARTS_COLORS = [
+  '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+  '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
+]
 
 // Define ResizeCallbackData type locally
 interface ResizeCallbackData {
@@ -29,16 +38,16 @@ interface ResizeCallbackData {
 
 interface RunData {
   run_id: string
-  project: string
-  name: string
+  path: string
+  alias: string | null
+  tags: string[]
   status: string
   created: string
   summary: any
   pid?: number
   best_metric_value?: number
   best_metric_name?: string
-  artifacts_created_count?: number
-  artifacts_used_count?: number
+  assets_count?: number
 }
 
 interface FilterState {
@@ -60,7 +69,9 @@ const csvEscape = (value: any): string => {
 const ExperimentPage: React.FC = () => {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const { settings, setSettings } = useSettings()
+  const { token } = theme.useToken()
   const [runs, setRuns] = useState<RunData[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
@@ -69,7 +80,8 @@ const ExperimentPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [projects, setProjects] = useState<string[]>([])
   const [stats, setStats] = useState({ total: 0, running: 0, finished: 0, failed: 0 })
-  const [refreshInterval, setRefreshInterval] = useState<number | null>(null)
+  // Use ref for interval to avoid stale closure issues in cleanup
+  const refreshIntervalRef = useRef<number | null>(null)
   
   // Use global settings for autoRefresh
   const autoRefresh = settings.autoRefresh
@@ -78,13 +90,14 @@ const ExperimentPage: React.FC = () => {
   }
   // Column width management
   const defaultColumnWidths = {
-    project: 120,
-    name: 100,
-    run_id: 280,          // 增加宽度以显示完整ID (20251009_082632_d5a4c7)
+    path: 180,
+    alias: 120,
+    tags: 180,
+    run_id: 140,          // Compact: only show hash suffix with copy button
     status: 100,
-    created: 210,         // 增加宽度以显示完整日期时间 (2025/10/09 08:26:32)
+    created: 210,         // Wider to show full datetime (2025/10/09 08:26:32)
     best_metric: 200,
-    artifacts_created: 120,
+    assets: 120,
     actions: 120,
   }
   
@@ -106,6 +119,47 @@ const ExperimentPage: React.FC = () => {
   )
   
   const [recycleBinOpen, setRecycleBinOpen] = useState(false)
+  
+  // Inline editing state for alias
+  const [editingRunId, setEditingRunId] = useState<string | null>(null)
+  const [editingAlias, setEditingAlias] = useState<string>('')
+  const [aliasUpdateLoading, setAliasUpdateLoading] = useState(false)
+  
+  // Path tree panel state
+  const [treePanelCollapsed, setTreePanelCollapsed] = useState(() => {
+    const saved = localStorage.getItem('tree_panel_collapsed')
+    return saved === 'true'
+  })
+  const [treePanelWidth, setTreePanelWidth] = useState(() => {
+    const saved = localStorage.getItem('tree_panel_width')
+    return saved ? parseInt(saved, 10) : 240
+  })
+  const [isResizing, setIsResizing] = useState(false)
+  const [selectedTreePath, setSelectedTreePath] = useState<string | null>(null)
+  
+  // Tag editing state
+  const [tagEditingRunId, setTagEditingRunId] = useState<string | null>(null)
+  const [tagModalOpen, setTagModalOpen] = useState(false)
+  const [tagModalRunId, setTagModalRunId] = useState<string | null>(null)
+  const [tagModalCurrentTags, setTagModalCurrentTags] = useState<string[]>([])
+  
+  // Compare mode state
+  const [compareMode, setCompareMode] = useState(false)
+  const [compareRunInfos, setCompareRunInfos] = useState<CompareRunInfo[]>([])
+  const [compareMetrics, setCompareMetrics] = useState<Map<string, MetricsData>>(new Map())
+  const [compareRunLabels, setCompareRunLabels] = useState<Map<string, string>>(new Map())
+  const [compareLoading, setCompareLoading] = useState(false)
+  const [visibleRunIds, setVisibleRunIds] = useState<Set<string>>(new Set())
+  const [addRunsModalOpen, setAddRunsModalOpen] = useState(false)
+  
+  // Persist tree panel collapsed state and width
+  useEffect(() => {
+    localStorage.setItem('tree_panel_collapsed', String(treePanelCollapsed))
+  }, [treePanelCollapsed])
+  
+  useEffect(() => {
+    localStorage.setItem('tree_panel_width', String(treePanelWidth))
+  }, [treePanelWidth])
   
   // Success confetti effect
   const { trigger: triggerConfetti, ConfettiComponent } = useSuccessConfetti()
@@ -133,6 +187,104 @@ const ExperimentPage: React.FC = () => {
     savePreferences()
   }, [savePreferences])
 
+  // Handle alias inline editing
+  const handleAliasEdit = useCallback((runId: string, currentAlias: string | null) => {
+    setEditingRunId(runId)
+    setEditingAlias(currentAlias || '')
+  }, [])
+  
+  const handleAliasSave = useCallback(async (runId: string) => {
+    const newAlias = editingAlias.trim() || null
+    setAliasUpdateLoading(true)
+    try {
+      await updateRunAlias(runId, newAlias)
+      // Update local state
+      setRuns(prev => prev.map(r => 
+        r.run_id === runId ? { ...r, alias: newAlias } : r
+      ))
+      message.success(t('experiments.alias_updated') || 'Alias updated')
+    } catch (error) {
+      logger.error('Failed to update alias:', error)
+      message.error(t('experiments.alias_update_failed') || 'Failed to update alias')
+    } finally {
+      setAliasUpdateLoading(false)
+      setEditingRunId(null)
+      setEditingAlias('')
+    }
+  }, [editingAlias, t])
+  
+  const handleAliasCancel = useCallback(() => {
+    setEditingRunId(null)
+    setEditingAlias('')
+  }, [])
+  
+  // Handle tree panel resize
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    
+    const startX = e.clientX
+    const startWidth = treePanelWidth
+    
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX
+      const newWidth = Math.min(Math.max(startWidth + delta, 160), 400)
+      setTreePanelWidth(newWidth)
+    }
+    
+    const handleMouseUp = () => {
+      setIsResizing(false)
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+    
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }, [treePanelWidth])
+  
+  // Handle tags update
+  const handleTagsUpdate = useCallback(async (runId: string, newTags: string[]) => {
+    try {
+      await updateRunTags(runId, newTags)
+      // Update local state
+      setRuns(prev => prev.map(r => 
+        r.run_id === runId ? { ...r, tags: newTags } : r
+      ))
+      message.success(t('experiments.tags_updated') || 'Tags updated')
+    } catch (error) {
+      logger.error('Failed to update tags:', error)
+      message.error(t('experiments.tags_update_failed') || 'Failed to update tags')
+    }
+  }, [t])
+  
+  // Handle removing a single tag
+  const handleRemoveTag = useCallback((runId: string, tagToRemove: string, currentTags: string[]) => {
+    const newTags = currentTags.filter(t => t !== tagToRemove)
+    handleTagsUpdate(runId, newTags)
+  }, [handleTagsUpdate])
+  
+  // Open tag modal
+  const handleOpenTagModal = useCallback((runId: string, currentTags: string[]) => {
+    setTagModalRunId(runId)
+    setTagModalCurrentTags(currentTags)
+    setTagModalOpen(true)
+  }, [])
+  
+  // Handle adding a new tag from modal
+  const handleAddTagFromModal = useCallback((tag: string) => {
+    if (!tagModalRunId) return
+    const newTags = [...tagModalCurrentTags, tag]
+    handleTagsUpdate(tagModalRunId, newTags)
+    setTagModalOpen(false)
+    setTagModalRunId(null)
+    setTagModalCurrentTags([])
+  }, [tagModalRunId, tagModalCurrentTags, handleTagsUpdate])
+  
+  // Get all tags from all runs for history
+  const allTagsFromRuns = useMemo(() => {
+    return runs.flatMap(r => r.tags || [])
+  }, [runs])
+
   // Fetch runs from API with better error handling
   const fetchRuns = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
@@ -143,32 +295,32 @@ const ExperimentPage: React.FC = () => {
       }
       const data = await response.json()
       // API returns array directly, not wrapped in object
-      const runs = Array.isArray(data) ? data : (data.runs || [])
+      const runsData = Array.isArray(data) ? data : (data.runs || [])
       
       // Map API response to our RunData interface
-      const mappedRuns = runs.map((r: any) => {
+      const mappedRuns = runsData.map((r: any) => {
         const created = r.created_time ? new Date(r.created_time * 1000) : new Date()
         
         return {
           run_id: r.id || r.run_id,
-          project: r.project || 'default',
-          name: r.name || 'unnamed',
+          path: r.path || 'default',
+          alias: r.alias || null,
+          tags: r.tags || [],
           status: r.status || 'unknown',
           created: created.toISOString(),
           summary: r.summary || {},
           pid: r.pid,
           best_metric_value: r.best_metric_value,
           best_metric_name: r.best_metric_name,
-          artifacts_created_count: r.artifacts_created_count || 0,
-          artifacts_used_count: r.artifacts_used_count || 0
+          assets_count: r.assets_count || 0
         }
       })
       
       setRuns(mappedRuns)
       
-      // Extract unique projects
-      const uniqueProjects = [...new Set(mappedRuns.map((r: RunData) => r.project))] as string[]
-      setProjects(uniqueProjects)
+      // Extract unique paths (top-level segments for filtering)
+      const uniquePaths = [...new Set(mappedRuns.map((r: RunData) => r.path.split('/')[0]))] as string[]
+      setProjects(uniquePaths)
       
       // Calculate statistics
       const runStats = {
@@ -178,15 +330,6 @@ const ExperimentPage: React.FC = () => {
         failed: mappedRuns.filter((r: RunData) => r.status === 'failed').length,
       }
       setStats(runStats)
-      
-      // Show notification for new runs if not initial load
-      if (!showLoading && mappedRuns.length > runs.length) {
-        notification.info({
-          message: t('experiments.new_runs') || 'New runs detected',
-          description: `${mappedRuns.length - runs.length} new run(s) added`,
-          placement: 'bottomRight'
-        })
-      }
     } catch (error) {
       logger.error('Failed to fetch runs:', error)
       if (showLoading) {
@@ -194,31 +337,77 @@ const ExperimentPage: React.FC = () => {
       }
     }
     if (showLoading) setLoading(false)
-  }, [runs.length, t])
+  }, [t])
 
+  // Fetch runs on mount and when navigating back to this page
   useEffect(() => {
     fetchRuns(true)
-  }, [])
+  }, [location.key])
+
+  // Batch delete runs by path
+  const handleBatchDeleteByPath = useCallback(async (path: string) => {
+    try {
+      const response = await fetch('/api/paths/soft-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const result = await response.json()
+      if (result.deleted_count > 0) {
+        triggerConfetti()
+        message.success(t('experiments.soft_delete_success', { count: result.deleted_count }) || `Moved ${result.deleted_count} runs to recycle bin`)
+        fetchRuns(false)
+      } else {
+        message.info(t('experiments.no_runs_to_delete') || 'No runs to delete in this path')
+      }
+    } catch (error) {
+      logger.error('Batch delete by path failed:', error)
+      message.error(t('experiments.delete_failed') || 'Failed to delete runs')
+    }
+  }, [t, fetchRuns, triggerConfetti])
+  
+  // Batch export runs by path
+  const handleBatchExportByPath = useCallback(async (path: string) => {
+    try {
+      // Download as ZIP file
+      const url = `/api/paths/export?path=${encodeURIComponent(path)}&format=zip`
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `runicorn_export_${path.replace(/\//g, '_')}.zip`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      message.success(t('experiments.export_started') || 'Export started')
+    } catch (error) {
+      logger.error('Batch export by path failed:', error)
+      message.error(t('experiments.export_failed') || 'Failed to export runs')
+    }
+  }, [t])
 
   // Auto-refresh functionality using global settings
   useEffect(() => {
+    // Clear any existing interval first
+    if (refreshIntervalRef.current) {
+      window.clearInterval(refreshIntervalRef.current)
+      refreshIntervalRef.current = null
+    }
+    
     if (autoRefresh) {
-      const interval = window.setInterval(() => {
+      refreshIntervalRef.current = window.setInterval(() => {
         fetchRuns(false)  // Don't show loading for auto-refresh
-      }, settings.refreshInterval * 1000)  // Use user-configured interval
-      setRefreshInterval(interval)
-    } else {
-      if (refreshInterval) {
-        window.clearInterval(refreshInterval)
-        setRefreshInterval(null)
-      }
+      }, settings.refreshInterval * 1000)
     }
+    
     return () => {
-      if (refreshInterval) {
-        window.clearInterval(refreshInterval)
+      if (refreshIntervalRef.current) {
+        window.clearInterval(refreshIntervalRef.current)
+        refreshIntervalRef.current = null
       }
     }
-  }, [autoRefresh, settings.refreshInterval])
+  }, [autoRefresh, settings.refreshInterval, fetchRuns])
 
   // Delete selected runs with better error handling
   const handleDelete = useCallback(() => {
@@ -232,7 +421,7 @@ const ExperimentPage: React.FC = () => {
       content: (
         <div>
           <p>{t('experiments.soft_delete_confirm_content', { count: selectedRowKeys.length }) || `Move ${selectedRowKeys.length} selected runs to recycle bin?`}</p>
-          <p style={{ color: '#1677ff', fontWeight: 500 }}>
+          <p style={{ color: token.colorPrimary, fontWeight: 500 }}>
             {t('experiments.soft_delete_note') || 'Files will be preserved and can be restored later.'}
           </p>
         </div>
@@ -281,8 +470,8 @@ const ExperimentPage: React.FC = () => {
         total_runs: selectedRunData.length,
         runs: selectedRunData.map(run => ({
           run_id: run.run_id,
-          project: run.project,
-          name: run.name,
+          path: run.path,
+          alias: run.alias,
           status: run.status,
           created: run.created,
           summary: run.summary,
@@ -342,7 +531,7 @@ const ExperimentPage: React.FC = () => {
     try {
       // Create comprehensive CSV with all important fields
       const headers = [
-        'Run ID', 'Project', 'Experiment Name', 'Status', 'Created Time',
+        'Run ID', 'Path', 'Alias', 'Status', 'Created Time',
         'Final Loss', 'Learning Rate', 'Batch Size', 'Epochs',
         'Best Metric Value', 'Best Metric Name'
       ]
@@ -350,8 +539,8 @@ const ExperimentPage: React.FC = () => {
       // Create CSV rows with safe escaping
       const rows = selectedRunData.map(run => [
         csvEscape(run.run_id),
-        csvEscape(run.project),
-        csvEscape(run.name),
+        csvEscape(run.path),
+        csvEscape(run.alias),
         csvEscape(run.status),
         csvEscape(new Date(run.created).toLocaleString()),
         csvEscape(run.summary?.final_loss?.toFixed(6) || ''),
@@ -406,17 +595,142 @@ const ExperimentPage: React.FC = () => {
     },
   ]
 
-  // Handle compare action (removed - comparison is done in run detail page)
-  const handleCompare = () => {
+  // Handle compare action - switch to inline compare mode
+  const handleCompare = useCallback(async () => {
     if (selectedRowKeys.length < 2) {
       message.warning(t('experiments.select_multiple') || 'Please select at least 2 runs to compare')
       return
     }
-    // Open first run with others for comparison
-    const firstRun = selectedRowKeys[0]
-    navigate(`/runs/${firstRun}`)
-    message.info(t('experiments.compare_hint') || 'Use the comparison feature in the run detail page')
-  }
+    
+    // Build run info list from selected runs
+    const selectedRuns = runs.filter(r => selectedRowKeys.includes(r.run_id))
+    const runInfos: CompareRunInfo[] = selectedRuns.map(r => ({
+      runId: r.run_id,
+      path: r.path,
+      alias: r.alias,
+      status: r.status,
+    }))
+    
+    // Build labels map (prefer alias, fallback to path last segment)
+    const labels = new Map<string, string>()
+    selectedRuns.forEach(r => {
+      labels.set(r.run_id, r.alias || r.path.split('/').pop() || r.run_id.slice(-12))
+    })
+    
+    setCompareRunInfos(runInfos)
+    setCompareRunLabels(labels)
+    setCompareMode(true)
+    setCompareLoading(true)
+    
+    // Initialize visible runs (all visible by default)
+    setVisibleRunIds(new Set(selectedRowKeys))
+    
+    // Fetch metrics for all selected runs in parallel
+    try {
+      const metricsMap = new Map<string, MetricsData>()
+      await Promise.all(
+        selectedRowKeys.map(async (runId) => {
+          try {
+            const data = await getStepMetrics(runId)
+            metricsMap.set(runId, data)
+          } catch (err) {
+            logger.warn(`Failed to fetch metrics for ${runId}:`, err)
+          }
+        })
+      )
+      setCompareMetrics(metricsMap)
+    } catch (error) {
+      logger.error('Failed to fetch metrics for comparison:', error)
+      message.error(t('experiments.compare_fetch_failed') || 'Failed to load metrics')
+    } finally {
+      setCompareLoading(false)
+    }
+  }, [selectedRowKeys, runs, t])
+  
+  // Toggle run visibility in compare charts
+  const toggleRunVisibility = useCallback((runId: string) => {
+    setVisibleRunIds(prev => {
+      const next = new Set(prev)
+      if (next.has(runId)) {
+        next.delete(runId)
+      } else {
+        next.add(runId)
+      }
+      return next
+    })
+  }, [])
+  
+  // Handle add more runs to comparison
+  const handleAddRuns = useCallback(() => {
+    setAddRunsModalOpen(true)
+  }, [])
+  
+  // Exit compare mode
+  const handleExitCompare = useCallback(() => {
+    setCompareMode(false)
+    setCompareRunInfos([])
+    setCompareMetrics(new Map())
+    setCompareRunLabels(new Map())
+  }, [])
+  
+  // Check if any compared run is still running
+  const hasRunningCompareRun = useMemo(() => {
+    return compareRunInfos.some(r => r.status === 'running')
+  }, [compareRunInfos])
+  
+  // Auto-refresh metrics and status when in compare mode with running experiments
+  useEffect(() => {
+    if (!compareMode || !hasRunningCompareRun || compareLoading) return
+    
+    const refreshInterval = settings.refreshInterval * 1000 // Use global refresh interval
+    
+    const intervalId = window.setInterval(async () => {
+      // Only refresh for running runs
+      const runningRunIds = compareRunInfos
+        .filter(r => r.status === 'running')
+        .map(r => r.runId)
+      
+      if (runningRunIds.length === 0) return
+      
+      try {
+        const newMetrics = new Map(compareMetrics)
+        const updatedRunInfos = [...compareRunInfos]
+        let statusChanged = false
+        
+        await Promise.all(
+          runningRunIds.map(async (runId) => {
+            try {
+              // Fetch metrics
+              const data = await getStepMetrics(runId)
+              newMetrics.set(runId, data)
+              
+              // Fetch status update
+              const detail = await getRunDetail(runId)
+              const newStatus = detail.status || 'unknown'
+              
+              // Update status if changed
+              const idx = updatedRunInfos.findIndex(r => r.runId === runId)
+              if (idx !== -1 && updatedRunInfos[idx].status !== newStatus) {
+                updatedRunInfos[idx] = { ...updatedRunInfos[idx], status: newStatus }
+                statusChanged = true
+              }
+            } catch (err) {
+              logger.warn(`Failed to refresh data for ${runId}:`, err)
+            }
+          })
+        )
+        
+        setCompareMetrics(newMetrics)
+        if (statusChanged) {
+          setCompareRunInfos(updatedRunInfos)
+        }
+      } catch (error) {
+        logger.error('Failed to refresh compare data:', error)
+      }
+    }, refreshInterval)
+    
+    return () => window.clearInterval(intervalId)
+  }, [compareMode, hasRunningCompareRun, compareLoading, compareRunInfos, compareMetrics, settings.refreshInterval])
 
   // Enhanced filtering with memoization
   const filteredRuns = useMemo(() => {
@@ -425,49 +739,145 @@ const ExperimentPage: React.FC = () => {
       const searchLower = searchText.toLowerCase()
       const matchesSearch = searchText === '' || 
         run.run_id.toLowerCase().includes(searchLower) ||
-        run.name.toLowerCase().includes(searchLower) ||
-        run.project.toLowerCase().includes(searchLower) ||
-        (run.summary?.tags && run.summary.tags.some((tag: string) => 
+        run.path.toLowerCase().includes(searchLower) ||
+        (run.alias && run.alias.toLowerCase().includes(searchLower)) ||
+        (run.tags && run.tags.some((tag: string) => 
           tag.toLowerCase().includes(searchLower)))
       
-      // Project filter
-      const matchesProject = projectFilter === 'all' || run.project === projectFilter
+      // Path filter from tree panel (prefix match)
+      const matchesTreePath = !selectedTreePath || 
+        run.path === selectedTreePath || 
+        run.path.startsWith(`${selectedTreePath}/`)
+      
+      // Path filter from dropdown (matches top-level segment)
+      const topLevelPath = run.path.split('/')[0]
+      const matchesProject = projectFilter === 'all' || topLevelPath === projectFilter
       
       // Status filter
       const matchesStatus = statusFilter === 'all' || run.status === statusFilter
       
-      return matchesSearch && matchesProject && matchesStatus
+      return matchesSearch && matchesTreePath && matchesProject && matchesStatus
     })
-  }, [runs, searchText, projectFilter, statusFilter])
+  }, [runs, searchText, selectedTreePath, projectFilter, statusFilter])
 
   // Enhanced table columns with sorting and better rendering (resizable)
   const columns: ColumnsType<RunData> = useMemo(() => [
     {
-      title: t('table.project'),
-      dataIndex: 'project',
-      key: 'project',
-      sorter: (a, b) => a.project.localeCompare(b.project),
-      render: (text) => <Tag color="blue">{text}</Tag>,
-      width: columnWidths.project,
+      title: t('table.path'),
+      dataIndex: 'path',
+      key: 'path',
+      sorter: (a, b) => a.path.localeCompare(b.path),
+      render: (text) => (
+        <Tooltip title={text}>
+          <code style={{ fontSize: '12px', color: token.colorPrimary }}>{text}</code>
+        </Tooltip>
+      ),
+      width: columnWidths.path,
       onHeaderCell: () => ({
-        width: columnWidths.project,
-        onResize: handleResize('project'),
+        width: columnWidths.path,
+        onResize: handleResize('path'),
       }),
     },
     {
-      title: t('table.name'),
-      dataIndex: 'name',
-      key: 'name',
-      width: columnWidths.name,
-      sorter: (a, b) => a.name.localeCompare(b.name),
-      render: (text, record) => (
-        <Tooltip title={`${record.project}/${text}`}>
-          <strong>{text}</strong>
-        </Tooltip>
-      ),
+      title: t('table.alias'),
+      dataIndex: 'alias',
+      key: 'alias',
+      width: columnWidths.alias,
+      sorter: (a, b) => (a.alias || '').localeCompare(b.alias || ''),
+      render: (text, record) => {
+        const isEditing = editingRunId === record.run_id
+        
+        if (isEditing) {
+          return (
+            <Input
+              size="small"
+              value={editingAlias}
+              onChange={(e) => setEditingAlias(e.target.value)}
+              onPressEnter={() => handleAliasSave(record.run_id)}
+              onBlur={() => handleAliasSave(record.run_id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  handleAliasCancel()
+                }
+              }}
+              autoFocus
+              style={{ width: '100%' }}
+              placeholder={t('experiments.alias_placeholder') || 'Enter alias...'}
+              disabled={aliasUpdateLoading}
+            />
+          )
+        }
+        
+        return (
+          <Tooltip title={t('experiments.double_click_edit') || 'Double-click to edit'}>
+            <div
+              style={{ 
+                cursor: 'pointer', 
+                minHeight: 22,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+              onDoubleClick={() => handleAliasEdit(record.run_id, text)}
+            >
+              {text ? (
+                <Tag color="purple">{text}</Tag>
+              ) : (
+                <span style={{ color: token.colorTextDisabled }}>-</span>
+              )}
+            </div>
+          </Tooltip>
+        )
+      },
       onHeaderCell: () => ({
-        width: columnWidths.name,
-        onResize: handleResize('name'),
+        width: columnWidths.alias,
+        onResize: handleResize('alias'),
+      }),
+    },
+    {
+      title: t('table.tags'),
+      dataIndex: 'tags',
+      key: 'tags',
+      width: columnWidths.tags,
+      render: (tags: string[], record) => {
+        const currentTags = tags || []
+        
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+            {currentTags.map(tag => (
+              <Tag
+                key={tag}
+                closable
+                onClose={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  handleRemoveTag(record.run_id, tag, currentTags)
+                }}
+                style={{ marginRight: 0 }}
+              >
+                {tag}
+              </Tag>
+            ))}
+            <Tooltip title={t('experiments.add_tag') || 'Add tag'}>
+              <Tag
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleOpenTagModal(record.run_id, currentTags)
+                }}
+                style={{ 
+                  cursor: 'pointer', 
+                  borderStyle: 'dashed',
+                  background: 'transparent',
+                }}
+              >
+                <PlusOutlined />
+              </Tag>
+            </Tooltip>
+          </div>
+        )
+      },
+      onHeaderCell: () => ({
+        width: columnWidths.tags,
+        onResize: handleResize('tags'),
       }),
     },
     {
@@ -475,9 +885,30 @@ const ExperimentPage: React.FC = () => {
       dataIndex: 'run_id',
       key: 'run_id',
       width: columnWidths.run_id,
-      render: (text) => (
-        <code style={{ fontSize: '11px', wordBreak: 'break-all' }}>{text}</code>
-      ),
+      render: (text: string) => {
+        // Extract hash suffix (last segment after underscore)
+        const suffix = text.split('_').pop() || text.slice(-6)
+        return (
+          <Space size={4}>
+            <Tooltip title={text}>
+              <code style={{ fontSize: '12px', cursor: 'pointer' }}>{suffix}</code>
+            </Tooltip>
+            <Tooltip title={t('common.copy') || 'Copy'}>
+              <Button
+                type="text"
+                size="small"
+                icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                style={{ padding: '0 4px', height: 20, minWidth: 20 }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  navigator.clipboard.writeText(text)
+                  message.success(t('common.copied') || 'Copied!')
+                }}
+              />
+            </Tooltip>
+          </Space>
+        )
+      },
       onHeaderCell: () => ({
         width: columnWidths.run_id,
         onResize: handleResize('run_id'),
@@ -505,7 +936,7 @@ const ExperimentPage: React.FC = () => {
       sorter: (a, b) => new Date(a.created).getTime() - new Date(b.created).getTime(),
       render: (text) => {
         const date = new Date(text)
-        // 使用当前语言设置
+        // Use current language setting
         const locale = i18n.language === 'zh' ? 'zh-CN' : 'en-US'
         return (
           <span style={{ fontSize: '13px', whiteSpace: 'nowrap' }}>
@@ -540,8 +971,8 @@ const ExperimentPage: React.FC = () => {
         if (value != null && name) {
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: '13px', color: '#666', fontWeight: 500 }}>{name}</span>
-              <span style={{ fontSize: '16px', fontWeight: 700, color: '#1677ff' }}>{value.toFixed(4)}</span>
+              <span style={{ fontSize: '13px', color: token.colorTextSecondary, fontWeight: 500 }}>{name}</span>
+              <span style={{ fontSize: '16px', fontWeight: 700, color: token.colorPrimary }}>{value.toFixed(4)}</span>
             </div>
           )
         }
@@ -549,21 +980,21 @@ const ExperimentPage: React.FC = () => {
       },
     },
     {
-      title: t('experiments.artifacts_created') || 'Artifacts',
-      key: 'artifacts_created',
-      width: columnWidths.artifacts_created,
+      title: t('experiments.assets') || 'Assets',
+      key: 'assets',
+      width: columnWidths.assets,
       onHeaderCell: () => ({
-        width: columnWidths.artifacts_created,
-        onResize: handleResize('artifacts_created'),
+        width: columnWidths.assets,
+        onResize: handleResize('assets'),
       }),
       render: (_, record) => {
-        const count = record.artifacts_created_count || 0
+        const count = record.assets_count || 0
         if (count === 0) {
-          return <span style={{ color: '#999' }}>-</span>
+          return <span style={{ color: token.colorTextDisabled }}>-</span>
         }
         return (
-          <Tooltip title={t('experiments.artifacts_created_tip', { count })}>
-            <Badge count={count} style={{ backgroundColor: '#52c41a' }} />
+          <Tooltip title={t('experiments.assets_tip', { count })}>
+            <Badge count={count} style={{ backgroundColor: token.colorSuccess }} />
           </Tooltip>
         )
       },
@@ -599,7 +1030,7 @@ const ExperimentPage: React.FC = () => {
         </Space>
       ),
     },
-  ], [t, navigate, columnWidths, handleResize, handleDelete])
+  ], [t, navigate, columnWidths, handleResize, handleDelete, token, i18n.language, editingRunId, editingAlias, aliasUpdateLoading, handleAliasEdit, handleAliasSave, handleAliasCancel, handleTagsUpdate, handleRemoveTag, handleOpenTagModal])
 
   // Show skeleton on initial load
   if (loading && runs.length === 0) {
@@ -610,277 +1041,317 @@ const ExperimentPage: React.FC = () => {
     <>
       {ConfettiComponent}
       
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        style={{ padding: 24 }}
-      >
-        {/* Fancy page title */}
-        <motion.div
-          initial={experimentsPageConfig.title.initial}
-          animate={experimentsPageConfig.title.animate}
-          transition={experimentsPageConfig.title.transition}
-          style={{ marginBottom: 36 }}
-        >
-          <h1 style={{
-            fontSize: experimentsPageConfig.title.fontSize,
-            fontWeight: experimentsPageConfig.title.fontWeight,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text',
-            marginBottom: experimentsPageConfig.title.marginBottom,
-            lineHeight: experimentsPageConfig.title.lineHeight
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100%',
+        overflow: 'hidden',
+        padding: 16,
+      }}>
+        {/* Header: Title + Stats - fixed height */}
+        <div style={{ flexShrink: 0, marginBottom: 12 }}>
+          {/* Header: Title + Inline Stats */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
           }}>
-            {t('menu.experiments')}
-          </h1>
-          <p style={{
-            color: experimentsPageConfig.subtitle.color,
-            fontSize: experimentsPageConfig.subtitle.fontSize,
-            margin: 0,
-            fontWeight: experimentsPageConfig.subtitle.fontWeight
-          }}>
-            {t('experiments.subtitle')}
-          </p>
-        </motion.div>
-        
-        {/* Fancy Statistics Cards with stagger animation */}
-        <StaggerContainer>
-          <Row gutter={[16, 16]} style={{ marginBottom: 32 }}>
-            <Col xs={24} sm={12} lg={6}>
-              <StaggerItem>
-                <FancyStatCard
-                  title={t('experiments.total_runs') || 'Total Runs'}
-                  value={stats.total}
-                  icon={<ExperimentOutlined />}
-                  gradientColors={experimentsPageConfig.statCards.total.gradientColors}
-                  delay={experimentsPageConfig.statCards.total.delay}
-                  pulse={experimentsPageConfig.statCards.total.pulse}
-                />
-              </StaggerItem>
-            </Col>
+            <h1 style={{
+              fontSize: 20,
+              fontWeight: 600,
+              color: token.colorText,
+              margin: 0,
+            }}>
+              {t('menu.experiments')}
+            </h1>
             
-            <Col xs={24} sm={12} lg={6}>
-              <StaggerItem>
-                <FancyStatCard
-                  title={t('experiments.running') || 'Running'}
-                  value={stats.running}
-                  icon={<ThunderboltOutlined />}
-                  gradientColors={experimentsPageConfig.statCards.running.gradientColors}
-                  delay={experimentsPageConfig.statCards.running.delay}
-                  pulse={stats.running > 0}  // Dynamic based on actual running count
-                />
-              </StaggerItem>
-            </Col>
-            
-            <Col xs={24} sm={12} lg={6}>
-              <StaggerItem>
-                <FancyStatCard
-                  title={t('experiments.finished') || 'Finished'}
-                  value={stats.finished}
-                  icon={<CheckCircleOutlined />}
-                  gradientColors={experimentsPageConfig.statCards.finished.gradientColors}
-                  delay={experimentsPageConfig.statCards.finished.delay}
-                  pulse={experimentsPageConfig.statCards.finished.pulse}
-                />
-              </StaggerItem>
-            </Col>
-            
-            <Col xs={24} sm={12} lg={6}>
-              <StaggerItem>
-                <FancyStatCard
-                  title={t('experiments.failed') || 'Failed'}
-                  value={stats.failed}
-                  icon={<CloseCircleOutlined />}
-                  gradientColors={experimentsPageConfig.statCards.failed.gradientColors}
-                  delay={experimentsPageConfig.statCards.failed.delay}
-                  pulse={experimentsPageConfig.statCards.failed.pulse}
-                />
-              </StaggerItem>
-            </Col>
-          </Row>
-        </StaggerContainer>
-
-      {/* Filters and Actions */}
-      <motion.div
-        initial={experimentsPageConfig.filterCard.animation.initial}
-        animate={experimentsPageConfig.filterCard.animation.animate}
-        transition={experimentsPageConfig.filterCard.animation.transition}
-      >
-        <Card
-          bordered={false}
-          style={{
-            borderRadius: experimentsPageConfig.filterCard.borderRadius,
-            marginBottom: 20,
-            background: experimentsPageConfig.filterCard.background,
-            backdropFilter: experimentsPageConfig.filterCard.backdropFilter,
-            border: experimentsPageConfig.filterCard.border,
-            boxShadow: experimentsPageConfig.filterCard.boxShadow
-          }}
-          bodyStyle={{ padding: experimentsPageConfig.filterCard.padding }}
-        >
-          <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-            <Space>
-          <Input
-            placeholder={t('experiments.search_placeholder') || 'Search runs...'}
-            prefix={<SearchOutlined />}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 200 }}
-          />
-          <Select
-            value={projectFilter}
-            onChange={setProjectFilter}
-            style={{ width: 150 }}
-          >
-            <Select.Option value="all">{t('runs.filter.all')}</Select.Option>
-            {projects.map(p => (
-              <Select.Option key={p} value={p}>{p}</Select.Option>
-            ))}
-          </Select>
-          <Select
-            value={statusFilter}
-            onChange={setStatusFilter}
-            style={{ width: 120 }}
-          >
-            <Select.Option value="all">{t('runs.filter.all')}</Select.Option>
-            <Select.Option value="running">{t('experiments.running') || 'Running'}</Select.Option>
-            <Select.Option value="finished">{t('experiments.finished') || 'Finished'}</Select.Option>
-            <Select.Option value="failed">{t('experiments.failed') || 'Failed'}</Select.Option>
-          </Select>
-          <Button 
-            icon={autoRefresh ? <SyncOutlined spin /> : <ReloadOutlined />} 
-            onClick={() => fetchRuns(true)}
-            loading={loading}
-          >
-            {autoRefresh ? t('runs.refreshing') : t('runs.refresh')}
-          </Button>
-          <Tooltip title={t('experiments.check_status_tooltip') || 'Check if running experiments are still alive'}>
-            <Button 
-              icon={<HeartOutlined />}
-              onClick={handleStatusCheck}
-              loading={statusCheckLoading}
-              type="dashed"
-            >
-              {t('experiments.check_status') || 'Check Status'}
-            </Button>
-          </Tooltip>
-          <Checkbox
-            checked={autoRefresh}
-            onChange={(e) => setAutoRefresh(e.target.checked)}
-          >
-            {t('experiments.auto_refresh') || 'Auto-refresh'}
-          </Checkbox>
-          <Tooltip title={t('recycle_bin.tooltip') || 'View and restore deleted experiments'}>
-            <Button 
-              icon={<UndoOutlined />}
-              onClick={() => setRecycleBinOpen(true)}
-              type="dashed"
-            >
-              {t('recycle_bin.title') || 'Recycle Bin'}
-            </Button>
-          </Tooltip>
-        </Space>
-        
-        <Space>
-          {selectedRowKeys.length > 0 && (
-            <>
-              <Button 
-                icon={<LineChartOutlined />} 
-                onClick={handleCompare}
-                disabled={selectedRowKeys.length < 2}
-              >
-                {t('experiments.compare') || 'Compare'} ({selectedRowKeys.length})
-              </Button>
-              <Dropdown
-                menu={{ items: exportMenuItems }}
-                trigger={['click']}
-              >
-                <Button icon={<ExportOutlined />}>
-                  {t('experiments.export') || 'Export'} ({selectedRowKeys.length}) <DownOutlined />
-                </Button>
-              </Dropdown>
-              <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>
-                {t('experiments.delete') || 'Delete'} ({selectedRowKeys.length})
-              </Button>
-            </>
-          )}
+            {/* Inline Statistics */}
+            <Space size={16} style={{ flexWrap: 'wrap' }}>
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                <ExperimentOutlined style={{ marginRight: 4 }} />
+                {t('experiments.total_runs') || 'Total'}: <span style={{ fontWeight: 700, fontSize: 15, color: token.colorText }}>{stats.total}</span>
+              </span>
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                <ThunderboltOutlined style={{ marginRight: 4, color: token.colorWarning }} />
+                {t('experiments.running') || 'Running'}: <span style={{ fontWeight: 700, fontSize: 15, color: token.colorWarning }}>{stats.running}</span>
+              </span>
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                <CheckCircleOutlined style={{ marginRight: 4, color: token.colorSuccess }} />
+                {t('experiments.finished') || 'Finished'}: <span style={{ fontWeight: 700, fontSize: 15, color: token.colorSuccess }}>{stats.finished}</span>
+              </span>
+              <span style={{ color: token.colorTextSecondary, fontSize: 13 }}>
+                <CloseCircleOutlined style={{ marginRight: 4, color: token.colorError }} />
+                {t('experiments.failed') || 'Failed'}: <span style={{ fontWeight: 700, fontSize: 15, color: token.colorError }}>{stats.failed}</span>
+              </span>
             </Space>
-          </Space>
-        </Card>
-      </motion.div>
+          </div>
+        </div>
 
-      {/* Enhanced Runs Table with fancy effects */}
-      <motion.div
-        initial={experimentsPageConfig.tableContainer.animation.initial}
-        animate={experimentsPageConfig.tableContainer.animation.animate}
-        transition={experimentsPageConfig.tableContainer.animation.transition}
-      >
-        <Card
-          bordered={false}
-          style={{
-            borderRadius: experimentsPageConfig.tableContainer.borderRadius,
+        {/* Main content: Path Tree + Runs Table - fills remaining space */}
+        <div style={{ 
+          display: 'flex', 
+          gap: 16,
+          flex: 1,
+          minHeight: 0,  // Important for flex child scrolling
+          overflow: 'hidden',
+        }}>
+          {/* Left: Path Tree Panel OR Compare Runs Panel */}
+          {compareMode ? (
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              style={{ 
+                width: 260, 
+                flexShrink: 0,
+                borderRadius: 8,
+                overflow: 'hidden',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              <CompareRunsPanel
+                runs={compareRunInfos}
+                colors={ECHARTS_COLORS}
+                visibleRunIds={visibleRunIds}
+                onToggleRunVisibility={toggleRunVisibility}
+                onAddRuns={handleAddRuns}
+                onBack={handleExitCompare}
+                style={{ height: '100%', minHeight: 0 }}
+              />
+            </motion.div>
+          ) : (
+            !treePanelCollapsed && (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                style={{ 
+                  width: treePanelWidth, 
+                  flexShrink: 0,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  position: 'relative',
+                }}
+              >
+                <PathTreePanel
+                  selectedPath={selectedTreePath}
+                  onSelectPath={setSelectedTreePath}
+                  onBatchDelete={handleBatchDeleteByPath}
+                  onBatchExport={handleBatchExportByPath}
+                  style={{ height: '100%', minHeight: 0 }}
+                />
+                {/* Resize handle */}
+                <div
+                  onMouseDown={handleResizeStart}
+                  style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 4,
+                    cursor: 'col-resize',
+                    background: isResizing ? token.colorPrimary : 'transparent',
+                    transition: 'background 0.2s',
+                    zIndex: 10,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isResizing) {
+                      (e.target as HTMLElement).style.background = token.colorPrimaryBg
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isResizing) {
+                      (e.target as HTMLElement).style.background = 'transparent'
+                    }
+                  }}
+                />
+              </motion.div>
+            )
+          )}
+
+          {/* Right: Filters + Table OR Compare Charts */}
+          <div style={{ 
+            flex: 1, 
+            minWidth: 0, 
+            display: 'flex', 
+            flexDirection: 'column', 
             overflow: 'hidden',
-            boxShadow: experimentsPageConfig.tableContainer.boxShadow
-          }}
-          bodyStyle={{ padding: 0 }}
-        >
-          <Table
-            className="enhanced-table"
-        components={{
-          header: {
-            cell: ResizableTitle,
-          },
-        }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys as string[]),
-          getCheckboxProps: (record) => ({
-            disabled: deleteLoading,  // Disable selection during deletion
-          }),
-        }}
-        columns={columns}
-        dataSource={filteredRuns}
-        rowKey="run_id"
-        loading={loading}
-        pagination={{
-          pageSize: pageSize,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          onShowSizeChange: (_, size) => setPageSize(size),
-          showTotal: (total, range) => 
-            t('experiments.table_total', { 
-              from: range[0], 
-              to: range[1], 
-              total 
-            }) || `${range[0]}-${range[1]} of ${total} items`,
-        }}
-        scroll={{ x: 1200 }}  // Horizontal scroll for better mobile view
-        size="middle"
-        onChange={(pagination, filters, sorter) => {
-          setSortedInfo(sorter as SorterResult<RunData>)
-        }}
-        locale={{
-          emptyText: (
-            <FancyEmpty
-              title={t('experiments.no_runs') || 'No experiments yet'}
-              description={t('experiments.no_runs_desc') || 'Start tracking your ML experiments with Runicorn SDK. Check out the quickstart guide to begin.'}
-              actionText={t('experiments.view_quickstart') || 'View Quickstart Guide'}
-              onAction={() => window.open('https://github.com/runicorn/runicorn#quick-start', '_blank')}
-            />
-          ),
+            minHeight: 0,
+          }}>
+            {compareMode ? (
+              /* Compare Charts View */
+              <CompareChartsView
+                runIds={compareRunInfos.map(r => r.runId)}
+                visibleRunIds={visibleRunIds}
+                metricsMap={compareMetrics}
+                runLabels={compareRunLabels}
+                colors={ECHARTS_COLORS}
+                loading={compareLoading}
+              />
+            ) : (
+              <>
+            {/* Filters and Actions - fixed height */}
+            <Card
+              bordered={false}
+              size="small"
+              style={{
+                borderRadius: 8,
+                marginBottom: 12,
+                flexShrink: 0,
+              }}
+              bodyStyle={{ padding: '12px 16px' }}
+            >
+              <Space style={{ width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <Space wrap>
+                  <Tooltip title={treePanelCollapsed ? (t('experiments.show_tree') || 'Show path tree') : (t('experiments.hide_tree') || 'Hide path tree')}>
+                    <Button
+                      icon={treePanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                      onClick={() => setTreePanelCollapsed(!treePanelCollapsed)}
+                    />
+                  </Tooltip>
+                  <Input
+                    placeholder={t('experiments.search_placeholder') || 'Search runs...'}
+                    prefix={<SearchOutlined />}
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    style={{ width: 180 }}
+                    allowClear
+                  />
+                  <Select
+                    value={projectFilter}
+                    onChange={setProjectFilter}
+                    style={{ width: 140 }}
+                    options={[
+                      { value: 'all', label: t('experiments.all_projects') || 'All Projects' },
+                      ...projects.map(p => ({ value: p, label: p }))
+                    ]}
+                  />
+                  <Select
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                    style={{ width: 120 }}
+                    options={[
+                      { value: 'all', label: t('experiments.all_status') || 'All Status' },
+                      { value: 'running', label: t('experiments.running') || 'Running' },
+                      { value: 'finished', label: t('experiments.finished') || 'Finished' },
+                      { value: 'failed', label: t('experiments.failed') || 'Failed' },
+                    ]}
+                  />
+                  <Button
+                    icon={autoRefresh ? <SyncOutlined spin /> : <ReloadOutlined />}
+                    onClick={() => fetchRuns(true)}
+                    loading={loading}
+                  >
+                    {t('runs.refresh') || 'Refresh'}
+                  </Button>
+                  <Checkbox
+                    checked={autoRefresh}
+                    onChange={(e) => setAutoRefresh(e.target.checked)}
+                  >
+                    {t('experiments.auto_refresh') || 'Auto'}
+                  </Checkbox>
+                  <Button icon={<UndoOutlined />} onClick={() => setRecycleBinOpen(true)}>
+                    {t('experiments.recycle_bin') || 'Bin'}
+                  </Button>
+                </Space>
+                
+                <Space>
+                  {selectedRowKeys.length > 0 && (
+                    <>
+                      <Button icon={<LineChartOutlined />} onClick={handleCompare} disabled={selectedRowKeys.length < 2}>
+                        {t('experiments.compare') || 'Compare'} ({selectedRowKeys.length})
+                      </Button>
+                      <Dropdown menu={{ items: exportMenuItems }} trigger={['click']}>
+                        <Button icon={<ExportOutlined />}>
+                          {t('experiments.export') || 'Export'} ({selectedRowKeys.length}) <DownOutlined />
+                        </Button>
+                      </Dropdown>
+                      <Button danger icon={<DeleteOutlined />} onClick={handleDelete}>
+                        {t('experiments.delete') || 'Delete'} ({selectedRowKeys.length})
+                      </Button>
+                    </>
+                  )}
+                </Space>
+              </Space>
+            </Card>
+
+            {/* Table - fills remaining space with internal scroll */}
+            <Card
+              bordered={false}
+              style={{
+                borderRadius: 8,
+                flex: 1,
+                minHeight: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+              bodyStyle={{ padding: 0, flex: 1, minHeight: 0, overflow: 'auto' }}
+            >
+              <Table
+                className="enhanced-table"
+                components={{ header: { cell: ResizableTitle } }}
+                rowSelection={{
+                  selectedRowKeys,
+                  onChange: (keys) => setSelectedRowKeys(keys as string[]),
+                  getCheckboxProps: () => ({ disabled: deleteLoading }),
+                }}
+                columns={columns}
+                dataSource={filteredRuns}
+                rowKey="run_id"
+                loading={loading}
+                pagination={{
+                  pageSize,
+                  showSizeChanger: true,
+                  showQuickJumper: true,
+                  pageSizeOptions: ['10', '20', '50', '100'],
+                  onShowSizeChange: (_, size) => setPageSize(size),
+                  showTotal: (total, range) => `${range[0]}-${range[1]} / ${total}`,
+                }}
+                scroll={{ x: 1200 }}
+                size="middle"
+                onChange={(_, __, sorter) => setSortedInfo(sorter as SorterResult<RunData>)}
+                locale={{
+                  emptyText: (
+                    <FancyEmpty
+                      title={t('experiments.no_runs') || 'No experiments yet'}
+                      description={t('experiments.no_runs_desc') || 'Start tracking your ML experiments.'}
+                      actionText={t('experiments.view_quickstart') || 'View Quickstart'}
+                      onAction={() => window.open('https://github.com/runicorn/runicorn#quick-start', '_blank')}
+                    />
+                  ),
+                }}
+              />
+            </Card>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      <RecycleBin
+        open={recycleBinOpen}
+        onClose={() => setRecycleBinOpen(false)}
+        onRestore={() => fetchRuns(false)}
+      />
+      
+      <AddTagModal
+        open={tagModalOpen}
+        existingTags={tagModalCurrentTags}
+        allTags={allTagsFromRuns}
+        onConfirm={handleAddTagFromModal}
+        onClose={() => {
+          setTagModalOpen(false)
+          setTagModalRunId(null)
+          setTagModalCurrentTags([])
         }}
       />
-        </Card>
-      </motion.div>
-      
-        <RecycleBin
-          open={recycleBinOpen}
-          onClose={() => setRecycleBinOpen(false)}
-          onRestore={() => fetchRuns(false)}
-        />
-      </motion.div>
     </>
   )
 }

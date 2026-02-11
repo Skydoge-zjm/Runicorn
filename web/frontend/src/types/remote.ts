@@ -40,7 +40,7 @@ export interface SSHConnectionConfig {
   
   // Remote Viewer configuration
   /** Remote storage root directory */
-  remoteRoot: string
+  remoteRoot?: string
   /** Local port for SSH tunnel (optional, auto-assign if not provided) */
   localPort?: number
   /** Remote Viewer port (default: 23300) */
@@ -86,6 +86,36 @@ export interface SavedConnection {
   /** Creation timestamp */
   createdAt: number
 }
+
+export type SavedEntryKind = 'server' | 'connection'
+
+export interface SavedServer {
+  kind: 'server'
+  id: string
+  name: string
+  host: string
+  port: number
+  username: string
+  authMethod: AuthMethod
+  password?: string
+  privateKeyPath?: string
+  passphrase?: string
+  createdAt: number
+}
+
+export interface SavedConnectionProfile {
+  kind: 'connection'
+  id: string
+  serverId: string
+  name: string
+  condaEnv?: string
+  remoteRoot?: string
+  localPort?: number
+  remotePort?: number
+  createdAt: number
+}
+
+export type SavedEntry = SavedServer | SavedConnectionProfile
 
 /**
  * Active SSH session
@@ -231,4 +261,60 @@ export interface SSHConnectionState {
   selectedEnv?: string
   /** Remote config (after selecting environment) */
   remoteConfig?: RemoteConfig
+}
+
+export type HostKeyVerificationReason = 'unknown' | 'changed'
+
+export interface HostKeyInfo {
+  host: string
+  port: number
+  known_hosts_host: string
+  key_type: string
+  fingerprint_sha256: string
+  public_key: string
+  reason: HostKeyVerificationReason
+  expected_fingerprint_sha256?: string
+  expected_public_key?: string
+}
+
+export interface HostKeyConfirmationRequiredDetail {
+  code: 'HOST_KEY_CONFIRMATION_REQUIRED'
+  message: string
+  host_key: HostKeyInfo
+}
+
+export interface KnownHostsAcceptRequest {
+  host: string
+  port: number
+  key_type: string
+  public_key: string
+  fingerprint_sha256: string
+}
+
+export interface KnownHostsEntry {
+  host: string
+  port: number
+  known_hosts_host: string
+  key_type: string
+  key_base64: string
+  fingerprint_sha256: string
+}
+
+export interface KnownHostsRemoveRequest {
+  host: string
+  port: number
+  key_type: string
+}
+
+export class ApiError<TDetail = unknown> extends Error {
+  status: number
+  detail?: TDetail
+
+  constructor(status: number, message: string, detail?: TDetail) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+    Object.setPrototypeOf(this, new.target.prototype)
+  }
 }

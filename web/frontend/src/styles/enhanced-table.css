@@ -30,11 +30,11 @@
 /* Table row base style */
 .enhanced-table .ant-table-tbody > tr {
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background 0.25s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
   position: relative;
 }
 
-/* Hover effect - Glow */
+/* Hover effect - Glow (no transform to prevent jumping) */
 .enhanced-table .ant-table-tbody > tr:hover {
   background: linear-gradient(
     90deg,
@@ -45,11 +45,6 @@
   box-shadow:
     inset 0 0 0 1px rgba(22, 119, 255, 0.15),
     0 4px 12px rgba(22, 119, 255, 0.08);
-  transform: translateY(-1px);
-}
-
-.enhanced-table .ant-table-tbody > tr:active {
-  transform: translateY(0);
 }
 
 /* Selected row style */
@@ -57,15 +52,9 @@
   background: rgba(22, 119, 255, 0.06) !important;
 }
 
-.enhanced-table .ant-table-tbody > tr.ant-table-row-selected::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: linear-gradient(180deg, #1677ff, #4096ff);
-  box-shadow: 0 0 8px rgba(22, 119, 255, 0.5);
+/* Left border indicator for selected rows using box-shadow instead of ::before to prevent layout shift */
+.enhanced-table .ant-table-tbody > tr.ant-table-row-selected > td:first-child {
+  box-shadow: inset 3px 0 0 0 #1677ff;
 }
 
 /* Table cell styling */

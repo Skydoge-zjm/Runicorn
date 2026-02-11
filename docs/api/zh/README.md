@@ -4,7 +4,7 @@
 
 # Runicorn API 文档
 
-**版本**: v0.5.0  
+**版本**: v0.6.0  
 **基础 URL**: `http://127.0.0.1:23300/api`  
 **协议**: HTTP/1.1  
 **格式**: JSON  
@@ -43,7 +43,7 @@ GET /api/health
 响应:
 {
   "status": "ok",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "timestamp": 1704067200.0
 }
 ```
@@ -80,7 +80,7 @@ with api.connect() as client:
 - ✅ 类型安全和自动补全
 - ✅ 自动重试和连接管理
 - ✅ pandas DataFrame 集成
-- ✅ Artifacts 和 Remote API 扩展
+- ✅ Remote API 扩展
 
 **文档**: [python_client_api.md](./python_client_api.md)
 
@@ -94,14 +94,14 @@ HTTP REST API 端点，用于 Web UI 和第三方集成。
 |------|------|------|--------|
 | **Python Client** 🆕 | Python 程序化访问 | [python_client_api.md](./python_client_api.md) | SDK |
 | **Runs API** | 实验运行管理（CRUD、软删除、恢复）| [runs_api.md](./runs_api.md) | 6个端点 |
-| **Artifacts API** | 模型和数据集版本控制 | [artifacts_api.md](./artifacts_api.md) | 7个端点 |
 | **Metrics API** | 实时指标查询和可视化数据 | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |
-| **V2 API** | 高性能 SQLite 查询 ⚡ | [v2_api.md](./v2_api.md) | 4个端点 |
 | **Config API** | 配置和偏好设置管理 | [config_api.md](./config_api.md) | 6个端点 |
 | **Remote Viewer API** 🆕 | VSCode Remote 风格的远程访问 | [remote_api.md](./remote_api.md) | 12个端点 |
-| **Manifest API** | 高性能 Manifest-based 同步 🚀 | [manifest_api.md](./manifest_api.md) | CLI + SDK |
+| **Logging API** 🆕 | 增强日志与控制台捕获 (v0.6.0) | [logging_api.md](./logging_api.md) | SDK |
+| **Paths API** 🆕 | 路径层级导航 (v0.6.0) | [paths_api.md](./paths_api.md) | 5+3个端点 |
+| **SSH API** | SSH 连接管理（已弃用）| [ssh_api.md](./ssh_api.md) | 12个端点 |
 
-> ⚠️ **弃用**: 旧的 SSH 文件同步 API (`/api/unified/*`) 已被 Remote Viewer API 替代。查看 [迁移指南](./MIGRATION_GUIDE_v0.4_to_v0.5.md)
+> ⚠️ **弃用**: 旧的 SSH 文件同步 API (`/api/unified/*`) 已被 Remote Viewer API 替代。查看 [迁移指南](../../guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md)
 
 **快速参考**: 查看 [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) 获取常用操作
 
@@ -198,19 +198,7 @@ def api_call_with_retry(url):
 
 ## 版本控制
 
-### API 版本
-
-- **V1 API** (`/api/*`): 稳定，向后兼容，基于文件
-- **V2 API** (`/api/v2/*`): 高性能，基于 SQLite，推荐用于新集成
-
-### 版本策略
-
-- **V1**: 为向后兼容而维护，适用于简单用例
-- **V2**: 推荐用于生产环境，提供 50-100 倍性能提升
-
-### 迁移指南
-
-查看 [V1_TO_V2_MIGRATION.md](./V1_TO_V2_MIGRATION.md) 获取详细迁移说明。
+所有 API 端点位于 `/api/*` 下。存储后端使用 SQLite，支持连接池和 WAL 模式，提供高性能查询。
 
 ---
 
@@ -227,12 +215,6 @@ GET /api/runs/{run_id}
 
 # 获取运行指标
 GET /api/runs/{run_id}/metrics_step
-
-# 列出 artifacts
-GET /api/artifacts?type=model
-
-# 获取 artifact 版本
-GET /api/artifacts/{name}/versions
 
 # 连接到远程服务器 (新)
 POST /api/remote/connect
@@ -255,7 +237,7 @@ ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 
 ## 其他资源
 
-- **快速开始指南**: [../guides/zh/QUICKSTART.md](../guides/zh/QUICKSTART.md)
+- **快速开始指南**: [QUICKSTART.md](../../guides/zh/QUICKSTART.md)
 - **Python SDK**: 查看 `src/runicorn/sdk.py`
 - **OpenAPI Schema**: `http://127.0.0.1:23300/docs` (FastAPI 自动生成)
 - **示例**: `examples/` 目录
@@ -270,7 +252,7 @@ ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 
 ---
 
-**最后更新**: 2025-10-25  
+**最后更新**: 2026-01-15  
 **维护者**: Runicorn 开发团队
 
 

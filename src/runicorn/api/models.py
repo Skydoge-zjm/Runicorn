@@ -98,44 +98,6 @@ class MetricSeries:
 
 
 @dataclass
-class Artifact:
-    """Artifact record."""
-    name: str
-    version: int
-    type: str
-    created_at: float
-    size_bytes: int
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Artifact:
-        """Create from API response."""
-        return cls(
-            name=data["name"],
-            version=data["version"],
-            type=data.get("type", "custom"),
-            created_at=data.get("created_at", 0),
-            size_bytes=data.get("size_bytes", 0),
-            metadata=data.get("metadata", {}),
-        )
-    
-    @property
-    def id(self) -> str:
-        """Get artifact ID (name:version)."""
-        return f"{self.name}:v{self.version}"
-    
-    @property
-    def created_datetime(self) -> datetime:
-        """Convert created_at to datetime."""
-        return datetime.fromtimestamp(self.created_at)
-    
-    @property
-    def size_mb(self) -> float:
-        """Get size in MB."""
-        return self.size_bytes / (1024 * 1024)
-
-
-@dataclass
 class RemoteSession:
     """Remote viewer session."""
     session_id: str

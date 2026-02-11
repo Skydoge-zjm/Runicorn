@@ -75,7 +75,7 @@
 pip install runicorn
 
 # From source
-git clone https://github.com/yourusername/runicorn.git
+git clone https://github.com/Skydoge-zjm/runicorn.git
 cd runicorn
 pip install -e .
 
@@ -450,7 +450,7 @@ model_path = artifact.download()
 - 🏗️ [Architecture Docs](../../architecture/en/)
 
 **Community**:
-- 💬 GitHub Issues: https://github.com/yourusername/runicorn/issues
+- 💬 GitHub Issues: https://github.com/Skydoge-zjm/runicorn/issues
 - 📧 Email: support@runicorn.dev
 
 **Diagnostic info**:
@@ -463,7 +463,7 @@ runicorn --version >> diagnosis.txt
 
 **Didn't find your answer?**
 
-Check [full documentation](../../README.md) or [submit an issue](https://github.com/yourusername/runicorn/issues/new)
+Check [full documentation](../../README.md) or [submit an issue](https://github.com/Skydoge-zjm/runicorn/issues/new)
 
 ---
 

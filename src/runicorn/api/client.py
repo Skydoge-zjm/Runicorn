@@ -21,7 +21,6 @@ from .exceptions import (
 )
 
 if TYPE_CHECKING:
-    from .artifacts import ArtifactsAPI
     from .remote import RemoteAPI
 
 logger = logging.getLogger(__name__)
@@ -318,14 +317,6 @@ class RunicornClient:
         self.close()
     
     # ==================== Extended API Properties ====================
-    
-    @property
-    def artifacts(self) -> "ArtifactsAPI":
-        """Access Artifacts API."""
-        if not hasattr(self, "_artifacts_api"):
-            from .artifacts import ArtifactsAPI
-            self._artifacts_api = ArtifactsAPI(self)
-        return self._artifacts_api
     
     @property
     def remote(self) -> "RemoteAPI":

@@ -5,8 +5,8 @@
 # Runicorn System Overview
 
 **Document Type**: Architecture  
-**Version**: v0.5.0  
-**Last Updated**: 2025-10-25
+**Version**: v0.6.0  
+**Last Updated**: 2025-01-XX
 
 ---
 
@@ -300,7 +300,105 @@ Workflow:
 
 ---
 
-### 6. Remote Viewer System (v0.5.0 New)
+### 6. Assets System (v0.6.0 New)
+
+**Responsibility**: Workspace snapshots and content-addressed blob storage
+
+**Components**:
+- **Snapshot Manager** (`snapshot.py`): Create workspace snapshots with SHA256 fingerprinting
+- **Blob Store** (`blob_store.py`): Content-addressed storage with automatic deduplication
+- **Fingerprint Calculator** (`fingerprint.py`): Fast file hashing for change detection
+- **Ignore Parser** (`ignore.py`): `.rnignore` file parsing (gitignore-compatible)
+- **Outputs Scanner** (`outputs_scan.py`): Automatic output file detection
+- **Assets JSON** (`assets_json.py`): Manifest file handling
+
+**Key Features**:
+- SHA256-based content deduplication (50-90% storage savings)
+- Incremental snapshots (only changed files)
+- Manifest-based restore
+- Orphaned blob cleanup
+
+**Design Pattern**: Content-addressable storage, copy-on-write
+
+---
+
+### 7. Console Capture System (v0.6.0 New)
+
+**Responsibility**: Capture stdout/stderr and Python logging output
+
+**Components**:
+- **Log Manager** (`log_manager.py`): Central logging coordination
+- **Capture** (`capture.py`): TeeWriter for stdout/stderr interception
+- **Logging Handler** (`logging_handler.py`): Python `logging` module integration
+
+**Key Features**:
+- Transparent stdout/stderr capture
+- Python logging handler integration via `run.get_logging_handler()`
+- Smart tqdm filtering (modes: smart/all/none)
+- Real-time WebSocket streaming
+
+**Design Pattern**: Decorator pattern for stream interception
+
+---
+
+### 8. Log Compatibility Layer (v0.6.0 New)
+
+**Responsibility**: Drop-in replacement for common ML logging libraries
+
+**Components**:
+- **MetricLogger** (`log_compat/torchvision.py`): torchvision.MetricLogger compatible API
+
+**Key Features**:
+- API-compatible with torchvision's MetricLogger
+- Automatic metric aggregation (avg, median, max, value)
+- Seamless integration with existing training scripts
+
+**Design Pattern**: Adapter pattern
+
+---
+
+### 9. Index System (v0.6.0 New)
+
+**Responsibility**: Fast experiment and run indexing
+
+**Components**:
+- **Index Database** (`index/db.py`): SQLite-based index for quick lookups
+
+**Key Features**:
+- Accelerated experiment listing
+- Path-based filtering
+- Status aggregation
+
+---
+
+### 10. Workspace Management (v0.6.0 New)
+
+**Responsibility**: Workspace root detection and configuration
+
+**Components**:
+- **Root Detector** (`workspace/root.py`): Find workspace root directory
+
+**Key Features**:
+- Automatic workspace detection (looks for `.runicorn/` or `runicorn.yaml`)
+- Support for nested workspaces
+
+---
+
+### 11. Runtime Configuration (v0.6.0 New)
+
+**Responsibility**: Load and manage runtime configuration
+
+**Components**:
+- **Config Loader** (`rnconfig/loader.py`): YAML/JSON configuration loading
+
+**Key Features**:
+- `runicorn.yaml` support
+- Environment variable overrides
+- Default value fallbacks
+
+---
+
+### 12. Remote Viewer System (v0.5.0+, Enhanced in v0.6.0)
 
 **Responsibility**: VSCode Remote-style remote access
 
@@ -311,6 +409,11 @@ Workflow:
 - **SSH Tunnel Manager**: Port forwarding and tunnel maintenance
 - **Health Checker**: Connection and Viewer status monitoring
 
+**v0.6.0 Enhancements**:
+- **Multi-backend SSH Architecture**: OpenSSH → AsyncSSH → Paramiko fallback chain
+- **Strict Host Key Verification**: Runicorn-managed known_hosts with 409 confirmation protocol
+- **AutoBackend Selector**: Automatic best-backend selection
+
 **Design Pattern**: Proxy pattern, Remote Procedure Call (RPC)
 
 **Benefits**:
@@ -319,6 +422,8 @@ Workflow:
 - ✅ Automatic environment detection and management
 - ✅ Secure SSH tunnel communication
 - ✅ Zero configuration, automatic cleanup
+
+See **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** for detailed backend design.
 
 ---
 
@@ -518,7 +623,32 @@ user_root_dir/
 
 ## Architecture Evolution Achieved
 
-### v0.5.0 (Current) ✅
+### v0.6.0 (Current) ✅
+
+- **Assets System**: SHA256 content-addressed storage with deduplication
+  - Workspace snapshots with fingerprinting
+  - Blob store for efficient storage
+  - Manifest-based restore
+- **Enhanced Logging**: Console capture and Python logging integration
+  - TeeWriter for stdout/stderr capture
+  - `get_logging_handler()` for Python logging
+  - MetricLogger compatibility layer
+  - Smart tqdm filtering
+- **Path-based Hierarchy**: VSCode-style path tree navigation
+  - PathTreePanel component
+  - `/api/paths` endpoints
+  - Batch operations (delete, export)
+- **Inline Compare View**: Multi-run metric comparison
+  - CompareChartsView with ECharts
+  - Common metrics auto-detection
+  - Visibility toggles
+- **SSH Backend Architecture**: Multi-backend fallback chain
+  - OpenSSH → AsyncSSH → Paramiko
+  - Strict host key verification
+  - 409 confirmation protocol
+- **New Modules**: `assets/`, `console/`, `log_compat/`, `index/`, `workspace/`, `rnconfig/`
+
+### v0.5.0 ✅
 
 - **Remote Viewer**: VSCode Remote-style remote access
   - SSH tunnel + temporary Viewer instance
@@ -535,6 +665,7 @@ user_root_dir/
 - **[STORAGE_DESIGN.md](STORAGE_DESIGN.md)** - Storage layer deep dive
 - **[DATA_FLOW.md](DATA_FLOW.md)** - How data flows through system
 - **[DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)** - Why we made these choices
+- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - SSH backend design (v0.6.0)
 
 ---
 

@@ -161,9 +161,15 @@ export default function PerformanceMonitorPage() {
   }
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      {/* Page Header */}
-      <Card>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%',
+      overflow: 'hidden',
+      padding: 16,
+    }}>
+      {/* Page Header - fixed height */}
+      <Card style={{ flexShrink: 0, marginBottom: 16 }}>
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Space>
@@ -186,7 +192,8 @@ export default function PerformanceMonitorPage() {
         </Space>
       </Card>
 
-      {/* Tabs */}
+      {/* Main content: Tabs - fills remaining space */}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
       {tabItems.length > 0 ? (
         <Tabs 
           items={tabItems}
@@ -209,8 +216,10 @@ export default function PerformanceMonitorPage() {
           message={t('gpu.not_available')}
           description={gpuReason || t('gpu.no_nvidia_smi')}
           showIcon
+          style={{ marginTop: 16 }}
         />
       )}
-    </Space>
+      </div>
+    </div>
   )
 }

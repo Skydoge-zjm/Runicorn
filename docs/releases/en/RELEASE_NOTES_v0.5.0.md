@@ -331,8 +331,8 @@ We greatly appreciate the valuable feedback from the community during developmen
 
 ### Report Issues
 
-- **GitHub Issues**: [Submit Bug Report](https://github.com/yourusername/runicorn/issues)
-- **Feature Requests**: [Submit Feature Suggestion](https://github.com/yourusername/runicorn/discussions)
+- **GitHub Issues**: [Submit Bug Report](https://github.com/Skydoge-zjm/runicorn/issues)
+- **Feature Requests**: [Submit Feature Suggestion](https://github.com/Skydoge-zjm/runicorn/discussions)
 
 ---
 
@@ -364,8 +364,8 @@ pip install -U runicorn
 
 ### GitHub Releases
 
-- [v0.5.0 Source Code](https://github.com/yourusername/runicorn/archive/v0.5.0.tar.gz)
-- [Windows Desktop App](https://github.com/yourusername/runicorn/releases/v0.5.0)
+- [v0.5.0 Source Code](https://github.com/Skydoge-zjm/runicorn/archive/v0.5.0.tar.gz)
+- [Windows Desktop App](https://github.com/Skydoge-zjm/runicorn/releases/v0.5.0)
 
 ---
 

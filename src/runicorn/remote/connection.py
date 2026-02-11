@@ -12,7 +12,17 @@ from pathlib import Path
 from typing import Optional, Dict, Tuple
 
 import paramiko
-from paramiko import SSHClient, SFTPClient, AutoAddPolicy
+from paramiko import SSHClient, SFTPClient
+
+from ..config import get_known_hosts_file_path
+from .host_key import (
+    HostKeyChangedError,
+    HostKeyConfirmationRequiredError,
+    HostKeyProblem,
+    HostKeyVerificationReason,
+    UnknownHostKeyError,
+)
+from .known_hosts import compute_fingerprint_sha256, format_known_hosts_host
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +45,56 @@ class SSHConfig:
     def get_key(self) -> str:
         """Get unique key for connection pool."""
         return f"{self.username}@{self.host}:{self.port}"
+
+
+def _build_host_key_problem(
+    *,
+    host: str,
+    port: int,
+    key: paramiko.PKey,
+    reason: HostKeyVerificationReason,
+    expected_key: Optional[paramiko.PKey] = None,
+) -> HostKeyProblem:
+    known_hosts_host = format_known_hosts_host(host, port)
+    key_type = key.get_name()
+    key_base64 = key.get_base64()
+    public_key = f"{key_type} {key_base64}"
+    fingerprint_sha256 = compute_fingerprint_sha256(key.asbytes())
+
+    expected_fingerprint_sha256 = None
+    expected_public_key = None
+    if expected_key is not None:
+        expected_key_type = expected_key.get_name()
+        expected_key_base64 = expected_key.get_base64()
+        expected_public_key = f"{expected_key_type} {expected_key_base64}"
+        expected_fingerprint_sha256 = compute_fingerprint_sha256(expected_key.asbytes())
+
+    return HostKeyProblem(
+        host=host,
+        port=port,
+        known_hosts_host=known_hosts_host,
+        key_type=key_type,
+        fingerprint_sha256=fingerprint_sha256,
+        public_key=public_key,
+        reason=reason,
+        expected_fingerprint_sha256=expected_fingerprint_sha256,
+        expected_public_key=expected_public_key,
+    )
+
+
+class _RejectUnknownHostKeyPolicy(paramiko.MissingHostKeyPolicy):
+    def __init__(self, host: str, port: int):
+        self._host = host
+        self._port = port
+
+    def missing_host_key(self, client: SSHClient, hostname: str, key: paramiko.PKey) -> None:
+        problem = _build_host_key_problem(
+            host=self._host,
+            port=self._port,
+            key=key,
+            reason="unknown",
+        )
+        raise UnknownHostKeyError(problem)
 
 
 class SSHConnection:
@@ -75,7 +135,17 @@ class SSHConnection:
             
             try:
                 self._client = SSHClient()
-                self._client.set_missing_host_key_policy(AutoAddPolicy())
+
+                known_hosts_path = get_known_hosts_file_path()
+                try:
+                    if known_hosts_path.exists():
+                        self._client.load_host_keys(str(known_hosts_path))
+                except Exception as e:
+                    logger.warning(f"Failed to load known_hosts from {known_hosts_path}: {e}")
+
+                self._client.set_missing_host_key_policy(
+                    _RejectUnknownHostKeyPolicy(host=self.config.host, port=self.config.port)
+                )
                 
                 # Prepare connection kwargs
                 connect_kwargs = {
@@ -137,7 +207,17 @@ class SSHConnection:
                     connect_kwargs["pkey"] = pkey
                 
                 # Connect
-                self._client.connect(**connect_kwargs)
+                try:
+                    self._client.connect(**connect_kwargs)
+                except paramiko.ssh_exception.BadHostKeyException as e:
+                    problem = _build_host_key_problem(
+                        host=self.config.host,
+                        port=self.config.port,
+                        key=e.key,
+                        reason="changed",
+                        expected_key=e.expected_key,
+                    )
+                    raise HostKeyChangedError(problem) from e
                 
                 # Enable keepalive
                 transport = self._client.get_transport()
@@ -148,9 +228,33 @@ class SSHConnection:
                 logger.info(f"SSH connected to {self.config.get_key()}")
                 return True
                 
-            except Exception as e:
-                logger.error(f"SSH connection failed: {e}")
+            except HostKeyConfirmationRequiredError as e:
+                problem = e.problem
+                logger.warning(
+                    "SSH host key verification requires confirmation: host=%s port=%s reason=%s key_type=%s fingerprint=%s",
+                    problem.host,
+                    problem.port,
+                    problem.reason,
+                    problem.key_type,
+                    problem.fingerprint_sha256,
+                )
                 self._connected = False
+                if self._client:
+                    try:
+                        self._client.close()
+                    except Exception:
+                        pass
+                self._client = None
+                raise
+
+            except Exception as e:
+                logger.error(f"SSH connection failed: {e}", exc_info=True)
+                self._connected = False
+                if self._client:
+                    try:
+                        self._client.close()
+                    except Exception:
+                        pass
                 self._client = None
                 raise
     

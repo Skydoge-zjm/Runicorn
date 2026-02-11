@@ -1,7 +1,7 @@
 # Remote Viewer API 代码示例
 
-> **版本**: v0.5.0  
-> **最后更新**: 2025-10-25
+> **版本**: v0.6.0  
+> **最后更新**: 2026-01-15
 
 [English](../en/REMOTE_API_EXAMPLES.md) | [简体中文](REMOTE_API_EXAMPLES.md)
 
@@ -28,7 +28,7 @@ from typing import Optional, Dict, List, Any
 class RunicornRemoteClient:
     """Runicorn Remote Viewer API 客户端"""
     
-    def __init__(self, base_url: str = "http://localhost:23300"):
+    def __init__(self, base_url: str = "http://127.0.0.1:23300"):
         self.base_url = base_url
         self.session = requests.Session()
     
@@ -36,23 +36,25 @@ class RunicornRemoteClient:
         self,
         host: str,
         username: str,
-        auth_method: str = "key",
         port: int = 22,
-        **kwargs
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        private_key_path: Optional[str] = None,
+        passphrase: Optional[str] = None,
+        use_agent: bool = True,
     ) -> Dict[str, Any]:
         """
-        连接到远程服务器
+        建立 SSH 连接
         
         Args:
             host: 远程服务器地址
             username: SSH 用户名
-            auth_method: 认证方式 ("key", "password", "agent")
             port: SSH 端口
-            **kwargs: 额外参数
-                private_key_path: 私钥路径 (auth_method="key")
-                password: 密码 (auth_method="password")
-                key_passphrase: 私钥密码
-                timeout: 连接超时
+            password: SSH 密码（可选）
+            private_key: 私钥内容（可选）
+            private_key_path: 私钥路径（可选）
+            passphrase: 私钥密码（可选）
+            use_agent: 使用 SSH Agent（默认: True）
         
         Returns:
             包含 connection_id 的响应字典
@@ -61,23 +63,12 @@ class RunicornRemoteClient:
             "host": host,
             "port": port,
             "username": username,
-            "auth_method": auth_method,
+            "password": password,
+            "private_key": private_key,
+            "private_key_path": private_key_path,
+            "passphrase": passphrase,
+            "use_agent": use_agent,
         }
-        
-        # 添加认证信息
-        if auth_method == "key":
-            if "private_key_path" in kwargs:
-                payload["private_key_path"] = kwargs["private_key_path"]
-            if "key_passphrase" in kwargs:
-                payload["key_passphrase"] = kwargs["key_passphrase"]
-        elif auth_method == "password":
-            if "password" not in kwargs:
-                raise ValueError("Password required for password authentication")
-            payload["password"] = kwargs["password"]
-        
-        # 可选参数
-        if "timeout" in kwargs:
-            payload["timeout"] = kwargs["timeout"]
         
         response = self.session.post(
             f"{self.base_url}/api/remote/connect",
@@ -85,142 +76,72 @@ class RunicornRemoteClient:
         )
         response.raise_for_status()
         return response.json()
-    
-    def list_connections(self) -> List[Dict[str, Any]]:
-        """列出所有活动连接"""
-        response = self.session.get(f"{self.base_url}/api/remote/connections")
+
+    def list_sessions(self) -> List[Dict[str, Any]]:
+        response = self.session.get(f"{self.base_url}/api/remote/sessions")
         response.raise_for_status()
-        return response.json()["connections"]
-    
-    def disconnect(self, connection_id: str, cleanup_viewer: bool = True) -> Dict[str, Any]:
-        """断开连接"""
-        response = self.session.delete(
-            f"{self.base_url}/api/remote/connections/{connection_id}",
-            params={"cleanup_viewer": cleanup_viewer}
-        )
-        response.raise_for_status()
-        return response.json()
-    
-    def list_environments(
-        self,
-        connection_id: str,
-        filter_type: str = "all"
-    ) -> List[Dict[str, Any]]:
-        """列出 Python 环境"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/environments",
-            params={
-                "connection_id": connection_id,
-                "filter": filter_type
-            }
-        )
-        response.raise_for_status()
-        return response.json()["environments"]
-    
-    def detect_environments(
-        self,
-        connection_id: str,
-        force_refresh: bool = False
-    ) -> Dict[str, Any]:
-        """重新检测环境"""
+        return response.json()["sessions"]
+
+    def disconnect(self, *, host: str, port: int, username: str) -> Dict[str, Any]:
         response = self.session.post(
-            f"{self.base_url}/api/remote/environments/detect",
-            json={
-                "connection_id": connection_id,
-                "force_refresh": force_refresh
-            }
+            f"{self.base_url}/api/remote/disconnect",
+            json={"host": host, "port": port, "username": username},
         )
         response.raise_for_status()
         return response.json()
-    
-    def get_remote_config(self, connection_id: str, env_name: str) -> Dict[str, Any]:
-        """获取远程配置"""
+
+    def list_conda_envs(self, *, connection_id: str) -> List[Dict[str, Any]]:
         response = self.session.get(
-            f"{self.base_url}/api/remote/config",
-            params={
-                "connection_id": connection_id,
-                "env_name": env_name
-            }
+            f"{self.base_url}/api/remote/conda-envs",
+            params={"connection_id": connection_id},
         )
         response.raise_for_status()
-        return response.json()
-    
+        return response.json()["envs"]
+
     def start_viewer(
         self,
-        connection_id: str,
-        env_name: str,
-        remote_root: Optional[str] = None,
-        auto_open: bool = True
+        *,
+        host: str,
+        username: str,
+        remote_root: str,
+        port: int = 22,
+        password: Optional[str] = None,
+        private_key: Optional[str] = None,
+        private_key_path: Optional[str] = None,
+        passphrase: Optional[str] = None,
+        use_agent: bool = True,
+        local_port: Optional[int] = None,
+        remote_port: Optional[int] = None,
+        conda_env: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """启动 Remote Viewer"""
         payload = {
-            "connection_id": connection_id,
-            "env_name": env_name,
-            "auto_open": auto_open
+            "host": host,
+            "port": port,
+            "username": username,
+            "password": password,
+            "private_key": private_key,
+            "private_key_path": private_key_path,
+            "passphrase": passphrase,
+            "use_agent": use_agent,
+            "remote_root": remote_root,
+            "local_port": local_port,
+            "remote_port": remote_port,
+            "conda_env": conda_env,
         }
-        
-        if remote_root:
-            payload["remote_root"] = remote_root
-        
-        response = self.session.post(
-            f"{self.base_url}/api/remote/viewer/start",
-            json=payload
-        )
+        response = self.session.post(f"{self.base_url}/api/remote/viewer/start", json=payload)
         response.raise_for_status()
         return response.json()
-    
-    def stop_viewer(self, connection_id: str, cleanup: bool = True) -> Dict[str, Any]:
-        """停止 Remote Viewer"""
+
+    def stop_viewer(self, *, session_id: str) -> Dict[str, Any]:
         response = self.session.post(
             f"{self.base_url}/api/remote/viewer/stop",
-            json={
-                "connection_id": connection_id,
-                "cleanup": cleanup
-            }
+            json={"session_id": session_id},
         )
         response.raise_for_status()
         return response.json()
-    
-    def get_viewer_status(self, connection_id: str) -> Dict[str, Any]:
-        """获取 Viewer 状态"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/viewer/status",
-            params={"connection_id": connection_id}
-        )
-        response.raise_for_status()
-        return response.json()
-    
-    def get_viewer_logs(
-        self,
-        connection_id: str,
-        lines: int = 100
-    ) -> List[str]:
-        """获取 Viewer 日志"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/viewer/logs",
-            params={
-                "connection_id": connection_id,
-                "lines": lines
-            }
-        )
-        response.raise_for_status()
-        return response.json()["logs"]
-    
-    def health_check(self, connection_id: str) -> Dict[str, Any]:
-        """健康检查"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/health",
-            params={"connection_id": connection_id}
-        )
-        response.raise_for_status()
-        return response.json()
-    
-    def ping(self, connection_id: str) -> Dict[str, Any]:
-        """测试连接延迟"""
-        response = self.session.get(
-            f"{self.base_url}/api/remote/ping",
-            params={"connection_id": connection_id}
-        )
+
+    def get_viewer_session(self, *, session_id: str) -> Dict[str, Any]:
+        response = self.session.get(f"{self.base_url}/api/remote/viewer/status/{session_id}")
         response.raise_for_status()
         return response.json()
     
@@ -243,46 +164,28 @@ from runicorn_remote_client import RunicornRemoteClient
 # 创建客户端
 with RunicornRemoteClient() as client:
     # 1. 连接到远程服务器
-    result = client.connect(
-        host="gpu-server.com",
-        username="mluser",
-        auth_method="key",
-        private_key_path="~/.ssh/id_rsa"
-    )
+    result = client.connect(host="gpu-server.com", username="mluser", private_key_path="~/.ssh/id_rsa")
     
     connection_id = result["connection_id"]
     print(f"✓ 已连接: {connection_id}")
     
-    # 2. 列出 Python 环境
-    environments = client.list_environments(
-        connection_id=connection_id,
-        filter_type="runicorn_only"
-    )
-    
-    print(f"✓ 找到 {len(environments)} 个环境")
-    for env in environments:
-        print(f"  - {env['name']}: Python {env['python_version']}, Runicorn {env['runicorn_version']}")
-    
+    # 2. （可选）列出 Python 环境
+    envs = client.list_conda_envs(connection_id=connection_id)
+    print(f"✓ 找到 {len(envs)} 个环境")
+
     # 3. 启动 Remote Viewer
-    viewer = client.start_viewer(
-        connection_id=connection_id,
-        env_name=environments[0]["name"],
-        auto_open=True
-    )
-    
-    print(f"✓ Viewer 已启动: {viewer['viewer']['url']}")
-    
+    viewer = client.start_viewer(host="gpu-server.com", username="mluser", remote_root="/data/experiments")
+    session_id = viewer["session"]["sessionId"]
+    print(f"✓ Viewer 已启动: {viewer['session']['url']}")
+
     # 4. 监控状态
-    status = client.get_viewer_status(connection_id)
-    print(f"✓ Viewer 状态: {status['viewer']['status']}")
-    
-    # 5. 健康检查
-    health = client.health_check(connection_id)
-    print(f"✓ 连接健康: {health['health']}")
-    
-    # 6. 完成后清理
+    status = client.get_viewer_session(session_id=session_id)
+    print(f"✓ Viewer 状态: {status['status']}")
+
+    # 5. 完成后清理
     input("按 Enter 键断开连接...")
-    client.disconnect(connection_id)
+    client.stop_viewer(session_id=session_id)
+    client.disconnect(host="gpu-server.com", port=22, username="mluser")
     print("✓ 已断开连接")
 ```
 
@@ -309,31 +212,24 @@ class RunicornRemoteClient {
     const {
       host,
       username,
-      authMethod = 'key',
       port = 22,
-      privateKeyPath,
-      password,
-      keyPassphrase,
-      timeout
+      password = null,
+      privateKey = null,
+      privateKeyPath = null,
+      passphrase = null,
+      useAgent = true
     } = options;
 
     const payload = {
       host,
       port,
       username,
-      auth_method: authMethod,
+      password,
+      private_key: privateKey,
+      private_key_path: privateKeyPath,
+      passphrase,
+      use_agent: useAgent,
     };
-
-    // 添加认证信息
-    if (authMethod === 'key') {
-      if (privateKeyPath) payload.private_key_path = privateKeyPath;
-      if (keyPassphrase) payload.key_passphrase = keyPassphrase;
-    } else if (authMethod === 'password') {
-      if (!password) throw new Error('Password required');
-      payload.password = password;
-    }
-
-    if (timeout) payload.timeout = timeout;
 
     const response = await fetch(`${this.baseUrl}/api/remote/connect`, {
       method: 'POST',
@@ -349,27 +245,28 @@ class RunicornRemoteClient {
   }
 
   /**
-   * 列出所有活动连接
+   * 列出所有活动 SSH 会话
    */
-  async listConnections() {
-    const response = await fetch(`${this.baseUrl}/api/remote/connections`);
+  async listSessions() {
+    const response = await fetch(`${this.baseUrl}/api/remote/sessions`);
     
     if (!response.ok) {
-      throw new Error(`Failed to list connections: ${response.statusText}`);
+      throw new Error(`Failed to list sessions: ${response.statusText}`);
     }
 
     const data = await response.json();
-    return data.connections;
+    return data.sessions;
   }
 
   /**
-   * 断开连接
+   * 断开 SSH 会话
    */
-  async disconnect(connectionId, cleanupViewer = true) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/connections/${connectionId}?cleanup_viewer=${cleanupViewer}`,
-      { method: 'DELETE' }
-    );
+  async disconnect({ host, username, port = 22 }) {
+    const response = await fetch(`${this.baseUrl}/api/remote/disconnect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host, port, username }),
+    });
 
     if (!response.ok) {
       throw new Error(`Disconnect failed: ${response.statusText}`);
@@ -381,52 +278,50 @@ class RunicornRemoteClient {
   /**
    * 列出 Python 环境
    */
-  async listEnvironments(connectionId, filterType = 'all') {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/environments?connection_id=${connectionId}&filter=${filterType}`
-    );
+  async listCondaEnvs(connectionId) {
+    const response = await fetch(`${this.baseUrl}/api/remote/conda-envs?connection_id=${connectionId}`);
 
     if (!response.ok) {
       throw new Error(`Failed to list environments: ${response.statusText}`);
     }
 
     const data = await response.json();
-    return data.environments;
-  }
-
-  /**
-   * 重新检测环境
-   */
-  async detectEnvironments(connectionId, forceRefresh = false) {
-    const response = await fetch(`${this.baseUrl}/api/remote/environments/detect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        connection_id: connectionId,
-        force_refresh: forceRefresh,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Detection failed: ${response.statusText}`);
-    }
-
-    return response.json();
+    return data.envs;
   }
 
   /**
    * 启动 Remote Viewer
    */
-  async startViewer(connectionId, envName, options = {}) {
-    const { remoteRoot, autoOpen = true } = options;
+  async startViewer(options) {
+    const {
+      host,
+      username,
+      remoteRoot,
+      port = 22,
+      password = null,
+      privateKey = null,
+      privateKeyPath = null,
+      passphrase = null,
+      useAgent = true,
+      localPort = null,
+      remotePort = null,
+      condaEnv = null,
+    } = options;
 
     const payload = {
-      connection_id: connectionId,
-      env_name: envName,
-      auto_open: autoOpen,
+      host,
+      port,
+      username,
+      password,
+      private_key: privateKey,
+      private_key_path: privateKeyPath,
+      passphrase,
+      use_agent: useAgent,
+      remote_root: remoteRoot,
+      local_port: localPort,
+      remote_port: remotePort,
+      conda_env: condaEnv,
     };
-
-    if (remoteRoot) payload.remote_root = remoteRoot;
 
     const response = await fetch(`${this.baseUrl}/api/remote/viewer/start`, {
       method: 'POST',
@@ -444,13 +339,12 @@ class RunicornRemoteClient {
   /**
    * 停止 Remote Viewer
    */
-  async stopViewer(connectionId, cleanup = true) {
+  async stopViewer(sessionId) {
     const response = await fetch(`${this.baseUrl}/api/remote/viewer/stop`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        connection_id: connectionId,
-        cleanup,
+        session_id: sessionId,
       }),
     });
 
@@ -462,12 +356,10 @@ class RunicornRemoteClient {
   }
 
   /**
-   * 获取 Viewer 状态
+   * 获取 Viewer 会话状态
    */
-  async getViewerStatus(connectionId) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/viewer/status?connection_id=${connectionId}`
-    );
+  async getViewerSession(sessionId) {
+    const response = await fetch(`${this.baseUrl}/api/remote/viewer/status/${sessionId}`);
 
     if (!response.ok) {
       throw new Error(`Failed to get status: ${response.statusText}`);
@@ -476,51 +368,6 @@ class RunicornRemoteClient {
     return response.json();
   }
 
-  /**
-   * 获取 Viewer 日志
-   */
-  async getViewerLogs(connectionId, lines = 100) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/viewer/logs?connection_id=${connectionId}&lines=${lines}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to get logs: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.logs;
-  }
-
-  /**
-   * 健康检查
-   */
-  async healthCheck(connectionId) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/health?connection_id=${connectionId}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Health check failed: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  /**
-   * 测试连接延迟
-   */
-  async ping(connectionId) {
-    const response = await fetch(
-      `${this.baseUrl}/api/remote/ping?connection_id=${connectionId}`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Ping failed: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
 }
 
 // 导出
@@ -539,40 +386,42 @@ const client = new RunicornRemoteClient();
     const { connection_id } = await client.connect({
       host: 'gpu-server.com',
       username: 'mluser',
-      authMethod: 'key',
       privateKeyPath: '~/.ssh/id_rsa',
+      useAgent: true,
     });
 
     console.log(`✓ 已连接: ${connection_id}`);
 
     // 2. 列出环境
-    const environments = await client.listEnvironments(connection_id, 'runicorn_only');
+    const envs = await client.listCondaEnvs(connection_id);
     
-    console.log(`✓ 找到 ${environments.length} 个环境`);
-    environments.forEach(env => {
-      console.log(`  - ${env.name}: Python ${env.python_version}, Runicorn ${env.runicorn_version}`);
+    console.log(`✓ 找到 ${envs.length} 个环境`);
+    envs.forEach(env => {
+      console.log(`  - ${env.name}: Python ${env.python_version} (${env.type})`);
     });
 
     // 3. 启动 Viewer
-    const viewer = await client.startViewer(
-      connection_id,
-      environments[0].name,
-      { autoOpen: true }
-    );
+    const viewer = await client.startViewer({
+      host: 'gpu-server.com',
+      port: 22,
+      username: 'mluser',
+      privateKeyPath: '~/.ssh/id_rsa',
+      useAgent: true,
+      remoteRoot: '~/runicorn_data',
+      condaEnv: null,
+    });
 
-    console.log(`✓ Viewer 已启动: ${viewer.viewer.url}`);
+    const sessionId = viewer.session.sessionId;
+    console.log(`✓ Viewer 已启动: ${viewer.session.url}`);
 
     // 4. 监控状态
-    const status = await client.getViewerStatus(connection_id);
-    console.log(`✓ Viewer 状态: ${status.viewer.status}`);
+    const status = await client.getViewerSession(sessionId);
+    console.log(`✓ Viewer 状态: ${status.status}`);
 
-    // 5. 健康检查
-    const health = await client.healthCheck(connection_id);
-    console.log(`✓ 连接健康: ${health.health}`);
-
-    // 6. 完成后清理
-    // await client.disconnect(connection_id);
-    // console.log('✓ 已断开连接');
+    // 5. 完成后清理
+    await client.stopViewer(sessionId);
+    await client.disconnect({ host: 'gpu-server.com', port: 22, username: 'mluser' });
+    console.log('✓ 已断开连接');
 
   } catch (error) {
     console.error('错误:', error.message);
@@ -595,33 +444,22 @@ def monitor_training(host, username, key_path, env_name):
     
     with RunicornRemoteClient() as client:
         # 连接
-        result = client.connect(
+        result = client.connect(host=host, username=username, private_key_path=key_path)
+        
+        viewer = client.start_viewer(
             host=host,
             username=username,
-            auth_method="key",
-            private_key_path=key_path
+            remote_root="~/runicorn_data",
+            private_key_path=key_path,
+            conda_env=env_name,
         )
-        conn_id = result["connection_id"]
-        
-        # 启动 Viewer
-        viewer = client.start_viewer(
-            connection_id=conn_id,
-            env_name=env_name,
-            auto_open=False  # 不自动打开浏览器
-        )
-        
-        print(f"Viewer URL: {viewer['viewer']['url']}")
+        session_id = viewer["session"]["sessionId"]
+        print(f"Viewer URL: {viewer['session']['url']}")
         
         # 监控循环
         while True:
-            status = client.get_viewer_status(conn_id)
-            health = client.health_check(conn_id)
-            
-            if health["health"] != "healthy":
-                print(f"警告: 连接不健康 - {health}")
-                break
-            
-            print(f"状态: {status['viewer']['status']}, 运行时间: {status['viewer']['uptime_seconds']}s")
+            status = client.get_viewer_session(session_id=session_id)
+            print(f"状态: {status['status']}, 运行时间: {status['uptimeSeconds']}s")
             time.sleep(30)  # 每30秒检查一次
 
 # 使用
@@ -653,40 +491,33 @@ def manage_multiple_servers(servers):
             
             print(f"✓ 已连接到 {server['host']}: {conn_id}")
         
-        # 列出所有连接
-        all_connections = client.list_connections()
-        print(f"\n总计 {len(all_connections)} 个活动连接:")
+        # 列出所有会话
+        all_sessions = client.list_sessions()
+        print(f"\n总计 {len(all_sessions)} 个活动会话:")
         
-        for conn in all_connections:
-            print(f"  - {conn['host']}: {conn['status']}")
-            if conn.get('viewer'):
-                print(f"    Viewer: {conn['viewer']['url']}")
+        for sess in all_sessions:
+            print(f"  - {sess['key']}: connected={sess['connected']}")
         
         # 交互式管理
         while True:
-            print("\n选项: (l)ist, (h)ealth, (q)uit")
+            print("\n选项: (l)ist, (q)uit")
             choice = input("> ").lower()
             
             if choice == 'l':
-                for conn in client.list_connections():
-                    print(f"{conn['connection_id']}: {conn['host']} - {conn['status']}")
-            
-            elif choice == 'h':
-                for conn_id in connections:
-                    health = client.health_check(conn_id)
-                    print(f"{conn_id}: {health['health']}")
+                for sess in client.list_sessions():
+                    print(f"{sess['key']}: connected={sess['connected']}")
             
             elif choice == 'q':
                 break
     
     finally:
         # 清理所有连接
-        for conn_id in connections:
+        for server in servers:
             try:
-                client.disconnect(conn_id)
-                print(f"✓ 已断开: {conn_id}")
+                client.disconnect(host=server["host"], port=server.get("port", 22), username=server["username"])
+                print(f"✓ 已断开: {server['host']}")
             except Exception as e:
-                print(f"✗ 断开失败: {conn_id} - {e}")
+                print(f"✗ 断开失败: {server['host']} - {e}")
         
         client.close()
 
@@ -695,13 +526,11 @@ servers = [
     {
         "host": "gpu-server-01.com",
         "username": "mluser",
-        "auth_method": "key",
         "private_key_path": "~/.ssh/id_rsa"
     },
     {
         "host": "gpu-server-02.com",
         "username": "mluser",
-        "auth_method": "key",
         "private_key_path": "~/.ssh/id_rsa"
     },
 ]
@@ -719,36 +548,31 @@ def select_best_environment(host, username, key_path):
     
     with RunicornRemoteClient() as client:
         # 连接
-        result = client.connect(
-            host=host,
-            username=username,
-            auth_method="key",
-            private_key_path=key_path
-        )
+        result = client.connect(host=host, username=username, private_key_path=key_path)
         conn_id = result["connection_id"]
         
-        # 获取所有环境
-        envs = client.list_environments(conn_id, filter_type="runicorn_only")
+        envs = client.list_conda_envs(connection_id=conn_id)
         
         if not envs:
             print("错误: 未找到安装 Runicorn 的环境")
             return None
         
-        # 选择最新版本的 Runicorn
-        best_env = max(envs, key=lambda e: e["runicorn_version"])
+        best_env = next((e for e in envs if e.get("is_default")), envs[0])
         
         print(f"选择环境: {best_env['name']}")
         print(f"  Python: {best_env['python_version']}")
-        print(f"  Runicorn: {best_env['runicorn_version']}")
-        print(f"  存储: {best_env['storage_root']}")
+        print(f"  Type: {best_env['type']}")
         
         # 启动 Viewer
         viewer = client.start_viewer(
-            connection_id=conn_id,
-            env_name=best_env["name"]
+            host=host,
+            username=username,
+            remote_root="~/runicorn_data",
+            private_key_path=key_path,
+            conda_env=best_env["name"],
         )
         
-        return viewer["viewer"]["url"]
+        return viewer["session"]["url"]
 
 # 使用
 url = select_best_environment(
@@ -779,13 +603,7 @@ def safe_connect_and_start():
     
     try:
         # 连接
-        result = client.connect(
-            host="gpu-server.com",
-            username="mluser",
-            auth_method="key",
-            private_key_path="~/.ssh/id_rsa",
-            timeout=30
-        )
+        result = client.connect(host="gpu-server.com", username="mluser", private_key_path="~/.ssh/id_rsa")
         conn_id = result["connection_id"]
         
     except requests.exceptions.Timeout:
@@ -793,8 +611,8 @@ def safe_connect_and_start():
         return
     
     except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 401:
-            print("错误: SSH 认证失败，请检查密钥")
+        if e.response.status_code == 409:
+            print("错误: 需要确认 host key")
         elif e.response.status_code == 503:
             print("错误: SSH 服务不可用")
         else:
@@ -806,31 +624,19 @@ def safe_connect_and_start():
         return
     
     try:
-        # 获取环境
-        envs = client.list_environments(conn_id, "runicorn_only")
-        
-        if not envs:
-            print("错误: 未找到安装 Runicorn 的环境")
-            print("提示: 在远程服务器上运行 'pip install runicorn'")
-            return
-        
-        # 启动 Viewer
         viewer = client.start_viewer(
-            connection_id=conn_id,
-            env_name=envs[0]["name"]
+            host="gpu-server.com",
+            username="mluser",
+            remote_root="~/runicorn_data",
+            private_key_path="~/.ssh/id_rsa",
+            conda_env=None,
         )
-        
-        print(f"✓ 成功: {viewer['viewer']['url']}")
+        print(f"✓ 成功: {viewer['session']['url']}")
         
     except requests.exceptions.HTTPError as e:
         error_data = e.response.json()
         
-        if error_data.get("error") == "environment_not_found":
-            print(f"错误: 环境不存在 - {error_data['message']}")
-        elif error_data.get("error") == "viewer_already_running":
-            print("警告: Viewer 已在运行")
-        else:
-            print(f"错误: {error_data.get('message', str(e))}")
+        print(f"错误: {error_data.get('detail', str(e))}")
     
     except Exception as e:
         print(f"错误: 启动失败 - {e}")
@@ -839,7 +645,7 @@ def safe_connect_and_start():
         # 确保清理
         if conn_id:
             try:
-                client.disconnect(conn_id)
+                client.disconnect(host="gpu-server.com", port=22, username="mluser")
             except:
                 pass
         
@@ -873,9 +679,8 @@ client.close()  # 容易忘记
 result = client.connect(
     host="remote-server.com",
     username="user",
-    auth_method="key",
     private_key_path="~/.ssh/id_rsa",
-    timeout=60  # 增加超时时间
+    port=22,
 )
 ```
 
@@ -891,29 +696,11 @@ key_path = os.getenv("SSH_KEY_PATH")
 client.connect(
     host=host,
     username=username,
-    auth_method="key",
     private_key_path=key_path
 )
 ```
 
-### 4. 定期健康检查
-
-```python
-import time
-
-def keep_alive(client, conn_id, interval=30):
-    """定期 ping 保持连接活跃"""
-    while True:
-        try:
-            result = client.ping(conn_id)
-            print(f"Ping: {result['latency_ms']}ms")
-            time.sleep(interval)
-        except Exception as e:
-            print(f"连接丢失: {e}")
-            break
-```
-
-### 5. 日志记录
+### 4. 日志记录
 
 ```python
 import logging
@@ -931,7 +718,7 @@ except Exception as e:
 ---
 
 **作者**: Runicorn Development Team  
-**版本**: v0.5.0  
-**最后更新**: 2025-10-25
+**版本**: v0.5.4  
+**最后更新**: 2025-12-22
 
 **[返回 API 文档](README.md)** | **[查看 API 参考](remote_api.md)**

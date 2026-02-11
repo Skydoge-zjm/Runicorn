@@ -3,13 +3,15 @@ export default {
   'menu.runs': 'Runs',
   'menu.experiments': 'Experiments',
   'menu.comparison': 'Comparison',
-  'menu.artifacts': 'Artifacts',
   'menu.performance': 'Performance Monitor',
   'menu.remote': 'Remote',
   'tag.api_ok': 'API OK',
   'tag.api_loading': 'API…',
   'tag.api_down': 'API DOWN',
   
+  'table.path': 'Path',
+  'table.alias': 'Alias',
+  'table.tags': 'Tags',
   'table.project': 'Project',
   'table.name': 'Name',
   'table.run_id': 'Run ID',
@@ -38,5 +40,11 @@ export default {
   'cancel': 'Cancel',
   'confirm': 'Confirm',
   'close': 'Close',
+  'common.cancel': 'Cancel',
+  'common.confirm': 'Confirm',
+
+  'common.copied': 'Copied',
+  'common.copy': 'Copy',
+  'common.copy_failed': 'Failed to copy',
 }
 

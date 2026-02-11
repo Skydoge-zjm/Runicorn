@@ -6,8 +6,8 @@
 
 **Document Type**: Architecture  
 **Purpose**: React application design and patterns  
-**Version**: v0.5.3  
-**Last Updated**: 2025-11-28
+**Version**: v0.6.0  
+**Last Updated**: 2025-01-XX
 
 ---
 
@@ -30,7 +30,10 @@ src/
 │   ├── MetricChart.tsx
 │   ├── LogsViewer.tsx
 │   ├── LineageGraph.tsx
-│   └── SettingsDrawer.tsx
+│   ├── SettingsDrawer.tsx
+│   ├── PathTreePanel.tsx      # v0.6.0 - Path tree navigation
+│   ├── CompareChartsView.tsx  # v0.6.0 - Multi-run comparison
+│   └── CompareRunsPanel.tsx   # v0.6.0 - Compare mode panel
 │
 ├── contexts/              # React Context
 │   └── SettingsContext.tsx
@@ -378,6 +381,112 @@ const metrics = await getStepMetrics(runId, settings.maxDataPoints)
 - Reduces data transfer for large experiments (100k+ points → 2k points)
 - LTTB preserves visual characteristics of the data
 - Configurable via UI settings
+
+---
+
+## New Frontend Features (v0.6.0) 🆕
+
+### Path Tree Navigation
+
+**Component**: `PathTreePanel.tsx`
+
+The ExperimentPage now includes a VSCode-style path tree panel for hierarchical navigation:
+
+```typescript
+// ExperimentPage layout with PathTreePanel
+<Layout>
+  <Sider width={240}>
+    <PathTreePanel
+      selectedPath={selectedPath}
+      onSelectPath={setSelectedPath}
+      onBatchDelete={handleBatchDelete}
+      onBatchExport={handleBatchExport}
+    />
+  </Sider>
+  <Content>
+    <ExperimentTable pathFilter={selectedPath} />
+  </Content>
+</Layout>
+```
+
+**Features**:
+- Hierarchical folder structure with expand/collapse
+- Run count badges with running indicator animation
+- Search/filter paths
+- Right-click context menu for batch operations
+- Persistent expanded state in localStorage
+
+### Inline Compare View
+
+**Components**: `CompareRunsPanel.tsx`, `CompareChartsView.tsx`
+
+Multi-run comparison directly in the experiment list page:
+
+```typescript
+// Compare mode layout
+{compareMode ? (
+  <Layout>
+    <Sider width={280}>
+      <CompareRunsPanel
+        runs={selectedRuns}
+        colors={chartColors}
+        visibleRunIds={visibleRunIds}
+        onToggleRunVisibility={toggleRunVisibility}
+        onBack={() => setCompareMode(false)}
+      />
+    </Sider>
+    <Content>
+      <CompareChartsView
+        runIds={selectedRunIds}
+        visibleRunIds={visibleRunIds}
+        metricsMap={metricsMap}
+        runLabels={runLabels}
+        colors={chartColors}
+        loading={loading}
+      />
+    </Content>
+  </Layout>
+) : (
+  <ExperimentTable onCompare={enterCompareMode} />
+)}
+```
+
+**Key Features**:
+- Auto-detect common metrics across selected runs
+- Toggle individual run/metric visibility
+- ECharts group synchronization for linked zoom
+- Color-coded run identification
+
+### Enhanced LogsViewer
+
+**Component**: `LogsViewer.tsx`
+
+Terminal-style log viewer with full ANSI color support:
+
+```typescript
+// ANSI color rendering
+const ansiConverter = new AnsiToHtml({
+  fg: '#e6e9ef',
+  bg: '#0b1020',
+  colors: { /* terminal color palette */ }
+})
+
+// Render with line numbers and search highlighting
+{displayLines.map((line, index) => (
+  <div className="log-line">
+    <span className="line-number">{index + 1}</span>
+    <span dangerouslySetInnerHTML={{ __html: ansiConverter.toHtml(line) }} />
+  </div>
+))}
+```
+
+**Features**:
+- Full ANSI escape code support (colors, bold, etc.)
+- Line numbers for easy reference
+- Keyword search with highlighting
+- Smart tqdm progress bar filtering
+- Auto-scroll toggle
+- Copy all / Clear buttons
 
 ---
 

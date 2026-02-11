@@ -61,15 +61,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_manage.add_argument("--days", type=int, default=30, help="Days for cleanup (default: 30)")
     p_manage.add_argument("--dry-run", action="store_true", help="Preview cleanup without deleting")
     
-    # Artifacts management subcommand
-    p_artifacts = sub.add_parser("artifacts", help="Manage artifacts (models, datasets)")
-    p_artifacts.add_argument("--storage", default=os.environ.get("RUNICORN_DIR") or None, help="Storage root directory")
-    p_artifacts.add_argument("--action", choices=["list", "versions", "info", "delete", "stats"], required=True, help="Artifact action")
-    p_artifacts.add_argument("--name", help="Artifact name")
-    p_artifacts.add_argument("--type", help="Artifact type (model, dataset, config, etc.)")
-    p_artifacts.add_argument("--version", type=int, help="Artifact version number")
-    p_artifacts.add_argument("--permanent", action="store_true", help="Permanent delete (vs soft delete)")
-    
     # Rate limit management subcommand
     p_rate = sub.add_parser("rate-limit", help="Manage API rate limits")
     p_rate.add_argument("--action", choices=["show", "list", "get", "set", "remove", "settings", "reset", "validate"], 
@@ -85,16 +76,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_rate.add_argument("--no-log-violations", action="store_true", help="Don't log rate limit violations")
     p_rate.add_argument("--whitelist-localhost", action="store_true", help="Whitelist localhost")
     p_rate.add_argument("--no-whitelist-localhost", action="store_true", help="Don't whitelist localhost")
-    
-    # Manifest generation subcommand
-    p_manifest = sub.add_parser("generate-manifest", help="Generate sync manifest (server-side)")
-    p_manifest.add_argument("--root", default=".", help="Root directory of experiments (default: current directory)")
-    p_manifest.add_argument("--output", help="Output path for manifest file")
-    p_manifest.add_argument("--active", action="store_true", help="Generate active manifest (only recent experiments)")
-    p_manifest.add_argument("--full", action="store_true", help="Generate full manifest (all experiments, default)")
-    p_manifest.add_argument("--active-window", type=int, default=3600, help="Time window for active experiments in seconds (default: 3600)")
-    p_manifest.add_argument("--no-incremental", action="store_true", help="Disable incremental generation")
-    p_manifest.add_argument("--verbose", "-v", action="store_true", help="Enable verbose output")
+
+    # Delete run with assets subcommand
+    p_delete = sub.add_parser("delete", help="Permanently delete runs and their orphaned assets")
+    p_delete.add_argument("--storage", default=os.environ.get("RUNICORN_DIR") or None, help="Storage root directory")
+    p_delete.add_argument("--run-id", dest="run_ids", action="append", help="Run ID to delete (can specify multiple)")
+    p_delete.add_argument("--dry-run", action="store_true", help="Preview deletion without actually deleting")
+    p_delete.add_argument("--force", action="store_true", help="Skip confirmation prompt")
 
     args = parser.parse_args(argv)
 
@@ -137,159 +125,6 @@ def main(argv: Optional[list[str]] = None) -> int:
             print(f"  user_root_dir : {cfg.get('user_root_dir') or '(not set)'}")
             if not cfg.get('user_root_dir'):
                 print("\nTip: Set it via:\n  runicorn config --set-user-root <ABSOLUTE_PATH>")
-        return 0
-    
-    if args.cmd == "artifacts":
-        try:
-            from .artifacts import create_artifact_storage, LineageTracker
-        except ImportError:
-            print("Error: Artifacts system is not available")
-            print("This may be a module loading issue. Check your installation.")
-            return 1
-        
-        import datetime
-        root = _default_storage_dir(getattr(args, "storage", None))
-        storage = create_artifact_storage(root)
-        
-        if args.action == "list":
-            artifacts = storage.list_artifacts(type=args.type)
-            
-            if not artifacts:
-                print("No artifacts found.")
-                return 0
-            
-            print(f"Found {len(artifacts)} artifact(s):\n")
-            print(f"{'Name':<30} {'Type':<10} {'Versions':<10} {'Size':<15} {'Latest':<10}")
-            print("-" * 85)
-            
-            for art in artifacts:
-                size_mb = art["size_bytes"] / (1024 * 1024)
-                print(f"{art['name']:<30} {art['type']:<10} {art['num_versions']:<10} {size_mb:>10.2f} MB   v{art['latest_version']}")
-            
-            return 0
-        
-        elif args.action == "versions":
-            if not args.name:
-                print("Error: --name is required for 'versions' action")
-                return 1
-            
-            versions = storage.list_versions(args.name, type=args.type)
-            
-            if not versions:
-                print(f"No versions found for artifact: {args.name}")
-                return 0
-            
-            print(f"Versions for {args.name}:\n")
-            print(f"{'Version':<10} {'Created':<25} {'Size':<15} {'Files':<8} {'Run'}")
-            print("-" * 90)
-            
-            for v in versions:
-                created = datetime.datetime.fromtimestamp(v.created_at).strftime("%Y-%m-%d %H:%M:%S")
-                size_mb = v.size_bytes / (1024 * 1024)
-                run_id = v.created_by_run[:20] + "..." if len(v.created_by_run) > 20 else v.created_by_run
-                print(f"v{v.version:<9} {created:<25} {size_mb:>10.2f} MB   {v.num_files:<8} {run_id}")
-            
-            return 0
-        
-        elif args.action == "info":
-            if not args.name or args.version is None:
-                print("Error: --name and --version are required for 'info' action")
-                return 1
-            
-            try:
-                metadata, manifest = storage.load_artifact(args.name, args.type, args.version)
-                
-                print(f"\nArtifact: {args.name}:v{args.version}")
-                print("=" * 60)
-                print(f"Type:         {metadata.type}")
-                print(f"Status:       {metadata.status}")
-                print(f"Created:      {datetime.datetime.fromtimestamp(metadata.created_at).strftime('%Y-%m-%d %H:%M:%S')}")
-                print(f"Created by:   {metadata.created_by_run}")
-                print(f"Size:         {metadata.size_bytes / (1024 * 1024):.2f} MB")
-                print(f"Files:        {metadata.num_files}")
-                print(f"References:   {metadata.num_references}")
-                
-                if metadata.description:
-                    print(f"Description:  {metadata.description}")
-                
-                if metadata.aliases:
-                    print(f"Aliases:      {', '.join(metadata.aliases)}")
-                
-                if metadata.tags:
-                    print(f"Tags:         {', '.join(metadata.tags)}")
-                
-                if metadata.metadata:
-                    print(f"\nMetadata:")
-                    for key, value in metadata.metadata.items():
-                        print(f"  {key}: {value}")
-                
-                if manifest.files:
-                    print(f"\nFiles ({len(manifest.files)}):")
-                    for f in manifest.files[:10]:  # Show first 10
-                        print(f"  {f.path} ({f.size / 1024:.1f} KB)")
-                    
-                    if len(manifest.files) > 10:
-                        print(f"  ... and {len(manifest.files) - 10} more files")
-                
-                return 0
-                
-            except FileNotFoundError as e:
-                print(f"Error: {e}")
-                return 1
-        
-        elif args.action == "delete":
-            if not args.name or args.version is None:
-                print("Error: --name and --version are required for 'delete' action")
-                return 1
-            
-            confirm = input(f"Delete {args.name}:v{args.version}? [y/N] ")
-            if confirm.lower() != 'y':
-                print("Cancelled.")
-                return 0
-            
-            try:
-                success = storage.delete_artifact_version(
-                    args.name,
-                    args.type or "model",
-                    args.version,
-                    soft_delete=not args.permanent
-                )
-                
-                if success:
-                    print(f"✅ {'Permanently' if args.permanent else 'Soft'} deleted {args.name}:v{args.version}")
-                else:
-                    print(f"Failed to delete {args.name}:v{args.version}")
-                    return 1
-                
-                return 0
-                
-            except Exception as e:
-                print(f"Error: {e}")
-                return 1
-        
-        elif args.action == "stats":
-            stats = storage.get_storage_stats()
-            
-            print("\nArtifact Storage Statistics")
-            print("=" * 60)
-            print(f"Total Artifacts:  {stats['total_artifacts']}")
-            print(f"Total Versions:   {stats['total_versions']}")
-            print(f"Total Size:       {stats['total_size_bytes'] / (1024**3):.2f} GB")
-            print(f"Dedup Enabled:    {stats['dedup_enabled']}")
-            
-            if stats['dedup_enabled']:
-                print(f"\nDeduplication Stats:")
-                print(f"  Pool Size:      {stats.get('dedup_pool_size_bytes', 0) / (1024**3):.2f} GB")
-                print(f"  Space Saved:    {stats.get('space_saved_bytes', 0) / (1024**3):.2f} GB")
-                print(f"  Dedup Ratio:    {stats.get('dedup_ratio', 0) * 100:.1f}%")
-            
-            if stats.get('by_type'):
-                print(f"\nBy Type:")
-                for type_name, type_stats in stats['by_type'].items():
-                    print(f"  {type_name.capitalize():<10} {type_stats['count']} artifacts, {type_stats['versions']} versions, {type_stats['size_bytes'] / (1024**3):.2f} GB")
-            
-            return 0
-        
         return 0
 
     if args.cmd == "export":
@@ -365,7 +200,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         def is_within(base: Path, target: Path) -> bool:
             try:
-                return str(target.resolve()).startswith(str(base.resolve()))
+                target.resolve().relative_to(base.resolve())
+                return True
             except Exception:
                 return False
 
@@ -720,82 +556,90 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return 1
             
         return 0
-    
-    if args.cmd == "generate-manifest":
-        # Import manifest CLI
-        try:
-            from .manifest.cli import generate_manifest_cli, setup_logging
-            from .manifest.generator import ManifestGenerator, ManifestType
-        except ImportError:
-            print("Error: Manifest system is not available")
-            print("This may be a module loading issue. Check your installation.")
+
+    if args.cmd == "delete":
+        root = _default_storage_dir(getattr(args, "storage", None))
+        run_ids = getattr(args, "run_ids", None) or []
+        dry_run = getattr(args, "dry_run", False)
+        force = getattr(args, "force", False)
+        
+        if not run_ids:
+            print("Error: --run-id is required")
+            print("Usage: runicorn delete --run-id <run_id> [--run-id <run_id2>] [--dry-run] [--force]")
             return 1
         
-        # Setup logging
-        setup_logging(args.verbose)
+        from .assets.cleanup import delete_run_completely
         
-        try:
-            # Determine manifest type
-            if args.active:
-                manifest_type = ManifestType.ACTIVE
-            else:
-                manifest_type = ManifestType.FULL
+        # Preview mode
+        if dry_run:
+            print("=" * 60)
+            print("DRY RUN - No files will be deleted")
+            print("=" * 60)
+        
+        total_blobs = 0
+        total_bytes = 0
+        
+        for run_id in run_ids:
+            print(f"\n{'[Preview] ' if dry_run else ''}Deleting run: {run_id}")
             
-            # Resolve paths
-            root_path = Path(args.root).resolve()
-            if not root_path.exists():
-                print(f"Error: Root directory does not exist: {root_path}")
-                return 1
-            
-            if not root_path.is_dir():
-                print(f"Error: Root path is not a directory: {root_path}")
-                return 1
-            
-            output_path = Path(args.output).resolve() if args.output else None
-            
-            # Create generator
-            generator = ManifestGenerator(
-                remote_root=root_path,
-                active_window_seconds=args.active_window,
-                incremental=not args.no_incremental
+            result = delete_run_completely(
+                run_id=run_id,
+                storage_root=root,
+                dry_run=dry_run,
             )
             
-            # Generate manifest
-            print(f"Generating {manifest_type.value} manifest...")
-            manifest, output_file = generator.generate(
-                manifest_type=manifest_type,
-                output_path=output_path
-            )
+            if not result["success"]:
+                print(f"  ✗ Failed: {result['errors']}")
+                continue
             
-            # Print summary
-            print("\n" + "=" * 60)
-            print("Manifest Generation Complete")
-            print("=" * 60)
-            print(f"Type:          {manifest_type.value}")
-            print(f"Output:        {output_file}")
-            print(f"Compressed:    {output_file}.gz")
-            print(f"Revision:      {manifest.revision}")
-            print(f"Snapshot ID:   {manifest.snapshot_id}")
-            print(f"Experiments:   {manifest.total_experiments}")
-            print(f"Files:         {manifest.total_files}")
-            print(f"Total Size:    {manifest.total_bytes / (1024*1024):.2f} MB")
-            print("=" * 60)
+            print(f"  Run directory: {'would be deleted' if dry_run else 'deleted'}")
             
-            return 0
+            orphaned = result.get("orphaned_assets", [])
+            kept = result.get("kept_assets", [])
+            
+            if orphaned:
+                print(f"  Orphaned assets ({len(orphaned)}) - {'would be' if dry_run else ''} deleted:")
+                for a in orphaned:
+                    name = a.get('name') or (a.get('fingerprint') or '')[:16] or 'unknown'
+                    print(f"    - [{a.get('asset_type')}] {name}")
+            
+            if kept:
+                print(f"  Shared assets ({len(kept)}) - kept (referenced by other runs):")
+                for a in kept:
+                    name = a.get('name') or (a.get('fingerprint') or '')[:16] or 'unknown'
+                    print(f"    - [{a.get('asset_type')}] {name}")
+            
+            blobs = result.get("blobs_deleted", 0)
+            bytes_freed = result.get("bytes_freed", 0)
+            total_blobs += blobs
+            total_bytes += bytes_freed
+            
+            if blobs > 0:
+                print(f"  Blobs deleted: {blobs} ({_format_bytes(bytes_freed)})")
         
-        except KeyboardInterrupt:
-            print("\nInterrupted by user")
-            return 130
+        print("\n" + "=" * 60)
+        if dry_run:
+            print(f"DRY RUN Summary: Would delete {len(run_ids)} run(s)")
+            print(f"  Blobs: {total_blobs}")
+            print(f"  Space: {_format_bytes(total_bytes)}")
+        else:
+            print(f"Deleted {len(run_ids)} run(s)")
+            print(f"  Blobs removed: {total_blobs}")
+            print(f"  Space freed: {_format_bytes(total_bytes)}")
         
-        except Exception as e:
-            print(f"Error: Manifest generation failed: {e}")
-            if args.verbose:
-                import traceback
-                traceback.print_exc()
-            return 1
+        return 0
     
     parser.print_help()
     return 1
+
+
+def _format_bytes(size: int) -> str:
+    """Format bytes to human readable string."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} PB"
 
 
 if __name__ == "__main__":

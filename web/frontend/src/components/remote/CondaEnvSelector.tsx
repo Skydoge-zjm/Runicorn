@@ -37,6 +37,7 @@ const { Text, Title } = Typography
 interface CondaEnvSelectorProps {
   envs: CondaEnv[]
   connectionId: string
+  initialEnv?: string
   onSelect: (envName: string) => void
   onCancel: () => void
   loading?: boolean
@@ -53,12 +54,16 @@ interface EnvVersionInfo {
 export default function CondaEnvSelector({
   envs,
   connectionId,
+  initialEnv,
   onSelect,
   onCancel,
   loading = false
 }: CondaEnvSelectorProps) {
   const { t } = useTranslation()
   const [selectedEnv, setSelectedEnv] = useState<string>(() => {
+    if (initialEnv && envs.some(e => e.name === initialEnv)) {
+      return initialEnv
+    }
     // Auto-select default environment
     const defaultEnv = envs.find(e => e.isDefault)
     return defaultEnv?.name || envs[0]?.name || 'system'

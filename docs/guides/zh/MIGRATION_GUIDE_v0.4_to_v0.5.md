@@ -662,7 +662,7 @@ runicorn --version
 - 🔧 [故障排查](../../reference/zh/TROUBLESHOOTING.md)
 
 **社区**:
-- 💬 [GitHub Issues](https://github.com/yourusername/runicorn/issues)
+- 💬 [GitHub Issues](https://github.com/Skydoge-zjm/runicorn/issues)
 - 📧 Email: support@runicorn.dev
 
 **报告问题时请包含**:
