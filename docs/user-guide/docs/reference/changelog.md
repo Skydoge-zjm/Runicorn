@@ -164,7 +164,10 @@ All notable changes to Runicorn.
 
 ## v0.4.0 - 2025-10-03
 
-### 🎉 Major New Feature: Artifacts (Model Versioning)
+### 🎉 Artifacts (Model Versioning)
+
+!!! warning "Deprecated in v0.6.0"
+    The Artifacts API (`rn.Artifact`, `run.log_artifact`, `run.use_artifact`) has been replaced by the [Assets System](../getting-started/assets-system.md) in v0.6.0. See the Assets guide for the current approach.
 
 #### Core Features
 
