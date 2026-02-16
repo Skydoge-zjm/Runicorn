@@ -40,7 +40,7 @@ except ImportError as e:
 
 # Optional: Import monitoring if needed
 try:
-    from .monitors import MetricMonitor, AnomalyDetector
+    from .extensions.monitors import MetricMonitor, AnomalyDetector
     HAS_MONITORING = True
 except ImportError:
     MetricMonitor = None
@@ -49,7 +49,7 @@ except ImportError:
 
 # Optional: Import environment capture
 try:
-    from .environment import EnvironmentCapture
+    from .extensions.environment import EnvironmentCapture
     HAS_ENV_CAPTURE = True
 except ImportError:
     EnvironmentCapture = None
