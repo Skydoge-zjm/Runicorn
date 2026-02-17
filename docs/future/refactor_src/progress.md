@@ -45,7 +45,10 @@
 
 **RF-15 详情**: CLI export 命令和 export-data 命令改用 iter_all_runs()/find_run_dir_by_id() 替代手动遍历，同时支持新布局（runs/<path>/<id>）和旧布局（<project>/<name>/runs/<id>）。viewer/api/storage.py 的 get_storage_stats() 改用 iter_all_runs() 统计，输出字段从 projects_count/experiments_count 简化为 paths_count。extensions/experiment.py 的 _find_run_path() 新增新布局路径 + find_run_dir_by_id() fallback。
 
-| RF-11: 删除 FileStorageBackend 半成品 | 🔲 待开始 | - |
+| RF-11: 删除 FileStorageBackend 半成品 | ✅ 完成 | 2026-02-17 |
+
+**RF-11 详情**: 删除 FileStorageBackend（半成品，多处 Placeholder，create_experiment 访问不存在的 experiment.project/name）和 HybridStorageBackend（依赖前者，同样不可用）。FilesToSQLiteFileReader 从继承 FileStorageBackend 改为继承 StorageBackend，新增 _experiments 缓存使 get_experiment/get_metrics 可用，_load_experiment_from_files 改用 path 字段替代 project/name，_verify_migration 同样修正。ensure_modern_storage() 去除 FileStorageBackend/HybridStorageBackend 回退路径，统一返回 SQLiteStorageBackend。storage/__init__.py 和 sdk.py 导出同步更新。
+
 | RF-12: 处理 modern_storage.py | 🔲 待开始 | - |
 
 ---

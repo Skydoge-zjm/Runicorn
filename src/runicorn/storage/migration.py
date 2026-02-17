@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Iterator
 
 from .models import ExperimentRecord, MetricRecord, EnvironmentRecord, MigrationStatus, QueryParams
-from .backends import StorageBackend, FileStorageBackend, SQLiteStorageBackend
+from .backends import StorageBackend, SQLiteStorageBackend
 
 logger = logging.getLogger(__name__)
 
@@ -177,8 +177,8 @@ class FilesToSQLiteMigrator(StorageMigrator):
                     continue
                 
                 # Verify key fields
-                if sqlite_exp.project != experiment.project:
-                    errors.append(f"Project mismatch for {experiment.id}")
+                if sqlite_exp.path != experiment.path:
+                    errors.append(f"Path mismatch for {experiment.id}")
                 if sqlite_exp.best_metric_value != experiment.best_metric_value:
                     errors.append(f"Best metric mismatch for {experiment.id}")
         
@@ -191,119 +191,46 @@ class FilesToSQLiteMigrator(StorageMigrator):
         }
 
 
-class FilesToSQLiteFileReader(FileStorageBackend):
+class FilesToSQLiteFileReader(StorageBackend):
     """
     Specialized file reader for migration purposes.
     
-    This class reads existing file-based experiments and converts them
-    to the new data model format.
+    Reads existing file-based experiments and converts them
+    to ExperimentRecord format. Not a real backend — only
+    list_experiments() and get_metrics() are implemented;
+    other abstract methods are stubs.
     """
     
     def __init__(self, root_dir: Path):
         """Initialize file reader for migration."""
-        super().__init__(root_dir)
+        self.root_dir = Path(root_dir)
+        # Cache loaded experiments so get_experiment/get_metrics can find them
+        self._experiments: Dict[str, ExperimentRecord] = {}
+    
+    # -- Implemented for migration --
     
     def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
-        """
-        Read all file-based experiments and convert to ExperimentRecord format.
-        """
+        """Read all file-based experiments and convert to ExperimentRecord format."""
         experiments = []
-        
-        # Import the existing storage utilities
-        from .file_utils import iter_all_runs, read_json
+        from .file_utils import iter_all_runs
         
         for entry in iter_all_runs(self.root_dir, include_deleted=query.include_deleted):
             try:
                 experiment = self._load_experiment_from_files(entry)
                 if experiment:
                     experiments.append(experiment)
+                    self._experiments[experiment.id] = experiment
             except Exception as e:
                 logger.warning(f"Failed to load experiment from {entry.dir}: {e}")
         
         return experiments
     
-    def _load_experiment_from_files(self, entry) -> Optional[ExperimentRecord]:
-        """
-        Load experiment data from file system and convert to ExperimentRecord.
-        
-        Args:
-            entry: RunEntry from the file scanner
-            
-        Returns:
-            ExperimentRecord if successful, None otherwise
-        """
-        try:
-            run_dir = entry.dir
-            
-            # Load metadata files
-            meta = self._read_json_safe(run_dir / "meta.json")
-            status = self._read_json_safe(run_dir / "status.json")
-            summary = self._read_json_safe(run_dir / "summary.json")
-            
-            # Extract core information
-            exp_id = meta.get("id") or run_dir.name
-            project = meta.get("project") or entry.project or "unknown"
-            name = meta.get("name") or entry.name or "default"
-            
-            # Handle timestamps
-            created_at = meta.get("created_at") or run_dir.stat().st_ctime
-            updated_at = status.get("ended_at") or meta.get("created_at") or created_at
-            started_at = status.get("started_at")
-            ended_at = status.get("ended_at")
-            
-            # Get status information
-            exp_status = status.get("status", "finished")
-            exit_reason = status.get("exit_reason")
-            
-            # Extract best metric information
-            best_metric_name = summary.get("best_metric_name")
-            best_metric_value = summary.get("best_metric_value")
-            best_metric_step = summary.get("best_metric_step")
-            best_metric_mode = summary.get("best_metric_mode")
-            
-            # Check for soft delete
-            deleted_at = None
-            delete_reason = None
-            deleted_file = run_dir / ".deleted"
-            if deleted_file.exists():
-                deleted_info = self._read_json_safe(deleted_file)
-                deleted_at = deleted_info.get("deleted_at")
-                delete_reason = deleted_info.get("reason")
-            
-            # Create ExperimentRecord
-            return ExperimentRecord(
-                id=exp_id,
-                project=project,
-                name=name,
-                created_at=created_at,
-                updated_at=updated_at,
-                started_at=started_at,
-                ended_at=ended_at,
-                status=exp_status,
-                exit_reason=exit_reason,
-                pid=meta.get("pid"),
-                python_version=meta.get("python"),
-                platform=meta.get("platform"),
-                hostname=meta.get("hostname"),
-                best_metric_name=best_metric_name,
-                best_metric_value=best_metric_value,
-                best_metric_step=best_metric_step,
-                best_metric_mode=best_metric_mode,
-                deleted_at=deleted_at,
-                delete_reason=delete_reason,
-                run_dir=str(run_dir),
-                duration_seconds=None,  # Will be computed
-                metric_count=0  # Will be computed
-            )
-            
-        except Exception as e:
-            logger.error(f"Failed to load experiment from {entry.dir}: {e}")
-            return None
+    def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
+        """Look up a previously loaded experiment by ID."""
+        return self._experiments.get(exp_id)
     
     def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
-        """
-        Load metrics from events.jsonl file and convert to MetricRecord format.
-        """
+        """Load metrics from events.jsonl file and convert to MetricRecord format."""
         try:
             experiment = self.get_experiment(exp_id)
             if not experiment:
@@ -314,14 +241,11 @@ class FilesToSQLiteFileReader(FileStorageBackend):
                 return []
             
             metrics = []
-            
-            # Parse events.jsonl
             with open(events_path, "r", encoding="utf-8", errors="ignore") as f:
                 for line in f:
                     line = line.strip()
                     if not line:
                         continue
-                    
                     try:
                         event = json.loads(line)
                         if event.get("type") == "metrics":
@@ -329,17 +253,12 @@ class FilesToSQLiteFileReader(FileStorageBackend):
                             timestamp = event.get("ts", time.time())
                             step = data.get("global_step") or data.get("step")
                             stage = data.get("stage")
-                            
-                            # Extract all numeric metrics from the data
                             for key, value in data.items():
                                 if key in ("global_step", "step", "time", "stage"):
                                     continue
-                                
                                 if isinstance(value, (int, float)):
-                                    # Filter by metric names if specified
                                     if metric_names and key not in metric_names:
                                         continue
-                                    
                                     metrics.append(MetricRecord(
                                         experiment_id=exp_id,
                                         timestamp=timestamp,
@@ -349,15 +268,93 @@ class FilesToSQLiteFileReader(FileStorageBackend):
                                         stage=stage,
                                         recorded_at=timestamp
                                     ))
-                    
                     except json.JSONDecodeError:
                         continue
-            
             return metrics
-            
         except Exception as e:
             logger.error(f"Failed to load metrics for {exp_id}: {e}")
             return []
+    
+    # -- Stubs (never called during migration) --
+    
+    def create_experiment(self, experiment: ExperimentRecord) -> str:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def count_experiments(self, query: QueryParams) -> int:
+        return len(self.list_experiments(query))
+    
+    def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def get_storage_stats(self):
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    # -- Internal helpers --
+    
+    def _load_experiment_from_files(self, entry) -> Optional[ExperimentRecord]:
+        """
+        Load experiment data from file system and convert to ExperimentRecord.
+        """
+        try:
+            run_dir = entry.dir
+            meta = self._read_json_safe(run_dir / "meta.json")
+            status = self._read_json_safe(run_dir / "status.json")
+            summary = self._read_json_safe(run_dir / "summary.json")
+            
+            exp_id = meta.get("id") or run_dir.name
+            
+            # Derive path: prefer meta.path, then entry.path, then legacy project/name
+            path = meta.get("path") or entry.path
+            if not path:
+                project = meta.get("project", "unknown")
+                name = meta.get("name", "default")
+                path = f"{project}/{name}"
+            
+            created_at = meta.get("created_at") or run_dir.stat().st_ctime
+            updated_at = status.get("ended_at") or meta.get("created_at") or created_at
+            
+            # Check for soft delete
+            deleted_at = None
+            delete_reason = None
+            deleted_file = run_dir / ".deleted"
+            if deleted_file.exists():
+                deleted_info = self._read_json_safe(deleted_file)
+                deleted_at = deleted_info.get("deleted_at")
+                delete_reason = deleted_info.get("reason")
+            
+            return ExperimentRecord(
+                id=exp_id,
+                path=path,
+                created_at=created_at,
+                updated_at=updated_at,
+                started_at=status.get("started_at"),
+                ended_at=status.get("ended_at"),
+                status=status.get("status", "finished"),
+                exit_reason=status.get("exit_reason"),
+                pid=meta.get("pid"),
+                python_version=meta.get("python"),
+                platform=meta.get("platform"),
+                hostname=meta.get("hostname"),
+                best_metric_name=summary.get("best_metric_name"),
+                best_metric_value=summary.get("best_metric_value"),
+                best_metric_step=summary.get("best_metric_step"),
+                best_metric_mode=summary.get("best_metric_mode"),
+                deleted_at=deleted_at,
+                delete_reason=delete_reason,
+                run_dir=str(run_dir),
+            )
+        except Exception as e:
+            logger.error(f"Failed to load experiment from {entry.dir}: {e}")
+            return None
     
     def _read_json_safe(self, path: Path) -> Dict[str, Any]:
         """Safely read JSON file with error handling."""
@@ -476,24 +473,18 @@ def ensure_modern_storage(root_dir: Path) -> StorageBackend:
     storage_type = detect_storage_type(root_dir)
     
     if storage_type == "file_only":
-        logger.info("Detected file-only storage, starting migration to hybrid")
-        # Start migration process
+        logger.info("Detected file-only storage, starting migration")
         status = migrate_storage_system(root_dir)
         if status.status == "completed":
-            logger.info("Migration to hybrid storage completed")
-            return SQLiteStorageBackend(root_dir)
+            logger.info("Migration to SQLite storage completed")
         else:
-            logger.warning("Migration failed, falling back to file storage")
-            return FileStorageBackend(root_dir)
-    
-    elif storage_type == "sqlite_only":
-        logger.info("Using SQLite storage backend")
+            logger.warning(f"Migration failed: {status.errors}")
+        # Always return SQLite backend (it has been initialized by migration)
         return SQLiteStorageBackend(root_dir)
     
-    elif storage_type == "hybrid":
-        logger.info("Using hybrid storage backend")
-        from .backends import HybridStorageBackend
-        return HybridStorageBackend(root_dir)
+    elif storage_type in ("sqlite_only", "hybrid"):
+        logger.info("Using SQLite storage backend")
+        return SQLiteStorageBackend(root_dir)
     
     else:  # empty
         logger.info("Initializing new SQLite storage")

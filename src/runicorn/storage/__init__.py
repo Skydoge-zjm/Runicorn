@@ -12,7 +12,7 @@ The storage system supports:
 """
 from __future__ import annotations
 
-from .backends import StorageBackend, FileStorageBackend, SQLiteStorageBackend, HybridStorageBackend
+from .backends import StorageBackend, SQLiteStorageBackend
 from .models import ExperimentRecord, MetricRecord, QueryParams
 from .migration import StorageMigrator
 from .file_utils import (
@@ -33,9 +33,7 @@ from .file_utils import (
 __all__ = [
     # Storage backends
     "StorageBackend",
-    "FileStorageBackend", 
     "SQLiteStorageBackend",
-    "HybridStorageBackend",
     # Models
     "ExperimentRecord",
     "MetricRecord", 

@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Import modern storage components (graceful fallback if not available)
 try:
-    from .storage.backends import SQLiteStorageBackend, HybridStorageBackend
+    from .storage.backends import SQLiteStorageBackend
     from .storage.models import ExperimentRecord, MetricRecord
     from .storage.migration import ensure_modern_storage, detect_storage_type
     HAS_MODERN_STORAGE = True
