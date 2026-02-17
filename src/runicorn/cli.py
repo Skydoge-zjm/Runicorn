@@ -284,7 +284,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 1
         
         try:
-            from .exporters import MetricsExporter
+            from .extensions.exporters import MetricsExporter
             exporter = MetricsExporter(run_dir)
             
             if format == "csv":
@@ -314,7 +314,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         action = args.action
         
         try:
-            from .experiment import ExperimentManager
+            from .extensions.experiment import ExperimentManager
             manager = ExperimentManager(root)
             
             if action == "tag":
