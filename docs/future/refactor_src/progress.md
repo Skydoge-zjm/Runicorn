@@ -36,8 +36,11 @@
 
 | 项目 | 状态 | 完成时间 |
 |------|------|----------|
-| RF-06: storage backends async→sync | 🔲 待开始 | - |
-| RF-07: 消除 sdk.py asyncio 裸调用 | 🔲 待开始 | - |
+| RF-06: storage backends async→sync | ✅ 完成 | 2026-02-17 |
+| RF-07: 消除 sdk.py asyncio 裸调用 | ✅ 完成 | 2026-02-17 |
+
+**RF-06+RF-07 详情**: backends.py 中 StorageBackend ABC 及三个实现类（SQLiteStorageBackend, FileStorageBackend, HybridStorageBackend）全部方法从 async def 改为 def。migration.py 同步化。sync_utils.py 简化为直接调用的薄包装（保留向后兼容）。sdk.py 中 3 处 asyncio 三段式 fallback（summary/update_best_metric/finish）替换为直接同步调用，删除 import asyncio。
+
 | RF-15: 统一目录布局假设 | 🔲 待开始 | - |
 | RF-11: 删除 FileStorageBackend 半成品 | 🔲 待开始 | - |
 | RF-12: 处理 modern_storage.py | 🔲 待开始 | - |

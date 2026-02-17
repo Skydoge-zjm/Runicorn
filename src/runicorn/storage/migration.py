@@ -1,4 +1,4 @@
-"""
+﻿"""
 Storage Migration Tools
 
 Provides tools for migrating between different storage backends,
@@ -6,7 +6,6 @@ particularly from file-based storage to SQLite.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
@@ -39,7 +38,7 @@ class StorageMigrator:
             status="pending"
         )
     
-    async def migrate_all(self, batch_size: int = 100) -> MigrationStatus:
+    def migrate_all(self, batch_size: int = 100) -> MigrationStatus:
         """
         Migrate all experiments from source to target backend.
         
@@ -55,7 +54,7 @@ class StorageMigrator:
         try:
             # Get total count for progress tracking
             total_query = QueryParams(limit=999999, include_deleted=True)
-            all_experiments = await self.source.list_experiments(total_query)
+            all_experiments = self.source.list_experiments(total_query)
             self.status.total_items = len(all_experiments)
             
             logger.info(f"Starting migration of {self.status.total_items} experiments")
@@ -66,7 +65,7 @@ class StorageMigrator:
                 
                 for experiment in batch:
                     try:
-                        await self._migrate_experiment(experiment)
+                        self._migrate_experiment(experiment)
                         self.status.processed_items += 1
                     except Exception as e:
                         self.status.failed_items += 1
@@ -78,7 +77,7 @@ class StorageMigrator:
                 logger.info(f"Migration progress: {progress:.1f}% ({self.status.processed_items}/{self.status.total_items})")
                 
                 # Small delay to avoid overwhelming the system
-                await asyncio.sleep(0.1)
+                time.sleep(0.1)
             
             # Mark as completed
             self.status.status = "completed"
@@ -93,7 +92,7 @@ class StorageMigrator:
         
         return self.status
     
-    async def _migrate_experiment(self, experiment: ExperimentRecord) -> None:
+    def _migrate_experiment(self, experiment: ExperimentRecord) -> None:
         """
         Migrate a single experiment with all its data.
         
@@ -101,12 +100,12 @@ class StorageMigrator:
             experiment: Experiment record to migrate
         """
         # 1. Create experiment record in target
-        await self.target.create_experiment(experiment)
+        self.target.create_experiment(experiment)
         
         # 2. Migrate metrics data
-        metrics = await self.source.get_metrics(experiment.id)
+        metrics = self.source.get_metrics(experiment.id)
         if metrics:
-            await self.target.log_metrics(experiment.id, metrics)
+            self.target.log_metrics(experiment.id, metrics)
         
         # 3. Copy any additional metadata if needed
         # This could include environment data, tags, etc.
@@ -133,7 +132,7 @@ class FilesToSQLiteMigrator(StorageMigrator):
         
         super().__init__(file_backend, sqlite_backend)
     
-    async def migrate_with_verification(self) -> MigrationStatus:
+    def migrate_with_verification(self) -> MigrationStatus:
         """
         Migrate with data verification.
         
@@ -141,18 +140,18 @@ class FilesToSQLiteMigrator(StorageMigrator):
             Migration status with verification results
         """
         # Perform migration
-        status = await self.migrate_all()
+        status = self.migrate_all()
         
         if status.status == "completed":
             # Verify migration integrity
-            verification_result = await self._verify_migration()
+            verification_result = self._verify_migration()
             if not verification_result["success"]:
                 status.status = "failed"
                 status.errors.extend(verification_result["errors"])
         
         return status
     
-    async def _verify_migration(self) -> Dict[str, Any]:
+    def _verify_migration(self) -> Dict[str, Any]:
         """
         Verify migration integrity by comparing file and SQLite data.
         
@@ -164,15 +163,15 @@ class FilesToSQLiteMigrator(StorageMigrator):
         try:
             # Compare experiment counts
             file_query = QueryParams(limit=999999, include_deleted=True)
-            file_experiments = await self.source.list_experiments(file_query)
-            sqlite_experiments = await self.target.list_experiments(file_query)
+            file_experiments = self.source.list_experiments(file_query)
+            sqlite_experiments = self.target.list_experiments(file_query)
             
             if len(file_experiments) != len(sqlite_experiments):
                 errors.append(f"Experiment count mismatch: {len(file_experiments)} file vs {len(sqlite_experiments)} SQLite")
             
             # Sample verification: check a few experiments in detail
             for experiment in file_experiments[:10]:  # Check first 10
-                sqlite_exp = await self.target.get_experiment(experiment.id)
+                sqlite_exp = self.target.get_experiment(experiment.id)
                 if not sqlite_exp:
                     errors.append(f"Experiment {experiment.id} missing in SQLite")
                     continue
@@ -204,7 +203,7 @@ class FilesToSQLiteFileReader(FileStorageBackend):
         """Initialize file reader for migration."""
         super().__init__(root_dir)
     
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
+    def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
         """
         Read all file-based experiments and convert to ExperimentRecord format.
         """
@@ -215,7 +214,7 @@ class FilesToSQLiteFileReader(FileStorageBackend):
         
         for entry in iter_all_runs(self.root_dir, include_deleted=query.include_deleted):
             try:
-                experiment = await self._load_experiment_from_files(entry)
+                experiment = self._load_experiment_from_files(entry)
                 if experiment:
                     experiments.append(experiment)
             except Exception as e:
@@ -223,7 +222,7 @@ class FilesToSQLiteFileReader(FileStorageBackend):
         
         return experiments
     
-    async def _load_experiment_from_files(self, entry) -> Optional[ExperimentRecord]:
+    def _load_experiment_from_files(self, entry) -> Optional[ExperimentRecord]:
         """
         Load experiment data from file system and convert to ExperimentRecord.
         
@@ -301,12 +300,12 @@ class FilesToSQLiteFileReader(FileStorageBackend):
             logger.error(f"Failed to load experiment from {entry.dir}: {e}")
             return None
     
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
+    def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
         """
         Load metrics from events.jsonl file and convert to MetricRecord format.
         """
         try:
-            experiment = await self.get_experiment(exp_id)
+            experiment = self.get_experiment(exp_id)
             if not experiment:
                 return []
             
@@ -370,7 +369,7 @@ class FilesToSQLiteFileReader(FileStorageBackend):
         return {}
 
 
-async def migrate_storage_system(root_dir: Path, backup: bool = True) -> MigrationStatus:
+def migrate_storage_system(root_dir: Path, backup: bool = True) -> MigrationStatus:
     """
     High-level function to migrate from file storage to SQLite.
     
@@ -384,10 +383,10 @@ async def migrate_storage_system(root_dir: Path, backup: bool = True) -> Migrati
     logger.info("Starting storage system migration")
     
     if backup:
-        await _create_backup(root_dir)
+        _create_backup(root_dir)
     
     migrator = FilesToSQLiteMigrator(root_dir)
-    status = await migrator.migrate_with_verification()
+    status = migrator.migrate_with_verification()
     
     if status.status == "completed":
         logger.info("Storage migration completed successfully")
@@ -397,7 +396,7 @@ async def migrate_storage_system(root_dir: Path, backup: bool = True) -> Migrati
     return status
 
 
-async def _create_backup(root_dir: Path) -> Path:
+def _create_backup(root_dir: Path) -> Path:
     """
     Create backup of existing storage before migration.
     
@@ -464,7 +463,7 @@ def detect_storage_type(root_dir: Path) -> str:
         return "empty"
 
 
-async def ensure_modern_storage(root_dir: Path) -> StorageBackend:
+def ensure_modern_storage(root_dir: Path) -> StorageBackend:
     """
     Ensure modern storage is available, migrating if necessary.
     
@@ -479,7 +478,7 @@ async def ensure_modern_storage(root_dir: Path) -> StorageBackend:
     if storage_type == "file_only":
         logger.info("Detected file-only storage, starting migration to hybrid")
         # Start migration process
-        status = await migrate_storage_system(root_dir)
+        status = migrate_storage_system(root_dir)
         if status.status == "completed":
             logger.info("Migration to hybrid storage completed")
             return SQLiteStorageBackend(root_dir)
@@ -499,3 +498,4 @@ async def ensure_modern_storage(root_dir: Path) -> StorageBackend:
     else:  # empty
         logger.info("Initializing new SQLite storage")
         return SQLiteStorageBackend(root_dir)
+

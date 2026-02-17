@@ -1,4 +1,4 @@
-"""
+﻿"""
 Storage Backend Implementations
 
 Provides different storage backend implementations including file-based,
@@ -6,7 +6,6 @@ SQLite-based, and hybrid approaches.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import sqlite3
@@ -31,7 +30,7 @@ class StorageBackend(ABC):
     """
     
     @abstractmethod
-    async def create_experiment(self, experiment: ExperimentRecord) -> str:
+    def create_experiment(self, experiment: ExperimentRecord) -> str:
         """
         Create a new experiment record.
         
@@ -44,7 +43,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
+    def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
         """
         Update experiment metadata.
         
@@ -58,7 +57,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
+    def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
         """
         Retrieve a single experiment by ID.
         
@@ -71,7 +70,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
+    def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
         """
         List experiments matching query parameters.
         
@@ -84,7 +83,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def count_experiments(self, query: QueryParams) -> int:
+    def count_experiments(self, query: QueryParams) -> int:
         """
         Count experiments matching query parameters.
         
@@ -97,7 +96,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
+    def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
         """
         Log metric data points for an experiment.
         
@@ -111,7 +110,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
+    def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
         """
         Retrieve metric data for an experiment.
         
@@ -125,7 +124,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
+    def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
         """
         Soft delete experiments.
         
@@ -139,7 +138,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
+    def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
         """
         Restore soft-deleted experiments.
         
@@ -152,7 +151,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def get_storage_stats(self) -> StorageStats:
+    def get_storage_stats(self) -> StorageStats:
         """
         Get storage system statistics.
         
@@ -180,7 +179,7 @@ class FileStorageBackend(StorageBackend):
         self.root_dir = Path(root_dir)
         self.root_dir.mkdir(parents=True, exist_ok=True)
     
-    async def create_experiment(self, experiment: ExperimentRecord) -> str:
+    def create_experiment(self, experiment: ExperimentRecord) -> str:
         """Create experiment using file system."""
         # Implementation here would mirror the existing file creation logic
         # from the original SDK - this is mainly for compatibility
@@ -215,11 +214,11 @@ class FileStorageBackend(StorageBackend):
         
         return exp_id
     
-    async def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
+    def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
         """Update experiment files."""
         try:
             # Find experiment directory
-            exp_record = await self.get_experiment(exp_id)
+            exp_record = self.get_experiment(exp_id)
             if not exp_record:
                 return False
             
@@ -245,28 +244,28 @@ class FileStorageBackend(StorageBackend):
             logger.error(f"Failed to update experiment {exp_id}: {e}")
             return False
     
-    async def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
+    def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
         """Get experiment from file system."""
         # Implementation would scan for the experiment directory and load metadata
         # This is a simplified version - the full implementation would mirror
         # the existing _find_run_dir_by_id logic
         return None  # Placeholder
     
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
+    def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
         """List experiments from file system."""
         # This would implement the current file scanning logic
         # Converting it to return ExperimentRecord objects
         return []  # Placeholder
     
-    async def count_experiments(self, query: QueryParams) -> int:
+    def count_experiments(self, query: QueryParams) -> int:
         """Count experiments matching query."""
-        experiments = await self.list_experiments(query)
+        experiments = self.list_experiments(query)
         return len(experiments)
     
-    async def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
+    def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
         """Log metrics to events.jsonl file."""
         try:
-            exp_record = await self.get_experiment(exp_id)
+            exp_record = self.get_experiment(exp_id)
             if not exp_record:
                 return False
             
@@ -294,12 +293,12 @@ class FileStorageBackend(StorageBackend):
             logger.error(f"Failed to log metrics for {exp_id}: {e}")
             return False
     
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
+    def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
         """Get metrics from events.jsonl file."""
         # Implementation would parse events.jsonl and convert to MetricRecord objects
         return []  # Placeholder
     
-    async def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
+    def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
         """Soft delete by creating .deleted marker files."""
         results = {}
         for exp_id in exp_ids:
@@ -307,7 +306,7 @@ class FileStorageBackend(StorageBackend):
             results[exp_id] = True  # Placeholder
         return results
     
-    async def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
+    def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
         """Restore by removing .deleted marker files."""
         results = {}
         for exp_id in exp_ids:
@@ -315,7 +314,7 @@ class FileStorageBackend(StorageBackend):
             results[exp_id] = True  # Placeholder
         return results
     
-    async def get_storage_stats(self) -> StorageStats:
+    def get_storage_stats(self) -> StorageStats:
         """Get file system storage statistics."""
         # Implementation would scan file system and compute statistics
         return StorageStats()
@@ -465,7 +464,7 @@ class SQLiteStorageBackend(StorageBackend):
             logger.error(f"Failed to initialize database schema: {e}")
             raise
     
-    async def create_experiment(self, experiment: ExperimentRecord) -> str:
+    def create_experiment(self, experiment: ExperimentRecord) -> str:
         """Create experiment in SQLite database."""
         conn = self.pool.get_connection()
         try:
@@ -494,7 +493,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
+    def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
         """Update experiment in SQLite database."""
         if not updates:
             return True
@@ -541,7 +540,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
+    def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
         """Get experiment from SQLite database."""
         conn = self.pool.get_connection()
         try:
@@ -561,7 +560,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
+    def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
         """List experiments with high-performance SQL queries."""
         sql_parts = ["SELECT * FROM experiments"]
         where_clauses = []
@@ -633,7 +632,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def count_experiments(self, query: QueryParams) -> int:
+    def count_experiments(self, query: QueryParams) -> int:
         """Count experiments matching query."""
         sql_parts = ["SELECT COUNT(*) FROM experiments"]
         where_clauses = []
@@ -692,7 +691,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
+    def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
         """Log metrics to SQLite database."""
         if not metrics:
             return True
@@ -731,7 +730,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
+    def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
         """Get metrics from SQLite database."""
         sql = "SELECT * FROM metrics WHERE experiment_id = ?"
         params = [exp_id]
@@ -756,7 +755,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
+    def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
         """Soft delete experiments in SQLite."""
         results = {}
         conn = self.pool.get_connection()
@@ -788,7 +787,7 @@ class SQLiteStorageBackend(StorageBackend):
         
         return results
     
-    async def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
+    def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
         """Restore soft-deleted experiments in SQLite."""
         results = {}
         conn = self.pool.get_connection()
@@ -820,7 +819,7 @@ class SQLiteStorageBackend(StorageBackend):
         
         return results
     
-    async def get_storage_stats(self) -> StorageStats:
+    def get_storage_stats(self) -> StorageStats:
         """Get SQLite storage statistics."""
         conn = self.pool.get_connection()
         try:
@@ -890,23 +889,23 @@ class HybridStorageBackend(StorageBackend):
         
         if enable_migration:
             # Start background migration if needed
-            asyncio.create_task(self._maybe_start_migration())
+            self._maybe_start_migration()
     
-    async def _maybe_start_migration(self) -> None:
+    def _maybe_start_migration(self) -> None:
         """Start migration from file storage if needed."""
         try:
             # Check if migration is needed
-            stats = await self.sqlite_backend.get_storage_stats()
+            stats = self.sqlite_backend.get_storage_stats()
             if stats.total_experiments == 0:
                 # No experiments in SQLite, check if we have file-based experiments
-                file_experiments = await self.file_backend.list_experiments(QueryParams(limit=1))
+                file_experiments = self.file_backend.list_experiments(QueryParams(limit=1))
                 if file_experiments:
                     logger.info("Starting automatic migration from file storage to SQLite")
-                    await self._migrate_from_files()
+                    self._migrate_from_files()
         except Exception as e:
             logger.error(f"Migration check failed: {e}")
     
-    async def _migrate_from_files(self) -> None:
+    def _migrate_from_files(self) -> None:
         """Migrate existing file-based experiments to SQLite."""
         if self._migration_in_progress:
             return
@@ -919,99 +918,100 @@ class HybridStorageBackend(StorageBackend):
         finally:
             self._migration_in_progress = False
     
-    async def create_experiment(self, experiment: ExperimentRecord) -> str:
+    def create_experiment(self, experiment: ExperimentRecord) -> str:
         """Create experiment in both SQLite and file system."""
         # Write to SQLite first for consistency
-        exp_id = await self.sqlite_backend.create_experiment(experiment)
+        exp_id = self.sqlite_backend.create_experiment(experiment)
         
         # Also create file structure for compatibility
         try:
-            await self.file_backend.create_experiment(experiment)
+            self.file_backend.create_experiment(experiment)
         except Exception as e:
             logger.warning(f"Failed to create file structure for {exp_id}: {e}")
         
         return exp_id
     
-    async def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
+    def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
         """Update experiment in both backends."""
         # Update SQLite first
-        sqlite_success = await self.sqlite_backend.update_experiment(exp_id, updates)
+        sqlite_success = self.sqlite_backend.update_experiment(exp_id, updates)
         
         # Update files for compatibility  
         try:
-            await self.file_backend.update_experiment(exp_id, updates)
+            self.file_backend.update_experiment(exp_id, updates)
         except Exception as e:
             logger.warning(f"Failed to update file for {exp_id}: {e}")
         
         return sqlite_success
     
-    async def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
+    def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
         """Get experiment preferring SQLite, fallback to files."""
         # Try SQLite first (faster)
-        experiment = await self.sqlite_backend.get_experiment(exp_id)
+        experiment = self.sqlite_backend.get_experiment(exp_id)
         if experiment:
             return experiment
         
         # Fallback to file system
-        return await self.file_backend.get_experiment(exp_id)
+        return self.file_backend.get_experiment(exp_id)
     
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
+    def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
         """List experiments using SQLite for performance."""
-        return await self.sqlite_backend.list_experiments(query)
+        return self.sqlite_backend.list_experiments(query)
     
-    async def count_experiments(self, query: QueryParams) -> int:
+    def count_experiments(self, query: QueryParams) -> int:
         """Count experiments using SQLite for performance."""
-        return await self.sqlite_backend.count_experiments(query)
+        return self.sqlite_backend.count_experiments(query)
     
-    async def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
+    def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
         """Log metrics to both SQLite and file system."""
         # Log to SQLite first
-        sqlite_success = await self.sqlite_backend.log_metrics(exp_id, metrics)
+        sqlite_success = self.sqlite_backend.log_metrics(exp_id, metrics)
         
         # Also log to files for compatibility
         try:
-            await self.file_backend.log_metrics(exp_id, metrics)
+            self.file_backend.log_metrics(exp_id, metrics)
         except Exception as e:
             logger.warning(f"Failed to log metrics to file for {exp_id}: {e}")
         
         return sqlite_success
     
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
+    def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
         """Get metrics preferring SQLite, fallback to files."""
         # Try SQLite first (faster and more structured)
-        metrics = await self.sqlite_backend.get_metrics(exp_id, metric_names)
+        metrics = self.sqlite_backend.get_metrics(exp_id, metric_names)
         if metrics:
             return metrics
         
         # Fallback to file system
-        return await self.file_backend.get_metrics(exp_id, metric_names)
+        return self.file_backend.get_metrics(exp_id, metric_names)
     
-    async def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
+    def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
         """Soft delete in both backends."""
         # Delete in SQLite first
-        sqlite_results = await self.sqlite_backend.soft_delete_experiments(exp_ids, reason)
+        sqlite_results = self.sqlite_backend.soft_delete_experiments(exp_ids, reason)
         
         # Also mark in file system
         try:
-            await self.file_backend.soft_delete_experiments(exp_ids, reason)
+            self.file_backend.soft_delete_experiments(exp_ids, reason)
         except Exception as e:
             logger.warning(f"Failed to soft delete in file system: {e}")
         
         return sqlite_results
     
-    async def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
+    def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
         """Restore in both backends."""
         # Restore in SQLite first
-        sqlite_results = await self.sqlite_backend.restore_experiments(exp_ids)
+        sqlite_results = self.sqlite_backend.restore_experiments(exp_ids)
         
         # Also restore in file system
         try:
-            await self.file_backend.restore_experiments(exp_ids)
+            self.file_backend.restore_experiments(exp_ids)
         except Exception as e:
             logger.warning(f"Failed to restore in file system: {e}")
         
         return sqlite_results
     
-    async def get_storage_stats(self) -> StorageStats:
+    def get_storage_stats(self) -> StorageStats:
         """Get comprehensive storage statistics."""
-        return await self.sqlite_backend.get_storage_stats()
+        return self.sqlite_backend.get_storage_stats()
+

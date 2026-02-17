@@ -896,7 +896,6 @@ class Run:
         # Also update modern storage if available
         if self.storage_backend:
             try:
-                import asyncio
                 # Map summary fields to experiment record fields
                 storage_updates = {}
                 if "best_metric_value" in update:
@@ -909,14 +908,7 @@ class Run:
                     storage_updates["best_metric_mode"] = update["best_metric_mode"]
                 
                 if storage_updates:
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            asyncio.create_task(self.storage_backend.update_experiment(self.id, storage_updates))
-                        else:
-                            loop.run_until_complete(self.storage_backend.update_experiment(self.id, storage_updates))
-                    except RuntimeError:
-                        asyncio.run(self.storage_backend.update_experiment(self.id, storage_updates))
+                    self.storage_backend.update_experiment(self.id, storage_updates)
                         
             except Exception as e:
                 logger.debug(f"Failed to update summary in modern storage: {e}")
@@ -947,23 +939,13 @@ class Run:
             # Update modern storage with new best metric
             if self.storage_backend:
                 try:
-                    import asyncio
                     updates = {
                         "best_metric_value": self._best_metric_value,
                         "best_metric_name": self._primary_metric_name,
                         "best_metric_step": self._best_metric_step,
                         "best_metric_mode": self._primary_metric_mode
                     }
-                    
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            asyncio.create_task(self.storage_backend.update_experiment(self.id, updates))
-                        else:
-                            loop.run_until_complete(self.storage_backend.update_experiment(self.id, updates))
-                    except RuntimeError:
-                        asyncio.run(self.storage_backend.update_experiment(self.id, updates))
-                        
+                    self.storage_backend.update_experiment(self.id, updates)
                 except Exception as e:
                     logger.debug(f"Failed to update best metric in modern storage: {e}")
     
@@ -1017,20 +999,12 @@ class Run:
         # Also update modern storage if available
         if self.storage_backend:
             try:
-                import asyncio
                 updates = {
                     "status": status,
                     "ended_at": _now_ts()
                 }
                 
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        asyncio.create_task(self.storage_backend.update_experiment(self.id, updates))
-                    else:
-                        loop.run_until_complete(self.storage_backend.update_experiment(self.id, updates))
-                except RuntimeError:
-                    asyncio.run(self.storage_backend.update_experiment(self.id, updates))
+                self.storage_backend.update_experiment(self.id, updates)
                     
             except Exception as e:
                 logger.debug(f"Failed to update status in modern storage: {e}")
