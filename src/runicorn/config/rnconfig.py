@@ -1,30 +1,23 @@
+"""Project-level TOML configuration loader.
+
+Merges user-level rnconfig.toml with project-level rnconfig.toml
+(project overrides user). Includes mtime-based caching.
+
+Migrated from rnconfig/loader.py into the unified config package.
+"""
 from __future__ import annotations
 
 import threading
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from ..config import get_rnconfig_file_path
+from .paths import get_rnconfig_file_path
+from ._toml import load_toml
 from ..workspace import get_workspace_root
-
-try:
-    import tomllib as _toml
-except ModuleNotFoundError:
-    import tomli as _toml
 
 
 _cache_lock = threading.Lock()
 _effective_cache: Dict[Tuple[Path, Path], Tuple[Tuple[int, int], Dict[str, Any]]] = {}
-
-
-def _load_toml(path: Path) -> Dict[str, Any]:
-    if not path.exists():
-        return {}
-    with path.open("rb") as f:
-        data = _toml.load(f)
-    if isinstance(data, dict):
-        return data
-    return {}
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
@@ -53,8 +46,8 @@ def load_effective_rnconfig(workspace_root: Optional[str] = None) -> Dict[str, A
         if cached and cached[0] == stamp:
             return cached[1]
 
-    user_cfg = _load_toml(user_path)
-    project_cfg = _load_toml(project_path)
+    user_cfg = load_toml(user_path)
+    project_cfg = load_toml(project_path)
     merged = _deep_merge(user_cfg, project_cfg)
 
     with _cache_lock:
