@@ -49,7 +49,9 @@
 
 **RF-11 详情**: 删除 FileStorageBackend（半成品，多处 Placeholder，create_experiment 访问不存在的 experiment.project/name）和 HybridStorageBackend（依赖前者，同样不可用）。FilesToSQLiteFileReader 从继承 FileStorageBackend 改为继承 StorageBackend，新增 _experiments 缓存使 get_experiment/get_metrics 可用，_load_experiment_from_files 改用 path 字段替代 project/name，_verify_migration 同样修正。ensure_modern_storage() 去除 FileStorageBackend/HybridStorageBackend 回退路径，统一返回 SQLiteStorageBackend。storage/__init__.py 和 sdk.py 导出同步更新。
 
-| RF-12: 处理 modern_storage.py | 🔲 待开始 | - |
+| RF-12: 处理 modern_storage.py | ✅ 完成 | 2026-02-17 |
+
+**RF-12 详情**: 删除 viewer/services/modern_storage.py（未接入任何 API 路由，且含硬错误：experiment.project/name 不存在、QueryParams(project=...) TypeError，RF-11 删除 FileStorageBackend/HybridStorageBackend 后导入已无法成功）。移除 viewer/__init__.py shutdown 事件中的 close_storage_service() 调用（原本也是空操作）。待 RF-14（Viewer 切换到 SQLite 读取）实施时重新设计。
 
 ---
 

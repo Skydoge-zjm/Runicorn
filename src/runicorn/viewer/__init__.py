@@ -115,13 +115,6 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             except Exception as e:
                 logger.warning(f"Failed to close SSH connections: {e}")
         
-        # Close storage service (CRITICAL for Windows desktop app)
-        try:
-            from .services.modern_storage import close_storage_service
-            close_storage_service()
-            logger.info("Closed storage service and database connections")
-        except Exception as e:
-            logger.warning(f"Failed to close storage service: {e}")
     
     # Register v1 API routers (backward compatibility)
     app.include_router(health_router, prefix="/api", tags=["health"])
