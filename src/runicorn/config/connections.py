@@ -1,7 +1,8 @@
 """SSH connection configuration management.
 
-Contains both the Fernet path (connections.json) and the XOR path
-(config.json ssh_connections). RF-04/RF-05 will unify these.
+All connections are stored in a single ``connections.json`` file using
+Fernet symmetric encryption for sensitive fields.  Legacy XOR-encrypted
+data in ``config.json`` is migrated automatically on first read.
 """
 from __future__ import annotations
 
@@ -16,25 +17,29 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Path B: Fernet-encrypted connections.json (newer)
+# Core load / save  (connections.json, Fernet)
 # ---------------------------------------------------------------------------
 
 def load_saved_connections() -> List[Dict[str, Any]]:
-    """Load saved SSH connections from connections.json and decrypt passwords."""
+    """Load saved SSH connections from connections.json and decrypt all sensitive fields."""
+    # Migrate legacy data from config.json on every read (idempotent/fast).
+    _migrate_legacy_xor_connections()
+
     path = get_connections_file_path()
     try:
         if path.exists():
             connections = json.loads(path.read_text(encoding="utf-8"))
 
-            # Decrypt passwords
-            from ..security.encryption import decrypt_password, is_encrypted
+            from ..security.encryption import decrypt_password, is_encrypted, SENSITIVE_FIELDS
             for conn in connections:
-                if conn.get('password') and is_encrypted(conn['password']):
-                    try:
-                        conn['password'] = decrypt_password(conn['password'])
-                    except Exception as e:
-                        logger.warning(f"Failed to decrypt password for {conn.get('name', 'unknown')}: {e}")
-                        conn['password'] = None  # Clear invalid password
+                for field in SENSITIVE_FIELDS:
+                    value = conn.get(field)
+                    if value and (is_encrypted(value) or value.startswith('ENC:')):
+                        try:
+                            conn[field] = decrypt_password(value)
+                        except Exception as e:
+                            logger.warning(f"Failed to decrypt {field} for {conn.get('name', 'unknown')}: {e}")
+                            conn[field] = None
 
             return connections
     except Exception as e:
@@ -43,38 +48,25 @@ def load_saved_connections() -> List[Dict[str, Any]]:
 
 
 def save_connections(connections: List[Dict[str, Any]]) -> None:
-    """Save SSH connections to connections.json with encrypted passwords."""
+    """Save SSH connections to connections.json, encrypting all sensitive fields."""
     path = get_connections_file_path()
     try:
-        # Ensure directory exists
         path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Debug: log incoming connections
-        for conn in connections:
-            logger.info(f"Processing connection '{conn.get('name')}': has_password={bool(conn.get('password'))}, password_length={len(conn.get('password', ''))}")
-
-        # Encrypt passwords before saving
-        from ..security.encryption import encrypt_password, is_encrypted
+        from ..security.encryption import encrypt_password, is_encrypted, SENSITIVE_FIELDS
         connections_to_save = []
         for conn in connections:
             conn_copy = conn.copy()
-            password = conn_copy.get('password')
-            if password:  # Has password
-                if not is_encrypted(password):
+            for field in SENSITIVE_FIELDS:
+                value = conn_copy.get(field)
+                if value and not is_encrypted(value):
                     try:
-                        conn_copy['password'] = encrypt_password(password)
-                        logger.info(f"✓ Encrypted password for '{conn.get('name', 'unknown')}'")
+                        conn_copy[field] = encrypt_password(value)
                     except Exception as e:
-                        logger.error(f"Failed to encrypt password for {conn.get('name', 'unknown')}: {e}")
-                        conn_copy['password'] = None  # Don't save unencrypted password
-                else:
-                    logger.info(f"Password for '{conn.get('name', 'unknown')}' is already encrypted")
-            else:
-                logger.warning(f"No password for '{conn.get('name', 'unknown')}'")
-            # Keep password field even if None (for consistency)
+                        logger.error(f"Failed to encrypt {field} for {conn.get('name', 'unknown')}: {e}")
+                        conn_copy[field] = None  # Don't save unencrypted
             connections_to_save.append(conn_copy)
 
-        # Write with pretty formatting
         path.write_text(json.dumps(connections_to_save, indent=2, ensure_ascii=False), encoding="utf-8")
         logger.info(f"Saved {len(connections_to_save)} connections to {path}")
     except Exception as e:
@@ -83,37 +75,22 @@ def save_connections(connections: List[Dict[str, Any]]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Path A: XOR-encrypted ssh_connections in config.json (older)
+# CRUD helpers  (used by viewer/api/config.py)
 # ---------------------------------------------------------------------------
 
-def save_ssh_connections(connections: list[Dict[str, Any]]) -> None:
-    """Save SSH connection configurations with encryption."""
-    from ..security.credentials import get_credential_manager
-
-    manager = get_credential_manager()
-    encrypted_connections = [
-        manager.encrypt_config(conn) for conn in connections
-    ]
-    save_user_config({"ssh_connections": encrypted_connections})
+def get_ssh_connections() -> List[Dict[str, Any]]:
+    """Get saved SSH connection configurations (unified, Fernet)."""
+    return load_saved_connections()
 
 
-def get_ssh_connections() -> list[Dict[str, Any]]:
-    """Get saved SSH connection configurations with decryption."""
-    from ..security.credentials import get_credential_manager
-
-    cfg = load_user_config()
-    connections = cfg.get("ssh_connections", [])
-
-    # Decrypt sensitive fields
-    manager = get_credential_manager()
-    return [
-        manager.decrypt_config(conn) for conn in connections
-    ]
+def save_ssh_connections(connections: List[Dict[str, Any]]) -> None:
+    """Save SSH connection configurations (unified, Fernet)."""
+    save_connections(connections)
 
 
 def add_ssh_connection(connection: Dict[str, Any]) -> None:
     """Add or update an SSH connection configuration."""
-    connections = get_ssh_connections()
+    connections = load_saved_connections()
 
     # Find and update if exists (by host+port+username)
     key = f"{connection.get('host')}:{connection.get('port', 22)}@{connection.get('username')}"
@@ -125,14 +102,63 @@ def add_ssh_connection(connection: Dict[str, Any]) -> None:
     # Add new/updated connection
     connections.append(connection)
 
-    # Keep only last 10 connections
-    connections = connections[-10:]
-
-    save_ssh_connections(connections)
+    save_connections(connections)
 
 
 def remove_ssh_connection(key: str) -> None:
     """Remove an SSH connection configuration."""
-    connections = get_ssh_connections()
+    connections = load_saved_connections()
     connections = [c for c in connections if c.get('key') != key]
-    save_ssh_connections(connections)
+    save_connections(connections)
+
+
+# ---------------------------------------------------------------------------
+# Legacy XOR migration  (config.json → connections.json)
+# ---------------------------------------------------------------------------
+
+def _migrate_legacy_xor_connections() -> None:
+    """One-time migration: read XOR-encrypted SSH connections from config.json,
+    merge them into connections.json (Fernet), then remove the old key.
+    """
+    cfg = load_user_config()
+    legacy = cfg.get("ssh_connections")
+    if not legacy:
+        return  # Nothing to migrate
+
+    logger.info(f"Migrating {len(legacy)} legacy XOR SSH connections to Fernet...")
+
+    from ..security.encryption import SENSITIVE_FIELDS
+
+    # Decrypt legacy entries using the XOR helper in encryption.py
+    from ..security.encryption import _try_decrypt_xor_legacy
+    migrated: List[Dict[str, Any]] = []
+    for conn in legacy:
+        decrypted = conn.copy()
+        for field in SENSITIVE_FIELDS:
+            value = decrypted.get(field)
+            if value and isinstance(value, str) and value.startswith("ENC:"):
+                plain = _try_decrypt_xor_legacy(value)
+                decrypted[field] = plain if plain is not None else None
+        migrated.append(decrypted)
+
+    # Merge with any existing connections.json data (avoid duplicates by key)
+    path = get_connections_file_path()
+    existing: List[Dict[str, Any]] = []
+    if path.exists():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    existing_keys = {c.get('key') for c in existing if c.get('key')}
+    for entry in migrated:
+        if entry.get('key') not in existing_keys:
+            existing.append(entry)
+
+    # Save merged list (will encrypt with Fernet)
+    save_connections(existing)
+
+    # Remove legacy key from config.json
+    cfg.pop("ssh_connections", None)
+    save_user_config(cfg)
+    logger.info("Legacy XOR SSH connections migrated successfully.")

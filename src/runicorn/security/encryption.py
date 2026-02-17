@@ -8,9 +8,16 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
+
+# All sensitive fields that should be encrypted when storing connection configs.
+# Used by config/connections.py for both save and load.
+SENSITIVE_FIELDS: List[str] = [
+    'password', 'passphrase', 'private_key',
+    'secret', 'token', 'api_key',
+]
 
 # Lazy import to avoid dependency issues if cryptography not installed
 _fernet_instance: Optional[object] = None
@@ -94,12 +101,35 @@ def encrypt_password(password: str) -> str:
         raise
 
 
+def _try_decrypt_xor_legacy(value: str) -> Optional[str]:
+    """Try to decrypt an ENC:-prefixed value using the legacy XOR scheme.
+
+    This is used during migration from the old credentials.py XOR system
+    to the Fernet system.  The function returns *None* if decryption fails
+    (missing key file, corrupted data, etc.).
+    """
+    if not value or not value.startswith("ENC:"):
+        return None
+    try:
+        from .credentials import CredentialManager
+        manager = CredentialManager()
+        result = manager.decrypt_credential(value)
+        return result if result else None
+    except Exception:
+        return None
+
+
 def decrypt_password(encrypted_password: str) -> str:
     """
-    Decrypt a stored password.
+    Decrypt a stored password (Fernet or legacy XOR).
+    
+    Priority:
+    1. Fernet token (starts with ``gAAAAA``)
+    2. Legacy XOR format (starts with ``ENC:``)
+    3. Treat as plain-text and return as-is
     
     Args:
-        encrypted_password: Encrypted password as base64 string
+        encrypted_password: Encrypted (or plain-text) password string
         
     Returns:
         Plain text password
@@ -107,13 +137,25 @@ def decrypt_password(encrypted_password: str) -> str:
     if not encrypted_password:
         return ""
     
-    try:
-        cipher = _get_cipher()
-        decrypted = cipher.decrypt(encrypted_password.encode('utf-8'))
-        return decrypted.decode('utf-8')
-    except Exception as e:
-        logger.error(f"Failed to decrypt password: {e}")
-        raise
+    # 1. Fernet
+    if is_encrypted(encrypted_password):
+        try:
+            cipher = _get_cipher()
+            decrypted = cipher.decrypt(encrypted_password.encode('utf-8'))
+            return decrypted.decode('utf-8')
+        except Exception as e:
+            logger.error(f"Failed to decrypt Fernet password: {e}")
+            raise
+    
+    # 2. Legacy XOR
+    if encrypted_password.startswith("ENC:"):
+        plain = _try_decrypt_xor_legacy(encrypted_password)
+        if plain is not None:
+            return plain
+        logger.warning("Failed to decrypt legacy XOR password, returning as-is")
+    
+    # 3. Plain-text (or unrecognised format)
+    return encrypted_password
 
 
 def is_encrypted(value: str) -> bool:

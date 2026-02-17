@@ -23,10 +23,12 @@
 | 项目 | 状态 | 完成时间 |
 |------|------|----------|
 | RF-03: 将配置体系统一为 config/ 包 | ✅ 完成 | 2026-02-17 |
-| RF-04: 统一两套加密系统 | 🔲 待开始 | - |
-| RF-05: 统一 SSH 连接保存的双代码路径 | 🔲 待开始 | - |
+| RF-04: 统一两套加密系统 | ✅ 完成 | 2026-02-17 |
+| RF-05: 统一 SSH 连接保存的双代码路径 | ✅ 完成 | 2026-02-17 |
 
 **RF-03 详情**: 将 config.py (307 行) 拆分为 config/ 包 (paths.py, user_config.py, connections.py, rate_limits.py) + 迁入 registry.py → config/registry.py, rnconfig/loader.py → config/rnconfig.py, 提取共享 TOML 基础设施 _toml.py。rate_limits.json 移至 config/_defaults/。registry.py 和 rnconfig/ 保留为兼容 shim。config/__init__.py re-export 所有公开符号，13 个下游消费者无需修改 import。
+
+**RF-04+RF-05 详情**: 统一加密为 Fernet，统一 SSH 连接存储为 connections.json。encryption.py 新增 SENSITIVE_FIELDS、_try_decrypt_xor_legacy()、decrypt_password() 兼容两种格式。connections.py 重写：load/save 加解密所有敏感字段，get_ssh_connections/save_ssh_connections 委托给 Fernet 路径，新增 _migrate_legacy_xor_connections() 自动迁移 config.json 中的 XOR 数据，取消 10 条连接限制。security/__init__.py 主导出切换为 encryption.py，credentials.py 保留为 deprecated。
 
 ---
 
