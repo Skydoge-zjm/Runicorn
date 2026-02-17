@@ -14,7 +14,7 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 
-from ..services.storage import iter_all_runs
+from ...storage.file_utils import iter_all_runs
 from ..utils.helpers import is_within_directory
 
 logger = logging.getLogger(__name__)

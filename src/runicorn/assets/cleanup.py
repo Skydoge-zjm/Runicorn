@@ -56,7 +56,7 @@ def delete_run_completely(
         - errors: list of error messages
     """
     from ..index import IndexDb
-    from ..viewer.services.storage import find_run_dir_by_id
+    from ..storage.file_utils import find_run_dir_by_id
     
     result: Dict[str, Any] = {
         "success": False,

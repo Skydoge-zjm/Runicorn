@@ -51,6 +51,7 @@ web/frontend/*.tsbuildinfo
 .windsurf/
 .kiro/
 .warprules
+WARP.md
 .DS_Store
 Thumbs.db
 

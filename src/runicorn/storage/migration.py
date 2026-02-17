@@ -211,7 +211,7 @@ class FilesToSQLiteFileReader(FileStorageBackend):
         experiments = []
         
         # Import the existing storage utilities
-        from ..viewer.services.storage import iter_all_runs, read_json
+        from .file_utils import iter_all_runs, read_json
         
         for entry in iter_all_runs(self.root_dir, include_deleted=query.include_deleted):
             try:

@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .utils.logging import setup_logging
 from .middleware.rate_limit import RateLimitMiddleware
-from .services.storage import get_storage_root, periodic_status_check
+from ..storage.file_utils import get_storage_root, periodic_status_check
 from .api import (
     health_router,
     runs_router, 

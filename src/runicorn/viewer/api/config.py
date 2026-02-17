@@ -19,7 +19,7 @@ from ...config import (
     get_config_file_path,
     load_user_config
 )
-from ..services.storage import get_storage_root
+from ...storage.file_utils import get_storage_root
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
