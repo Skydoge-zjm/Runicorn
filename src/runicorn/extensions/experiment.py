@@ -262,18 +262,21 @@ class ExperimentManager:
         return results
     
     def _find_run_path(self, project: str, name: str, run_id: str) -> Optional[Path]:
-        """Find the path to a run directory."""
-        # New layout: storage_root/project/name/runs/run_id
-        run_path = self.storage_root / project / name / "runs" / run_id
-        if run_path.exists():
-            return run_path
+        """Find the path to a run directory (supports both old and new layouts)."""
+        # New layout: storage_root/runs/<project>/<name>/<run_id>
+        new_path = self.storage_root / "runs" / project / name / run_id
+        if new_path.exists():
+            return new_path
         
-        # Legacy layout: storage_root/runs/run_id
-        legacy_path = self.storage_root / "runs" / run_id
-        if legacy_path.exists():
-            return legacy_path
+        # Old layout: storage_root/<project>/<name>/runs/<run_id>
+        old_path = self.storage_root / project / name / "runs" / run_id
+        if old_path.exists():
+            return old_path
         
-        return None
+        # Fallback: scan all runs by ID
+        from ..storage.file_utils import find_run_dir_by_id
+        entry = find_run_dir_by_id(self.storage_root, run_id)
+        return entry.dir if entry else None
     
     def cleanup_old_experiments(self, days: int = 30, dry_run: bool = True) -> List[str]:
         """
