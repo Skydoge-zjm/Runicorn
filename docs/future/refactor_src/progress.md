@@ -62,7 +62,9 @@
 | RF-09: index/ → storage/index_db.py | ✅ 完成 | 2026-02-17 |
 
 **RF-09 详情**: git mv index/db.py → storage/index_db.py。sdk.py 和 assets/cleanup.py 的 import 改为 from .storage.index_db import IndexDb。index/__init__.py 保留为兼容 shim。额外修复: file_utils.py 对 sdk.py 的循环依赖——将顶层 from ..sdk import DEFAULT_DIRNAME, _default_storage_dir 改为 get_storage_root() 内的懒加载 import，打破 sdk → storage → file_utils → sdk 循环链。
-| RF-10: workspace/ → workspace.py | 🔲 待开始 | - |
+| RF-10: workspace/ → workspace.py | ✅ 完成 | 2026-02-17 |
+
+**RF-10 详情**: workspace/root.py (25 行) → workspace.py 单文件，删除 workspace/ 目录。现有 from .workspace import get_workspace_root 无需任何修改（Python 对包和模块的 import 语法相同）。
 | RF-08: 修复 + 重命名 api/ → client/ | 🔲 待开始 | - |
 
 ---
