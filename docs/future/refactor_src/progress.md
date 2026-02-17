@@ -77,3 +77,7 @@
 |------|------|----------|
 | RF-13: 合并两个 SQLite 数据库 | 🔲 待开始 | - |
 | RF-14: Viewer 切换到 SQLite 读取 | 🔲 待开始 | - |
+
+**RF-13 说明**（预计 8-16 小时，风险高）: 系统存在两个独立 SQLite 数据库，存储高度重叠的数据。`storage_root/index/runicorn.db`（IndexDb）3 张表（runs、assets、run_assets），主要用于资产去重；`storage_root/runicorn.db`（SQLiteStorageBackend）7 张表 + 3 个视图，`experiments` 表与 IndexDb 的 `runs` 表字段大量重叠。sdk.py 每次创建 Run 同时写两个数据库，双倍 I/O 且有数据不一致风险。方案：将 IndexDb 的 assets/run_assets 表合并到 storage/runicorn.db，在 SQLiteStorageBackend 新增资产相关方法，重写 sdk.py 中所有 IndexDb 交互代码，提供数据迁移脚本。
+
+**RF-14 说明**（预计 16-24 小时，风险高，依赖 RF-13）: SDK 已实现文件 + SQLite 双写，但 Viewer 的 8 个核心路由模块仍通过 file_utils.py 递归扫描文件系统读取数据。100 个 run 的 list_runs 需读 300 个 JSON 文件，响应秒级。方案：Viewer 启动时初始化 SQLiteStorageBackend，核心路由优先从 SQLite 查询，保留文件系统读取作为 fallback（处理未迁移旧数据）。这是唯一能带来用户可感知性能提升的重构项，list_runs 从秒级降到毫秒级。涉及 8 个路由模块重写，需处理数据一致性问题（文件系统 vs SQLite 谁是 source of truth）。建议在 RF-13 完成后再执行。
