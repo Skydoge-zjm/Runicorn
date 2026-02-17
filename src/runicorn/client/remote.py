@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .client import RunicornClient
+    from .http import RunicornClient
 
 
 class RemoteAPI:

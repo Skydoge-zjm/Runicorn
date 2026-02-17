@@ -1,5 +1,4 @@
-"""
-Runicorn API Client
+"""Runicorn Client
 
 Provides programmatic access to Runicorn Viewer REST API.
 """
@@ -31,10 +30,10 @@ class RunicornClient:
     Client for programmatic access to Runicorn Viewer API.
     
     Example:
-        >>> import runicorn.api as api
-        >>> client = api.connect("http://localhost:23300")
-        >>> experiments = client.list_experiments()
-        >>> run = client.get_run(experiments[0]["id"])
+        >>> import runicorn.client as client_mod
+        >>> client = client_mod.connect("http://localhost:23300")
+        >>> runs = client.list_runs()
+        >>> run = client.get_run(runs[0]["id"])
     """
     
     def __init__(
@@ -78,7 +77,7 @@ class RunicornClient:
             )
             resp.raise_for_status()
             data = resp.json()
-            if data.get("status") != "healthy":
+            if data.get("status") != "ok":
                 raise APIConnectionError(f"Viewer is not healthy: {data}")
             logger.info(f"Connected to Runicorn Viewer at {self.base_url}")
         except requests.RequestException as e:
@@ -157,127 +156,121 @@ class RunicornClient:
         """DELETE request."""
         return self._request("DELETE", endpoint)
     
-    # ==================== Experiments API ====================
+    # ==================== Runs API ====================
     
-    def list_experiments(
-        self,
-        project: Optional[str] = None,
-        name: Optional[str] = None,
-        status: Optional[str] = None,
-        limit: Optional[int] = None,
-        offset: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+    def list_runs(self) -> List[Dict[str, Any]]:
         """
-        List experiments.
+        List all experiment runs.
         
-        Args:
-            project: Filter by project name
-            name: Filter by experiment name
-            status: Filter by status (running, finished, failed)
-            limit: Maximum number of results
-            offset: Offset for pagination
-            
         Returns:
-            List of experiment records
+            List of run records (each with id, status, path, alias, etc.)
         """
-        params = {}
-        if project:
-            params["project"] = project
-        if name:
-            params["name"] = name
-        if status:
-            params["status"] = status
-        if limit:
-            params["limit"] = limit
-        if offset:
-            params["offset"] = offset
-        
-        data = self.get("/api/experiments", params=params)
-        return data.get("experiments", [])
+        return self.get("/api/runs")
     
-    def get_experiment(self, run_id: str) -> Dict[str, Any]:
+    def get_run(self, run_id: str) -> Dict[str, Any]:
         """
-        Get experiment details.
+        Get run details.
         
         Args:
             run_id: Run ID
             
         Returns:
-            Experiment record
+            Run record
         """
         return self.get(f"/api/runs/{run_id}")
     
-    # ==================== Runs API ====================
+    # ==================== Paths API ====================
     
-    def get_run(self, run_id: str) -> Dict[str, Any]:
-        """Get run details (alias for get_experiment)."""
-        return self.get_experiment(run_id)
-    
-    def list_projects(self) -> List[Dict[str, Any]]:
+    def list_paths(self, include_stats: bool = False) -> Dict[str, Any]:
         """
-        List all projects.
+        List all experiment paths.
         
+        Args:
+            include_stats: Include run count statistics per path
+            
         Returns:
-            List of projects with experiment counts
+            Dictionary with paths list, tree structure, and optionally stats
         """
-        data = self.get("/api/projects")
-        return data.get("projects", [])
+        params = {}
+        if include_stats:
+            params["include_stats"] = "true"
+        return self.get("/api/paths", params=params)
+    
+    def list_runs_by_path(
+        self,
+        path: Optional[str] = None,
+        exact: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        List runs filtered by path.
+        
+        Args:
+            path: Path prefix to filter by (e.g., "cv/yolo")
+            exact: If true, match exact path only
+            
+        Returns:
+            List of runs matching the path filter
+        """
+        params = {}
+        if path:
+            params["path"] = path
+        if exact:
+            params["exact"] = "true"
+        return self.get("/api/paths/runs", params=params)
     
     # ==================== Metrics API ====================
     
     def get_metrics(
         self,
         run_id: str,
-        metric_names: Optional[List[str]] = None,
-        limit: Optional[int] = None,
+        downsample: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Get run metrics.
         
         Args:
             run_id: Run ID
-            metric_names: Filter by metric names
-            limit: Maximum number of data points
+            downsample: Target number of data points (100-50000, None = no downsampling)
             
         Returns:
-            Metrics data with time series
+            Dict with columns, rows, total, and sampled counts
         """
         params = {}
-        if metric_names:
-            params["metrics"] = ",".join(metric_names)
-        if limit:
-            params["limit"] = limit
+        if downsample is not None:
+            params["downsample"] = downsample
         
-        return self.get(f"/api/metrics/{run_id}", params=params)
+        return self.get(f"/api/runs/{run_id}/metrics", params=params)
     
     # ==================== Export API ====================
     
-    def export_experiment(
-        self,
-        run_id: str,
-        format: str = "json",
-        include_media: bool = False,
-    ) -> bytes:
+    def export_csv(self, run_id: str) -> bytes:
         """
-        Export experiment data.
+        Export run metrics as CSV.
         
         Args:
             run_id: Run ID
-            format: Export format (json, csv)
-            include_media: Include media files
             
         Returns:
-            Exported data (binary)
+            CSV content (binary)
         """
-        payload = {
-            "run_id": run_id,
-            "format": format,
-            "include_media": include_media,
-        }
+        url = urljoin(self.base_url, f"/api/export/{run_id}/csv")
+        resp = self.session.get(url, timeout=self.timeout)
+        resp.raise_for_status()
+        return resp.content
+    
+    def export_report(self, run_id: str, format: str = "markdown") -> bytes:
+        """
+        Generate experiment report.
         
-        # This returns raw bytes, not JSON
-        url = urljoin(self.base_url, "/api/export")
-        resp = self.session.post(url, json=payload, timeout=self.timeout)
+        Args:
+            run_id: Run ID
+            format: Report format (markdown or html)
+            
+        Returns:
+            Report content (binary)
+        """
+        url = urljoin(self.base_url, f"/api/export/{run_id}/report")
+        resp = self.session.get(url, params={"format": format}, timeout=self.timeout)
         resp.raise_for_status()
         return resp.content
     
@@ -287,21 +280,41 @@ class RunicornClient:
         """Get Viewer configuration."""
         return self.get("/api/config")
     
-    def update_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Update Viewer configuration."""
-        return self.put("/api/config", json=config)
+    def set_user_root_dir(self, path: str) -> Dict[str, Any]:
+        """
+        Set user root directory for experiment storage.
+        
+        Args:
+            path: New storage root directory path
+            
+        Returns:
+            Updated config with new storage path
+        """
+        return self.post("/api/config/user_root_dir", json={"path": path})
     
     # ==================== GPU API ====================
     
     def get_gpu_info(self) -> Dict[str, Any]:
-        """Get GPU information."""
-        return self.get("/api/gpu")
+        """Get GPU telemetry data."""
+        return self.get("/api/gpu/telemetry")
     
     # ==================== Health API ====================
     
     def health_check(self) -> Dict[str, Any]:
         """Check Viewer health status."""
         return self.get("/api/health")
+    
+    # ==================== Storage API ====================
+    
+    def get_storage_stats(self) -> Dict[str, Any]:
+        """Get storage usage statistics."""
+        return self.get("/api/storage/stats")
+    
+    # ==================== Status API ====================
+    
+    def check_status(self) -> Dict[str, Any]:
+        """Manually trigger status check for all running experiments."""
+        return self.post("/api/status/check")
     
     def close(self) -> None:
         """Close client session."""

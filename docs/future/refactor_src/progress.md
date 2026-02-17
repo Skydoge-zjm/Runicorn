@@ -65,7 +65,9 @@
 | RF-10: workspace/ → workspace.py | ✅ 完成 | 2026-02-17 |
 
 **RF-10 详情**: workspace/root.py (25 行) → workspace.py 单文件，删除 workspace/ 目录。现有 from .workspace import get_workspace_root 无需任何修改（Python 对包和模块的 import 语法相同）。
-| RF-08: 修复 + 重命名 api/ → client/ | 🔲 待开始 | - |
+|| RF-08: 修复 + 重命名 api/ → client/ | ✅ 完成 | 2026-02-17 |
+
+**RF-08 详情**: 修复客户端与服务端 API 的 8 处不一致（health check status "healthy"→"ok"、list_experiments→list_runs 对齐 GET /api/runs、get_metrics 路径 /api/metrics/{id}→/api/runs/{id}/metrics、export 从 POST /api/export→GET /api/export/{id}/csv+report、update_config→set_user_root_dir 对齐 POST /api/config/user_root_dir、GPU /api/gpu→/api/gpu/telemetry、list_projects→list_paths 对齐 GET /api/paths、models.py Experiment project/name→RunInfo path/alias）。新增 get_storage_stats()、check_status()、list_runs_by_path()、export_report() 方法。git mv api/ → client/（client.py→http.py 避免同名），api/__init__.py 保留为兼容 shim。utils.py 适配新 metrics 响应格式（columns+rows）。models.py: Experiment→RunInfo、Project→PathInfo，旧名保留为别名。
 
 ---
 
