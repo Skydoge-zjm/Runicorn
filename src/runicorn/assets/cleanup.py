@@ -55,7 +55,7 @@ def delete_run_completely(
         - bytes_freed: int
         - errors: list of error messages
     """
-    from ..index import IndexDb
+    from ..storage.index_db import IndexDb
     from ..storage.file_utils import find_run_dir_by_id
     
     result: Dict[str, Any] = {
@@ -392,7 +392,7 @@ def cleanup_orphaned_blobs(storage_root: Path, dry_run: bool = False) -> Dict[st
     Returns:
         Dict with cleanup summary.
     """
-    from ..index import IndexDb
+    from ..storage.index_db import IndexDb
     
     result: Dict[str, Any] = {
         "success": False,

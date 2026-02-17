@@ -16,8 +16,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 
-from ..sdk import DEFAULT_DIRNAME, _default_storage_dir
-
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +53,7 @@ def get_storage_root(storage: Optional[str] = None) -> Path:
     Returns:
         Path to storage root directory
     """
+    from ..sdk import _default_storage_dir
     root = _default_storage_dir(storage)
     root.mkdir(parents=True, exist_ok=True)
     (root / "runs").mkdir(parents=True, exist_ok=True)

@@ -22,7 +22,7 @@ from .assets.archive import archive_dir, archive_file
 from .assets.fingerprint import dir_stat_fingerprint, stat_fingerprint
 from .assets.snapshot import snapshot_workspace
 from .assets.outputs_scan import scan_outputs_once
-from .index import IndexDb
+from .storage.index_db import IndexDb
 
 # Setup logging
 logger = logging.getLogger(__name__)
