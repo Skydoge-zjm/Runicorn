@@ -45,8 +45,20 @@
 
 发现 Bug: Run.finish() 二次调用死锁（详见下方 Bug 列表 #2）
 
-## Phase T3: 安全 + 客户端
-⏳ 待 T2 完成后开始
+## Phase T3: 安全 + 客户端 ✅ 完成
+
+| 模块 | 状态 | 用例数 | 备注 |
+|------|------|--------|------|
+| T3.1 security/encryption.py | ✅ | 17 | Fernet 加解密往返, is_encrypted, XOR legacy, 自动检测, 明文穿透, SENSITIVE_FIELDS, 密钥自动生成 |
+| T3.2 security/path_validation.py | ✅ | 27+2skip | 正常路径, 遍历攻击, 符号链接(Win skip), 文件名净化, Windows 保留名, 安全创建目录 |
+| T3.3 security/rate_limiter.py | ✅ | 20 | 滑动窗口基础/过期, 端点独立限流, localhost 白名单, 多线程安全 |
+| T3.4 client/http.py | ✅ | 20 | 全 API 方法 mock, 4xx/5xx 错误处理, 连接验证失败, 上下文管理器, remote 属性 |
+| T3.5 client/models.py | ✅ | 17 | RunInfo/PathInfo/MetricSeries/RemoteSession from_dict, 聚合方法, Experiment/Project 别名 |
+| T3.6 integration config_migration | ✅ | 3 | XOR→Fernet 迁移, 连接数保持, config.json 处理 |
+| T3.7 integration encryption_roundtrip | ✅ | 2 | 全字段加解密往返, Fernet+XOR+明文混合格式 |
+
+**T3 合计: 106 passed, 2 skipped**
+**T1+T2+T3 总计: 378 passed, 5 skipped**
 
 ## Phase T4: 扩展 + 资产 + E2E
 ⏳ 待 T3 完成后开始
