@@ -1,3 +1,13 @@
+"""
+DEPRECATED: Legacy index database.
+
+This module is kept for backward compatibility only.
+New code should use SQLiteStorageBackend which now includes
+asset management (assets/run_assets tables in runicorn.db).
+
+The automatic migration in storage.migration.migrate_index_to_unified()
+will copy data from index/runicorn.db into the unified runicorn.db.
+"""
 from __future__ import annotations
 
 import json

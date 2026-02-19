@@ -15,7 +15,7 @@ ALLOWED_EXPERIMENT_COLUMNS = {
     'best_metric_step', 'best_metric_mode', 'exit_reason',
     'updated_at', 'deleted_at', 'delete_reason',
     'pid', 'python_version', 'platform', 'hostname', 'run_dir',
-    'metric_count'
+    'workspace_root', 'metric_count'
 }
 
 # Pattern for valid column names (alphanumeric + underscore only)

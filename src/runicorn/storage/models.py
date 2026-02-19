@@ -52,6 +52,7 @@ class ExperimentRecord:
     
     # File system integration
     run_dir: str = ""
+    workspace_root: Optional[str] = None
     
     # Computed fields
     duration_seconds: Optional[float] = None

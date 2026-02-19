@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Iterator
@@ -458,6 +459,103 @@ def detect_storage_type(root_dir: Path) -> str:
         return "file_only"
     else:
         return "empty"
+
+
+def migrate_index_to_unified(root_dir: Path, backend: SQLiteStorageBackend) -> bool:
+    """
+    Migrate asset data from legacy index/runicorn.db into the unified runicorn.db.
+
+    Only migrates `assets` and `run_assets` tables. The `runs` table is
+    skipped because `experiments` already covers that data.
+
+    This function is idempotent — repeated calls are safe (INSERT OR IGNORE).
+
+    Args:
+        root_dir: Storage root directory.
+        backend: An already-initialised SQLiteStorageBackend.
+
+    Returns:
+        True if migration was performed, False if skipped (no index DB or already done).
+    """
+    index_db_path = Path(root_dir) / "index" / "runicorn.db"
+    if not index_db_path.exists():
+        return False
+
+    # Check if already migrated
+    conn = backend.pool.get_connection()
+    try:
+        row = conn.execute(
+            "SELECT stat_value FROM storage_stats WHERE stat_name='index_migrated'"
+        ).fetchone()
+        if row and row[0] == '"true"':
+            logger.debug("Index already migrated, skipping")
+            return False
+    finally:
+        backend.pool.return_connection(conn)
+
+    logger.info(f"Migrating index data from {index_db_path}")
+
+    try:
+        src = sqlite3.connect(str(index_db_path), timeout=5.0)
+        src.row_factory = sqlite3.Row
+
+        # Migrate assets
+        assets_rows = src.execute("SELECT * FROM assets").fetchall()
+        migrated_assets = 0
+        conn = backend.pool.get_connection()
+        try:
+            for row in assets_rows:
+                try:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO assets (
+                            asset_id, asset_type, name, source_uri, archive_uri,
+                            is_archived, fingerprint_kind, fingerprint,
+                            size_bytes, mtime, created_at, metadata_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            row["asset_id"], row["asset_type"], row["name"],
+                            row["source_uri"], row["archive_uri"],
+                            row["is_archived"], row["fingerprint_kind"],
+                            row["fingerprint"], row["size_bytes"],
+                            row["mtime"], row["created_at"],
+                            row["metadata_json"],
+                        ),
+                    )
+                    migrated_assets += 1
+                except Exception as e:
+                    logger.debug(f"Skip asset {row['asset_id']}: {e}")
+
+            # Migrate run_assets (only for runs that exist in experiments)
+            ra_rows = src.execute("SELECT * FROM run_assets").fetchall()
+            migrated_links = 0
+            for row in ra_rows:
+                try:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO run_assets (run_id, asset_id, role, created_at) VALUES (?, ?, ?, ?)",
+                        (row["run_id"], row["asset_id"], row["role"], row["created_at"]),
+                    )
+                    migrated_links += 1
+                except Exception as e:
+                    logger.debug(f"Skip run_asset link {row['run_id']}/{row['asset_id']}: {e}")
+
+            # Mark migration done
+            conn.execute(
+                "INSERT OR REPLACE INTO storage_stats (stat_name, stat_value, updated_at) VALUES (?, ?, ?)",
+                ("index_migrated", '"true"', time.time()),
+            )
+            conn.commit()
+        finally:
+            backend.pool.return_connection(conn)
+
+        src.close()
+        logger.info(f"Index migration complete: {migrated_assets} assets, {migrated_links} links")
+        return True
+
+    except Exception as e:
+        logger.error(f"Index migration failed: {e}")
+        return False
 
 
 def ensure_modern_storage(root_dir: Path) -> StorageBackend:

@@ -22,7 +22,6 @@ from .assets.archive import archive_dir, archive_file
 from .assets.fingerprint import dir_stat_fingerprint, stat_fingerprint
 from .assets.snapshot import snapshot_workspace
 from .assets.outputs_scan import scan_outputs_once
-from .storage.index_db import IndexDb
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -231,12 +230,6 @@ class Run:
         self._outputs_watch_thread: Optional[threading.Thread] = None
         self._outputs_watch_stop = threading.Event()
 
-        self._index_db: Optional[IndexDb] = None
-        try:
-            self._index_db = IndexDb(self.storage_root)
-        except Exception:
-            self._index_db = None
-
         # Global step counter for metrics logging
         # Starts from 0; first auto step will be 1
         self._global_step: int = 0
@@ -281,20 +274,6 @@ class Run:
         self._write_json(self._meta_path, asdict(meta))
         self._write_json(self._status_path, {"status": "running", "started_at": _now_ts()})
 
-        if self._index_db is not None:
-            try:
-                self._index_db.upsert_run(
-                    run_id=self.id,
-                    path=self.path,
-                    alias=self.alias,
-                    created_at=float(meta.created_at),
-                    status="running",
-                    run_dir=str(self.run_dir),
-                    workspace_root=str(self.workspace_root),
-                )
-            except Exception:
-                pass
-
         ensure_assets_file(self._assets_path)
 
         if snapshot_code:
@@ -321,9 +300,9 @@ class Run:
 
             update_assets_atomic(self._assets_path, self._assets_lock, _upd)
 
-            if self._index_db is not None:
+            if self.storage_backend:
                 try:
-                    self._index_db.record_asset_for_run(
+                    self.storage_backend.record_asset_for_run(
                         run_id=self.id,
                         role="code",
                         asset_type="code_snapshot",
@@ -405,10 +384,10 @@ class Run:
             state_gc_after_sec=state_gc_after_sec,
         )
 
-        if self._index_db is not None:
+        if self.storage_backend:
             try:
                 for e in res.get("archived_entries") or []:
-                    self._index_db.record_asset_for_run(
+                    self.storage_backend.record_asset_for_run(
                         run_id=self.id,
                         role="output",
                         asset_type="output",
@@ -478,6 +457,13 @@ class Run:
             # Initialize SQLite backend
             self.storage_backend = SQLiteStorageBackend(self.storage_root)
             
+            # Auto-migrate legacy index database if present
+            try:
+                from .storage.migration import migrate_index_to_unified
+                migrate_index_to_unified(self.storage_root, self.storage_backend)
+            except Exception as e:
+                logger.debug(f"Index migration skipped or failed: {e}")
+            
             # Create experiment record in modern storage
             experiment = ExperimentRecord(
                 id=self.id,
@@ -490,14 +476,13 @@ class Run:
                 python_version=sys.version.split(" ")[0],
                 platform=f"{platform.system()} {platform.release()} ({platform.machine()})",
                 hostname=socket.gethostname(),
-                run_dir=str(self.run_dir)
+                run_dir=str(self.run_dir),
+                workspace_root=str(self.workspace_root),
             )
             
-            # Use synchronous wrapper to safely create experiment
-            from .storage.sync_utils import create_experiment_sync
-            create_experiment_sync(self.storage_backend, experiment)
+            self.storage_backend.create_experiment(experiment)
             
-            logger.info(f"✅ Modern storage initialized: {type(self.storage_backend).__name__}")
+            logger.info(f"Modern storage initialized: {type(self.storage_backend).__name__}")
             
         except Exception as e:
             logger.error(f"Failed to initialize modern storage: {e}")
@@ -589,9 +574,7 @@ class Run:
                         ))
                 
                 if metrics:
-                    # Use synchronous wrapper to safely log metrics
-                    from .storage.sync_utils import log_metrics_sync
-                    log_metrics_sync(self.storage_backend, self.id, metrics)
+                    self.storage_backend.log_metrics(self.id, metrics)
                         
             except Exception as e:
                 logger.debug(f"Failed to log to modern storage: {e}")
@@ -711,9 +694,9 @@ class Run:
 
         update_assets_atomic(self._assets_path, self._assets_lock, _upd)
 
-        if self._index_db is not None:
+        if self.storage_backend:
             try:
-                self._index_db.record_asset_for_run(
+                self.storage_backend.record_asset_for_run(
                     run_id=self.id,
                     role="config",
                     asset_type="config",
@@ -784,14 +767,14 @@ class Run:
 
         update_assets_atomic(self._assets_path, self._assets_lock, _upd)
 
-        if self._index_db is not None:
+        if self.storage_backend:
             try:
                 fp_kind = entry.get("fingerprint_kind")
                 fp_val = entry.get("fingerprint")
                 if isinstance(fp_val, dict):
                     fp_val = json.dumps(fp_val, ensure_ascii=False, sort_keys=True)
                     fp_kind = fp_kind or "stat"
-                self._index_db.record_asset_for_run(
+                self.storage_backend.record_asset_for_run(
                     run_id=self.id,
                     role="dataset",
                     asset_type="dataset",
@@ -859,9 +842,9 @@ class Run:
 
         update_assets_atomic(self._assets_path, self._assets_lock, _upd)
 
-        if self._index_db is not None:
+        if self.storage_backend:
             try:
-                self._index_db.record_asset_for_run(
+                self.storage_backend.record_asset_for_run(
                     run_id=self.id,
                     role="pretrained",
                     asset_type="pretrained",
@@ -962,18 +945,6 @@ class Run:
         
         self.stop_outputs_watch()
 
-        if self._index_db is not None:
-            try:
-                self._index_db.finish_run(run_id=self.id, status=status, ended_at=_now_ts())
-            except Exception:
-                pass
-            try:
-                if hasattr(self._index_db, "close_all"):
-                    self._index_db.close_all()
-                else:
-                    self._index_db.close()
-            except Exception:
-                pass
         # Save best metric to summary before finishing
         if self._best_metric_value is not None:
             best_metric_summary = {

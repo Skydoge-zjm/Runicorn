@@ -75,9 +75,9 @@
 
 | 项目 | 状态 | 完成时间 |
 |------|------|----------|
-| RF-13: 合并两个 SQLite 数据库 | 🔲 待开始 | - |
+| RF-13: 合并两个 SQLite 数据库 | ✅ 完成 | 2026-02-19 |
 | RF-14: Viewer 切换到 SQLite 读取 | 🔲 待开始 | - |
 
-**RF-13 说明**（预计 8-16 小时，风险高）: 系统存在两个独立 SQLite 数据库，存储高度重叠的数据。`storage_root/index/runicorn.db`（IndexDb）3 张表（runs、assets、run_assets），主要用于资产去重；`storage_root/runicorn.db`（SQLiteStorageBackend）7 张表 + 3 个视图，`experiments` 表与 IndexDb 的 `runs` 表字段大量重叠。sdk.py 每次创建 Run 同时写两个数据库，双倍 I/O 且有数据不一致风险。方案：将 IndexDb 的 assets/run_assets 表合并到 storage/runicorn.db，在 SQLiteStorageBackend 新增资产相关方法，重写 sdk.py 中所有 IndexDb 交互代码，提供数据迁移脚本。
+**RF-13 详情**: 将 IndexDb（index/runicorn.db）的 assets/run_assets 表合并到统一的 runicorn.db 中。schema.sql 新增 assets 和 run_assets 表定义及索引，experiments 表新增 workspace_root 字段。SQLiteStorageBackend 新增 7 个资产管理方法（upsert_asset、link_run_asset、record_asset_for_run、delete_run_with_orphan_assets、get_assets_for_run、get_asset_ref_count、get_asset_by_fingerprint），方法签名与 IndexDb 对齐便于迁移。sdk.py 移除 IndexDb 依赖，所有 self._index_db 调用替换为 self.storage_backend 调用，移除 sync_utils 包装（直接调用 backend 方法）。assets/cleanup.py 改用 SQLiteStorageBackend 替代 IndexDb。migration.py 新增 migrate_index_to_unified() 幂等迁移函数，在 _init_modern_storage() 中自动执行。IndexDb 和 sync_utils.py 保留为 deprecated 兼容层，index/__init__.py shim 保留。
 
-**RF-14 说明**（预计 16-24 小时，风险高，依赖 RF-13）: SDK 已实现文件 + SQLite 双写，但 Viewer 的 8 个核心路由模块仍通过 file_utils.py 递归扫描文件系统读取数据。100 个 run 的 list_runs 需读 300 个 JSON 文件，响应秒级。方案：Viewer 启动时初始化 SQLiteStorageBackend，核心路由优先从 SQLite 查询，保留文件系统读取作为 fallback（处理未迁移旧数据）。这是唯一能带来用户可感知性能提升的重构项，list_runs 从秒级降到毫秒级。涉及 8 个路由模块重写，需处理数据一致性问题（文件系统 vs SQLite 谁是 source of truth）。建议在 RF-13 完成后再执行。
+**RF-14 说明**（预计 16-24 小时，风险高，RF-13 已完成）: SDK 已实现文件 + SQLite 双写，但 Viewer 的 8 个核心路由模块仍通过 file_utils.py 递归扫描文件系统读取数据。100 个 run 的 list_runs 需读 300 个 JSON 文件，响应秒级。方案：Viewer 启动时初始化 SQLiteStorageBackend，核心路由优先从 SQLite 查询，保留文件系统读取作为 fallback（处理未迁移旧数据）。这是唯一能带来用户可感知性能提升的重构项，list_runs 从秒级降到毫秒级。涉及 8 个路由模块重写，需处理数据一致性问题（文件系统 vs SQLite 谁是 source of truth）。

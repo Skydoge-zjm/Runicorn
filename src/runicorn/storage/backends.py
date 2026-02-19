@@ -10,6 +10,7 @@ import json
 import logging
 import sqlite3
 import time
+import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Iterator
@@ -309,13 +310,15 @@ class SQLiteStorageBackend(StorageBackend):
                 INSERT INTO experiments (
                     id, path, alias, created_at, updated_at, status,
                     pid, python_version, platform, hostname, run_dir,
+                    workspace_root,
                     best_metric_name, best_metric_value, best_metric_step, best_metric_mode
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 experiment.id, experiment.path, experiment.alias,
                 experiment.created_at, experiment.updated_at, experiment.status,
                 experiment.pid, experiment.python_version, experiment.platform, 
                 experiment.hostname, experiment.run_dir,
+                experiment.workspace_root,
                 experiment.best_metric_name, experiment.best_metric_value,
                 experiment.best_metric_step, experiment.best_metric_mode
             ))
@@ -694,6 +697,218 @@ class SQLiteStorageBackend(StorageBackend):
         except Exception as e:
             logger.error(f"Failed to get storage stats: {e}")
             return StorageStats()
+        finally:
+            self.pool.return_connection(conn)
+
+    # -------------------- Asset Management --------------------
+
+    def upsert_asset(
+        self,
+        *,
+        asset_type: str,
+        name: Optional[str],
+        source_uri: Optional[str],
+        archive_uri: Optional[str],
+        is_archived: bool,
+        fingerprint_kind: Optional[str],
+        fingerprint: Optional[str],
+        size_bytes: Optional[int] = None,
+        mtime: Optional[float] = None,
+        created_at: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Insert an asset or return existing asset_id if fingerprint matches."""
+        conn = self.pool.get_connection()
+        try:
+            asset_id = str(uuid.uuid4())
+            metadata_json = (
+                json.dumps(metadata or {}, ensure_ascii=False)
+                if metadata is not None
+                else None
+            )
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO assets (
+                        asset_id, asset_type, name, source_uri, archive_uri,
+                        is_archived, fingerprint_kind, fingerprint,
+                        size_bytes, mtime, created_at, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        asset_id, asset_type, name, source_uri, archive_uri,
+                        1 if is_archived else 0,
+                        fingerprint_kind, fingerprint,
+                        size_bytes, mtime, created_at, metadata_json,
+                    ),
+                )
+                conn.commit()
+                return asset_id
+            except sqlite3.IntegrityError:
+                if fingerprint:
+                    row = conn.execute(
+                        "SELECT asset_id FROM assets WHERE asset_type=? AND fingerprint=?",
+                        (asset_type, fingerprint),
+                    ).fetchone()
+                    if row:
+                        return str(row["asset_id"])
+                raise
+        finally:
+            self.pool.return_connection(conn)
+
+    def link_run_asset(
+        self,
+        *,
+        run_id: str,
+        asset_id: str,
+        role: str,
+        created_at: Optional[float] = None,
+    ) -> None:
+        """Create a link between a run and an asset."""
+        conn = self.pool.get_connection()
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO run_assets (run_id, asset_id, role, created_at) VALUES (?, ?, ?, ?)",
+                (run_id, asset_id, role, created_at),
+            )
+            conn.commit()
+        finally:
+            self.pool.return_connection(conn)
+
+    def record_asset_for_run(
+        self,
+        *,
+        run_id: str,
+        role: str,
+        asset_type: str,
+        name: Optional[str],
+        source_uri: Optional[str],
+        archive_uri: Optional[str],
+        is_archived: bool,
+        fingerprint_kind: Optional[str],
+        fingerprint: Optional[str],
+        size_bytes: Optional[int] = None,
+        mtime: Optional[float] = None,
+        created_at: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Upsert an asset and link it to a run (convenience combo)."""
+        asset_id = self.upsert_asset(
+            asset_type=asset_type,
+            name=name,
+            source_uri=source_uri,
+            archive_uri=archive_uri,
+            is_archived=is_archived,
+            fingerprint_kind=fingerprint_kind,
+            fingerprint=fingerprint,
+            size_bytes=size_bytes,
+            mtime=mtime,
+            created_at=created_at,
+            metadata=metadata,
+        )
+        self.link_run_asset(
+            run_id=run_id,
+            asset_id=asset_id,
+            role=role,
+            created_at=created_at,
+        )
+        return asset_id
+
+    def get_assets_for_run(self, run_id: str) -> List[Dict[str, Any]]:
+        """Get all assets associated with a run."""
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(
+                """
+                SELECT a.*, ra.role, ra.created_at AS linked_at
+                FROM assets a
+                JOIN run_assets ra ON a.asset_id = ra.asset_id
+                WHERE ra.run_id = ?
+                """,
+                (run_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_asset_ref_count(self, asset_id: str) -> int:
+        """Get the number of runs referencing an asset."""
+        conn = self.pool.get_connection()
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM run_assets WHERE asset_id = ?",
+                (asset_id,),
+            ).fetchone()
+            return int(row["cnt"]) if row else 0
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_asset_by_fingerprint(
+        self, asset_type: str, fingerprint: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get asset by type and fingerprint."""
+        conn = self.pool.get_connection()
+        try:
+            row = conn.execute(
+                "SELECT * FROM assets WHERE asset_type=? AND fingerprint=?",
+                (asset_type, fingerprint),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            self.pool.return_connection(conn)
+
+    def delete_run_with_orphan_assets(self, run_id: str) -> Dict[str, Any]:
+        """
+        Delete a run and any assets that become orphaned.
+
+        Returns dict with 'orphaned_assets' and 'kept_assets' lists.
+        Does NOT delete actual files — caller handles that.
+        """
+        conn = self.pool.get_connection()
+        try:
+            # Get all assets for this run
+            assets = conn.execute(
+                """
+                SELECT a.*, ra.role
+                FROM assets a
+                JOIN run_assets ra ON a.asset_id = ra.asset_id
+                WHERE ra.run_id = ?
+                """,
+                (run_id,),
+            ).fetchall()
+
+            orphaned = []
+            kept = []
+
+            for asset in assets:
+                asset_id = asset["asset_id"]
+                row = conn.execute(
+                    "SELECT COUNT(*) AS cnt FROM run_assets WHERE asset_id=? AND run_id!=?",
+                    (asset_id, run_id),
+                ).fetchone()
+                ref_count = int(row["cnt"]) if row else 0
+
+                asset_dict = dict(asset)
+                if ref_count == 0:
+                    orphaned.append(asset_dict)
+                else:
+                    kept.append(asset_dict)
+
+            # Delete experiment record (CASCADE deletes run_assets and metrics)
+            conn.execute("DELETE FROM experiments WHERE id=?", (run_id,))
+
+            # Delete orphaned assets
+            for asset in orphaned:
+                conn.execute(
+                    "DELETE FROM assets WHERE asset_id=?", (asset["asset_id"],)
+                )
+
+            conn.commit()
+
+            return {
+                "orphaned_assets": orphaned,
+                "kept_assets": kept,
+            }
         finally:
             self.pool.return_connection(conn)
 
