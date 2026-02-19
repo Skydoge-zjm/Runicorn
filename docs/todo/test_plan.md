@@ -1,9 +1,9 @@
 # Runicorn 全面测试规划
 
-> 版本: 1.0
+> 版本: 1.1（审阅修订版）
 > 日期: 2026-02-19
-> 基准分支: refactor/src-restructure（RF-01 ~ RF-15 全部完成后）
-> 配套文档: refactor_proposal_v2.md, src_structure.md, progress.md
+> 基准分支: test/comprehensive（基于 develop 的 merge commit dc2dc4d，RF-01~RF-15 已全部完成）
+> 配套文档: src_structure.md, test_plan_review_synthesis.md
 
 ---
 
@@ -25,6 +25,8 @@
   - 含 e2e: `pytest --run-e2e`
 - **临时目录**: 所有涉及文件 I/O 的测试使用 `tmp_path` fixture，禁止写入工作目录
 - **数据库测试**: 每个测试用例使用独立的 SQLite 文件（`tmp_path / "runicorn.db"`），测试结束自动清理
+- **异步测试**: 涉及 `async def` 的被测函数（如 `periodic_status_check`）需 `pytest-asyncio` 支持，测试函数标记 `@pytest.mark.asyncio`
+- **参数化**: 跨平台路径（win/linux/macos）、加密格式（fernet/xor/plaintext）、Viewer 列表/过滤等场景应使用 `@pytest.mark.parametrize` 收敛用例，避免重复
 
 ### 1.3 现有测试现状
 现有 `tests/` 目录结构混乱，覆盖面集中在 assets 和 remote 模块。**本计划不延续现有结构**，而是从零设计。可保留仍有效的测试文件，但需迁移到新目录并适配新 fixture。
@@ -49,6 +51,7 @@ tests/
 │   ├── test_sdk_assets.py            # log_config, log_dataset, log_pretrained, scan_outputs
 │   ├── test_enabled.py               # enabled/disabled 开关 + NoOpRun
 │   ├── test_cli.py                   # CLI 子命令解析与执行
+│   ├── test_workspace.py              # get_workspace_root .git 查找与 fallback
 │   │
 │   ├── config/
 │   │   ├── test_paths.py             # 跨平台路径解析
@@ -77,10 +80,11 @@ tests/
 │   │
 │   ├── viewer/
 │   │   ├── test_db_reader.py         # db_reader.py 辅助层
-│   │   └── test_listdir_cache.py     # 目录缓存
+│   │   ├── test_listdir_cache.py     # 目录缓存
+│   │   └── test_incremental_cache.py # IncrementalMetricsCache 增量读取
 │   │
 │   ├── client/
-│   │   ├── test_http_client.py       # RunicornClient 请求构造（mock httpx）
+│   │   ├── test_http_client.py       # RunicornClient 请求构造（mock requests）
 │   │   ├── test_models.py            # RunInfo, PathInfo, MetricPoint
 │   │   └── test_utils.py             # metrics_to_dataframe 等
 │   │
@@ -95,6 +99,15 @@ tests/
 │   │   ├── test_exporters.py         # MetricsExporter
 │   │   └── test_environment.py       # EnvironmentCapture
 │   │
+│   ├── assets/
+│   │   ├── test_fingerprint.py       # dir_stat_fingerprint, stat_fingerprint 确定性
+│   │   ├── test_archive.py           # 基于指纹的归档去重
+│   │   ├── test_ignore.py            # .runicornignore 规则解析与匹配
+│   │   └── test_assets_json.py       # ensure_assets_file, update_assets_atomic 原子写入
+│   │
+│   ├── log_compat/
+│   │   └── test_torchvision.py       # MetricLogger/SmoothedValue API 兼容 + 指标转发
+│   │
 │   └── remote/
 │       ├── test_known_hosts.py       # KnownHostsStore (可复用现有)
 │       └── test_ssh_backend.py       # AutoBackend 选择逻辑
@@ -104,7 +117,7 @@ tests/
 │   ├── test_sdk_storage.py           # SDK Run → SQLite 双写验证
 │   ├── test_sdk_lifecycle.py         # init → log → set_primary_metric → finish 全流程
 │   ├── test_viewer_runs_api.py       # /api/runs/* 路由（TestClient）
-│   ├── test_viewer_projects_api.py   # /api/projects/* 路由
+│   ├── test_viewer_projects_api.py   # /api/paths/* 路由（projects_router 实际提供 paths 层级 API）
 │   ├── test_viewer_metrics_api.py    # /api/runs/{id}/metrics 路由
 │   ├── test_viewer_health_api.py     # /api/health 路由
 │   ├── test_viewer_export_api.py     # /api/export/* 路由
@@ -122,11 +135,11 @@ tests/
 │   ├── test_cli_commands.py          # CLI 全子命令 smoke test
 │   └── test_viewer_startup.py        # Viewer 进程启动 + 健康检查
 │
-└── data/                             # 测试用静态数据
-    ├── sample_meta.json
-    ├── sample_events.jsonl
-    ├── sample_rnconfig.toml
-    └── sample_rate_limits.json
+└── data/                             # 测试用静态数据（仅用于 fixture 无法动态生成的场景）
+    ├── sample_meta.json              # 被 populated_storage fixture 引用
+    ├── sample_events.jsonl           # 被 populated_storage fixture 引用
+    ├── sample_rnconfig.toml          # 被 test_rnconfig.py 引用
+    └── sample_rate_limits.json       # 被 test_rate_limits.py 引用
 ```
 
 ---
@@ -150,12 +163,19 @@ tests/
 - `populated_db(sqlite_backend, populated_storage)` — 将文件系统数据同步到 SQLite
 
 ### 3.3 `fixtures/viewer.py`
-- `app(storage_root, sqlite_backend)` — 调用 `create_app()` 并注入 `app.state.storage_root` + `app.state.storage_backend`，跳过真实 startup 事件
-- `client(app)` — httpx `AsyncClient` 或 Starlette `TestClient`
+- `app(storage_root, sqlite_backend)` — 调用 `create_app()` 并手动设置 `app.state.storage_root` + `app.state.storage_backend`，**不通过 TestClient 触发 startup 事件**（startup 会启动 periodic_status_check 和 sync_filesystem_to_db 后台线程，干扰测试稳定性）；如需 TestClient 包装，应先 monkeypatch 掉后台任务
+- `client(app)` — Starlette `TestClient`（同步），或 httpx `AsyncClient`（异步）
 
 ### 3.4 `fixtures/sdk.py`
-- `run_instance(storage_root)` — 创建一个 `Run` 实例（`capture_console=False`, `enable_modern_storage=True`），yield 后调用 `finish()`
+- `run_instance(storage_root, monkeypatch)` — 先 `monkeypatch.delenv("RUNICORN_DISABLE_MODERN_STORAGE", raising=False)` 确保现代存储启用，然后创建 `Run(storage=str(storage_root), capture_console=False)`，yield 后调用 `finish()`。显式传入 `run_id` 以确保可复现性
 - `noop_run()` — 返回 `NoOpRun` 实例
+
+### 3.5 `fixtures/config.py`（新增）
+- `mock_config_root(tmp_path, monkeypatch)` — 统一将 `config.paths._config_root_dir` 指向 `tmp_path`，避免触碰真实 `%APPDATA%`、`.secret.key`、用户目录。config 包测试（paths, user_config, connections, rate_limits）均应使用
+
+### 3.6 全局测试约定
+- **缓存/全局单例重置**: `_toml.py` 缓存、`IncrementalMetricsCache`、`LogManager` 单例等全局状态，每个测试模块需在 fixture 中显式清理（如 `clear_toml_cache()`），避免测试互相污染
+- **时间/并发确定性**: rate limiter、outputs scan、cache expiry、后台巡检等时间敏感测试，应用 `monkeypatch` 替换时间源（或依赖注入）而非 `sleep`，确保确定性
 
 ---
 
@@ -168,7 +188,7 @@ tests/
 - `test_run_log_writes_events_jsonl` — `run.log({"loss": 0.5}, step=1)` 后 events.jsonl 含对应行
 - `test_run_log_auto_step_increment` — 不传 step 时自动递增
 - `test_run_log_multiple_metrics` — 单次 log 多个指标
-- `test_run_set_primary_metric` — 设置后 summary.json 含 best_metric_name/value
+- `test_run_set_primary_metric` — `set_primary_metric()` 设置内部状态，多次 `log()` 后 `finish()`，断言 summary.json 含 best_metric_name/best_metric_value/best_metric_step
 - `test_run_best_metric_tracking_max` — mode="max" 时只记录更大值
 - `test_run_best_metric_tracking_min` — mode="min" 时只记录更小值
 - `test_run_finish_writes_status` — finish() 后 status.json 中 status="finished"
@@ -177,11 +197,23 @@ tests/
 - `test_run_context_manager_exception` — with 块抛异常 → failed
 - `test_run_double_finish_idempotent` — 多次 finish 不报错
 - `test_run_sqlite_dual_write` — log() 后 SQLite experiments 和 metrics 表有对应记录
-- `test_run_sqlite_disabled_via_env` — `RUNICORN_DISABLE_MODERN_STORAGE=1` 时不写 SQLite
+- `test_run_sqlite_disabled_via_env` — `RUNICORN_DISABLE_MODERN_STORAGE=1` 时不写 SQLite，断言 `run.storage_backend is None` 且数据库文件不存在
 - `test_run_summary_writes_file` — summary() 方法正确写入 summary.json
 - `test_run_init_with_alias` — alias 参数写入 meta.json
-- `test_run_init_with_tags` — tags 参数写入 meta.json 和 experiment_tags 表
 - `test_run_storage_backend_asset_methods` — log_config/log_dataset/log_pretrained 调用 backend 的资产方法
+
+#### `test_sdk_assets.py` (unit) — 资产方法专项
+- `test_log_config_writes_config_json` — 验证写入文件路径和内容结构
+- `test_log_dataset_records_asset_in_db` — 验证 assets 表有记录
+- `test_log_pretrained_records_asset` — 同上
+- `test_scan_outputs_once_archives_new_files` — 验证新文件被归档
+
+#### `test_normalize_path` 用例（在 `test_sdk_run.py` 中）
+- `test_normalize_path_default` — `None` → `"default"`
+- `test_normalize_path_strips_root` — `"/"` → `""`
+- `test_normalize_path_traversal_rejected` — 含 `".."` 的 path 抛 ValueError
+- `test_normalize_path_invalid_chars_rejected` — 特殊字符抛 ValueError
+- `test_normalize_path_max_length` — 超 200 字符抛 ValueError
 
 #### `test_sdk_media.py` (unit)
 - `test_log_image_from_path` — 传入文件路径
@@ -196,7 +228,7 @@ tests/
 - `test_set_enabled_programmatic` — `set_enabled(False)` → disabled
 - `test_reset_enabled` — reset 后恢复默认
 - `test_noop_run_all_methods_silent` — NoOpRun 所有方法可调用且不报错
-- `test_noop_run_returns_none` — NoOpRun.log() 返回 None
+- `test_noop_run_methods_match_run_interface` — 用 `inspect` 比对 `Run` 和 `NoOpRun` 的公共方法签名一致性（注意 `log_image()` 返回 `""`，`scan_outputs_once()` 返回 `{"scanned":0,...}`，并非全部返回 None）
 - `test_enabled_context_manager` — `with enabled(False):` 块内 disabled，块外恢复
 
 ### 4.2 config/ 包
@@ -209,6 +241,7 @@ tests/
 - `test_get_connections_file_path` — 返回 `config_root / "connections.json"`
 - `test_get_known_hosts_file_path` — 返回 `config_root / "known_hosts"`
 - `test_get_registry_dir` — 返回 `config_root / "registry"`
+- `test_get_rnconfig_file_path` — 返回 `config_root / "rnconfig.toml"`
 
 #### `test_user_config.py` (unit)
 - `test_load_empty_config` — 文件不存在返回默认空 dict
@@ -241,18 +274,37 @@ tests/
 - `test_clear_registry_cache` — 清缓存后下次读取从文件加载
 - `test_mtime_cache` — 同 rnconfig 的缓存逻辑
 
+#### `test_toml_cache.py` (unit) — `_toml.py` 共享缓存基础设施
+- `test_load_toml_valid` — 正常 TOML 文件解析正确
+- `test_load_toml_missing_returns_empty` — 文件不存在返回空 dict
+- `test_load_toml_cached_same_mtime` — 相同 mtime 不重复读取
+- `test_load_toml_cached_invalidated_on_change` — mtime 变化后刷新缓存
+- `test_clear_toml_cache` — 清缓存后重新从文件加载
+
+#### `test_rate_limits.py` (unit) — 限流配置读写
+- `test_load_defaults_when_no_user_file` — 用户配置不存在时使用内置默认
+- `test_load_from_package_defaults` — fallback 到 _defaults/ 目录
+- `test_load_hardcoded_fallback` — 两者均不存在时返回硬编码默认
+- `test_user_config_overrides_defaults` — 用户文件中的字段覆盖默认
+- `test_save_and_load_roundtrip` — 保存后重新加载一致
+
 #### `test_compat_shims.py` (unit)
 - `test_import_from_runicorn_config` — `from runicorn.config import load_user_config` 可用
 - `test_import_from_runicorn_registry` — `from runicorn.registry import get_config` 可用（兼容 shim）
 - `test_import_from_runicorn_rnconfig` — `from runicorn.rnconfig import get_effective_rnconfig` 可用（兼容 shim）
 - `test_import_private_config_root_dir` — `from runicorn.config import _config_root_dir` 可用（security/ 依赖）
 
+#### `test_workspace.py` (unit) — RF-10 验证（workspace 是真实模块，非兼容 shim）
+- `test_get_workspace_root_finds_git` — 无参数时返回当前目录祖先中有 .git 的目录
+- `test_get_workspace_root_explicit` — 指定 explicit_root 时直接返回
+- `test_get_workspace_root_fallback_cwd` — 无 .git 时 fallback 到 `cwd()`
+
 ### 4.3 storage/ 存储层
 
 #### `test_sqlite_backend.py` (unit) — RF-06/RF-13/RF-14 核心验证
 CRUD 基础:
 - `test_create_experiment` — 插入后 get 返回相同数据
-- `test_create_duplicate_id_upserts` — 相同 ID 重复插入为 upsert
+- `test_create_duplicate_id_raises_integrity_error` — 相同 ID 重复插入抛 IntegrityError（当前实现使用 INSERT INTO 而非 INSERT OR REPLACE）
 - `test_update_experiment` — 更新 status/alias 等字段
 - `test_get_experiment_not_found` — 不存在的 ID 返回 None
 - `test_list_experiments_no_filter` — 无条件列出全部
@@ -261,7 +313,8 @@ CRUD 基础:
 - `test_log_metrics` — 批量写入指标记录
 - `test_get_metrics_all` — 获取全部指标
 - `test_get_metrics_by_name` — 按名称过滤
-- `test_soft_delete` — 软删除后 list 不返回、get 仍返回（deleted_at 非 None）
+- `test_soft_delete_excluded_from_list` — 软删除后 `list_experiments(include_deleted=False)` 不含该记录
+- `test_soft_delete_get_still_returns` — 软删除后 `get_experiment()` 仍返回（需先确认实际 `get_experiment` 实现行为）
 - `test_restore_experiments` — 恢复后 deleted_at 为 None
 - `test_get_storage_stats` — 返回正确的实验数/指标数/DB 大小
 
@@ -285,7 +338,7 @@ Viewer 专用方法 (RF-14):
 - `test_get_asset_ref_count` — 资产引用计数
 
 #### `test_connection_pool.py` (unit)
-- `test_pool_init_creates_connections` — 初始化后 pool 有 N 个连接
+- `test_pool_init_creates_connections` — 指定 `pool_size=5`，初始化后 `len(pool.all_connections) == 5`
 - `test_get_and_return_connection` — 获取连接后归还
 - `test_concurrent_access` — 多线程同时获取连接无死锁（threading）
 - `test_close_all` — close_all 后所有连接关闭
@@ -310,10 +363,19 @@ Viewer 专用方法 (RF-14):
 #### `test_models.py` (unit)
 - `test_experiment_record_from_dict` — 含 legacy project/name → path 转换
 - `test_experiment_record_to_dict` — 序列化
+- `test_experiment_record_is_active` — deleted_at is None → True
+- `test_experiment_record_is_running` — status="running", deleted_at=None → True
+- `test_experiment_record_compute_duration` — started_at/ended_at 均有时正确计算
+- `test_experiment_record_short_id` — short_id 属性返回截断值
+- `test_experiment_record_path_parts` — path_parts() 解析正确
 - `test_query_params_defaults` — 默认值
 - `test_query_params_with_filters` — path/status/time_range 组合
 - `test_metric_record_creation` — 基本属性
 - `test_storage_stats_fields` — 字段完整性
+- `test_environment_record_creation` — EnvironmentRecord 基本属性
+- `test_migration_status_progress_percent` — processed/total 计算正确
+- `test_migration_status_is_complete` — 全部处理完成时返回 True
+- `test_migration_status_has_errors` — 有失败记录时返回 True
 
 #### `test_migration.py` (unit)
 - `test_files_to_sqlite_migrator` — 基本迁移流程
@@ -325,7 +387,7 @@ Viewer 专用方法 (RF-14):
 - `test_detect_storage_type` — 检测 file_only/sqlite_only/hybrid/empty
 
 #### `test_schema.py` (unit)
-- `test_schema_creates_all_tables` — 7 张表 + assets/run_assets = 9 张表
+- `test_schema_creates_all_tables` — 用 `SELECT name FROM sqlite_master WHERE type='table'` 断言精确表名集合（set 对比），而非仅断言数量
 - `test_schema_creates_views` — 3 个预计算视图
 - `test_schema_wal_mode` — WAL 模式生效
 - `test_schema_idempotent` — 重复执行 schema.sql 不报错
@@ -377,6 +439,12 @@ Viewer 专用方法 (RF-14):
 #### `test_listdir_cache.py` (unit)
 - `test_cache_hit` — 第二次调用返回缓存
 - `test_cache_expiry` — 过期后重新扫描
+- `test_cache_different_dirs` — 不同目录独立缓存
+
+#### `test_incremental_cache.py` (unit) — IncrementalMetricsCache
+- `test_incremental_read_new_lines` — 追加新行后再次查询只返回新增部分
+- `test_incremental_cache_invalidated_on_truncation` — events.jsonl 被截断时重置偏移量
+- `test_cache_stats_endpoint` — 缓存统计信息正确
 
 ### 4.6 client/ 客户端库
 
@@ -395,7 +463,7 @@ Viewer 专用方法 (RF-14):
 - `test_api_error_handling` — 4xx/5xx 响应抛出对应异常
 - `test_connection_verify_fails_graceful` — 连接失败时抛出 APIConnectionError
 
-#### `test_client_models.py` (unit)
+#### `test_models.py` (unit) — client/models.py（命名与目录结构一致）
 - `test_run_info_from_dict` — RunInfo 数据模型
 - `test_path_info_from_dict` — PathInfo 数据模型
 - `test_legacy_experiment_alias` — Experiment 别名可用（向后兼容）
@@ -439,7 +507,37 @@ Viewer 专用方法 (RF-14):
 - `test_capture_pip_packages` — 捕获 pip 包列表
 - `test_capture_system_info` — 捕获系统信息
 
-### 4.9 CLI
+### 4.10 assets/ 资产包（新增）
+
+#### `test_fingerprint.py` (unit)
+- `test_stat_fingerprint_same_file` — 相同文件产生相同指纹
+- `test_stat_fingerprint_different_file` — 不同文件产生不同指纹
+- `test_dir_stat_fingerprint_deterministic` — 相同目录多次计算结果一致
+- `test_fingerprint_empty_dir` — 空目录边界情况
+- `test_fingerprint_permission_error` — 权限错误处理
+
+#### `test_archive.py` (unit)
+- `test_archive_file_by_fingerprint` — 基于指纹的归档去重
+- `test_archive_dir` — 目录归档
+- `test_archive_dedup_skips_existing` — 相同指纹不重复归档
+
+#### `test_ignore.py` (unit)
+- `test_runicornignore_rules_parsing` — 规则解析
+- `test_runicornignore_matching` — 文件匹配逻辑
+- `test_runicornignore_no_file` — 无 .runicornignore 时默认行为
+
+#### `test_assets_json.py` (unit)
+- `test_ensure_assets_file_creates` — 不存在时创建
+- `test_update_assets_atomic` — 原子写入验证（写入中断不破坏原文件）
+
+### 4.11 log_compat/ 兼容层（新增）
+
+#### `test_torchvision.py` (unit)
+- `test_metric_logger_forwards_to_run` — MetricLogger 写入时 events.jsonl 有对应记录（mock Run）
+- `test_smoothed_value_api_compat` — median/global_avg/max/min 等属性与 torchvision 原版行为一致
+- `test_metric_logger_context_manager` — 上下文管理器用法
+
+### 4.12 CLI
 
 #### `test_cli.py` (unit)
 - `test_viewer_help` — `viewer --help` 不报错
@@ -461,9 +559,9 @@ Viewer 专用方法 (RF-14):
 - `test_run_creates_sqlite_record` — Run init 后 SQLite experiments 表有记录
 - `test_run_log_writes_to_sqlite` — log() 后 SQLite metrics 表有记录
 - `test_run_finish_updates_sqlite_status` — finish() 更新 SQLite status
-- `test_run_best_metric_in_sqlite` — set_primary_metric → log → summary 后 SQLite 有 best_metric
+- `test_run_best_metric_in_sqlite` — set_primary_metric → 多次 log → finish 后 SQLite 有 best_metric
 - `test_run_assets_recorded_in_unified_db` — log_config/log_dataset → assets 表有记录（RF-13）
-- `test_run_tags_in_sqlite` — init with tags → experiment_tags 表有记录
+- `test_run_tags_via_set_tags` — Run 创建后通过 `storage_backend.set_tags(run_id, [...])` 写入标签，验证 experiment_tags 表有记录
 
 #### `test_sdk_lifecycle.py`
 - `test_full_lifecycle` — init → log(×N) → set_primary_metric → log_config → finish：文件系统和 SQLite 均正确
@@ -476,18 +574,19 @@ Viewer 专用方法 (RF-14):
 - `test_list_runs_from_sqlite` — 预填充 SQLite 后 GET /api/runs 返回完整列表
 - `test_list_runs_fallback_to_files` — SQLite 无数据时从文件系统读取
 - `test_get_run_detail` — GET /api/runs/{id} 返回详情
-- `test_update_run_alias` — PUT /api/runs/{id} 更新别名（双写文件+SQLite）
-- `test_update_run_tags` — PUT /api/runs/{id} 更新标签（双写）
-- `test_soft_delete_run` — DELETE /api/runs/{id} 软删除（双写）
-- `test_restore_run` — POST /api/runs/{id}/restore 恢复（双写）
-- `test_list_deleted_runs` — GET /api/runs/deleted 返回回收站
+- `test_update_run_alias` — PATCH /api/runs/{id} 更新别名（双写 meta.json + SQLite experiments.alias）
+- `test_update_run_tags` — PATCH /api/runs/{id} 更新标签（双写 meta.json + SQLite experiment_tags，set_tags 语义）
+- `test_soft_delete_run` — POST /api/runs/soft-delete 批量软删除（payload 带 run_ids，双写）
+- `test_restore_run` — POST /api/recycle-bin/restore 恢复（双写）
+- `test_list_deleted_runs` — GET /api/recycle-bin 返回回收站列表
+- `test_empty_recycle_bin` — POST /api/recycle-bin/empty 永久删除
 - `test_get_run_assets` — GET /api/runs/{id}/assets 返回资产列表
 
-#### `test_viewer_projects_api.py`
+#### `test_viewer_projects_api.py`（projects_router 实际提供 /api/paths 层级 API）
 - `test_list_paths_from_sqlite` — GET /api/paths 从 SQLite 获取路径
 - `test_list_path_stats` — 每个 path 的 run 数量、最新时间
-- `test_list_runs_by_path` — GET /api/paths/{path}/runs 按路径筛选
-- `test_soft_delete_by_path` — 按路径批量软删除
+- `test_list_runs_by_path` — GET /api/paths/runs 按路径筛选
+- `test_path_tree` — GET /api/paths/tree 返回树形结构
 
 #### `test_viewer_metrics_api.py`
 - `test_get_metrics_from_file` — 从 events.jsonl 读取指标
@@ -510,6 +609,13 @@ Viewer 专用方法 (RF-14):
 - `test_sync_on_startup` — app startup 时文件系统 → SQLite 同步
 - `test_sync_handles_partial_data` — meta.json 缺失字段时不崩溃
 - `test_sync_preserves_deleted` — 同步已软删除 run 保留 deleted_at
+
+#### `test_viewer_config_api.py`
+- `test_get_user_root_dir` — GET /api/config/user_root_dir 返回当前值
+- `test_set_user_root_dir` — POST /api/config/user_root_dir 持久化验证
+
+#### `test_viewer_storage_api.py`
+- `test_get_storage_stats` — GET /api/storage/stats 返回正确字段
 
 ### 5.3 Client → Server 联调
 
@@ -540,7 +646,7 @@ Viewer 专用方法 (RF-14):
 2. SDK 创建 Run 并 log 指标
 3. HTTP GET /api/runs 验证 run 出现
 4. HTTP GET /api/runs/{id}/metrics 验证指标数据
-5. RunicornClient 连接并读取相同数据
+5. RunicornClient 连接并读取相同数据（通过 httpx 直接访问 TestClient 暴露的临时端口，或使用 ASGI transport 桥接）
 6. SDK finish()，验证状态更新
 
 ### `test_cli_commands.py`
@@ -554,7 +660,7 @@ Viewer 专用方法 (RF-14):
 - `python -m runicorn delete --help` → exit 0
 
 ### `test_viewer_startup.py`
-- `test_viewer_creates_app_successfully` — `create_app()` 返回 FastAPI 实例，包含 74 个路由
+- `test_viewer_creates_app_successfully` — `create_app()` 返回 FastAPI 实例，断言关键路由前缀存在（`/api/health`, `/api/runs`, `/api/paths`, `/api/recycle-bin`, `/api/remote` 等）而非硬编码路由数量
 - `test_viewer_startup_initializes_backend` — startup 事件后 `app.state.storage_backend` 不为 None
 - `test_viewer_shutdown_closes_backend` — shutdown 事件后 backend 已关闭
 
@@ -565,15 +671,15 @@ Viewer 专用方法 (RF-14):
 以下列出每个 RF 项需要被测试覆盖的关键点，以及对应的测试文件：
 
 - **RF-01** (删除空目录): 无需专项测试，import 验证即可
-- **RF-02** (消除转发层): `test_compat_shims.py` — 验证 `from runicorn.storage.file_utils import ...` 直接可用
+- **RF-02** (消除转发层): 通过 `test_sqlite_backend.py`、`test_file_utils.py` 等 storage 测试隐式覆盖（转发层已删除，直接测试真实模块即可）
 - **RF-03** (config 包): `test_paths.py`, `test_user_config.py`, `test_compat_shims.py`
 - **RF-04** (统一加密): `test_encryption.py`, `test_connections.py`, `test_encryption_roundtrip.py`
 - **RF-05** (统一 SSH 路径): `test_connections.py`, `test_config_migration.py`
 - **RF-06** (async→sync): `test_sqlite_backend.py` — 所有方法为同步调用（无 await）
 - **RF-07** (消除 asyncio): `test_sdk_run.py` — SDK 直接调用 backend（无 asyncio）
-- **RF-08** (client 重命名+修复): `test_http_client.py`, `test_client_server.py`, `test_client_models.py`
+- **RF-08** (client 重命名+修复): `test_http_client.py`（mock requests）, `test_client_server.py`, `test_models.py`（client/）
 - **RF-09** (index 合并): `test_sqlite_backend.py` 资产方法, `test_index_db.py` 兼容 shim
-- **RF-10** (workspace 降级): `test_compat_shims.py` — `from runicorn.workspace import get_workspace_root`
+- **RF-10** (workspace 降级): `test_workspace.py` — `get_workspace_root()` .git 查找、显式指定、fallback cwd（workspace 是真实模块，非兼容 shim）
 - **RF-11** (删除 FileStorageBackend): `test_sqlite_backend.py` — 验证 SQLiteStorageBackend 是唯一完整实现
 - **RF-12** (删除 modern_storage): 无需专项测试（已删除）
 - **RF-13** (合并 DB): `test_sqlite_backend.py` 资产方法, `test_migration.py` migrate_index_to_unified
@@ -596,12 +702,12 @@ SDK unit 测试 → Viewer API integration 测试 → db_reader unit 测试。
 security/ unit 测试 → client/ unit 测试 → client-server integration。
 验证 RF-04/05/08 的正确性。
 
-### Phase T4: 扩展 + E2E
-extensions/ + console/ unit 测试 → E2E 全流程。
-完善覆盖率。
+### Phase T4: 扩展 + 资产 + E2E
+extensions/ + console/ + assets/ + log_compat/ unit 测试 → E2E 全流程。
+完善覆盖率，较依赖系统环境的测试（WebSocket、remote SSH、system/gpu）用 `@pytest.mark.slow` / `@pytest.mark.requires_*` marker 隔离，默认 CI 不跑。
 
 ### 预估测试用例数量
-- Unit: ~170 个
-- Integration: ~45 个
+- Unit: ~220 个（含新增 assets/log_compat/workspace/_toml/rate_limits/models 补充）
+- Integration: ~50 个（含新增 config_api/storage_api/recycle-bin）
 - E2E: ~10 个
-- **合计: ~225 个**
+- **合计: ~280 个**
