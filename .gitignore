@@ -52,6 +52,7 @@ web/frontend/*.tsbuildinfo
 .kiro/
 .warprules
 WARP.md
+.warpindexingignore
 .DS_Store
 Thumbs.db
 
