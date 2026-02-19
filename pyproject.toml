@@ -85,7 +85,7 @@ ignore_missing_imports = true
 
 
 [tool.pytest.ini_options]
-testpaths = ["tests/unit", "tests/integration", "tests/e2e"]
+testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-ra"
 markers = [
