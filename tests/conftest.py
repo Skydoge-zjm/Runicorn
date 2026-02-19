@@ -58,5 +58,5 @@ def pytest_collection_modifyitems(config: pytest.Config, items: List[pytest.Item
 # Re-export shared fixtures so every test file can use them directly.
 # ---------------------------------------------------------------------------
 
-from tests.fixtures.storage import storage_root, sqlite_backend  # noqa: E402, F401
+from tests.fixtures.storage import storage_root, sqlite_backend, populated_storage, populated_db  # noqa: E402, F401
 from tests.fixtures.config import mock_config_root  # noqa: E402, F401
