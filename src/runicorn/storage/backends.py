@@ -1,4 +1,4 @@
-"""
+﻿"""
 Storage Backend Implementations
 
 Provides different storage backend implementations including file-based,
@@ -6,11 +6,11 @@ SQLite-based, and hybrid approaches.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import sqlite3
 import time
+import uuid
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Iterator
@@ -31,7 +31,7 @@ class StorageBackend(ABC):
     """
     
     @abstractmethod
-    async def create_experiment(self, experiment: ExperimentRecord) -> str:
+    def create_experiment(self, experiment: ExperimentRecord) -> str:
         """
         Create a new experiment record.
         
@@ -44,7 +44,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
+    def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
         """
         Update experiment metadata.
         
@@ -58,7 +58,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
+    def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
         """
         Retrieve a single experiment by ID.
         
@@ -71,7 +71,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
+    def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
         """
         List experiments matching query parameters.
         
@@ -84,7 +84,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def count_experiments(self, query: QueryParams) -> int:
+    def count_experiments(self, query: QueryParams) -> int:
         """
         Count experiments matching query parameters.
         
@@ -97,7 +97,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
+    def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
         """
         Log metric data points for an experiment.
         
@@ -111,7 +111,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
+    def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
         """
         Retrieve metric data for an experiment.
         
@@ -125,7 +125,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
+    def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
         """
         Soft delete experiments.
         
@@ -139,7 +139,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
+    def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
         """
         Restore soft-deleted experiments.
         
@@ -152,7 +152,7 @@ class StorageBackend(ABC):
         pass
     
     @abstractmethod
-    async def get_storage_stats(self) -> StorageStats:
+    def get_storage_stats(self) -> StorageStats:
         """
         Get storage system statistics.
         
@@ -160,169 +160,6 @@ class StorageBackend(ABC):
             Storage statistics and health metrics
         """
         pass
-
-
-class FileStorageBackend(StorageBackend):
-    """
-    File-based storage backend (legacy compatibility).
-    
-    This backend maintains compatibility with the existing file-based storage
-    while implementing the new storage interface.
-    """
-    
-    def __init__(self, root_dir: Path):
-        """
-        Initialize file storage backend.
-        
-        Args:
-            root_dir: Root directory for experiment storage
-        """
-        self.root_dir = Path(root_dir)
-        self.root_dir.mkdir(parents=True, exist_ok=True)
-    
-    async def create_experiment(self, experiment: ExperimentRecord) -> str:
-        """Create experiment using file system."""
-        # Implementation here would mirror the existing file creation logic
-        # from the original SDK - this is mainly for compatibility
-        exp_id = experiment.id
-        
-        # Create directory structure
-        run_dir = self._get_run_dir(experiment.project, experiment.name, exp_id)
-        run_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Write meta.json
-        meta_path = run_dir / "meta.json"
-        meta_data = {
-            "id": exp_id,
-            "project": experiment.project,
-            "name": experiment.name,
-            "created_at": experiment.created_at,
-            "python": experiment.python_version,
-            "platform": experiment.platform,
-            "hostname": experiment.hostname,
-            "pid": experiment.pid,
-            "storage_dir": str(self.root_dir)
-        }
-        meta_path.write_text(json.dumps(meta_data, ensure_ascii=False, indent=2), encoding="utf-8")
-        
-        # Write status.json
-        status_path = run_dir / "status.json"
-        status_data = {
-            "status": experiment.status,
-            "started_at": experiment.started_at or experiment.created_at
-        }
-        status_path.write_text(json.dumps(status_data, ensure_ascii=False, indent=2), encoding="utf-8")
-        
-        return exp_id
-    
-    async def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
-        """Update experiment files."""
-        try:
-            # Find experiment directory
-            exp_record = await self.get_experiment(exp_id)
-            if not exp_record:
-                return False
-            
-            run_dir = Path(exp_record.run_dir)
-            
-            # Update status.json if status-related fields changed
-            if any(key in updates for key in ['status', 'ended_at', 'exit_reason']):
-                status_path = run_dir / "status.json"
-                status_data = json.loads(status_path.read_text(encoding="utf-8")) if status_path.exists() else {}
-                status_data.update({k: v for k, v in updates.items() if k in ['status', 'ended_at', 'exit_reason']})
-                status_path.write_text(json.dumps(status_data, ensure_ascii=False, indent=2), encoding="utf-8")
-            
-            # Update summary.json if metric-related fields changed
-            if any(key in updates for key in ['best_metric_value', 'best_metric_name', 'best_metric_step', 'best_metric_mode']):
-                summary_path = run_dir / "summary.json"
-                summary_data = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
-                summary_data.update({k: v for k, v in updates.items() if k.startswith('best_metric_')})
-                summary_path.write_text(json.dumps(summary_data, ensure_ascii=False, indent=2), encoding="utf-8")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to update experiment {exp_id}: {e}")
-            return False
-    
-    async def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
-        """Get experiment from file system."""
-        # Implementation would scan for the experiment directory and load metadata
-        # This is a simplified version - the full implementation would mirror
-        # the existing _find_run_dir_by_id logic
-        return None  # Placeholder
-    
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
-        """List experiments from file system."""
-        # This would implement the current file scanning logic
-        # Converting it to return ExperimentRecord objects
-        return []  # Placeholder
-    
-    async def count_experiments(self, query: QueryParams) -> int:
-        """Count experiments matching query."""
-        experiments = await self.list_experiments(query)
-        return len(experiments)
-    
-    async def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
-        """Log metrics to events.jsonl file."""
-        try:
-            exp_record = await self.get_experiment(exp_id)
-            if not exp_record:
-                return False
-            
-            run_dir = Path(exp_record.run_dir)
-            events_path = run_dir / "events.jsonl"
-            
-            # Convert metrics to event format and append
-            with open(events_path, "a", encoding="utf-8") as f:
-                for metric in metrics:
-                    event = {
-                        "ts": metric.timestamp,
-                        "type": "metrics",
-                        "data": {
-                            "global_step": metric.step,
-                            "time": metric.timestamp,
-                            metric.metric_name: metric.metric_value,
-                            "stage": metric.stage
-                        }
-                    }
-                    f.write(json.dumps(event, ensure_ascii=False) + "\n")
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to log metrics for {exp_id}: {e}")
-            return False
-    
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
-        """Get metrics from events.jsonl file."""
-        # Implementation would parse events.jsonl and convert to MetricRecord objects
-        return []  # Placeholder
-    
-    async def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
-        """Soft delete by creating .deleted marker files."""
-        results = {}
-        for exp_id in exp_ids:
-            # Implementation would create .deleted marker file
-            results[exp_id] = True  # Placeholder
-        return results
-    
-    async def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
-        """Restore by removing .deleted marker files."""
-        results = {}
-        for exp_id in exp_ids:
-            # Implementation would remove .deleted marker file
-            results[exp_id] = True  # Placeholder
-        return results
-    
-    async def get_storage_stats(self) -> StorageStats:
-        """Get file system storage statistics."""
-        # Implementation would scan file system and compute statistics
-        return StorageStats()
-    
-    def _get_run_dir(self, project: str, name: str, exp_id: str) -> Path:
-        """Get run directory path for new layout."""
-        return self.root_dir / project / name / "runs" / exp_id
 
 
 class ConnectionPool:
@@ -465,7 +302,7 @@ class SQLiteStorageBackend(StorageBackend):
             logger.error(f"Failed to initialize database schema: {e}")
             raise
     
-    async def create_experiment(self, experiment: ExperimentRecord) -> str:
+    def create_experiment(self, experiment: ExperimentRecord) -> str:
         """Create experiment in SQLite database."""
         conn = self.pool.get_connection()
         try:
@@ -473,13 +310,15 @@ class SQLiteStorageBackend(StorageBackend):
                 INSERT INTO experiments (
                     id, path, alias, created_at, updated_at, status,
                     pid, python_version, platform, hostname, run_dir,
+                    workspace_root,
                     best_metric_name, best_metric_value, best_metric_step, best_metric_mode
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 experiment.id, experiment.path, experiment.alias,
                 experiment.created_at, experiment.updated_at, experiment.status,
                 experiment.pid, experiment.python_version, experiment.platform, 
                 experiment.hostname, experiment.run_dir,
+                experiment.workspace_root,
                 experiment.best_metric_name, experiment.best_metric_value,
                 experiment.best_metric_step, experiment.best_metric_mode
             ))
@@ -494,7 +333,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
+    def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
         """Update experiment in SQLite database."""
         if not updates:
             return True
@@ -541,7 +380,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
+    def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
         """Get experiment from SQLite database."""
         conn = self.pool.get_connection()
         try:
@@ -561,7 +400,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
+    def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
         """List experiments with high-performance SQL queries."""
         sql_parts = ["SELECT * FROM experiments"]
         where_clauses = []
@@ -633,7 +472,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def count_experiments(self, query: QueryParams) -> int:
+    def count_experiments(self, query: QueryParams) -> int:
         """Count experiments matching query."""
         sql_parts = ["SELECT COUNT(*) FROM experiments"]
         where_clauses = []
@@ -692,7 +531,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
+    def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
         """Log metrics to SQLite database."""
         if not metrics:
             return True
@@ -731,7 +570,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
+    def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
         """Get metrics from SQLite database."""
         sql = "SELECT * FROM metrics WHERE experiment_id = ?"
         params = [exp_id]
@@ -756,7 +595,7 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
     
-    async def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
+    def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
         """Soft delete experiments in SQLite."""
         results = {}
         conn = self.pool.get_connection()
@@ -788,7 +627,7 @@ class SQLiteStorageBackend(StorageBackend):
         
         return results
     
-    async def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
+    def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
         """Restore soft-deleted experiments in SQLite."""
         results = {}
         conn = self.pool.get_connection()
@@ -820,7 +659,7 @@ class SQLiteStorageBackend(StorageBackend):
         
         return results
     
-    async def get_storage_stats(self) -> StorageStats:
+    def get_storage_stats(self) -> StorageStats:
         """Get SQLite storage statistics."""
         conn = self.pool.get_connection()
         try:
@@ -861,157 +700,366 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
 
+    # -------------------- Asset Management --------------------
 
-class HybridStorageBackend(StorageBackend):
-    """
-    Hybrid storage backend combining SQLite and file system.
-    
-    This backend provides the best of both worlds:
-    - Fast queries through SQLite
-    - Large file storage through file system
-    - Backward compatibility with existing data
-    """
-    
-    def __init__(self, root_dir: Path, enable_migration: bool = True):
-        """
-        Initialize hybrid storage backend.
-        
-        Args:
-            root_dir: Root directory for storage
-            enable_migration: Whether to enable automatic migration from files
-        """
-        self.root_dir = Path(root_dir)
-        self.sqlite_backend = SQLiteStorageBackend(root_dir)
-        self.file_backend = FileStorageBackend(root_dir)
-        self.enable_migration = enable_migration
-        
-        # Migration status tracking
-        self._migration_in_progress = False
-        
-        if enable_migration:
-            # Start background migration if needed
-            asyncio.create_task(self._maybe_start_migration())
-    
-    async def _maybe_start_migration(self) -> None:
-        """Start migration from file storage if needed."""
+    def upsert_asset(
+        self,
+        *,
+        asset_type: str,
+        name: Optional[str],
+        source_uri: Optional[str],
+        archive_uri: Optional[str],
+        is_archived: bool,
+        fingerprint_kind: Optional[str],
+        fingerprint: Optional[str],
+        size_bytes: Optional[int] = None,
+        mtime: Optional[float] = None,
+        created_at: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Insert an asset or return existing asset_id if fingerprint matches."""
+        conn = self.pool.get_connection()
         try:
-            # Check if migration is needed
-            stats = await self.sqlite_backend.get_storage_stats()
-            if stats.total_experiments == 0:
-                # No experiments in SQLite, check if we have file-based experiments
-                file_experiments = await self.file_backend.list_experiments(QueryParams(limit=1))
-                if file_experiments:
-                    logger.info("Starting automatic migration from file storage to SQLite")
-                    await self._migrate_from_files()
-        except Exception as e:
-            logger.error(f"Migration check failed: {e}")
-    
-    async def _migrate_from_files(self) -> None:
-        """Migrate existing file-based experiments to SQLite."""
-        if self._migration_in_progress:
-            return
-        
-        self._migration_in_progress = True
-        try:
-            # This would implement the full migration logic
-            # For now, it's a placeholder
-            logger.info("Migration would start here")
+            asset_id = str(uuid.uuid4())
+            metadata_json = (
+                json.dumps(metadata or {}, ensure_ascii=False)
+                if metadata is not None
+                else None
+            )
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO assets (
+                        asset_id, asset_type, name, source_uri, archive_uri,
+                        is_archived, fingerprint_kind, fingerprint,
+                        size_bytes, mtime, created_at, metadata_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        asset_id, asset_type, name, source_uri, archive_uri,
+                        1 if is_archived else 0,
+                        fingerprint_kind, fingerprint,
+                        size_bytes, mtime, created_at, metadata_json,
+                    ),
+                )
+                conn.commit()
+                return asset_id
+            except sqlite3.IntegrityError:
+                if fingerprint:
+                    row = conn.execute(
+                        "SELECT asset_id FROM assets WHERE asset_type=? AND fingerprint=?",
+                        (asset_type, fingerprint),
+                    ).fetchone()
+                    if row:
+                        return str(row["asset_id"])
+                raise
         finally:
-            self._migration_in_progress = False
-    
-    async def create_experiment(self, experiment: ExperimentRecord) -> str:
-        """Create experiment in both SQLite and file system."""
-        # Write to SQLite first for consistency
-        exp_id = await self.sqlite_backend.create_experiment(experiment)
-        
-        # Also create file structure for compatibility
+            self.pool.return_connection(conn)
+
+    def link_run_asset(
+        self,
+        *,
+        run_id: str,
+        asset_id: str,
+        role: str,
+        created_at: Optional[float] = None,
+    ) -> None:
+        """Create a link between a run and an asset."""
+        conn = self.pool.get_connection()
         try:
-            await self.file_backend.create_experiment(experiment)
-        except Exception as e:
-            logger.warning(f"Failed to create file structure for {exp_id}: {e}")
-        
-        return exp_id
-    
-    async def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
-        """Update experiment in both backends."""
-        # Update SQLite first
-        sqlite_success = await self.sqlite_backend.update_experiment(exp_id, updates)
-        
-        # Update files for compatibility  
+            conn.execute(
+                "INSERT OR IGNORE INTO run_assets (run_id, asset_id, role, created_at) VALUES (?, ?, ?, ?)",
+                (run_id, asset_id, role, created_at),
+            )
+            conn.commit()
+        finally:
+            self.pool.return_connection(conn)
+
+    def record_asset_for_run(
+        self,
+        *,
+        run_id: str,
+        role: str,
+        asset_type: str,
+        name: Optional[str],
+        source_uri: Optional[str],
+        archive_uri: Optional[str],
+        is_archived: bool,
+        fingerprint_kind: Optional[str],
+        fingerprint: Optional[str],
+        size_bytes: Optional[int] = None,
+        mtime: Optional[float] = None,
+        created_at: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        """Upsert an asset and link it to a run (convenience combo)."""
+        asset_id = self.upsert_asset(
+            asset_type=asset_type,
+            name=name,
+            source_uri=source_uri,
+            archive_uri=archive_uri,
+            is_archived=is_archived,
+            fingerprint_kind=fingerprint_kind,
+            fingerprint=fingerprint,
+            size_bytes=size_bytes,
+            mtime=mtime,
+            created_at=created_at,
+            metadata=metadata,
+        )
+        self.link_run_asset(
+            run_id=run_id,
+            asset_id=asset_id,
+            role=role,
+            created_at=created_at,
+        )
+        return asset_id
+
+    def get_assets_for_run(self, run_id: str) -> List[Dict[str, Any]]:
+        """Get all assets associated with a run."""
+        conn = self.pool.get_connection()
         try:
-            await self.file_backend.update_experiment(exp_id, updates)
-        except Exception as e:
-            logger.warning(f"Failed to update file for {exp_id}: {e}")
-        
-        return sqlite_success
-    
-    async def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
-        """Get experiment preferring SQLite, fallback to files."""
-        # Try SQLite first (faster)
-        experiment = await self.sqlite_backend.get_experiment(exp_id)
-        if experiment:
-            return experiment
-        
-        # Fallback to file system
-        return await self.file_backend.get_experiment(exp_id)
-    
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
-        """List experiments using SQLite for performance."""
-        return await self.sqlite_backend.list_experiments(query)
-    
-    async def count_experiments(self, query: QueryParams) -> int:
-        """Count experiments using SQLite for performance."""
-        return await self.sqlite_backend.count_experiments(query)
-    
-    async def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
-        """Log metrics to both SQLite and file system."""
-        # Log to SQLite first
-        sqlite_success = await self.sqlite_backend.log_metrics(exp_id, metrics)
-        
-        # Also log to files for compatibility
+            rows = conn.execute(
+                """
+                SELECT a.*, ra.role, ra.created_at AS linked_at
+                FROM assets a
+                JOIN run_assets ra ON a.asset_id = ra.asset_id
+                WHERE ra.run_id = ?
+                """,
+                (run_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_asset_ref_count(self, asset_id: str) -> int:
+        """Get the number of runs referencing an asset."""
+        conn = self.pool.get_connection()
         try:
-            await self.file_backend.log_metrics(exp_id, metrics)
-        except Exception as e:
-            logger.warning(f"Failed to log metrics to file for {exp_id}: {e}")
-        
-        return sqlite_success
-    
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
-        """Get metrics preferring SQLite, fallback to files."""
-        # Try SQLite first (faster and more structured)
-        metrics = await self.sqlite_backend.get_metrics(exp_id, metric_names)
-        if metrics:
-            return metrics
-        
-        # Fallback to file system
-        return await self.file_backend.get_metrics(exp_id, metric_names)
-    
-    async def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
-        """Soft delete in both backends."""
-        # Delete in SQLite first
-        sqlite_results = await self.sqlite_backend.soft_delete_experiments(exp_ids, reason)
-        
-        # Also mark in file system
+            row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM run_assets WHERE asset_id = ?",
+                (asset_id,),
+            ).fetchone()
+            return int(row["cnt"]) if row else 0
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_asset_by_fingerprint(
+        self, asset_type: str, fingerprint: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get asset by type and fingerprint."""
+        conn = self.pool.get_connection()
         try:
-            await self.file_backend.soft_delete_experiments(exp_ids, reason)
-        except Exception as e:
-            logger.warning(f"Failed to soft delete in file system: {e}")
-        
-        return sqlite_results
-    
-    async def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
-        """Restore in both backends."""
-        # Restore in SQLite first
-        sqlite_results = await self.sqlite_backend.restore_experiments(exp_ids)
-        
-        # Also restore in file system
+            row = conn.execute(
+                "SELECT * FROM assets WHERE asset_type=? AND fingerprint=?",
+                (asset_type, fingerprint),
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            self.pool.return_connection(conn)
+
+    # -------------------- Tag Management --------------------
+
+    def set_tags(self, exp_id: str, tags: List[str]) -> None:
+        """Replace all tags for an experiment."""
+        conn = self.pool.get_connection()
         try:
-            await self.file_backend.restore_experiments(exp_ids)
-        except Exception as e:
-            logger.warning(f"Failed to restore in file system: {e}")
-        
-        return sqlite_results
-    
-    async def get_storage_stats(self) -> StorageStats:
-        """Get comprehensive storage statistics."""
-        return await self.sqlite_backend.get_storage_stats()
+            conn.execute("DELETE FROM experiment_tags WHERE experiment_id = ?", (exp_id,))
+            if tags:
+                conn.executemany(
+                    "INSERT OR IGNORE INTO experiment_tags (experiment_id, tag) VALUES (?, ?)",
+                    [(exp_id, tag) for tag in tags],
+                )
+            conn.commit()
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_tags(self, exp_id: str) -> List[str]:
+        """Get all tags for an experiment."""
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT tag FROM experiment_tags WHERE experiment_id = ? ORDER BY tag",
+                (exp_id,),
+            ).fetchall()
+            return [row["tag"] for row in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    # -------------------- Viewer-optimised Queries --------------------
+
+    def list_experiments_for_viewer(
+        self, *, include_deleted: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        Return experiments enriched with tags and assets_count in one query.
+
+        Each returned dict contains all experiments columns plus:
+          - tags_csv  (str | None) – comma-separated tags
+          - assets_count (int)
+        """
+        sql = """
+            SELECT e.*,
+                   GROUP_CONCAT(DISTINCT t.tag) AS tags_csv,
+                   COUNT(DISTINCT ra.asset_id)  AS assets_count
+            FROM experiments e
+            LEFT JOIN experiment_tags t  ON e.id = t.experiment_id
+            LEFT JOIN run_assets      ra ON e.id = ra.run_id
+        """
+        if not include_deleted:
+            sql += " WHERE e.deleted_at IS NULL"
+        sql += " GROUP BY e.id ORDER BY e.created_at DESC"
+
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(sql).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def list_deleted_for_viewer(self) -> List[Dict[str, Any]]:
+        """Return soft-deleted experiments for recycle-bin display."""
+        sql = """
+            SELECT id, path, alias, created_at, status,
+                   deleted_at, delete_reason, run_dir
+            FROM experiments
+            WHERE deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+        """
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(sql).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_unique_paths(self) -> List[str]:
+        """Return sorted list of distinct experiment paths (active only)."""
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT DISTINCT path FROM experiments WHERE deleted_at IS NULL ORDER BY path"
+            ).fetchall()
+            return [r["path"] for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_path_stats(self) -> Dict[str, Dict[str, int]]:
+        """
+        Return per-path run statistics (total/running/finished/failed).
+
+        Includes accumulated counts for ancestor paths.
+        """
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute("""
+                SELECT path,
+                       COUNT(*)                                      AS total,
+                       COUNT(CASE WHEN status='running'  THEN 1 END) AS running,
+                       COUNT(CASE WHEN status='finished' THEN 1 END) AS finished,
+                       COUNT(CASE WHEN status='failed'   THEN 1 END) AS failed
+                FROM experiments
+                WHERE deleted_at IS NULL
+                GROUP BY path
+            """).fetchall()
+        finally:
+            self.pool.return_connection(conn)
+
+        path_runs: Dict[str, Dict[str, int]] = {}
+        for r in rows:
+            path_runs[r["path"]] = {
+                "total": r["total"],
+                "running": r["running"],
+                "finished": r["finished"],
+                "failed": r["failed"],
+            }
+
+        # Accumulate ancestor paths
+        for path in list(path_runs.keys()):
+            parts = path.split("/")
+            for i in range(1, len(parts)):
+                ancestor = "/".join(parts[:i])
+                if ancestor not in path_runs:
+                    path_runs[ancestor] = {"total": 0, "running": 0, "finished": 0, "failed": 0}
+                for k in ("total", "running", "finished", "failed"):
+                    path_runs[ancestor][k] += path_runs[path][k]
+
+        return path_runs
+
+    def get_running_experiments(self) -> List[Dict[str, Any]]:
+        """Return id/run_dir/pid for experiments with status='running'."""
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT id, run_dir, pid FROM experiments WHERE status = 'running' AND deleted_at IS NULL"
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def experiment_exists(self, exp_id: str) -> bool:
+        """Check whether an experiment record exists."""
+        conn = self.pool.get_connection()
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM experiments WHERE id = ?", (exp_id,)
+            ).fetchone()
+            return row is not None
+        finally:
+            self.pool.return_connection(conn)
+
+    def delete_run_with_orphan_assets(self, run_id: str) -> Dict[str, Any]:
+        """
+        Delete a run and any assets that become orphaned.
+
+        Returns dict with 'orphaned_assets' and 'kept_assets' lists.
+        Does NOT delete actual files — caller handles that.
+        """
+        conn = self.pool.get_connection()
+        try:
+            # Get all assets for this run
+            assets = conn.execute(
+                """
+                SELECT a.*, ra.role
+                FROM assets a
+                JOIN run_assets ra ON a.asset_id = ra.asset_id
+                WHERE ra.run_id = ?
+                """,
+                (run_id,),
+            ).fetchall()
+
+            orphaned = []
+            kept = []
+
+            for asset in assets:
+                asset_id = asset["asset_id"]
+                row = conn.execute(
+                    "SELECT COUNT(*) AS cnt FROM run_assets WHERE asset_id=? AND run_id!=?",
+                    (asset_id, run_id),
+                ).fetchone()
+                ref_count = int(row["cnt"]) if row else 0
+
+                asset_dict = dict(asset)
+                if ref_count == 0:
+                    orphaned.append(asset_dict)
+                else:
+                    kept.append(asset_dict)
+
+            # Delete experiment record (CASCADE deletes run_assets and metrics)
+            conn.execute("DELETE FROM experiments WHERE id=?", (run_id,))
+
+            # Delete orphaned assets
+            for asset in orphaned:
+                conn.execute(
+                    "DELETE FROM assets WHERE asset_id=?", (asset["asset_id"],)
+                )
+
+            conn.commit()
+
+            return {
+                "orphaned_assets": orphaned,
+                "kept_assets": kept,
+            }
+        finally:
+            self.pool.return_connection(conn)
+
+

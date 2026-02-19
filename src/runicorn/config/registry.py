@@ -1,45 +1,19 @@
+"""TOML key-value registry.
+
+Reads values from TOML files under the registry directory.
+Migrated from the top-level registry.py into the unified config package.
+"""
 from __future__ import annotations
 
-import threading
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, List, Tuple
 
-from .config import get_registry_dir
-
-try:
-    import tomllib as _toml
-except ModuleNotFoundError:
-    import tomli as _toml
-
-
-_cache_lock = threading.Lock()
-_toml_cache: Dict[Path, Tuple[int, Dict[str, Any]]] = {}
+from .paths import get_registry_dir
+from ._toml import load_toml_cached, clear_toml_cache
 
 
 def clear_registry_cache() -> None:
-    with _cache_lock:
-        _toml_cache.clear()
-
-
-def _load_toml_file(path: Path) -> Dict[str, Any]:
-    with path.open("rb") as f:
-        data = _toml.load(f)
-    if isinstance(data, dict):
-        return data
-    return {}
-
-
-def _get_toml_cached(path: Path) -> Dict[str, Any]:
-    mtime_ns = path.stat().st_mtime_ns
-    with _cache_lock:
-        cached = _toml_cache.get(path)
-        if cached and cached[0] == mtime_ns:
-            return cached[1]
-
-    data = _load_toml_file(path)
-    with _cache_lock:
-        _toml_cache[path] = (mtime_ns, data)
-    return data
+    clear_toml_cache()
 
 
 def _split_key(key: str) -> List[str]:
@@ -89,7 +63,7 @@ def _lookup_subkeys(data: Any, subkeys: List[str], file_path: Path, full_key: st
 def get_config(key: str) -> Any:
     registry_root = get_registry_dir()
     file_path, rest, _searched = _resolve_registry_file(key, registry_root)
-    data = _get_toml_cached(file_path)
+    data = load_toml_cached(file_path)
 
     if not rest:
         if "value" not in data:

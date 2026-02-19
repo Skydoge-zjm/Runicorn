@@ -8,8 +8,9 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from fastapi import APIRouter, Request, HTTPException
-from ..services.storage import iter_all_runs, read_json, update_status_if_process_dead
+from ...storage.file_utils import iter_all_runs, read_json, update_status_if_process_dead
 from ..utils.incremental_cache import get_incremental_metrics_cache
+from ..services.db_reader import get_backend
 
 router = APIRouter()
 
@@ -58,20 +59,47 @@ async def check_all_status(request: Request) -> Dict[str, Any]:
         Summary of status check results
     """
     storage_root = request.app.state.storage_root
+    backend = get_backend(request)
     checked_count = 0
     updated_count = 0
     
+    # --- SQLite fast-path: only query running experiments ---
+    if backend is not None:
+        try:
+            from pathlib import Path
+            running_exps = backend.get_running_experiments()
+            for exp in running_exps:
+                run_dir = Path(exp.run_dir) if exp.run_dir else None
+                if run_dir and run_dir.exists():
+                    checked_count += 1
+                    update_status_if_process_dead(run_dir)
+                    new_status = read_json(run_dir / "status.json")
+                    new_status_val = str((new_status.get("status") if isinstance(new_status, dict) else "running") or "running")
+                    if new_status_val != "running":
+                        updated_count += 1
+                        try:
+                            backend.update_experiment(exp.experiment_id, {"status": new_status_val})
+                        except Exception:
+                            pass
+            return {
+                "checked": checked_count,
+                "updated": updated_count,
+                "message": f"Checked {checked_count} running experiments, updated {updated_count} statuses"
+            }
+        except Exception:
+            checked_count = 0
+            updated_count = 0
+    
+    # --- File-system fallback ---
     for entry in iter_all_runs(storage_root):
         run_dir = entry.dir
         status = read_json(run_dir / "status.json")
         
         if status.get("status") == "running":
             checked_count += 1
-            # Store original status for comparison
             original_status = status.copy()
             update_status_if_process_dead(run_dir)
             
-            # Re-read to see if it changed
             new_status = read_json(run_dir / "status.json")
             if new_status.get("status") != original_status.get("status"):
                 updated_count += 1

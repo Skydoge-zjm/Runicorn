@@ -15,7 +15,7 @@ router = APIRouter()
 
 # Try to import experiment manager if available
 try:
-    from ...experiment import ExperimentManager
+    from ...extensions.experiment import ExperimentManager
     HAS_EXPERIMENT_MANAGER = True
 except ImportError:
     ExperimentManager = None

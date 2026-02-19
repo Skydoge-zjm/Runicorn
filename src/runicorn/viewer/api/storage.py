@@ -12,6 +12,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Request
 
 from .storage_utils import get_storage_root
+from ...storage.file_utils import iter_all_runs
 
 router = APIRouter()
 
@@ -96,30 +97,16 @@ def get_storage_stats(storage_root: Path) -> Dict[str, Any]:
     # Total archive size
     archive_size = blobs_size + manifests_size + outputs_size
     
-    # Run directories (project/experiment/runs/*)
+    # Run directories (discovers both new and legacy layouts)
     runs_size = 0
     runs_count = 0
-    projects_count = 0
-    experiments_count = 0
+    paths_seen: set = set()
     
-    for project_dir in storage_root.iterdir():
-        if not project_dir.is_dir():
-            continue
-        # Skip special directories
-        if project_dir.name in ("archive", "index", ".dedup", "artifacts"):
-            continue
-        
-        projects_count += 1
-        for exp_dir in project_dir.iterdir():
-            if not exp_dir.is_dir():
-                continue
-            experiments_count += 1
-            runs_dir = exp_dir / "runs"
-            if runs_dir.exists():
-                for run_dir in runs_dir.iterdir():
-                    if run_dir.is_dir():
-                        runs_count += 1
-                        runs_size += _get_dir_size(run_dir)
+    for entry in iter_all_runs(storage_root):
+        runs_count += 1
+        runs_size += _get_dir_size(entry.dir)
+        if entry.path:
+            paths_seen.add(entry.path)
     
     # Index database
     index_dir = storage_root / "index"
@@ -170,8 +157,7 @@ def get_storage_stats(storage_root: Path) -> Dict[str, Any]:
         "runs": {
             "size_bytes": runs_size,
             "size_human": _format_size(runs_size),
-            "projects_count": projects_count,
-            "experiments_count": experiments_count,
+            "paths_count": len(paths_seen),
             "runs_count": runs_count,
         },
         "index": {

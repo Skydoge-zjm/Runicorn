@@ -30,45 +30,6 @@ def validate_run_id(run_id: str) -> bool:
     return bool(re.match(pattern, run_id))
 
 
-def validate_project_name(project: str) -> bool:
-    """
-    Validate project name.
-    
-    Args:
-        project: Project name to validate
-        
-    Returns:
-        True if valid, False otherwise
-    """
-    if not project or not isinstance(project, str):
-        return False
-    
-    # Disallow path traversal and special characters
-    if '..' in project or '/' in project or '\\' in project:
-        return False
-    
-    # Allow alphanumeric, underscore, hyphen, and Chinese characters
-    # Maximum length: 100 characters
-    if len(project) > 100:
-        return False
-    
-    return True
-
-
-def validate_experiment_name(name: str) -> bool:
-    """
-    Validate experiment name.
-    
-    Args:
-        name: Experiment name to validate
-        
-    Returns:
-        True if valid, False otherwise
-    """
-    # Same validation as project name
-    return validate_project_name(name)
-
-
 def validate_path(path: str, base_dir: Optional[Path] = None) -> bool:
     """
     Validate that a path doesn't escape the base directory.

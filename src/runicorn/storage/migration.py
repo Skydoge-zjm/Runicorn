@@ -1,4 +1,4 @@
-"""
+﻿"""
 Storage Migration Tools
 
 Provides tools for migrating between different storage backends,
@@ -6,15 +6,15 @@ particularly from file-based storage to SQLite.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
+import sqlite3
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Iterator
 
 from .models import ExperimentRecord, MetricRecord, EnvironmentRecord, MigrationStatus, QueryParams
-from .backends import StorageBackend, FileStorageBackend, SQLiteStorageBackend
+from .backends import StorageBackend, SQLiteStorageBackend
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class StorageMigrator:
             status="pending"
         )
     
-    async def migrate_all(self, batch_size: int = 100) -> MigrationStatus:
+    def migrate_all(self, batch_size: int = 100) -> MigrationStatus:
         """
         Migrate all experiments from source to target backend.
         
@@ -55,7 +55,7 @@ class StorageMigrator:
         try:
             # Get total count for progress tracking
             total_query = QueryParams(limit=999999, include_deleted=True)
-            all_experiments = await self.source.list_experiments(total_query)
+            all_experiments = self.source.list_experiments(total_query)
             self.status.total_items = len(all_experiments)
             
             logger.info(f"Starting migration of {self.status.total_items} experiments")
@@ -66,7 +66,7 @@ class StorageMigrator:
                 
                 for experiment in batch:
                     try:
-                        await self._migrate_experiment(experiment)
+                        self._migrate_experiment(experiment)
                         self.status.processed_items += 1
                     except Exception as e:
                         self.status.failed_items += 1
@@ -78,7 +78,7 @@ class StorageMigrator:
                 logger.info(f"Migration progress: {progress:.1f}% ({self.status.processed_items}/{self.status.total_items})")
                 
                 # Small delay to avoid overwhelming the system
-                await asyncio.sleep(0.1)
+                time.sleep(0.1)
             
             # Mark as completed
             self.status.status = "completed"
@@ -93,7 +93,7 @@ class StorageMigrator:
         
         return self.status
     
-    async def _migrate_experiment(self, experiment: ExperimentRecord) -> None:
+    def _migrate_experiment(self, experiment: ExperimentRecord) -> None:
         """
         Migrate a single experiment with all its data.
         
@@ -101,12 +101,12 @@ class StorageMigrator:
             experiment: Experiment record to migrate
         """
         # 1. Create experiment record in target
-        await self.target.create_experiment(experiment)
+        self.target.create_experiment(experiment)
         
         # 2. Migrate metrics data
-        metrics = await self.source.get_metrics(experiment.id)
+        metrics = self.source.get_metrics(experiment.id)
         if metrics:
-            await self.target.log_metrics(experiment.id, metrics)
+            self.target.log_metrics(experiment.id, metrics)
         
         # 3. Copy any additional metadata if needed
         # This could include environment data, tags, etc.
@@ -133,7 +133,7 @@ class FilesToSQLiteMigrator(StorageMigrator):
         
         super().__init__(file_backend, sqlite_backend)
     
-    async def migrate_with_verification(self) -> MigrationStatus:
+    def migrate_with_verification(self) -> MigrationStatus:
         """
         Migrate with data verification.
         
@@ -141,18 +141,18 @@ class FilesToSQLiteMigrator(StorageMigrator):
             Migration status with verification results
         """
         # Perform migration
-        status = await self.migrate_all()
+        status = self.migrate_all()
         
         if status.status == "completed":
             # Verify migration integrity
-            verification_result = await self._verify_migration()
+            verification_result = self._verify_migration()
             if not verification_result["success"]:
                 status.status = "failed"
                 status.errors.extend(verification_result["errors"])
         
         return status
     
-    async def _verify_migration(self) -> Dict[str, Any]:
+    def _verify_migration(self) -> Dict[str, Any]:
         """
         Verify migration integrity by comparing file and SQLite data.
         
@@ -164,22 +164,22 @@ class FilesToSQLiteMigrator(StorageMigrator):
         try:
             # Compare experiment counts
             file_query = QueryParams(limit=999999, include_deleted=True)
-            file_experiments = await self.source.list_experiments(file_query)
-            sqlite_experiments = await self.target.list_experiments(file_query)
+            file_experiments = self.source.list_experiments(file_query)
+            sqlite_experiments = self.target.list_experiments(file_query)
             
             if len(file_experiments) != len(sqlite_experiments):
                 errors.append(f"Experiment count mismatch: {len(file_experiments)} file vs {len(sqlite_experiments)} SQLite")
             
             # Sample verification: check a few experiments in detail
             for experiment in file_experiments[:10]:  # Check first 10
-                sqlite_exp = await self.target.get_experiment(experiment.id)
+                sqlite_exp = self.target.get_experiment(experiment.id)
                 if not sqlite_exp:
                     errors.append(f"Experiment {experiment.id} missing in SQLite")
                     continue
                 
                 # Verify key fields
-                if sqlite_exp.project != experiment.project:
-                    errors.append(f"Project mismatch for {experiment.id}")
+                if sqlite_exp.path != experiment.path:
+                    errors.append(f"Path mismatch for {experiment.id}")
                 if sqlite_exp.best_metric_value != experiment.best_metric_value:
                     errors.append(f"Best metric mismatch for {experiment.id}")
         
@@ -192,75 +192,136 @@ class FilesToSQLiteMigrator(StorageMigrator):
         }
 
 
-class FilesToSQLiteFileReader(FileStorageBackend):
+class FilesToSQLiteFileReader(StorageBackend):
     """
     Specialized file reader for migration purposes.
     
-    This class reads existing file-based experiments and converts them
-    to the new data model format.
+    Reads existing file-based experiments and converts them
+    to ExperimentRecord format. Not a real backend — only
+    list_experiments() and get_metrics() are implemented;
+    other abstract methods are stubs.
     """
     
     def __init__(self, root_dir: Path):
         """Initialize file reader for migration."""
-        super().__init__(root_dir)
+        self.root_dir = Path(root_dir)
+        # Cache loaded experiments so get_experiment/get_metrics can find them
+        self._experiments: Dict[str, ExperimentRecord] = {}
     
-    async def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
-        """
-        Read all file-based experiments and convert to ExperimentRecord format.
-        """
+    # -- Implemented for migration --
+    
+    def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
+        """Read all file-based experiments and convert to ExperimentRecord format."""
         experiments = []
-        
-        # Import the existing storage utilities
-        from ..viewer.services.storage import iter_all_runs, read_json
+        from .file_utils import iter_all_runs
         
         for entry in iter_all_runs(self.root_dir, include_deleted=query.include_deleted):
             try:
-                experiment = await self._load_experiment_from_files(entry)
+                experiment = self._load_experiment_from_files(entry)
                 if experiment:
                     experiments.append(experiment)
+                    self._experiments[experiment.id] = experiment
             except Exception as e:
                 logger.warning(f"Failed to load experiment from {entry.dir}: {e}")
         
         return experiments
     
-    async def _load_experiment_from_files(self, entry) -> Optional[ExperimentRecord]:
+    def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
+        """Look up a previously loaded experiment by ID."""
+        return self._experiments.get(exp_id)
+    
+    def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
+        """Load metrics from events.jsonl file and convert to MetricRecord format."""
+        try:
+            experiment = self.get_experiment(exp_id)
+            if not experiment:
+                return []
+            
+            events_path = Path(experiment.run_dir) / "events.jsonl"
+            if not events_path.exists():
+                return []
+            
+            metrics = []
+            with open(events_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        event = json.loads(line)
+                        if event.get("type") == "metrics":
+                            data = event.get("data", {})
+                            timestamp = event.get("ts", time.time())
+                            step = data.get("global_step") or data.get("step")
+                            stage = data.get("stage")
+                            for key, value in data.items():
+                                if key in ("global_step", "step", "time", "stage"):
+                                    continue
+                                if isinstance(value, (int, float)):
+                                    if metric_names and key not in metric_names:
+                                        continue
+                                    metrics.append(MetricRecord(
+                                        experiment_id=exp_id,
+                                        timestamp=timestamp,
+                                        metric_name=key,
+                                        metric_value=value,
+                                        step=step,
+                                        stage=stage,
+                                        recorded_at=timestamp
+                                    ))
+                    except json.JSONDecodeError:
+                        continue
+            return metrics
+        except Exception as e:
+            logger.error(f"Failed to load metrics for {exp_id}: {e}")
+            return []
+    
+    # -- Stubs (never called during migration) --
+    
+    def create_experiment(self, experiment: ExperimentRecord) -> str:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def count_experiments(self, query: QueryParams) -> int:
+        return len(self.list_experiments(query))
+    
+    def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    def get_storage_stats(self):
+        raise NotImplementedError("FilesToSQLiteFileReader is read-only")
+    
+    # -- Internal helpers --
+    
+    def _load_experiment_from_files(self, entry) -> Optional[ExperimentRecord]:
         """
         Load experiment data from file system and convert to ExperimentRecord.
-        
-        Args:
-            entry: RunEntry from the file scanner
-            
-        Returns:
-            ExperimentRecord if successful, None otherwise
         """
         try:
             run_dir = entry.dir
-            
-            # Load metadata files
             meta = self._read_json_safe(run_dir / "meta.json")
             status = self._read_json_safe(run_dir / "status.json")
             summary = self._read_json_safe(run_dir / "summary.json")
             
-            # Extract core information
             exp_id = meta.get("id") or run_dir.name
-            project = meta.get("project") or entry.project or "unknown"
-            name = meta.get("name") or entry.name or "default"
             
-            # Handle timestamps
+            # Derive path: prefer meta.path, then entry.path, then legacy project/name
+            path = meta.get("path") or entry.path
+            if not path:
+                project = meta.get("project", "unknown")
+                name = meta.get("name", "default")
+                path = f"{project}/{name}"
+            
             created_at = meta.get("created_at") or run_dir.stat().st_ctime
             updated_at = status.get("ended_at") or meta.get("created_at") or created_at
-            started_at = status.get("started_at")
-            ended_at = status.get("ended_at")
-            
-            # Get status information
-            exp_status = status.get("status", "finished")
-            exit_reason = status.get("exit_reason")
-            
-            # Extract best metric information
-            best_metric_name = summary.get("best_metric_name")
-            best_metric_value = summary.get("best_metric_value")
-            best_metric_step = summary.get("best_metric_step")
-            best_metric_mode = summary.get("best_metric_mode")
             
             # Check for soft delete
             deleted_at = None
@@ -271,94 +332,30 @@ class FilesToSQLiteFileReader(FileStorageBackend):
                 deleted_at = deleted_info.get("deleted_at")
                 delete_reason = deleted_info.get("reason")
             
-            # Create ExperimentRecord
             return ExperimentRecord(
                 id=exp_id,
-                project=project,
-                name=name,
+                path=path,
                 created_at=created_at,
                 updated_at=updated_at,
-                started_at=started_at,
-                ended_at=ended_at,
-                status=exp_status,
-                exit_reason=exit_reason,
+                started_at=status.get("started_at"),
+                ended_at=status.get("ended_at"),
+                status=status.get("status", "finished"),
+                exit_reason=status.get("exit_reason"),
                 pid=meta.get("pid"),
                 python_version=meta.get("python"),
                 platform=meta.get("platform"),
                 hostname=meta.get("hostname"),
-                best_metric_name=best_metric_name,
-                best_metric_value=best_metric_value,
-                best_metric_step=best_metric_step,
-                best_metric_mode=best_metric_mode,
+                best_metric_name=summary.get("best_metric_name"),
+                best_metric_value=summary.get("best_metric_value"),
+                best_metric_step=summary.get("best_metric_step"),
+                best_metric_mode=summary.get("best_metric_mode"),
                 deleted_at=deleted_at,
                 delete_reason=delete_reason,
                 run_dir=str(run_dir),
-                duration_seconds=None,  # Will be computed
-                metric_count=0  # Will be computed
             )
-            
         except Exception as e:
             logger.error(f"Failed to load experiment from {entry.dir}: {e}")
             return None
-    
-    async def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
-        """
-        Load metrics from events.jsonl file and convert to MetricRecord format.
-        """
-        try:
-            experiment = await self.get_experiment(exp_id)
-            if not experiment:
-                return []
-            
-            events_path = Path(experiment.run_dir) / "events.jsonl"
-            if not events_path.exists():
-                return []
-            
-            metrics = []
-            
-            # Parse events.jsonl
-            with open(events_path, "r", encoding="utf-8", errors="ignore") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    
-                    try:
-                        event = json.loads(line)
-                        if event.get("type") == "metrics":
-                            data = event.get("data", {})
-                            timestamp = event.get("ts", time.time())
-                            step = data.get("global_step") or data.get("step")
-                            stage = data.get("stage")
-                            
-                            # Extract all numeric metrics from the data
-                            for key, value in data.items():
-                                if key in ("global_step", "step", "time", "stage"):
-                                    continue
-                                
-                                if isinstance(value, (int, float)):
-                                    # Filter by metric names if specified
-                                    if metric_names and key not in metric_names:
-                                        continue
-                                    
-                                    metrics.append(MetricRecord(
-                                        experiment_id=exp_id,
-                                        timestamp=timestamp,
-                                        metric_name=key,
-                                        metric_value=value,
-                                        step=step,
-                                        stage=stage,
-                                        recorded_at=timestamp
-                                    ))
-                    
-                    except json.JSONDecodeError:
-                        continue
-            
-            return metrics
-            
-        except Exception as e:
-            logger.error(f"Failed to load metrics for {exp_id}: {e}")
-            return []
     
     def _read_json_safe(self, path: Path) -> Dict[str, Any]:
         """Safely read JSON file with error handling."""
@@ -370,7 +367,7 @@ class FilesToSQLiteFileReader(FileStorageBackend):
         return {}
 
 
-async def migrate_storage_system(root_dir: Path, backup: bool = True) -> MigrationStatus:
+def migrate_storage_system(root_dir: Path, backup: bool = True) -> MigrationStatus:
     """
     High-level function to migrate from file storage to SQLite.
     
@@ -384,10 +381,10 @@ async def migrate_storage_system(root_dir: Path, backup: bool = True) -> Migrati
     logger.info("Starting storage system migration")
     
     if backup:
-        await _create_backup(root_dir)
+        _create_backup(root_dir)
     
     migrator = FilesToSQLiteMigrator(root_dir)
-    status = await migrator.migrate_with_verification()
+    status = migrator.migrate_with_verification()
     
     if status.status == "completed":
         logger.info("Storage migration completed successfully")
@@ -397,7 +394,7 @@ async def migrate_storage_system(root_dir: Path, backup: bool = True) -> Migrati
     return status
 
 
-async def _create_backup(root_dir: Path) -> Path:
+def _create_backup(root_dir: Path) -> Path:
     """
     Create backup of existing storage before migration.
     
@@ -464,7 +461,104 @@ def detect_storage_type(root_dir: Path) -> str:
         return "empty"
 
 
-async def ensure_modern_storage(root_dir: Path) -> StorageBackend:
+def migrate_index_to_unified(root_dir: Path, backend: SQLiteStorageBackend) -> bool:
+    """
+    Migrate asset data from legacy index/runicorn.db into the unified runicorn.db.
+
+    Only migrates `assets` and `run_assets` tables. The `runs` table is
+    skipped because `experiments` already covers that data.
+
+    This function is idempotent — repeated calls are safe (INSERT OR IGNORE).
+
+    Args:
+        root_dir: Storage root directory.
+        backend: An already-initialised SQLiteStorageBackend.
+
+    Returns:
+        True if migration was performed, False if skipped (no index DB or already done).
+    """
+    index_db_path = Path(root_dir) / "index" / "runicorn.db"
+    if not index_db_path.exists():
+        return False
+
+    # Check if already migrated
+    conn = backend.pool.get_connection()
+    try:
+        row = conn.execute(
+            "SELECT stat_value FROM storage_stats WHERE stat_name='index_migrated'"
+        ).fetchone()
+        if row and row[0] == '"true"':
+            logger.debug("Index already migrated, skipping")
+            return False
+    finally:
+        backend.pool.return_connection(conn)
+
+    logger.info(f"Migrating index data from {index_db_path}")
+
+    try:
+        src = sqlite3.connect(str(index_db_path), timeout=5.0)
+        src.row_factory = sqlite3.Row
+
+        # Migrate assets
+        assets_rows = src.execute("SELECT * FROM assets").fetchall()
+        migrated_assets = 0
+        conn = backend.pool.get_connection()
+        try:
+            for row in assets_rows:
+                try:
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO assets (
+                            asset_id, asset_type, name, source_uri, archive_uri,
+                            is_archived, fingerprint_kind, fingerprint,
+                            size_bytes, mtime, created_at, metadata_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            row["asset_id"], row["asset_type"], row["name"],
+                            row["source_uri"], row["archive_uri"],
+                            row["is_archived"], row["fingerprint_kind"],
+                            row["fingerprint"], row["size_bytes"],
+                            row["mtime"], row["created_at"],
+                            row["metadata_json"],
+                        ),
+                    )
+                    migrated_assets += 1
+                except Exception as e:
+                    logger.debug(f"Skip asset {row['asset_id']}: {e}")
+
+            # Migrate run_assets (only for runs that exist in experiments)
+            ra_rows = src.execute("SELECT * FROM run_assets").fetchall()
+            migrated_links = 0
+            for row in ra_rows:
+                try:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO run_assets (run_id, asset_id, role, created_at) VALUES (?, ?, ?, ?)",
+                        (row["run_id"], row["asset_id"], row["role"], row["created_at"]),
+                    )
+                    migrated_links += 1
+                except Exception as e:
+                    logger.debug(f"Skip run_asset link {row['run_id']}/{row['asset_id']}: {e}")
+
+            # Mark migration done
+            conn.execute(
+                "INSERT OR REPLACE INTO storage_stats (stat_name, stat_value, updated_at) VALUES (?, ?, ?)",
+                ("index_migrated", '"true"', time.time()),
+            )
+            conn.commit()
+        finally:
+            backend.pool.return_connection(conn)
+
+        src.close()
+        logger.info(f"Index migration complete: {migrated_assets} assets, {migrated_links} links")
+        return True
+
+    except Exception as e:
+        logger.error(f"Index migration failed: {e}")
+        return False
+
+
+def ensure_modern_storage(root_dir: Path) -> StorageBackend:
     """
     Ensure modern storage is available, migrating if necessary.
     
@@ -477,25 +571,20 @@ async def ensure_modern_storage(root_dir: Path) -> StorageBackend:
     storage_type = detect_storage_type(root_dir)
     
     if storage_type == "file_only":
-        logger.info("Detected file-only storage, starting migration to hybrid")
-        # Start migration process
-        status = await migrate_storage_system(root_dir)
+        logger.info("Detected file-only storage, starting migration")
+        status = migrate_storage_system(root_dir)
         if status.status == "completed":
-            logger.info("Migration to hybrid storage completed")
-            return SQLiteStorageBackend(root_dir)
+            logger.info("Migration to SQLite storage completed")
         else:
-            logger.warning("Migration failed, falling back to file storage")
-            return FileStorageBackend(root_dir)
-    
-    elif storage_type == "sqlite_only":
-        logger.info("Using SQLite storage backend")
+            logger.warning(f"Migration failed: {status.errors}")
+        # Always return SQLite backend (it has been initialized by migration)
         return SQLiteStorageBackend(root_dir)
     
-    elif storage_type == "hybrid":
-        logger.info("Using hybrid storage backend")
-        from .backends import HybridStorageBackend
-        return HybridStorageBackend(root_dir)
+    elif storage_type in ("sqlite_only", "hybrid"):
+        logger.info("Using SQLite storage backend")
+        return SQLiteStorageBackend(root_dir)
     
     else:  # empty
         logger.info("Initializing new SQLite storage")
         return SQLiteStorageBackend(root_dir)
+

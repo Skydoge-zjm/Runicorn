@@ -14,6 +14,7 @@ import uvicorn
 from .viewer import create_app
 from .config import get_config_file_path, load_user_config, set_user_root_dir
 from .sdk import _default_storage_dir
+from .storage.file_utils import iter_all_runs, find_run_dir_by_id
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -131,44 +132,21 @@ def main(argv: Optional[list[str]] = None) -> int:
         root = _default_storage_dir(getattr(args, "storage", None))
         root.mkdir(parents=True, exist_ok=True)
 
-        # Discover candidate run directories (new + legacy)
+        # Discover candidate run directories (both new and legacy layouts)
         candidates: list[Path] = []
-        # New layout: root/<project>/<name>/runs/<id>
-        try:
-            for proj in sorted([p for p in root.iterdir() if p.is_dir()]):
-                if proj.name in {"runs", "webui"}:
-                    continue
-                if args.project and proj.name != args.project:
-                    continue
-                for name in sorted([n for n in proj.iterdir() if n.is_dir()]):
-                    if args.name and name.name != args.name:
-                        continue
-                    runs_dir = name / "runs"
-                    if not runs_dir.exists():
-                        continue
-                    for rd in runs_dir.iterdir():
-                        if not rd.is_dir():
-                            continue
-                        if args.run_ids and rd.name not in set(args.run_ids):
-                            continue
-                        candidates.append(rd)
-        except Exception:
-            pass
-        # Legacy: root/runs/<id>
-        try:
-            legacy_runs = root / "runs"
-            if legacy_runs.exists():
-                for rd in legacy_runs.iterdir():
-                    if not rd.is_dir():
-                        continue
-                    if args.run_ids and rd.name not in set(args.run_ids):
-                        continue
-                    # If filters (project/name) are set, legacy runs won't match; include only if no filters
-                    if (args.project or args.name):
-                        continue
-                    candidates.append(rd)
-        except Exception:
-            pass
+        run_id_filter = set(args.run_ids) if args.run_ids else None
+
+        for entry in iter_all_runs(root):
+            # Filter by run ID
+            if run_id_filter and entry.dir.name not in run_id_filter:
+                continue
+            # Filter by project (first segment of path)
+            if args.project and entry.project != args.project:
+                continue
+            # Filter by name (last segment of path)
+            if args.name and entry.name != args.name:
+                continue
+            candidates.append(entry.dir)
 
         if not candidates:
             print("No runs matched the given filters. Nothing to export.")
@@ -253,31 +231,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         format = args.format
         output = args.output
         
-        # Find run directory
-        from pathlib import Path
-        run_dir = None
-        
-        # Try new layout
-        for proj in root.iterdir():
-            if not proj.is_dir() or proj.name in ["runs", "webui"]:
-                continue
-            for exp in proj.iterdir():
-                if not exp.is_dir():
-                    continue
-                runs_dir = exp / "runs"
-                if runs_dir.exists():
-                    candidate = runs_dir / run_id
-                    if candidate.exists():
-                        run_dir = candidate
-                        break
-            if run_dir:
-                break
-        
-        # Try legacy layout
-        if not run_dir:
-            legacy = root / "runs" / run_id
-            if legacy.exists():
-                run_dir = legacy
+        # Find run directory (searches both new and legacy layouts)
+        entry = find_run_dir_by_id(root, run_id)
+        run_dir = entry.dir if entry else None
         
         if not run_dir:
             print(f"Run {run_id} not found")

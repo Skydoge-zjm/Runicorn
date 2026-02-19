@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .utils.logging import setup_logging
 from .middleware.rate_limit import RateLimitMiddleware
-from .services.storage import get_storage_root, periodic_status_check
+from ..storage.file_utils import get_storage_root, periodic_status_check
 from .api import (
     health_router,
     runs_router, 
@@ -82,8 +82,21 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     async def startup_event():
         """Initialize background tasks on app startup."""
         nonlocal _status_check_task
-        _status_check_task = asyncio.create_task(periodic_status_check(root))
+        _status_check_task = asyncio.create_task(
+            periodic_status_check(root, backend=app.state.storage_backend)
+        )
         logger.info("Started background process status checker")
+        
+        # Sync filesystem runs into SQLite (background, non-blocking)
+        if app.state.storage_backend is not None:
+            def _run_sync():
+                try:
+                    from .services.db_reader import sync_filesystem_to_db
+                    sync_filesystem_to_db(root, app.state.storage_backend)
+                except Exception as e:
+                    logger.warning(f"Filesystem-to-SQLite sync failed: {e}")
+            import threading
+            threading.Thread(target=_run_sync, daemon=True).start()
     
     @app.on_event("shutdown") 
     async def shutdown_event():
@@ -115,13 +128,13 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             except Exception as e:
                 logger.warning(f"Failed to close SSH connections: {e}")
         
-        # Close storage service (CRITICAL for Windows desktop app)
-        try:
-            from .services.modern_storage import close_storage_service
-            close_storage_service()
-            logger.info("Closed storage service and database connections")
-        except Exception as e:
-            logger.warning(f"Failed to close storage service: {e}")
+        # Close SQLite storage backend
+        if getattr(app.state, 'storage_backend', None) is not None:
+            try:
+                app.state.storage_backend.close()
+                logger.info("Closed SQLite storage backend")
+            except Exception as e:
+                logger.warning(f"Failed to close SQLite storage backend: {e}")
     
     # Register v1 API routers (backward compatibility)
     app.include_router(health_router, prefix="/api", tags=["health"])
@@ -146,6 +159,14 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     # Store storage root and mode for access by routers
     app.state.storage_root = root
     
+    # Initialize SQLite storage backend for fast reads
+    try:
+        from ..storage.backends import SQLiteStorageBackend
+        app.state.storage_backend = SQLiteStorageBackend(root)
+        logger.info("SQLite storage backend initialized for Viewer reads")
+    except Exception as e:
+        app.state.storage_backend = None
+        logger.warning(f"SQLite storage backend unavailable, using file-only mode: {e}")
     
     # Initialize Remote Viewer components
     try:

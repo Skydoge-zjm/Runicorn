@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS experiments (
     
     -- File system integration
     run_dir TEXT NOT NULL,                 -- Absolute path to run directory
+    workspace_root TEXT,                   -- Workspace root directory (for code snapshot)
     
     -- Computed fields for analytics
     duration_seconds REAL,                 -- Total experiment duration
@@ -165,6 +166,44 @@ CREATE TABLE IF NOT EXISTS query_cache (
 );
 
 CREATE INDEX IF NOT EXISTS idx_cache_expires ON query_cache(expires_at);
+
+-- =====================================================
+-- Assets: Deduplication and tracking of run-associated files
+-- =====================================================
+CREATE TABLE IF NOT EXISTS assets (
+    asset_id TEXT PRIMARY KEY,
+    asset_type TEXT NOT NULL,               -- 'code_snapshot', 'output', 'config', 'dataset', 'pretrained'
+    name TEXT,                              -- Human-readable name
+    source_uri TEXT,                        -- Original file/dir location
+    archive_uri TEXT,                       -- Archived location in storage
+    is_archived INTEGER NOT NULL DEFAULT 0, -- Whether asset has been archived
+    fingerprint_kind TEXT,                  -- Fingerprint algorithm ('sha256', 'stat', etc.)
+    fingerprint TEXT,                       -- Fingerprint value for dedup
+    size_bytes INTEGER,                     -- File size
+    mtime REAL,                             -- Source file modification time
+    created_at REAL,                        -- When this record was created
+    metadata_json TEXT                      -- Additional metadata (JSON)
+);
+
+CREATE INDEX IF NOT EXISTS idx_assets_type_name ON assets(asset_type, name);
+CREATE INDEX IF NOT EXISTS idx_assets_fingerprint ON assets(fingerprint);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_type_fingerprint_unique ON assets(asset_type, fingerprint);
+
+-- =====================================================
+-- Run-Asset Links: Many-to-many relationship
+-- =====================================================
+CREATE TABLE IF NOT EXISTS run_assets (
+    run_id TEXT NOT NULL,                   -- References experiments.id
+    asset_id TEXT NOT NULL,                 -- References assets.asset_id
+    role TEXT NOT NULL,                     -- 'code', 'output', 'config', 'dataset', 'pretrained'
+    created_at REAL,                        -- When this link was created
+    PRIMARY KEY (run_id, asset_id, role),
+    FOREIGN KEY (run_id) REFERENCES experiments(id) ON DELETE CASCADE,
+    FOREIGN KEY (asset_id) REFERENCES assets(asset_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_run_assets_run ON run_assets(run_id);
+CREATE INDEX IF NOT EXISTS idx_run_assets_asset ON run_assets(asset_id);
 
 -- =====================================================
 -- Analytics Views: Pre-computed analytics

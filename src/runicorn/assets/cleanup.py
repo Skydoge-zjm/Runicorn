@@ -55,8 +55,8 @@ def delete_run_completely(
         - bytes_freed: int
         - errors: list of error messages
     """
-    from ..index import IndexDb
-    from ..viewer.services.storage import find_run_dir_by_id
+    from ..storage.backends import SQLiteStorageBackend
+    from ..storage.file_utils import find_run_dir_by_id
     
     result: Dict[str, Any] = {
         "success": False,
@@ -85,12 +85,13 @@ def delete_run_completely(
     
     run_dir = entry.dir
     
-    # Open index database
+    # Open storage backend
+    backend = None
     try:
-        index_db = IndexDb(storage_root)
+        backend = SQLiteStorageBackend(storage_root)
     except Exception as e:
-        result["errors"].append(f"Failed to open index database: {e}")
-        # Even without index, we can still delete the run directory and outputs
+        result["errors"].append(f"Failed to open storage database: {e}")
+        # Even without database, we can still delete the run directory and outputs
         if not dry_run:
             try:
                 shutil.rmtree(run_dir)
@@ -105,8 +106,8 @@ def delete_run_completely(
         return result
     
     try:
-        # Get orphaned assets info from index
-        db_result = index_db.delete_run_with_orphan_assets(run_id) if not dry_run else _preview_orphaned_assets(index_db, run_id)
+        # Get orphaned assets info from database
+        db_result = backend.delete_run_with_orphan_assets(run_id) if not dry_run else _preview_orphaned_assets(backend, run_id)
         
         orphaned_assets = db_result.get("orphaned_assets", [])
         kept_assets = db_result.get("kept_assets", [])
@@ -155,7 +156,8 @@ def delete_run_completely(
         logger.exception(f"Failed to delete run {run_id}")
     finally:
         try:
-            index_db.close()
+            if backend:
+                backend.close()
         except Exception:
             pass
     
@@ -249,16 +251,16 @@ def _cleanup_empty_dirs(start_dir: Path, stop_at: Path) -> int:
     return removed
 
 
-def _preview_orphaned_assets(index_db: Any, run_id: str) -> Dict[str, Any]:
+def _preview_orphaned_assets(backend: Any, run_id: str) -> Dict[str, Any]:
     """Preview which assets would be orphaned without actually deleting."""
-    assets = index_db.get_assets_for_run(run_id)
+    assets = backend.get_assets_for_run(run_id)
     
     orphaned = []
     kept = []
     
     for asset in assets:
         asset_id = asset["asset_id"]
-        ref_count = index_db.get_asset_ref_count(asset_id)
+        ref_count = backend.get_asset_ref_count(asset_id)
         
         # ref_count includes current run, so orphaned if ref_count == 1
         if ref_count <= 1:
@@ -392,7 +394,7 @@ def cleanup_orphaned_blobs(storage_root: Path, dry_run: bool = False) -> Dict[st
     Returns:
         Dict with cleanup summary.
     """
-    from ..index import IndexDb
+    from ..storage.backends import SQLiteStorageBackend
     
     result: Dict[str, Any] = {
         "success": False,
@@ -409,42 +411,50 @@ def cleanup_orphaned_blobs(storage_root: Path, dry_run: bool = False) -> Dict[st
         result["success"] = True
         return result
     
-    # Collect all referenced blobs from index
+    # Collect all referenced blobs from database
     referenced_blobs: set[str] = set()
     
+    backend = None
     try:
-        index_db = IndexDb(storage_root)
-        conn = index_db._connect()
-        
-        # Get all archived assets with fingerprints
-        rows = conn.execute(
-            "SELECT fingerprint, archive_uri FROM assets WHERE is_archived=1 AND fingerprint IS NOT NULL"
-        ).fetchall()
-        
-        for row in rows:
-            fp = row["fingerprint"]
-            archive_uri = row["archive_uri"]
+        backend = SQLiteStorageBackend(storage_root)
+        conn = backend.pool.get_connection()
+        try:
+            # Get all archived assets with fingerprints
+            rows = conn.execute(
+                "SELECT fingerprint, archive_uri FROM assets WHERE is_archived=1 AND fingerprint IS NOT NULL"
+            ).fetchall()
             
-            # Single file: fingerprint is the blob hash
-            if fp and len(fp) == 64:
-                referenced_blobs.add(fp)
-            
-            # Manifest: read to get all blob hashes
-            if archive_uri and ".json" in archive_uri:
-                try:
-                    manifest_path = Path(archive_uri)
-                    if manifest_path.exists():
-                        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-                        for entry in manifest.get("files", {}).values():
-                            sha = entry.get("sha256")
-                            if sha:
-                                referenced_blobs.add(sha)
-                except Exception:
-                    pass
-        
-        index_db.close()
+            for row in rows:
+                fp = row["fingerprint"]
+                archive_uri = row["archive_uri"]
+                
+                # Single file: fingerprint is the blob hash
+                if fp and len(fp) == 64:
+                    referenced_blobs.add(fp)
+                
+                # Manifest: read to get all blob hashes
+                if archive_uri and ".json" in archive_uri:
+                    try:
+                        manifest_path = Path(archive_uri)
+                        if manifest_path.exists():
+                            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                            for entry in manifest.get("files", {}).values():
+                                sha = entry.get("sha256")
+                                if sha:
+                                    referenced_blobs.add(sha)
+                    except Exception:
+                        pass
+        finally:
+            backend.pool.return_connection(conn)
+        backend.close()
+        backend = None
     except Exception as e:
-        result["errors"].append(f"Failed to scan index: {e}")
+        if backend:
+            try:
+                backend.close()
+            except Exception:
+                pass
+        result["errors"].append(f"Failed to scan storage database: {e}")
         return result
     
     # Scan blob directory

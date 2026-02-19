@@ -1,5 +1,5 @@
 """
-Data models for Runicorn API responses
+Data models for Runicorn API client responses.
 """
 from __future__ import annotations
 
@@ -9,40 +9,47 @@ from datetime import datetime
 
 
 @dataclass
-class Experiment:
-    """Experiment record."""
+class RunInfo:
+    """Run record (corresponds to server-side RunListItem)."""
     id: str
-    project: str
-    name: str
     status: str
-    created_at: float
-    updated_at: float
-    summary: Dict[str, Any] = field(default_factory=dict)
+    created_time: Optional[float] = None
+    path: Optional[str] = None
+    alias: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    best_metric_value: Optional[float] = None
+    best_metric_name: Optional[str] = None
+    assets_count: int = 0
+    run_dir: Optional[str] = None
+    pid: Optional[int] = None
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Experiment:
+    def from_dict(cls, data: Dict[str, Any]) -> RunInfo:
         """Create from API response."""
         return cls(
             id=data["id"],
-            project=data.get("project", "default"),
-            name=data.get("name", "default"),
             status=data.get("status", "unknown"),
-            created_at=data.get("created_at", 0),
-            updated_at=data.get("updated_at", 0),
-            summary=data.get("summary", {}),
+            created_time=data.get("created_time"),
+            path=data.get("path"),
+            alias=data.get("alias"),
             tags=data.get("tags", []),
+            best_metric_value=data.get("best_metric_value"),
+            best_metric_name=data.get("best_metric_name"),
+            assets_count=data.get("assets_count", 0),
+            run_dir=data.get("run_dir"),
+            pid=data.get("pid"),
         )
     
     @property
-    def created_datetime(self) -> datetime:
-        """Convert created_at to datetime."""
-        return datetime.fromtimestamp(self.created_at)
-    
-    @property
-    def updated_datetime(self) -> datetime:
-        """Convert updated_at to datetime."""
-        return datetime.fromtimestamp(self.updated_at)
+    def created_datetime(self) -> Optional[datetime]:
+        """Convert created_time to datetime."""
+        if self.created_time is not None:
+            return datetime.fromtimestamp(self.created_time)
+        return None
+
+
+# Backward compatibility
+Experiment = RunInfo
 
 
 @dataclass
@@ -130,17 +137,25 @@ class RemoteSession:
 
 
 @dataclass
-class Project:
-    """Project summary."""
-    name: str
-    experiment_count: int
-    latest_update: float
+class PathInfo:
+    """Path statistics (corresponds to server-side path stats)."""
+    path: str
+    total: int = 0
+    running: int = 0
+    finished: int = 0
+    failed: int = 0
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> Project:
+    def from_dict(cls, path: str, data: Dict[str, Any]) -> PathInfo:
         """Create from API response."""
         return cls(
-            name=data["name"],
-            experiment_count=data.get("experiment_count", 0),
-            latest_update=data.get("latest_update", 0),
+            path=path,
+            total=data.get("total", 0),
+            running=data.get("running", 0),
+            finished=data.get("finished", 0),
+            failed=data.get("failed", 0),
         )
+
+
+# Backward compatibility
+Project = PathInfo

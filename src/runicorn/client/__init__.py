@@ -1,27 +1,27 @@
 """
-Runicorn API Client
+Runicorn Client
 
 Programmatic access to Runicorn Viewer REST API.
 
 Example:
-    >>> import runicorn.api as api
+    >>> import runicorn.client as client
     >>> 
     >>> # Connect to Viewer
-    >>> client = api.connect()
+    >>> c = client.connect()
     >>> 
-    >>> # List experiments
-    >>> experiments = client.list_experiments(project="vision")
+    >>> # List runs
+    >>> runs = c.list_runs()
     >>> 
     >>> # Get run details
-    >>> run = client.get_run(experiments[0]["id"])
-    >>> print(f"Run: {run['name']}, Status: {run['status']}")
+    >>> run = c.get_run(runs[0]["id"])
+    >>> print(f"Run: {run['path']}, Status: {run['status']}")
     >>> 
     >>> # Get metrics
-    >>> metrics = client.get_metrics(run["id"])
+    >>> metrics = c.get_metrics(run["id"])
     >>> 
     >>> # Remote viewer
-    >>> client.remote.connect(host="localhost", username="user")
-    >>> session = client.remote.start_viewer(
+    >>> c.remote.connect(host="localhost", username="user")
+    >>> session = c.remote.start_viewer(
     ...     connection_id="localhost",
     ...     remote_root="/data"
     ... )
@@ -29,7 +29,7 @@ Example:
 """
 from __future__ import annotations
 
-from .client import RunicornClient
+from .http import RunicornClient
 from .exceptions import (
     RunicornAPIError,
     ConnectionError,
@@ -39,11 +39,13 @@ from .exceptions import (
     AuthenticationError,
 )
 from .models import (
-    Experiment,
+    RunInfo,
+    Experiment,  # backward compat alias
     MetricPoint,
     MetricSeries,
     RemoteSession,
-    Project,
+    PathInfo,
+    Project,  # backward compat alias
 )
 
 __all__ = [
@@ -58,10 +60,12 @@ __all__ = [
     "ServerError",
     "AuthenticationError",
     # Models
+    "RunInfo",
     "Experiment",
     "MetricPoint",
     "MetricSeries",
     "RemoteSession",
+    "PathInfo",
     "Project",
 ]
 
@@ -83,9 +87,9 @@ def connect(
         RunicornClient instance
         
     Example:
-        >>> import runicorn.api as api
-        >>> client = api.connect()
-        >>> experiments = client.list_experiments()
+        >>> import runicorn.client as client
+        >>> c = client.connect()
+        >>> runs = c.list_runs()
     """
     return RunicornClient(
         base_url=base_url,

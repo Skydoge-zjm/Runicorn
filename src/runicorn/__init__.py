@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from .sdk import Run, init, get_active_run
-from .registry import get_config
+from .config.registry import get_config
 from .enabled import enabled, is_enabled, reset_enabled, set_enabled
-from .rnconfig import get_effective_rnconfig
+from .config.rnconfig import get_effective_rnconfig
 from .assets import snapshot_workspace
 
 # Version information
