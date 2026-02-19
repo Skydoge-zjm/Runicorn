@@ -857,6 +857,156 @@ class SQLiteStorageBackend(StorageBackend):
         finally:
             self.pool.return_connection(conn)
 
+    # -------------------- Tag Management --------------------
+
+    def set_tags(self, exp_id: str, tags: List[str]) -> None:
+        """Replace all tags for an experiment."""
+        conn = self.pool.get_connection()
+        try:
+            conn.execute("DELETE FROM experiment_tags WHERE experiment_id = ?", (exp_id,))
+            if tags:
+                conn.executemany(
+                    "INSERT OR IGNORE INTO experiment_tags (experiment_id, tag) VALUES (?, ?)",
+                    [(exp_id, tag) for tag in tags],
+                )
+            conn.commit()
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_tags(self, exp_id: str) -> List[str]:
+        """Get all tags for an experiment."""
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT tag FROM experiment_tags WHERE experiment_id = ? ORDER BY tag",
+                (exp_id,),
+            ).fetchall()
+            return [row["tag"] for row in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    # -------------------- Viewer-optimised Queries --------------------
+
+    def list_experiments_for_viewer(
+        self, *, include_deleted: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        Return experiments enriched with tags and assets_count in one query.
+
+        Each returned dict contains all experiments columns plus:
+          - tags_csv  (str | None) – comma-separated tags
+          - assets_count (int)
+        """
+        sql = """
+            SELECT e.*,
+                   GROUP_CONCAT(DISTINCT t.tag) AS tags_csv,
+                   COUNT(DISTINCT ra.asset_id)  AS assets_count
+            FROM experiments e
+            LEFT JOIN experiment_tags t  ON e.id = t.experiment_id
+            LEFT JOIN run_assets      ra ON e.id = ra.run_id
+        """
+        if not include_deleted:
+            sql += " WHERE e.deleted_at IS NULL"
+        sql += " GROUP BY e.id ORDER BY e.created_at DESC"
+
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(sql).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def list_deleted_for_viewer(self) -> List[Dict[str, Any]]:
+        """Return soft-deleted experiments for recycle-bin display."""
+        sql = """
+            SELECT id, path, alias, created_at, status,
+                   deleted_at, delete_reason, run_dir
+            FROM experiments
+            WHERE deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+        """
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(sql).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_unique_paths(self) -> List[str]:
+        """Return sorted list of distinct experiment paths (active only)."""
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT DISTINCT path FROM experiments WHERE deleted_at IS NULL ORDER BY path"
+            ).fetchall()
+            return [r["path"] for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def get_path_stats(self) -> Dict[str, Dict[str, int]]:
+        """
+        Return per-path run statistics (total/running/finished/failed).
+
+        Includes accumulated counts for ancestor paths.
+        """
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute("""
+                SELECT path,
+                       COUNT(*)                                      AS total,
+                       COUNT(CASE WHEN status='running'  THEN 1 END) AS running,
+                       COUNT(CASE WHEN status='finished' THEN 1 END) AS finished,
+                       COUNT(CASE WHEN status='failed'   THEN 1 END) AS failed
+                FROM experiments
+                WHERE deleted_at IS NULL
+                GROUP BY path
+            """).fetchall()
+        finally:
+            self.pool.return_connection(conn)
+
+        path_runs: Dict[str, Dict[str, int]] = {}
+        for r in rows:
+            path_runs[r["path"]] = {
+                "total": r["total"],
+                "running": r["running"],
+                "finished": r["finished"],
+                "failed": r["failed"],
+            }
+
+        # Accumulate ancestor paths
+        for path in list(path_runs.keys()):
+            parts = path.split("/")
+            for i in range(1, len(parts)):
+                ancestor = "/".join(parts[:i])
+                if ancestor not in path_runs:
+                    path_runs[ancestor] = {"total": 0, "running": 0, "finished": 0, "failed": 0}
+                for k in ("total", "running", "finished", "failed"):
+                    path_runs[ancestor][k] += path_runs[path][k]
+
+        return path_runs
+
+    def get_running_experiments(self) -> List[Dict[str, Any]]:
+        """Return id/run_dir/pid for experiments with status='running'."""
+        conn = self.pool.get_connection()
+        try:
+            rows = conn.execute(
+                "SELECT id, run_dir, pid FROM experiments WHERE status = 'running' AND deleted_at IS NULL"
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            self.pool.return_connection(conn)
+
+    def experiment_exists(self, exp_id: str) -> bool:
+        """Check whether an experiment record exists."""
+        conn = self.pool.get_connection()
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM experiments WHERE id = ?", (exp_id,)
+            ).fetchone()
+            return row is not None
+        finally:
+            self.pool.return_connection(conn)
+
     def delete_run_with_orphan_assets(self, run_id: str) -> Dict[str, Any]:
         """
         Delete a run and any assets that become orphaned.

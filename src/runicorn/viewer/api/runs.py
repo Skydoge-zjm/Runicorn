@@ -30,6 +30,7 @@ from ...storage.file_utils import (
 from .storage_utils import get_storage_root
 from ..utils.validation import validate_run_id, validate_batch_size
 from ..utils.helpers import is_within_directory
+from ..services.db_reader import get_backend, find_run_entry_fast, list_runs_from_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -77,34 +78,54 @@ async def list_runs(request: Request) -> List[RunListItem]:
     """
     List all experiment runs.
     
-    Supports both local and remote storage modes:
-    - local mode: reads from local storage_root
-    - remote mode: reads from remote cache metadata directory
+    Uses SQLite for fast queries when available, falls back to file-system scan.
     
     Returns:
         List of run information including status and best metrics
     """
+    backend = get_backend(request)
+    
+    # --- SQLite fast-path ---
+    if backend is not None:
+        db_rows = list_runs_from_db(backend)
+        if db_rows is not None:
+            items: List[RunListItem] = []
+            for r in db_rows:
+                # PID check only for running runs
+                if r["status"] == "running" and r["run_dir"]:
+                    run_dir = Path(r["run_dir"])
+                    if run_dir.exists():
+                        update_status_if_process_dead(run_dir)
+                        # Re-check status from file (may have changed)
+                        status_data = read_json(run_dir / "status.json")
+                        new_status = str((status_data.get("status") if isinstance(status_data, dict) else "running") or "running")
+                        if new_status != "running":
+                            r["status"] = new_status
+                            # Also update SQLite
+                            try:
+                                backend.update_experiment(r["id"], {"status": new_status})
+                            except Exception:
+                                pass
+                items.append(RunListItem(**r))
+            return items
+    
+    # --- File-system fallback ---
     storage_root = get_storage_root(request)
-    items: List[RunListItem] = []
+    items = []
     
     for entry in iter_all_runs(storage_root):
         run_dir = entry.dir
         run_id = run_dir.name
         
-        # Load run metadata first
         meta = read_json(run_dir / "meta.json")
         status = read_json(run_dir / "status.json")
         summary = read_json(run_dir / "summary.json")
         
-        # Only check process status if currently marked as "running"
-        # This significantly improves performance for large run lists
         current_status = str((status.get("status") if isinstance(status, dict) else "finished") or "finished")
         if current_status == "running":
             update_status_if_process_dead(run_dir)
-            # Re-read status after potential update
             status = read_json(run_dir / "status.json")
         
-        # Extract creation time
         created = meta.get("created_at") if isinstance(meta, dict) else None
         if not isinstance(created, (int, float)):
             try:
@@ -112,12 +133,10 @@ async def list_runs(request: Request) -> List[RunListItem]:
             except Exception:
                 created = None
         
-        # Get path and alias from meta (new model)
         path = (meta.get("path") if isinstance(meta, dict) else None) or entry.project
         alias = (meta.get("alias") if isinstance(meta, dict) else None)
         tags = (meta.get("tags") if isinstance(meta, dict) else None) or []
         
-        # Get best metric info from summary
         best_metric_value = None
         best_metric_name = None
         if isinstance(summary, dict):
@@ -128,8 +147,8 @@ async def list_runs(request: Request) -> List[RunListItem]:
         assets_path = run_dir / "assets.json"
         if assets_path.exists():
             try:
-                assets = read_json(assets_path)
-                assets_count = _count_assets_from_assets_json(assets)
+                assets_data = read_json(assets_path)
+                assets_count = _count_assets_from_assets_json(assets_data)
             except Exception:
                 pass
         
@@ -157,7 +176,7 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     """
     Get detailed information for a specific run.
     
-    Supports both local and remote storage modes.
+    Uses SQLite for fast lookup when available, falls back to file scan.
     
     Args:
         run_id: The run ID to retrieve
@@ -168,8 +187,7 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = get_storage_root(request)
-    entry = find_run_dir_by_id(storage_root, run_id)
+    entry = find_run_entry_fast(request, run_id)
     
     if not entry:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -179,14 +197,29 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     # Check and update process status if needed
     update_status_if_process_dead(run_dir)
     
-    # Load run metadata
-    meta = read_json(run_dir / "meta.json")
-    status = read_json(run_dir / "status.json")
+    # Try SQLite first for metadata
+    backend = get_backend(request)
+    exp = None
+    if backend is not None:
+        try:
+            exp = backend.get_experiment(run_id)
+        except Exception:
+            pass
     
-    # Get path and alias
-    path = (meta.get("path") if isinstance(meta, dict) else None) or entry.project
-    alias = (meta.get("alias") if isinstance(meta, dict) else None)
+    if exp is not None:
+        status_val = exp.status or "finished"
+        pid = exp.pid
+        path = exp.path
+        alias = exp.alias
+    else:
+        meta = read_json(run_dir / "meta.json")
+        status_data = read_json(run_dir / "status.json")
+        status_val = str((status_data.get("status") if isinstance(status_data, dict) else "finished") or "finished")
+        pid = (meta.get("pid") if isinstance(meta, dict) else None)
+        path = (meta.get("path") if isinstance(meta, dict) else None) or entry.project
+        alias = (meta.get("alias") if isinstance(meta, dict) else None)
 
+    # Assets still read from files (complex nested structure)
     assets: Any = {}
     assets_count = 0
     assets_path = run_dir / "assets.json"
@@ -200,8 +233,8 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
     
     return {
         "id": run_id,
-        "status": str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
-        "pid": (meta.get("pid") if isinstance(meta, dict) else None),
+        "status": str(status_val),
+        "pid": pid,
         "run_dir": str(run_dir),
         "path": path,
         "alias": alias,
@@ -273,6 +306,17 @@ async def update_run(run_id: str, request: Request, payload: RunUpdatePayload) -
         logger.error(f"Failed to update meta.json for {run_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to update run: {e}")
     
+    # Dual-write to SQLite
+    backend = get_backend(request)
+    if backend is not None:
+        try:
+            if payload.alias is not None:
+                backend.update_experiment(run_id, {"alias": meta.get("alias")})
+            if payload.tags is not None:
+                backend.set_tags(run_id, meta.get("tags", []))
+        except Exception as e:
+            logger.debug(f"SQLite dual-write failed for update_run {run_id}: {e}")
+    
     return {
         "ok": True,
         "alias": meta.get("alias"),
@@ -282,8 +326,7 @@ async def update_run(run_id: str, request: Request, payload: RunUpdatePayload) -
 
 @router.get("/runs/{run_id}/assets")
 async def get_run_assets(run_id: str, request: Request) -> Dict[str, Any]:
-    storage_root = get_storage_root(request)
-    entry = find_run_dir_by_id(storage_root, run_id)
+    entry = find_run_entry_fast(request, run_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Run not found")
     run_dir = entry.dir
@@ -304,7 +347,7 @@ async def download_run_asset(
     filename: Optional[str] = Query(None, description="Optional download filename override"),
 ) -> FileResponse:
     storage_root = get_storage_root(request)
-    entry = find_run_dir_by_id(storage_root, run_id)
+    entry = find_run_entry_fast(request, run_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Run not found")
 
@@ -493,6 +536,15 @@ async def soft_delete_runs(request: Request, payload: Dict[str, Any] = Body(...)
         
         success = soft_delete_run(entry.dir, "user_deleted")
         results[run_id] = {"success": success}
+        
+        # Dual-write to SQLite
+        if success:
+            backend = get_backend(request)
+            if backend is not None:
+                try:
+                    backend.soft_delete_experiments([run_id], reason="user_deleted")
+                except Exception:
+                    pass
     
     successful_deletes = sum(1 for r in results.values() if r["success"])
     return {
@@ -510,17 +562,39 @@ async def list_deleted_runs(request: Request) -> Dict[str, Any]:
     Returns:
         List of deleted runs with deletion metadata
     """
+    # --- SQLite fast-path ---
+    backend = get_backend(request)
+    if backend is not None:
+        try:
+            db_rows = backend.list_deleted_for_viewer()
+            if db_rows is not None:
+                items: List[Dict[str, Any]] = []
+                for r in db_rows:
+                    items.append({
+                        "id": r["id"],
+                        "path": r.get("path"),
+                        "alias": r.get("alias"),
+                        "created_time": r.get("created_at"),
+                        "deleted_at": r.get("deleted_at"),
+                        "delete_reason": r.get("delete_reason", "unknown"),
+                        "original_status": r.get("status", "unknown"),
+                        "run_dir": r.get("run_dir", ""),
+                    })
+                return {"deleted_runs": items}
+        except Exception:
+            pass  # fallback below
+    
+    # --- File-system fallback ---
     storage_root = request.app.state.storage_root
-    items: List[Dict[str, Any]] = []
+    items = []
     
     for entry in iter_all_runs(storage_root, include_deleted=True):
         if not is_run_deleted(entry.dir):
-            continue  # Only show deleted runs
+            continue
         
         run_dir = entry.dir
         run_id = run_dir.name
         
-        # Load metadata
         meta = read_json(run_dir / "meta.json") 
         deleted_info = read_json(run_dir / ".deleted")
         
@@ -599,6 +673,15 @@ async def restore_runs(request: Request, payload: Dict[str, Any] = Body(...)) ->
         
         success = restore_run(entry.dir)
         results[run_id] = {"success": success}
+        
+        # Dual-write to SQLite
+        if success:
+            backend = get_backend(request)
+            if backend is not None:
+                try:
+                    backend.restore_experiments([run_id])
+                except Exception:
+                    pass
     
     successful_restores = sum(1 for r in results.values() if r["success"])
     return {
@@ -771,28 +854,27 @@ async def get_run_asset_refs(run_id: str, request: Request) -> Dict[str, Any]:
     Returns:
         Dict with orphaned_assets (unique to this run) and shared_assets
     """
-    storage_root = get_storage_root(request)
-    
     if not validate_run_id(run_id):
         raise HTTPException(status_code=400, detail=f"Invalid run_id format: {run_id}")
     
-    # Include deleted runs so we can preview assets before permanent deletion
-    entry = find_run_dir_by_id(storage_root, run_id, include_deleted=True)
+    entry = find_run_entry_fast(request, run_id, include_deleted=True)
     if not entry:
         raise HTTPException(status_code=404, detail="Run not found")
     
+    # Use unified storage backend (from RF-13)
+    backend = get_backend(request)
+    if backend is None:
+        raise HTTPException(status_code=503, detail="Storage backend not available")
+    
     try:
-        from ...index import IndexDb
-        index_db = IndexDb(storage_root)
-        
-        assets = index_db.get_assets_for_run(run_id)
+        assets = backend.get_assets_for_run(run_id)
         
         orphaned = []
         shared = []
         
         for asset in assets:
             asset_id = asset["asset_id"]
-            ref_count = index_db.get_asset_ref_count(asset_id)
+            ref_count = backend.get_asset_ref_count(asset_id)
             
             asset_info = {
                 "asset_id": asset_id,
@@ -806,12 +888,7 @@ async def get_run_asset_refs(run_id: str, request: Request) -> Dict[str, Any]:
             if ref_count <= 1:
                 orphaned.append(asset_info)
             else:
-                # Get other runs that reference this asset
-                other_runs = [r for r in index_db.get_runs_for_asset(asset_id) if r != run_id]
-                asset_info["other_runs"] = other_runs
                 shared.append(asset_info)
-        
-        index_db.close()
         
         return {
             "run_id": run_id,

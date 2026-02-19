@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse
 from ...storage.file_utils import find_run_dir_by_id
 from ..utils.incremental_cache import get_incremental_metrics_cache
 from .storage_utils import get_storage_root
+from ..services.db_reader import find_run_entry_fast
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -177,8 +178,7 @@ async def get_metrics(
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = get_storage_root(request)
-    entry = find_run_dir_by_id(storage_root, run_id)
+    entry = find_run_entry_fast(request, run_id)
     
     if not entry:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -245,8 +245,7 @@ async def get_metrics_step(
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = get_storage_root(request)
-    entry = find_run_dir_by_id(storage_root, run_id)
+    entry = find_run_entry_fast(request, run_id)
     
     if not entry:
         raise HTTPException(status_code=404, detail="Run not found")
@@ -333,9 +332,8 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
     """
     await websocket.accept()
     
-    storage_root = websocket.app.state.storage_root
-    
-    entry = find_run_dir_by_id(storage_root, run_id)
+    # find_run_entry_fast works with WebSocket too (same .app.state)
+    entry = find_run_entry_fast(websocket, run_id)  # type: ignore[arg-type]
     
     if not entry:
         try:

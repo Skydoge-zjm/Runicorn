@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 
 from ...storage.file_utils import iter_all_runs
 from ..utils.helpers import is_within_directory
+from ..services.db_reader import get_backend, sync_filesystem_to_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -196,6 +197,20 @@ if HAS_MULTIPART:
                 new_ids.append(entry.dir.name)
         
         logger.info(f"Import completed: {len(imported_files)} files, {len(new_ids)} new runs")
+        
+        # Sync newly imported runs to SQLite
+        backend = get_backend(request)
+        if backend is not None and new_dirs:
+            try:
+                import threading
+                t = threading.Thread(
+                    target=sync_filesystem_to_db,
+                    args=(storage_root, backend),
+                    daemon=True,
+                )
+                t.start()
+            except Exception as e:
+                logger.debug(f"Post-import sync failed: {e}")
         
         return {
             "ok": True,

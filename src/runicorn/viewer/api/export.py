@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import Response
 
 from ...storage.file_utils import find_run_dir_by_id, read_json
+from ..services.db_reader import find_run_entry_fast
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -45,8 +46,7 @@ async def export_csv(run_id: str, request: Request) -> Response:
     if not HAS_EXPORTER:
         raise HTTPException(status_code=501, detail="Export functionality not available")
     
-    storage_root = request.app.state.storage_root
-    entry = find_run_dir_by_id(storage_root, run_id)
+    entry = find_run_entry_fast(request, run_id)
     
     if not entry:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
@@ -89,8 +89,7 @@ async def export_report(run_id: str, request: Request, format: str = "markdown")
     if format not in ["markdown", "html"]:
         raise HTTPException(status_code=400, detail="Format must be markdown or html")
     
-    storage_root = request.app.state.storage_root
-    entry = find_run_dir_by_id(storage_root, run_id)
+    entry = find_run_entry_fast(request, run_id)
     
     if not entry:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")
@@ -137,8 +136,7 @@ async def get_environment(run_id: str, request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: If run is not found
     """
-    storage_root = request.app.state.storage_root
-    entry = find_run_dir_by_id(storage_root, run_id)
+    entry = find_run_entry_fast(request, run_id)
     
     if not entry:
         raise HTTPException(status_code=404, detail=f"Run {run_id} not found")

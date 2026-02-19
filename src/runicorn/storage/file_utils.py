@@ -380,34 +380,57 @@ def find_run_dir_by_id(root: Path, run_id: str, include_deleted: bool = False) -
     return None
 
 
-async def periodic_status_check(root: Path) -> None:
+async def periodic_status_check(root: Path, backend=None) -> None:
     """
     Periodically check and update status of running experiments.
     
     This runs as a background task to detect crashed/interrupted experiments.
+    When *backend* (SQLiteStorageBackend) is given, only running experiments
+    are queried, and status changes are dual-written to SQLite.
     
     Args:
         root: Storage root directory
+        backend: Optional SQLiteStorageBackend for targeted queries
     """
     while True:
         try:
-            # Check all running experiments
-            for entry in iter_all_runs(root):
+            if backend is not None:
+                # SQLite fast-path: only check experiments marked as running
                 try:
-                    status = read_json(entry.dir / "status.json")
-                    if status.get("status") == "running":
-                        update_status_if_process_dead(entry.dir)
-                except Exception as entry_error:
-                    # Don't let one bad entry crash the whole checker
-                    logger.debug(f"Error checking status for {entry.dir.name}: {entry_error}")
-                    continue
+                    running_exps = backend.get_running_experiments()
+                    for exp in running_exps:
+                        try:
+                            run_dir = Path(exp.run_dir) if exp.run_dir else None
+                            if run_dir and run_dir.exists():
+                                update_status_if_process_dead(run_dir)
+                                # Check if status changed and dual-write
+                                new_status = read_json(run_dir / "status.json")
+                                new_val = str((new_status.get("status") if isinstance(new_status, dict) else "running") or "running")
+                                if new_val != "running":
+                                    try:
+                                        backend.update_experiment(exp.experiment_id, {"status": new_val})
+                                    except Exception:
+                                        pass
+                        except Exception as entry_error:
+                            logger.debug(f"Error checking status for {exp.experiment_id}: {entry_error}")
+                except Exception:
+                    pass  # fall through; next cycle will retry
+            else:
+                # File-system fallback
+                for entry in iter_all_runs(root):
+                    try:
+                        status = read_json(entry.dir / "status.json")
+                        if status.get("status") == "running":
+                            update_status_if_process_dead(entry.dir)
+                    except Exception as entry_error:
+                        logger.debug(f"Error checking status for {entry.dir.name}: {entry_error}")
+                        continue
             
-            # Wait 60 seconds before next check (reduced frequency to minimize log noise)
+            # Wait 60 seconds before next check
             await asyncio.sleep(60)
         except asyncio.CancelledError:
             logger.info("Status check task cancelled")
             break
         except Exception as e:
-            # Log but don't crash - keep checking
             logger.error(f"Status check task error: {e}", exc_info=True)
-            await asyncio.sleep(30)  # Continue checking despite errors
+            await asyncio.sleep(30)
