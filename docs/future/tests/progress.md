@@ -60,8 +60,25 @@
 **T3 合计: 106 passed, 2 skipped**
 **T1+T2+T3 总计: 378 passed, 5 skipped**
 
-## Phase T4: 扩展 + 资产 + E2E
-⏳ 待 T3 完成后开始
+## Phase T4: 扩展 + 资产 + 控制台 + 日志兼容 + E2E ✅ 完成
+
+| 模块 | 状态 | 用例数 | 备注 |
+|------|------|--------|------|
+| T4.1 assets/fingerprint.py | ✅ | 9 | stat/dir fingerprint, sha256, content_fingerprint |
+| T4.2 assets/archive.py | ✅ | 4 | archive_file, archive_dir manifest, dedup, rolling overwrite |
+| T4.3 assets/ignore.py | ✅ | 9 | 解析规则, glob匹配, dir-only, negation, load_ignore_matcher |
+| T4.4 assets/assets_json.py | ✅ | 6 | ensure_assets_file, update_assets_atomic(FileLock), read_assets |
+| T4.5 extensions/monitors.py | ✅ | 11 | MetricMonitor NaN/Inf/threshold, AnomalyDetector baseline/trend, AlertRule |
+| T4.6 extensions/experiment.py | ✅ | 12 | ExperimentManager: add/search/tag/delete/pin, 新旧布局, 持久化 |
+| T4.7 extensions/exporters.py | ✅ | 4 | to_csv(string/file/empty), markdown report |
+| T4.8 extensions/environment.py | ✅ | 5 | git info(mock), pip packages(mock), platform details |
+| T4.9 console/capture.py | ✅ | 8 | TeeWriter双写, smart/none模式, ConsoleCapture替换/恢复, cleanup |
+| T4.10 console/log_manager.py | ✅ | 6 | singleton per path, ref counting, write immediate flush |
+| T4.11 log_compat/torchvision.py | ✅ | 9 | SmoothedValue, MetricLogger update/run转发/log_every |
+| T4.12 E2E viewer_startup | ✅ | 3+3skip | create_app, API routes, storage_root (skip without --run-e2e) |
+
+**T4 合计: 86 passed, 3 skipped (E2E marker)**
+**T1+T2+T3+T4 总计: 463 passed, 5 skipped (全 E2E 含 3 passed)**
 
 ## 发现的 Bug
 （测试过程中发现的 bug 记录在此，遵循 .warprules 规则 7：测试代码和修复分开提交）
