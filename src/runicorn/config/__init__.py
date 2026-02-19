@@ -26,6 +26,8 @@ from .connections import (
     remove_ssh_connection,
 )
 from .rate_limits import get_rate_limit_config, save_rate_limit_config
+from .rnconfig import get_effective_rnconfig, load_effective_rnconfig
+from .registry import get_config, clear_registry_cache
 
 __all__ = [
     # paths
@@ -50,4 +52,10 @@ __all__ = [
     # rate limits
     "get_rate_limit_config",
     "save_rate_limit_config",
+    # rnconfig
+    "get_effective_rnconfig",
+    "load_effective_rnconfig",
+    # registry
+    "get_config",
+    "clear_registry_cache",
 ]
