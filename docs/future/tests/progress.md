@@ -11,7 +11,7 @@
 | T1.1 测试基础设施 | ✅ | — | conftest + fixtures + 目录骨架 |
 | T1.2 config/_toml.py | ✅ | 6 | TOML 缓存加载/失效/默认值 |
 | T1.3 config/paths.py | ✅ | 7+3skip | 跨平台路径; Py3.13 monkeypatch os.name 不可用 |
-| T1.4 config/user_config.py | ✅ | 7 | 发现 bug: save_user_config 无法删键 |
+| T1.4 config/user_config.py | ✅ | 9 | 含 None 删键测试 (Bug #1 已修复) |
 | T1.5 config/connections.py | ✅ | 9 | Fernet 加密, CRUD, legacy XOR 迁移 |
 | T1.6 config/rnconfig + registry | ✅ | 9 | 单例加载 + 注册表查找 |
 | T1.7 config/rate_limits.py | ✅ | 4 | 限速配置读取 |
@@ -97,7 +97,7 @@
 ## 发现的 Bug
 （测试过程中发现的 bug 记录在此，遵循 .warprules 规则 7：测试代码和修复分开提交）
 
-1. **save_user_config 无法删键** — `config/user_config.py` 的 `save_user_config()` 使用 dict merge 更新，无法删除已有键。导致 `_migrate_legacy_xor_connections()` 迁移后 `ssh_connections` 残留在 config.json 中。记录于 `test_connections.py:152-158`。状态：待修复。
+1. **save_user_config 无法删键** — `config/user_config.py` 的 `save_user_config()` 使用 dict merge 更新，无法删除已有键。导致 `_migrate_legacy_xor_connections()` 迁移后 `ssh_connections` 残留在 config.json 中。**已修复**：改为逐 key 遍历，value 为 None 时 pop 删除。新增 2 个测试用例。
 
 2. **Run.finish() 二次调用死锁** — `sdk.py` 的 `finish()` 方法调用 `storage_backend.close()` 关闭 ConnectionPool（清空队列并关闭所有连接），但未将 `self.storage_backend` 置为 `None`。第二次 `finish()` 时 `if self.storage_backend:` 仍为 True，调用 `update_experiment()` → `pool.get()` 在空队列上永久阻塞。修复方案：`close()` 后加 `self.storage_backend = None`。记录于 `test_sdk_run.py::TestRunFinish::test_run_double_finish_idempotent`（测试中以 `RUNICORN_DISABLE_MODERN_STORAGE=1` 绕过）。状态：待修复。
 

@@ -54,6 +54,22 @@ class TestSaveUserConfig:
 
         assert result == {"x": 1, "y": 2}
 
+    def test_save_deletes_key_with_none(self, mock_config_root: Path) -> None:
+        """Passing None as value removes the key from config."""
+        save_user_config({"a": 1, "b": 2, "c": 3})
+        save_user_config({"b": None})
+        result = load_user_config()
+
+        assert result == {"a": 1, "c": 3}
+
+    def test_save_delete_nonexistent_key_is_noop(self, mock_config_root: Path) -> None:
+        """Deleting a key that doesn't exist does not raise."""
+        save_user_config({"a": 1})
+        save_user_config({"zzz": None})
+        result = load_user_config()
+
+        assert result == {"a": 1}
+
 
 class TestUserRootDir:
 
