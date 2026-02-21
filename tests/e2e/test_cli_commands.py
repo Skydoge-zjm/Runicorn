@@ -33,6 +33,31 @@ class TestCliCommands:
         r = _run_cli("export", "--storage", str(tmp_path))
         assert r.returncode == 0
 
+    def test_viewer_help(self):
+        r = _run_cli("viewer", "--help")
+        assert r.returncode == 0
+        assert "viewer" in r.stdout.lower() or "storage" in r.stdout.lower()
+
+    def test_export_help(self):
+        r = _run_cli("export", "--help")
+        assert r.returncode == 0
+
+    def test_export_data_help(self):
+        r = _run_cli("export-data", "--help")
+        assert r.returncode == 0
+
+    def test_manage_help(self):
+        r = _run_cli("manage", "--help")
+        assert r.returncode == 0
+
+    def test_rate_limit_help(self):
+        r = _run_cli("rate-limit", "--help")
+        assert r.returncode == 0
+
+    def test_delete_help(self):
+        r = _run_cli("delete", "--help")
+        assert r.returncode == 0
+
     def test_unknown_subcommand(self):
         r = _run_cli("nonexistent_subcommand_xyz")
         assert r.returncode != 0

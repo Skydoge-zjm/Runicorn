@@ -101,15 +101,9 @@ class TestMigrationPreservesAllConnections:
 
 
 class TestMigrationRemovesFromConfigJson:
-    """test_migration_removes_from_config_json — after migration,
-    config.json should no longer contain ``ssh_connections``.
+    """After migration, config.json should no longer contain ``ssh_connections``."""
 
-    NOTE: There is a known bug where save_user_config() merges instead of
-    replacing, so the key may NOT be removed.  This test documents current
-    behaviour and will be updated when the bug is fixed.
-    """
-
-    def test_legacy_key_handled(self, mock_config_root: Path):
+    def test_legacy_key_removed(self, mock_config_root: Path):
         _prepare_legacy_config(mock_config_root, [
             {"host": "h", "port": 22, "username": "u",
              "key": "h:22@u", "password": "pw"},
@@ -119,7 +113,5 @@ class TestMigrationRemovesFromConfigJson:
         load_saved_connections()  # triggers migration
 
         cfg = json.loads((mock_config_root / "config.json").read_text("utf-8"))
-        # Ideally: assert "ssh_connections" not in cfg
-        # Due to known bug (save_user_config merges), key may still exist.
-        # We verify migration at least executed by checking connections.json.
+        assert "ssh_connections" not in cfg
         assert (mock_config_root / "connections.json").exists()

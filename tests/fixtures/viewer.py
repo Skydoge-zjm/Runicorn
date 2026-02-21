@@ -160,6 +160,19 @@ def viewer_app(
         _noop_status_check,
     )
 
+    # Prevent the background sync thread from starting during startup to
+    # avoid a race where sync writes to SQLite while shutdown closes it.
+    _orig_thread_init = __import__("threading").Thread.__init__
+
+    def _skip_sync_thread(self, *args, **kwargs):
+        target = kwargs.get("target")
+        # Block only the sync thread spawned in viewer startup
+        if target is not None and "_run_sync" in getattr(target, "__qualname__", ""):
+            kwargs["target"] = lambda: None  # no-op
+        _orig_thread_init(self, *args, **kwargs)
+
+    monkeypatch.setattr("threading.Thread.__init__", _skip_sync_thread)
+
     # Disable rate limiter so tests aren't throttled
     class _AlwaysAllowLimiter:
         def is_allowed(self, *a, **kw):  # noqa: ARG002

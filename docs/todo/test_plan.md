@@ -22,7 +22,7 @@
 - **运行命令**:
   - 全量 unit + integration: `pytest`
   - 仅 unit: `pytest -m unit`
-  - 含 e2e: `pytest --run-e2e`
+  - 含 e2e: `pytest`（E2E 测试默认运行，无需额外标记）
 - **临时目录**: 所有涉及文件 I/O 的测试使用 `tmp_path` fixture，禁止写入工作目录
 - **数据库测试**: 每个测试用例使用独立的 SQLite 文件（`tmp_path / "runicorn.db"`），测试结束自动清理
 - **异步测试**: 涉及 `async def` 的被测函数（如 `periodic_status_check`）需 `pytest-asyncio` 支持，测试函数标记 `@pytest.mark.asyncio`

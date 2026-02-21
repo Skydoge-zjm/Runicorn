@@ -51,3 +51,32 @@ class TestImportArchive:
         """Missing file field → 422 or 503."""
         resp = viewer_client.post("/api/import/archive")
         assert resp.status_code in (422, 503)
+
+
+class TestImportTriggersSync:
+
+    def test_import_then_verify_in_api(
+        self,
+        viewer_client: TestClient,
+        viewer_storage_root,
+        viewer_backend,
+        populated_viewer_storage: List[str],
+    ) -> None:
+        """After importing a zip, the run should appear via sync."""
+        new_id = "20250501_120000_gggggg"
+        data = _make_run_zip(new_id, path="import/sync")
+        resp = viewer_client.post(
+            "/api/import/archive",
+            files={"file": ("export.zip", data, "application/zip")},
+        )
+        if resp.status_code != 200:
+            pytest.skip("import endpoint unavailable (python-multipart)")
+
+        # Trigger manual sync so the imported run appears in SQLite
+        from runicorn.viewer.services.db_reader import sync_filesystem_to_db
+        sync_filesystem_to_db(viewer_storage_root, viewer_backend)
+
+        # Verify via the runs API
+        resp = viewer_client.get("/api/runs")
+        ids = {r["id"] for r in resp.json()}
+        assert new_id in ids

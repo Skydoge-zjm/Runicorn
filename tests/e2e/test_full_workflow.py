@@ -85,3 +85,51 @@ class TestFullWorkflow:
         assert status_path.exists()
         status = json.loads(status_path.read_text(encoding="utf-8"))
         assert status["status"] == "failed"
+
+
+class TestSdkToViewerChain:
+    """SDK creates Run → log metrics → Viewer TestClient verifies data via API."""
+
+    def test_sdk_then_viewer_reads(self, tmp_path: Path, monkeypatch):
+        """Full chain: SDK writes run, then Viewer API returns it."""
+        storage = tmp_path / "chain_storage"
+        storage.mkdir()
+        monkeypatch.setenv("RUNICORN_DIR", str(storage))
+        monkeypatch.setenv("RUNICORN_DISABLE_MODERN_STORAGE", "1")
+
+        import runicorn
+
+        run = runicorn.init(
+            path="chain/test",
+            storage=str(storage),
+        )
+        run.log({"loss": 0.5, "acc": 0.8}, step=1)
+        run.log({"loss": 0.3, "acc": 0.9}, step=2)
+        run_id = run.id
+        run.finish(status="completed")
+
+        # Now start a Viewer TestClient and verify the run appears
+        from runicorn.storage.backends import SQLiteStorageBackend
+        from runicorn.viewer.services.db_reader import sync_filesystem_to_db
+
+        backend = SQLiteStorageBackend(storage)
+        try:
+            sync_filesystem_to_db(storage, backend)
+
+            from runicorn.viewer import create_app
+            from fastapi.testclient import TestClient
+
+            app = create_app(storage=str(storage))
+            app.state.storage_backend = backend
+
+            with TestClient(app, raise_server_exceptions=False) as client:
+                resp = client.get("/api/runs")
+                assert resp.status_code == 200
+                ids = {r["id"] for r in resp.json()}
+                assert run_id in ids
+
+                resp = client.get(f"/api/runs/{run_id}")
+                assert resp.status_code == 200
+                assert resp.json()["id"] == run_id
+        finally:
+            backend.close()

@@ -139,5 +139,32 @@
 
 **S2 后全量: 555 passed, 15 skipped**
 
+### S2-final: 10 项补充 + E2E 门禁移除 + sync deleted_at 修复
+
+- 移除 `--run-e2e` 门禁，E2E 测试默认运行
+- 修复 `sync_filesystem_to_db` 未持久化 `deleted_at` 的 bug
+- 新增 10 个测试用例覆盖边缘场景
+
+**S2-final 后: 575 passed, 5 skipped** (commit e505a38)
+
+## Phase S3: 最终补齐 + Bug 修复 ✅ 完成
+
+| 批次 | 状态 | 内容 |
+|------|------|------|
+| A8 | ✅ | 修复 migration 不删除 ssh_connections 的 bug + 更新测试断言 |
+| A2 | ✅ | E2E CLI: +6 subprocess --help smoke tests (viewer/export/export-data/manage/rate-limit/delete) |
+| A1 | ✅ | E2E full workflow: SDK→Viewer→Client 链式验证 |
+| A3 | ✅ | E2E viewer startup: 初始化 backend + shutdown 关闭 backend |
+| A4 | ✅ | Integration runs API: empty recycle bin + get run assets |
+| A5 | ✅ | Integration export API: report success/501 测试 |
+| A6 | ✅ | Integration import API: import 后 sync 验证 |
+| A7 | ✅ | Integration sqlite_sync: startup sync + partial data 容错 |
+
+发现 Bug:
+3. **empty_recycle_bin 不清理 SQLite** — `POST /api/recycle-bin/empty` 只删除文件目录，不清理 SQLite 中的 soft-delete 记录，导致回收站列表仍显示已永久删除的 run。**已修复**：添加 `backend.delete_run_with_orphan_assets()` 调用。
+
+**S3 合计: +16 tests, +2 bug fixes**
+**最终全量: 591 passed, 5 skipped**
+
 ---
 *此文档为唯一进度文档，遵循 .warprules 规则 11*

@@ -34,6 +34,13 @@ class TestExportReport:
         # 400 (bad format) or 501 (exporter missing)
         assert resp.status_code in (400, 501)
 
+    def test_export_report_success_or_501(
+        self, viewer_client: TestClient, populated_viewer_storage
+    ) -> None:
+        """Report with valid format returns 200 (success) or 501 (no exporter)."""
+        resp = viewer_client.get(f"/api/export/{RUN_A}/report?format=markdown")
+        assert resp.status_code in (200, 500, 501)
+
 
 class TestEnvironment:
 

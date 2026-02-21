@@ -89,3 +89,47 @@ class TestFindRunEntryFastFallback:
         resp = viewer_client.get(f"/api/runs/{new_id}")
         assert resp.status_code == 200
         assert resp.json()["id"] == new_id
+
+
+class TestSyncOnStartup:
+    """Verify sync works when triggered manually (simulating startup)."""
+
+    def test_sync_on_startup(
+        self,
+        viewer_storage_root: Path,
+        viewer_backend: SQLiteStorageBackend,
+    ) -> None:
+        """Startup-equivalent sync picks up disk-only runs."""
+        new_id = "20250501_120000_startup"
+        _create_run_on_disk_only(viewer_storage_root, new_id, "startup/test")
+
+        inserted = sync_filesystem_to_db(viewer_storage_root, viewer_backend)
+        assert inserted >= 1
+        assert viewer_backend.get_experiment(new_id) is not None
+
+
+class TestSyncHandlesPartialData:
+
+    def test_sync_with_missing_fields(
+        self,
+        viewer_storage_root: Path,
+        viewer_backend: SQLiteStorageBackend,
+    ) -> None:
+        """meta.json missing optional fields should not crash sync."""
+        run_id = "20250502_120000_partial"
+        run_dir = viewer_storage_root / "runs" / "partial" / run_id
+        run_dir.mkdir(parents=True)
+        # Minimal meta: only id — no path, no created_at, no tags
+        (run_dir / "meta.json").write_text(
+            json.dumps({"id": run_id}), encoding="utf-8"
+        )
+        (run_dir / "status.json").write_text(
+            json.dumps({"status": "running"}), encoding="utf-8"
+        )
+
+        # Should not raise
+        inserted = sync_filesystem_to_db(viewer_storage_root, viewer_backend)
+        assert inserted >= 1
+
+        exp = viewer_backend.get_experiment(run_id)
+        assert exp is not None
