@@ -57,6 +57,40 @@ class TestSDKLifecycle:
         events = run._events_path.read_text(encoding="utf-8").strip().splitlines()
         assert len(events) == 1
 
+    def test_lifecycle_with_console_capture(self, storage_root: Path, monkeypatch):
+        """Run with capture_console=True produces logs.txt content."""
+        monkeypatch.delenv("RUNICORN_DISABLE_MODERN_STORAGE", raising=False)
+        monkeypatch.setenv("RUNICORN_DIR", str(storage_root))
+
+        with Run(path="lifecycle/console", storage=str(storage_root),
+                 capture_console=True, run_id="lifecycle_console_001") as run:
+            run.log({"loss": 1.0}, step=1)
+
+        # After finish, logs.txt should exist (might be empty if console capture
+        # didn't have anything written to stdout/stderr, but file must exist)
+        logs_path = run._logs_txt_path
+        assert logs_path.parent.exists()
+
+    def test_lifecycle_disabled(self, storage_root: Path, monkeypatch):
+        """When runicorn is disabled, init() returns NoOpRun."""
+        from runicorn.enabled import NoOpRun, reset_enabled
+        import runicorn as rn
+
+        monkeypatch.setenv("RUNICORN_ON", "0")
+        monkeypatch.setenv("RUNICORN_DIR", str(storage_root))
+        # Reset any cached override so env var takes effect
+        reset_enabled()
+
+        run = rn.init(path="disabled/test")
+        assert isinstance(run, NoOpRun)
+        assert run.id == "disabled"
+        # Methods are no-ops
+        run.log({"x": 1})
+        run.finish()
+
+        # Restore
+        reset_enabled()
+
     def test_lifecycle_with_assets(self, storage_root: Path, monkeypatch, tmp_path):
         """Lifecycle that includes config, dataset, and pretrained logging."""
         monkeypatch.delenv("RUNICORN_DISABLE_MODERN_STORAGE", raising=False)

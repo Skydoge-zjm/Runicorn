@@ -98,6 +98,21 @@ class TestLogImage:
             run.finish()
 
 
+class TestLogImageNoPil:
+    def test_log_image_numpy_no_pil_raises(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
+        """Numpy array without PIL installed raises RuntimeError."""
+        run = _make_run(storage_root, monkeypatch, run_id="img_nopil_001")
+        try:
+            mock_arr = MagicMock(spec=["shape", "dtype", "__array__"])
+            mock_arr.shape = (100, 100, 3)
+            with patch("runicorn.sdk.HAS_PIL", False), \
+                 patch("runicorn.sdk.HAS_NUMPY", True):
+                with pytest.raises(RuntimeError, match="Pillow"):
+                    run.log_image("no_pil", mock_arr)
+        finally:
+            run.finish()
+
+
 class TestLogText:
     def test_log_text_writes_file(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
         """log_text appends to logs.txt."""

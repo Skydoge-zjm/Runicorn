@@ -60,3 +60,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: List[pytest.Item
 
 from tests.fixtures.storage import storage_root, sqlite_backend, populated_storage, populated_db  # noqa: E402, F401
 from tests.fixtures.config import mock_config_root  # noqa: E402, F401
+from tests.fixtures.viewer import (  # noqa: E402, F401
+    viewer_storage_root, viewer_backend, populated_viewer_storage,
+    viewer_app, viewer_client,
+)

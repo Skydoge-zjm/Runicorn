@@ -99,6 +99,17 @@ class TestSDKStorageDualWrite:
         finally:
             run.finish()
 
+    def test_run_tags_via_set_tags(self, storage_root: Path, monkeypatch):
+        """Tags set via the backend's set_tags appear in SQLite."""
+        run = _make_run(storage_root, monkeypatch, run_id="tags_001")
+        try:
+            assert run.storage_backend is not None
+            run.storage_backend.set_tags("tags_001", ["fast", "v2"])
+            tags = run.storage_backend.get_tags("tags_001")
+            assert set(tags) == {"fast", "v2"}
+        finally:
+            run.finish()
+
     def test_log_dataset_records_asset_in_sqlite(self, storage_root: Path, monkeypatch, tmp_path):
         """log_dataset() creates a dataset asset record in SQLite."""
         ds_dir = tmp_path / "dataset"

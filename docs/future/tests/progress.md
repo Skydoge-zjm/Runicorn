@@ -101,5 +101,43 @@
 
 2. **Run.finish() 二次调用死锁** — `sdk.py` 的 `finish()` 方法调用 `storage_backend.close()` 关闭 ConnectionPool，但未将 `self.storage_backend` 置为 `None`。第二次 `finish()` 时在空队列上永久阻塞。**已修复**：`close()` 后加 `self.storage_backend = None`。测试 `test_run_double_finish_idempotent` 已移除绕过，走真实 SQLite 路径验证。
 
+## Phase S1: Bug 修复 ✅ 完成
+
+（详见上方 Bug 列表 #1, #2）
+
+## Phase S2: 补齐缺失测试 ✅ 完成
+
+| 批次 | 状态 | 新增用例数 | 内容 |
+|------|------|-----------|------|
+| S2.1 Viewer fixture + health/storage/config API | ✅ | 9 | viewer fixture 基础设施, 3 个 API 测试文件 |
+| S2.2 runs + projects + metrics API | ✅ | 25 | 列表/详情/软删除/恢复/更新/paths/tree/metrics/progress/cache |
+| S2.3 export + import + sqlite_sync | ✅ | 10 | CSV/report/environment, zip import, filesystem→SQLite sync |
+| S2.4 client_server + client/utils | ✅ | 9 | httpx ASGI transport 联调, metrics_to_dataframe, runs_to_dataframe |
+| S2.5 补充已有文件缺失用例 | ✅ | 6 | no_pil, console_capture, disabled, retry, tags, fallback |
+
+**S2 合计: 59 新增测试**
+
+新增文件:
+- tests/fixtures/viewer.py (重写: 含 populated_viewer_storage, viewer_app, viewer_client)
+- tests/integration/test_viewer_health_api.py
+- tests/integration/test_viewer_storage_api.py
+- tests/integration/test_viewer_config_api.py
+- tests/integration/test_viewer_runs_api.py
+- tests/integration/test_viewer_projects_api.py
+- tests/integration/test_viewer_metrics_api.py
+- tests/integration/test_viewer_export_api.py
+- tests/integration/test_viewer_import_api.py
+- tests/integration/test_viewer_sqlite_sync.py
+- tests/integration/test_client_server.py
+- tests/unit/client/test_utils.py
+
+修改文件 (补充用例):
+- tests/unit/test_sdk_media.py (+TestLogImageNoPil)
+- tests/integration/test_sdk_lifecycle.py (+console_capture, +disabled)
+- tests/unit/client/test_http_client.py (+TestRetryBehaviour)
+- tests/integration/test_sdk_storage.py (+test_run_tags_via_set_tags)
+
+**S2 后全量: 555 passed, 15 skipped**
+
 ---
 *此文档为唯一进度文档，遵循 .warprules 规则 11*

@@ -213,6 +213,18 @@ class TestApiErrorHandling:
             client.get("/api/health")
 
 
+class TestRetryBehaviour:
+    """Verify the Session retry adapter is configured."""
+
+    def test_retry_adapter_mounted(self, mock_session):
+        """Session should have retry adapters for http:// and https://."""
+        _ = _make_client(mock_session)
+        assert mock_session.mount.call_count >= 2
+        mount_prefixes = [c.args[0] for c in mock_session.mount.call_args_list]
+        assert "http://" in mount_prefixes
+        assert "https://" in mount_prefixes
+
+
 class TestConnectionVerifyFails:
     """test_connection_verify_fails_graceful — __init__ raises APIConnectionError."""
 
