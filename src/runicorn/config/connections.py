@@ -159,6 +159,8 @@ def _migrate_legacy_xor_connections() -> None:
     save_connections(existing)
 
     # Remove legacy key from config.json
-    cfg.pop("ssh_connections", None)
-    save_user_config(cfg)
+    # Pass {"ssh_connections": None} so save_user_config pops the key
+    # from the on-disk config (passing the whole cfg without the key
+    # would silently leave it behind).
+    save_user_config({"ssh_connections": None})
     logger.info("Legacy XOR SSH connections migrated successfully.")

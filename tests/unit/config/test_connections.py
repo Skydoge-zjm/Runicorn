@@ -176,13 +176,9 @@ class TestLegacyMigration:
         conn_path = mock_config_root / "connections.json"
         assert conn_path.exists()
 
-        # BUG: save_user_config() merges instead of replacing, so the
-        # "ssh_connections" key is NOT actually removed from config.json.
-        # This should be fixed in a follow-up commit.
+        # After migration, the legacy key should be removed from config.json
         cfg = json.loads(cfg_path.read_text("utf-8"))
-        # Once the bug is fixed, this should be:
-        #   assert "ssh_connections" not in cfg
-        assert "ssh_connections" in cfg  # current buggy behaviour
+        assert "ssh_connections" not in cfg
 
     def test_missing_key_file_auto_creates(self, mock_config_root: Path) -> None:
         """If .secret.key doesn't exist, encrypt_password auto-generates it."""
