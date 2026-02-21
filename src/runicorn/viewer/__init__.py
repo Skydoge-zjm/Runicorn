@@ -77,11 +77,12 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     
     # Background task for status checking
     _status_check_task = None
+    _sync_thread = None
     
     @app.on_event("startup")
     async def startup_event():
         """Initialize background tasks on app startup."""
-        nonlocal _status_check_task
+        nonlocal _status_check_task, _sync_thread
         _status_check_task = asyncio.create_task(
             periodic_status_check(root, backend=app.state.storage_backend)
         )
@@ -96,11 +97,19 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                 except Exception as e:
                     logger.warning(f"Filesystem-to-SQLite sync failed: {e}")
             import threading
-            threading.Thread(target=_run_sync, daemon=True).start()
+            _sync_thread = threading.Thread(target=_run_sync, daemon=True)
+            _sync_thread.start()
     
     @app.on_event("shutdown") 
     async def shutdown_event():
         """Cleanup background tasks and connections on app shutdown."""
+        # Wait for sync thread to finish before closing the backend,
+        # so we don't close SQLite while sync is still writing.
+        if _sync_thread is not None and _sync_thread.is_alive():
+            _sync_thread.join(timeout=10)
+            if _sync_thread.is_alive():
+                logger.warning("Sync thread did not finish within timeout")
+        
         # Stop background status checker
         if _status_check_task:
             _status_check_task.cancel()

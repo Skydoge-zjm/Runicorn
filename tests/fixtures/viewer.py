@@ -160,9 +160,6 @@ def viewer_app(
         _noop_status_check,
     )
 
-    # NOTE: sync thread suppression is handled globally by the
-    # _suppress_viewer_sync_thread session fixture in conftest.py.
-
     # Disable rate limiter so tests aren't throttled
     class _AlwaysAllowLimiter:
         def is_allowed(self, *a, **kw):  # noqa: ARG002
@@ -181,7 +178,11 @@ def viewer_app(
 
     app = create_app(storage=str(viewer_storage_root))
 
-    # Override storage_backend with the one from fixture (shared connection)
+    # Close the backend that create_app() created internally — we replace
+    # it with the fixture backend so both share the same connection.
+    original_backend = getattr(app.state, "storage_backend", None)
+    if original_backend is not None and original_backend is not viewer_backend:
+        original_backend.close()
     app.state.storage_backend = viewer_backend
 
     return app

@@ -26,32 +26,6 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Global: suppress viewer startup sync thread to prevent race conditions
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(autouse=True, scope="session")
-def _suppress_viewer_sync_thread():
-    """Prevent the background sync thread spawned in viewer startup from
-    racing with TestClient shutdown (which closes the SQLite backend).
-
-    This is session-scoped so it covers ALL tests, including those that
-    create their own TestClient without the viewer fixtures.
-    """
-    import threading
-    _orig = threading.Thread.__init__
-
-    def _patched(self, *args, **kwargs):
-        target = kwargs.get("target")
-        if target is not None and "_run_sync" in getattr(target, "__qualname__", ""):
-            kwargs["target"] = lambda: None  # no-op
-        _orig(self, *args, **kwargs)
-
-    threading.Thread.__init__ = _patched
-    yield
-    threading.Thread.__init__ = _orig
-
-
-# ---------------------------------------------------------------------------
 # Re-export shared fixtures so every test file can use them directly.
 # ---------------------------------------------------------------------------
 
