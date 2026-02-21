@@ -166,5 +166,27 @@
 **S3 合计: +16 tests, +2 bug fixes**
 **最终全量: 591 passed, 5 skipped**
 
+## Phase C: 覆盖率提升 ✅ 完成
+
+初始覆盖率: 55% (591 passed)
+
+| 批次 | 状态 | 新增用例数 | 内容 |
+|------|------|-----------|------|
+| C1 | ✅ | 3 | cli.py: export 创建 tar.gz, export→import 往返, import 缺失归档错误 |
+| C2 | ✅ | 5 | projects API: list_runs_by_name, exact/prefix path, soft-delete batch, export path JSON |
+| C3 | ✅ | 2 | metrics API: response headers, downsample small data |
+| C4 | ✅ | 3 | cleanup.py: delete_run_completely, dry_run, nonexistent run |
+| C5 | ✅ | 3 | ui_preferences API: get empty, save+load, reset column widths |
+| C6 | ✅ | 3 | config API: SSH connections CRUD (get empty, save+list, delete) |
+
+基础设施修复:
+- 将 sync thread 抑制从 viewer fixture 提升到 root conftest session-scoped autouse fixture，修复 TestSdkToViewerChain 等直接创建 TestClient 的测试中的 access violation 竞态
+
+新增文件:
+- tests/integration/test_assets_cleanup.py
+
+**C 合计: +19 tests**
+**最终全量: 610 passed, 5 skipped, 覆盖率 58%**
+
 ---
 *此文档为唯一进度文档，遵循 .warprules 规则 11*

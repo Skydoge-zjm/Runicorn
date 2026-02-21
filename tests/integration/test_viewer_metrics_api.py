@@ -60,6 +60,31 @@ class TestProgress:
         assert data["available"] is False
 
 
+class TestMetricsHeaders:
+
+    def test_response_has_metadata_headers(
+        self, viewer_client: TestClient, populated_viewer_storage
+    ) -> None:
+        resp = viewer_client.get(f"/api/runs/{RUN_A}/metrics")
+        assert resp.status_code == 200
+        assert "X-Row-Count" in resp.headers
+        assert "X-Total-Count" in resp.headers
+        assert int(resp.headers["X-Total-Count"]) == 2
+
+
+class TestMetricsDownsample:
+
+    def test_downsample_not_applied_when_data_small(
+        self, viewer_client: TestClient, populated_viewer_storage
+    ) -> None:
+        """With only 2 rows, downsample=100 should return all rows."""
+        resp = viewer_client.get(f"/api/runs/{RUN_A}/metrics?downsample=100")
+        assert resp.status_code == 200
+        data = resp.json()
+        # 2 rows < 100 target, no downsampling applied
+        assert data["total"] == data["sampled"]
+
+
 class TestCacheStats:
 
     def test_cache_stats(self, viewer_client: TestClient) -> None:

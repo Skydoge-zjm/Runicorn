@@ -37,3 +37,83 @@ class TestSetUserRootDir:
         data = resp.json()
         assert data["ok"] is True
         assert "user_root_dir" in data
+
+
+class TestSSHConnectionsCRUD:
+
+    def test_get_empty_connections(
+        self, viewer_client: TestClient, mock_config_root
+    ) -> None:
+        resp = viewer_client.get("/api/config/ssh_connections")
+        assert resp.status_code == 200
+        assert resp.json()["connections"] == []
+
+    def test_save_and_list_connection(
+        self, viewer_client: TestClient, mock_config_root
+    ) -> None:
+        conn = {
+            "host": "test-host", "port": 22, "username": "admin",
+            "remember_password": True, "password": "secret",
+        }
+        resp = viewer_client.post("/api/config/ssh_connections", json=conn)
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+        resp = viewer_client.get("/api/config/ssh_connections")
+        conns = resp.json()["connections"]
+        assert len(conns) >= 1
+        assert conns[0]["host"] == "test-host"
+        # Password should be masked
+        assert "password" not in conns[0]
+        assert conns[0]["has_password"] is True
+
+    def test_delete_connection(
+        self, viewer_client: TestClient, mock_config_root
+    ) -> None:
+        conn = {"host": "del-host", "port": 22, "username": "u"}
+        viewer_client.post("/api/config/ssh_connections", json=conn)
+
+        key = "del-host:22@u"
+        resp = viewer_client.delete(f"/api/config/ssh_connections/{key}")
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+
+class TestUIPreferences:
+
+    def test_get_empty_column_widths(
+        self, viewer_client: TestClient, mock_config_root
+    ) -> None:
+        resp = viewer_client.get("/api/config/column-widths?table=runs&size=1920x1080")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["table"] == "runs"
+        assert data["widths"] == {}
+
+    def test_save_and_load_column_widths(
+        self, viewer_client: TestClient, mock_config_root
+    ) -> None:
+        payload = {
+            "table": "runs", "size": "1920x1080",
+            "widths": {"name": 200, "status": 100},
+        }
+        resp = viewer_client.post("/api/config/column-widths", json=payload)
+        assert resp.status_code == 200
+
+        resp = viewer_client.get("/api/config/column-widths?table=runs&size=1920x1080")
+        assert resp.json()["widths"] == {"name": 200, "status": 100}
+
+    def test_reset_column_widths(
+        self, viewer_client: TestClient, mock_config_root
+    ) -> None:
+        payload = {
+            "table": "runs", "size": "1920x1080",
+            "widths": {"name": 200},
+        }
+        viewer_client.post("/api/config/column-widths", json=payload)
+
+        resp = viewer_client.delete("/api/config/column-widths?table=runs&size=1920x1080")
+        assert resp.status_code == 200
+
+        resp = viewer_client.get("/api/config/column-widths?table=runs&size=1920x1080")
+        assert resp.json()["widths"] == {}
