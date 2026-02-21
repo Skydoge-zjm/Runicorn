@@ -203,6 +203,19 @@ class TestIterAllRuns:
     def test_empty_root(self, tmp_path: Path) -> None:
         assert iter_all_runs(tmp_path) == []
 
+    def test_mixed_layouts(self, tmp_path: Path) -> None:
+        """Runs in both new and legacy layouts are discovered."""
+        # New layout
+        _make_run_dir(tmp_path / "runs" / "train" / "run_new_001")
+        # Legacy layout
+        _make_run_dir(tmp_path / "proj" / "exp" / "runs" / "run_leg_001")
+
+        entries = iter_all_runs(tmp_path)
+        ids = {e.dir.name for e in entries}
+        assert "run_new_001" in ids
+        assert "run_leg_001" in ids
+        assert len(entries) == 2
+
 
 # ===========================================================================
 # find_run_dir_by_id
@@ -241,6 +254,41 @@ class TestUpdateStatusIfProcessDead:
         status = read_json(run_dir / "status.json")
         assert status["status"] == "failed"
         assert status["exit_reason"] == "process_not_found"
+
+    @patch("runicorn.storage.file_utils.is_process_alive", return_value=False)
+    @patch("socket.gethostname", return_value="localhost")
+    def test_periodic_status_check_with_backend(
+        self, _mock_host, _mock_alive, tmp_path: Path,
+    ) -> None:
+        """periodic_status_check with backend queries running experiments."""
+        import asyncio
+        from types import SimpleNamespace
+        from unittest.mock import MagicMock
+        from runicorn.storage.file_utils import periodic_status_check
+
+        run_dir = tmp_path / "run_psc"
+        run_dir.mkdir()
+        write_json(run_dir / "meta.json", {"pid": 99999, "hostname": "localhost"})
+        write_json(run_dir / "status.json", {"status": "running"})
+
+        mock_backend = MagicMock()
+        mock_backend.get_running_experiments.return_value = [
+            {"id": "run_psc", "run_dir": str(run_dir), "pid": 99999},
+        ]
+
+        async def _one_iteration():
+            # periodic_status_check loops forever; cancel after first sleep
+            task = asyncio.ensure_future(periodic_status_check(tmp_path, backend=mock_backend))
+            await asyncio.sleep(0.1)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        asyncio.run(_one_iteration())
+        # The function should have called get_running_experiments
+        mock_backend.get_running_experiments.assert_called_once()
 
     def test_skips_non_running(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "run2"

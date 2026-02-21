@@ -80,6 +80,29 @@ class TestLogDataset:
             run.finish()
 
 
+class TestScanOutputsOnce:
+    def test_scan_outputs_once_archives_new_files(
+        self, storage_root: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    ):
+        """scan_outputs_once() discovers new files and records archived entries."""
+        output_dir = tmp_path / "outputs"
+        output_dir.mkdir()
+        (output_dir / "model.pth").write_bytes(b"\x00" * 128)
+
+        run = _make_run(storage_root, monkeypatch, run_id="scan_001")
+        try:
+            result = run.scan_outputs_once(
+                output_dirs=[str(output_dir)],
+                patterns=["*.pth"],
+                stable_required=1,
+                min_age_sec=0,
+            )
+            assert isinstance(result, dict)
+            assert result["scanned"] >= 1
+        finally:
+            run.finish()
+
+
 class TestLogPretrained:
     def test_log_pretrained_records_in_assets(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
         """log_pretrained() writes pretrained entry to assets.json."""

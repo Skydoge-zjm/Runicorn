@@ -117,6 +117,33 @@ class TestCRUD:
         assert len(load_saved_connections()) == 15
 
 
+class TestLegacyXorAndFernetCoexist:
+
+    def test_legacy_xor_and_fernet_coexist(self, mock_config_root: Path) -> None:
+        """Connections file with both Fernet and plaintext entries decrypts all."""
+        from runicorn.config.connections import save_connections, load_saved_connections
+        from runicorn.security.encryption import encrypt_password
+
+        # First save a Fernet-encrypted connection
+        save_connections([
+            {"host": "fernet_host", "port": 22, "username": "u1", "password": "secret_f"},
+        ])
+
+        # Manually append a plaintext connection to the same file
+        import json
+        conn_path = mock_config_root / "connections.json"
+        raw = json.loads(conn_path.read_text("utf-8"))
+        raw.append({"host": "plain_host", "port": 22, "username": "u2", "password": "secret_p"})
+        conn_path.write_text(json.dumps(raw), encoding="utf-8")
+
+        loaded = load_saved_connections()
+        assert len(loaded) == 2
+        by_host = {c["host"]: c for c in loaded}
+        assert by_host["fernet_host"]["password"] == "secret_f"
+        # Plaintext passwords are returned as-is by decrypt_password
+        assert by_host["plain_host"]["password"] == "secret_p"
+
+
 class TestLegacyMigration:
 
     def test_legacy_xor_migration(self, mock_config_root: Path) -> None:

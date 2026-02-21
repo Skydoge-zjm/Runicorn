@@ -44,3 +44,22 @@ class TestCLISubcommands:
         )
         result = main(["config", "--show"])
         assert result == 0
+
+    def test_export_uses_iter_all_runs(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path,
+    ):
+        """``runicorn export`` calls iter_all_runs to discover runs (RF-15)."""
+        called = []
+        original = __import__("runicorn.storage.file_utils", fromlist=["iter_all_runs"]).iter_all_runs
+
+        def spy(root, **kw):
+            called.append(root)
+            return original(root, **kw)
+
+        monkeypatch.setattr("runicorn.cli.iter_all_runs", spy)
+
+        storage = tmp_path / "storage"
+        (storage / "runs").mkdir(parents=True)
+        result = main(["export", "--storage", str(storage)])
+        assert result == 0
+        assert len(called) == 1

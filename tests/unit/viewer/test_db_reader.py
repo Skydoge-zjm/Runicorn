@@ -91,6 +91,16 @@ class TestListRunsFromDb:
 # ---------------------------------------------------------------------------
 
 class TestFindRunEntryFast:
+    def test_find_run_entry_fast_sqlite_miss_fallback(self, storage_root, sqlite_backend):
+        """When SQLite has no record, falls back to file-system scan."""
+        # Run exists on disk but NOT in SQLite
+        _populate_run(storage_root, "run_miss_001", path="eval/resnet")
+
+        req = _mock_request(backend=sqlite_backend, storage_root=storage_root)
+        entry = find_run_entry_fast(req, "run_miss_001")
+        assert entry is not None
+        assert entry.dir.name == "run_miss_001"
+
     def test_find_run_entry_fast_sqlite_hit(self, storage_root, sqlite_backend):
         """SQLite has the record → returns RunEntry without file scan."""
         run_dir = _populate_run(storage_root, "run_fast_001")
@@ -142,6 +152,21 @@ class TestFindRunEntryFast:
 # ---------------------------------------------------------------------------
 
 class TestSyncFilesystemToDb:
+    def test_sync_preserves_deleted_state(self, storage_root, sqlite_backend):
+        """Soft-deleted runs synced from disk have deleted_at set in SQLite."""
+        from runicorn.storage.file_utils import soft_delete_run, write_json
+
+        run_dir = _populate_run(storage_root, "sync_del_001")
+        write_json(run_dir / "status.json", {"status": "finished"})
+        soft_delete_run(run_dir, reason="test")
+
+        inserted = sync_filesystem_to_db(storage_root, sqlite_backend)
+        assert inserted == 1
+
+        exp = sqlite_backend.get_experiment("sync_del_001")
+        assert exp is not None
+        assert exp.deleted_at is not None
+
     def test_sync_inserts_missing_runs(self, storage_root, sqlite_backend):
         """Runs on disk but not in DB are inserted."""
         _populate_run(storage_root, "sync_001")

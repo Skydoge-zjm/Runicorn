@@ -303,6 +303,29 @@ class TestRunContextManager:
         assert status["status"] == "failed"
 
 
+class TestRunStorageBackendAssetMethods:
+    def test_run_storage_backend_asset_methods(
+        self, storage_root: Path, monkeypatch: pytest.MonkeyPatch,
+    ):
+        """log_config/log_dataset/log_pretrained call backend.record_asset_for_run."""
+        run = _make_run(storage_root, monkeypatch, run_id="test_asset_backend_001")
+        try:
+            assert run.storage_backend is not None
+
+            run.log_config(args={"lr": 0.01})
+            run.log_dataset("ds", {"repo": "x/y"})
+            run.log_pretrained("resnet", source_type="hf")
+
+            # All three asset types should be recorded in the assets table
+            assets = run.storage_backend.get_assets_for_run(run.id)
+            roles = {a["role"] for a in assets}
+            assert "config" in roles
+            assert "dataset" in roles
+            assert "pretrained" in roles
+        finally:
+            run.finish()
+
+
 class TestRunSummary:
     def test_run_summary_writes_file(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
         """summary() merges data into summary.json."""
