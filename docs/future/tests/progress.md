@@ -78,7 +78,21 @@
 | T4.12 E2E viewer_startup | ✅ | 3+3skip | create_app, API routes, storage_root (skip without --run-e2e) |
 
 **T4 合计: 86 passed, 3 skipped (E2E marker)**
-**T1+T2+T3+T4 总计: 463 passed, 5 skipped (全 E2E 含 3 passed)**
+
+### T4 补充: 迁移 + E2E 补全
+
+| 模块 | 状态 | 用例数 | 备注 |
+|------|------|--------|------|
+| console/logging_handler.py | ✅ | 15 | 从 tests_legacy 迁移: basic/emit/logger/thread-safety/lazy-init/active-run |
+| remote/known_hosts.py | ✅ | 9 | 从 tests_legacy 迁移: format/parse, fingerprint, CRUD, lock timeout, write error |
+| remote/ssh_backend.py | ✅ | 10 | 从 tests_legacy 迁移: AutoBackend fallback, OpenSSH preconditions, resolve_ssh_path |
+| E2E full_workflow | ✅ | 3 | SDK init→log→finish→verify, context manager, failed run |
+| E2E cli_commands | ✅ | 4 | config --show, --help, export empty, unknown subcommand |
+
+**T4+补充 合计: 41 passed**
+**T1+T2+T3+T4(全) 总计: 504 passed, 5 skipped**
+
+✅ tests_legacy/ 已删除 (git rm -r)
 
 ## 发现的 Bug
 （测试过程中发现的 bug 记录在此，遵循 .warprules 规则 7：测试代码和修复分开提交）
