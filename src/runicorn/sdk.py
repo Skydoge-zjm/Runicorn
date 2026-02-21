@@ -984,6 +984,7 @@ class Run:
             try:
                 if hasattr(self.storage_backend, 'close'):
                     self.storage_backend.close()
+                    self.storage_backend = None
                     logger.debug("Closed storage backend connections")
                     
                     # Additional: Force close all file handles

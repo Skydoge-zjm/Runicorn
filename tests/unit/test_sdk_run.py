@@ -268,21 +268,14 @@ class TestRunFinish:
     def test_run_double_finish_idempotent(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
         """Calling finish() twice does not raise.
 
-        BUG: With modern storage enabled, the second finish() deadlocks because
-        close() empties the ConnectionPool but storage_backend is not set to None.
-        Workaround: disable modern storage for this test.  Bug documented in
-        docs/future/tests/progress.md.
+        Previously deadlocked because close() emptied the ConnectionPool but
+        storage_backend was not set to None.  Fixed by adding
+        ``self.storage_backend = None`` after close().
         """
-        monkeypatch.setenv("RUNICORN_DISABLE_MODERN_STORAGE", "1")
-        monkeypatch.setenv("RUNICORN_DIR", str(storage_root))
-        run = Run(
-            path="test/double",
-            storage=str(storage_root),
-            capture_console=False,
-            run_id="test_double_001",
-        )
+        run = _make_run(storage_root, monkeypatch, run_id="test_double_001")
+        assert run.storage_backend is not None, "Should test with modern storage enabled"
         run.finish()
-        run.finish()  # should not raise
+        run.finish()  # should not raise or deadlock
 
 
 class TestRunContextManager:

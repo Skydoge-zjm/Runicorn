@@ -31,7 +31,7 @@
 | T2.1 enabled.py | ✅ | 12 | is_enabled, set/reset, NoOpRun, context manager, 接口一致性 |
 | T2.1 workspace.py | ✅ | 3 | .git 查找, explicit_root, fallback cwd |
 | T2.2 sdk.py normalize_path + helpers | ✅ | 13 | 含 _default_storage_dir, _gen_run_id |
-| T2.3 sdk.py Run class core | ✅ | 18 | init, log, primary metric, finish, context manager, SQLite |
+| T2.3 sdk.py Run class core | ✅ | 18 | init, log, primary metric, finish, context manager, SQLite (Bug #2 已修复) |
 | T2.4 sdk.py media + assets | ✅ | 11 | log_image(bytes/path/PIL/numpy), log_text, log_config, log_dataset, log_pretrained |
 | T2.5 cli.py | ✅ | 10 | 8 subcommand --help + no-subcommand + config --show |
 | T2.6 viewer listdir_cache | ✅ | 8 | rate limit, cache hit/miss/expiry, eviction, invalidate, stats |
@@ -99,7 +99,7 @@
 
 1. **save_user_config 无法删键** — `config/user_config.py` 的 `save_user_config()` 使用 dict merge 更新，无法删除已有键。导致 `_migrate_legacy_xor_connections()` 迁移后 `ssh_connections` 残留在 config.json 中。**已修复**：改为逐 key 遍历，value 为 None 时 pop 删除。新增 2 个测试用例。
 
-2. **Run.finish() 二次调用死锁** — `sdk.py` 的 `finish()` 方法调用 `storage_backend.close()` 关闭 ConnectionPool（清空队列并关闭所有连接），但未将 `self.storage_backend` 置为 `None`。第二次 `finish()` 时 `if self.storage_backend:` 仍为 True，调用 `update_experiment()` → `pool.get()` 在空队列上永久阻塞。修复方案：`close()` 后加 `self.storage_backend = None`。记录于 `test_sdk_run.py::TestRunFinish::test_run_double_finish_idempotent`（测试中以 `RUNICORN_DISABLE_MODERN_STORAGE=1` 绕过）。状态：待修复。
+2. **Run.finish() 二次调用死锁** — `sdk.py` 的 `finish()` 方法调用 `storage_backend.close()` 关闭 ConnectionPool，但未将 `self.storage_backend` 置为 `None`。第二次 `finish()` 时在空队列上永久阻塞。**已修复**：`close()` 后加 `self.storage_backend = None`。测试 `test_run_double_finish_idempotent` 已移除绕过，走真实 SQLite 路径验证。
 
 ---
 *此文档为唯一进度文档，遵循 .warprules 规则 11*
