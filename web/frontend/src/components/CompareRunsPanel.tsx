@@ -99,15 +99,6 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
           <div style={{ fontSize: 13, fontWeight: 600, color: token.colorText }}>
             {t('experiments.comparing_runs', { count: runs.length }) || `Comparing ${runs.length} runs`}
           </div>
-          <Tooltip title={t('experiments.add_runs') || 'Add more runs'}>
-            <Button
-              type="text"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={onAddRuns}
-              style={{ color: token.colorPrimary }}
-            />
-          </Tooltip>
         </div>
         {/* Visible count */}
         <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>

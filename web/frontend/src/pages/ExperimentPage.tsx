@@ -17,7 +17,6 @@ import ResizableTitle from '../components/ResizableTitle'
 import { useColumnWidths } from '../hooks/useColumnWidths'
 import FancyEmpty from '../components/fancy/FancyEmpty'
 import AnimatedStatusBadge from '../components/fancy/AnimatedStatusBadge'
-import { useSuccessConfetti } from '../hooks/useSuccessConfetti'
 import logger from '../utils/logger'
 import type { ColumnsType, TableProps } from 'antd/es/table'
 import type { SorterResult } from 'antd/es/table/interface'
@@ -150,7 +149,7 @@ const ExperimentPage: React.FC = () => {
   const [compareRunLabels, setCompareRunLabels] = useState<Map<string, string>>(new Map())
   const [compareLoading, setCompareLoading] = useState(false)
   const [visibleRunIds, setVisibleRunIds] = useState<Set<string>>(new Set())
-  const [addRunsModalOpen, setAddRunsModalOpen] = useState(false)
+  // addRunsModalOpen removed: no corresponding Modal exists yet (planned for Sprint 2)
   
   // Persist tree panel collapsed state and width
   useEffect(() => {
@@ -161,8 +160,6 @@ const ExperimentPage: React.FC = () => {
     localStorage.setItem('tree_panel_width', String(treePanelWidth))
   }, [treePanelWidth])
   
-  // Success confetti effect
-  const { trigger: triggerConfetti, ConfettiComponent } = useSuccessConfetti()
 
   // Persist user preferences
   useEffect(() => {
@@ -357,7 +354,6 @@ const ExperimentPage: React.FC = () => {
       }
       const result = await response.json()
       if (result.deleted_count > 0) {
-        triggerConfetti()
         message.success(t('experiments.soft_delete_success', { count: result.deleted_count }) || `Moved ${result.deleted_count} runs to recycle bin`)
         fetchRuns(false)
       } else {
@@ -367,7 +363,7 @@ const ExperimentPage: React.FC = () => {
       logger.error('Batch delete by path failed:', error)
       message.error(t('experiments.delete_failed') || 'Failed to delete runs')
     }
-  }, [t, fetchRuns, triggerConfetti])
+  }, [t, fetchRuns])
   
   // Batch export runs by path
   const handleBatchExportByPath = useCallback(async (path: string) => {
@@ -410,8 +406,9 @@ const ExperimentPage: React.FC = () => {
   }, [autoRefresh, settings.refreshInterval, fetchRuns])
 
   // Delete selected runs with better error handling
-  const handleDelete = useCallback(() => {
-    if (selectedRowKeys.length === 0) {
+  const handleDelete = useCallback((explicitRunIds?: string[]) => {
+    const idsToDelete = explicitRunIds || selectedRowKeys
+    if (idsToDelete.length === 0) {
       message.warning(t('experiments.select_one_delete') || 'Please select at least one run to delete')
       return
     }
@@ -420,7 +417,7 @@ const ExperimentPage: React.FC = () => {
       title: t('experiments.move_to_bin_title') || 'Move to Recycle Bin',
       content: (
         <div>
-          <p>{t('experiments.soft_delete_confirm_content', { count: selectedRowKeys.length }) || `Move ${selectedRowKeys.length} selected runs to recycle bin?`}</p>
+          <p>{t('experiments.soft_delete_confirm_content', { count: idsToDelete.length }) || `Move ${idsToDelete.length} selected runs to recycle bin?`}</p>
           <p style={{ color: token.colorPrimary, fontWeight: 500 }}>
             {t('experiments.soft_delete_note') || 'Files will be preserved and can be restored later.'}
           </p>
@@ -433,13 +430,12 @@ const ExperimentPage: React.FC = () => {
       onOk: async () => {
         setDeleteLoading(true)
         try {
-          const result = await softDeleteRuns(selectedRowKeys)
-          setSelectedRowKeys([])
+          const result = await softDeleteRuns(idsToDelete)
+          setSelectedRowKeys(prev => prev.filter(k => !idsToDelete.includes(k)))
           
           if (result.deleted_count > 0) {
-            triggerConfetti()  // 🎉 Celebration effect!
             message.success(t('experiments.soft_delete_success', { count: result.deleted_count }) || `Moved ${result.deleted_count} runs to recycle bin`)
-            await fetchRuns(false) // Refresh list without loading indicator
+            await fetchRuns(false)
           } else {
             message.warning('No runs were moved to recycle bin')
           }
@@ -660,10 +656,10 @@ const ExperimentPage: React.FC = () => {
     })
   }, [])
   
-  // Handle add more runs to comparison
+  // Handle add more runs to comparison (placeholder for Sprint 2)
   const handleAddRuns = useCallback(() => {
-    setAddRunsModalOpen(true)
-  }, [])
+    message.info(t('experiments.add_runs_coming_soon') || 'Add runs feature coming soon')
+  }, [t])
   
   // Exit compare mode
   const handleExitCompare = useCallback(() => {
@@ -1021,10 +1017,7 @@ const ExperimentPage: React.FC = () => {
               type="link" 
               danger 
               icon={<DeleteOutlined />}
-              onClick={() => {
-                setSelectedRowKeys([record.run_id])
-                handleDelete()
-              }}
+              onClick={() => handleDelete([record.run_id])}
             />
           </Tooltip>
         </Space>
@@ -1039,9 +1032,7 @@ const ExperimentPage: React.FC = () => {
 
   return (
     <>
-      {ConfettiComponent}
-      
-      <div style={{ 
+      <div style={{
         display: 'flex', 
         flexDirection: 'column', 
         height: '100%',
