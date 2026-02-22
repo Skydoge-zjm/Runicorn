@@ -715,15 +715,27 @@ async def empty_recycle_bin(request: Request, payload: Dict[str, Any] = Body(...
         )
     
     deleted_count = 0
+    deleted_ids: list[str] = []
     for entry in iter_all_runs(storage_root, include_deleted=True):
         if is_run_deleted(entry.dir):
             try:
                 import shutil
+                run_id = entry.dir.name
                 shutil.rmtree(entry.dir)
                 deleted_count += 1
-                logger.info(f"Permanently deleted run: {entry.dir.name}")
+                deleted_ids.append(run_id)
+                logger.info(f"Permanently deleted run: {run_id}")
             except Exception as e:
                 logger.error(f"Failed to permanently delete {entry.dir.name}: {e}")
+    
+    # Clean up SQLite records for permanently deleted runs
+    backend = get_backend(request)
+    if backend is not None and deleted_ids:
+        for run_id in deleted_ids:
+            try:
+                backend.delete_run_with_orphan_assets(run_id)
+            except Exception as e:
+                logger.debug(f"SQLite cleanup failed for {run_id}: {e}")
     
     return {
         "permanently_deleted": deleted_count,

@@ -1,0 +1,192 @@
+# Runicorn 测试开发进度
+
+> 分支: test/comprehensive
+> 开始时间: 2026-02-19
+> 配套计划: docs/todo/test_plan.md v1.1
+
+## Phase T1: 基础设施 + 存储层 ✅ 完成
+
+| 模块 | 状态 | 用例数 | 备注 |
+|------|------|--------|------|
+| T1.1 测试基础设施 | ✅ | — | conftest + fixtures + 目录骨架 |
+| T1.2 config/_toml.py | ✅ | 6 | TOML 缓存加载/失效/默认值 |
+| T1.3 config/paths.py | ✅ | 7+3skip | 跨平台路径; Py3.13 monkeypatch os.name 不可用 |
+| T1.4 config/user_config.py | ✅ | 9 | 含 None 删键测试 (Bug #1 已修复) |
+| T1.5 config/connections.py | ✅ | 9 | Fernet 加密, CRUD, legacy XOR 迁移 |
+| T1.6 config/rnconfig + registry | ✅ | 9 | 单例加载 + 注册表查找 |
+| T1.7 config/rate_limits.py | ✅ | 4 | 限速配置读取 |
+| T1.8 兼容 shim | ✅ | 4 | 兼容垫片转发 |
+| T1.9 storage/models.py | ✅ | 18 | 含 legacy project/name 转换 |
+| T1.10 storage/sql_utils + schema | ✅ | 11 | 列名白名单 + DDL 完整性/幂等 |
+| T1.11 storage/backends.py | ✅ | 45 | ConnectionPool 4 + SQLiteBackend 41 |
+| T1.12 storage/file_utils.py | ✅ | 27 | 新旧布局, soft-delete, process alive |
+| T1.13 storage/migration + index_db | ✅ | 23 | migration 12 + index_db 11 |
+
+**T1 合计: 170 passed, 3 skipped**
+
+## Phase T2: SDK + Viewer ✅ 完成
+
+| 模块 | 状态 | 用例数 | 备注 |
+|------|------|--------|------|
+| T2.1 enabled.py | ✅ | 12 | is_enabled, set/reset, NoOpRun, context manager, 接口一致性 |
+| T2.1 workspace.py | ✅ | 3 | .git 查找, explicit_root, fallback cwd |
+| T2.2 sdk.py normalize_path + helpers | ✅ | 13 | 含 _default_storage_dir, _gen_run_id |
+| T2.3 sdk.py Run class core | ✅ | 18 | init, log, primary metric, finish, context manager, SQLite (Bug #2 已修复) |
+| T2.4 sdk.py media + assets | ✅ | 11 | log_image(bytes/path/PIL/numpy), log_text, log_config, log_dataset, log_pretrained |
+| T2.5 cli.py | ✅ | 10 | 8 subcommand --help + no-subcommand + config --show |
+| T2.6 viewer listdir_cache | ✅ | 8 | rate limit, cache hit/miss/expiry, eviction, invalidate, stats |
+| T2.6 viewer incremental_cache | ✅ | 7 | full read, cache hit, incremental, truncation, stats, eviction |
+| T2.7 viewer db_reader | ✅ | 11 | get_backend, list_runs, find_run_entry_fast, sync_filesystem |
+| T2.8 integration sdk_storage | ✅ | 6 | SDK→SQLite 双写: metrics, experiment, finish, best_metric, assets |
+| T2.8 integration sdk_lifecycle | ✅ | 3 | 完整训练流程, 失败流程, 资产流程 |
+
+**T2 合计: 102 passed, 0 skipped**
+**T1+T2 总计: 272 passed, 3 skipped**
+
+发现 Bug: Run.finish() 二次调用死锁（详见下方 Bug 列表 #2）
+
+## Phase T3: 安全 + 客户端 ✅ 完成
+
+| 模块 | 状态 | 用例数 | 备注 |
+|------|------|--------|------|
+| T3.1 security/encryption.py | ✅ | 17 | Fernet 加解密往返, is_encrypted, XOR legacy, 自动检测, 明文穿透, SENSITIVE_FIELDS, 密钥自动生成 |
+| T3.2 security/path_validation.py | ✅ | 27+2skip | 正常路径, 遍历攻击, 符号链接(Win skip), 文件名净化, Windows 保留名, 安全创建目录 |
+| T3.3 security/rate_limiter.py | ✅ | 20 | 滑动窗口基础/过期, 端点独立限流, localhost 白名单, 多线程安全 |
+| T3.4 client/http.py | ✅ | 20 | 全 API 方法 mock, 4xx/5xx 错误处理, 连接验证失败, 上下文管理器, remote 属性 |
+| T3.5 client/models.py | ✅ | 17 | RunInfo/PathInfo/MetricSeries/RemoteSession from_dict, 聚合方法, Experiment/Project 别名 |
+| T3.6 integration config_migration | ✅ | 3 | XOR→Fernet 迁移, 连接数保持, config.json 处理 |
+| T3.7 integration encryption_roundtrip | ✅ | 2 | 全字段加解密往返, Fernet+XOR+明文混合格式 |
+
+**T3 合计: 106 passed, 2 skipped**
+**T1+T2+T3 总计: 378 passed, 5 skipped**
+
+## Phase T4: 扩展 + 资产 + 控制台 + 日志兼容 + E2E ✅ 完成
+
+| 模块 | 状态 | 用例数 | 备注 |
+|------|------|--------|------|
+| T4.1 assets/fingerprint.py | ✅ | 9 | stat/dir fingerprint, sha256, content_fingerprint |
+| T4.2 assets/archive.py | ✅ | 4 | archive_file, archive_dir manifest, dedup, rolling overwrite |
+| T4.3 assets/ignore.py | ✅ | 9 | 解析规则, glob匹配, dir-only, negation, load_ignore_matcher |
+| T4.4 assets/assets_json.py | ✅ | 6 | ensure_assets_file, update_assets_atomic(FileLock), read_assets |
+| T4.5 extensions/monitors.py | ✅ | 11 | MetricMonitor NaN/Inf/threshold, AnomalyDetector baseline/trend, AlertRule |
+| T4.6 extensions/experiment.py | ✅ | 12 | ExperimentManager: add/search/tag/delete/pin, 新旧布局, 持久化 |
+| T4.7 extensions/exporters.py | ✅ | 4 | to_csv(string/file/empty), markdown report |
+| T4.8 extensions/environment.py | ✅ | 5 | git info(mock), pip packages(mock), platform details |
+| T4.9 console/capture.py | ✅ | 8 | TeeWriter双写, smart/none模式, ConsoleCapture替换/恢复, cleanup |
+| T4.10 console/log_manager.py | ✅ | 6 | singleton per path, ref counting, write immediate flush |
+| T4.11 log_compat/torchvision.py | ✅ | 9 | SmoothedValue, MetricLogger update/run转发/log_every |
+| T4.12 E2E viewer_startup | ✅ | 3+3skip | create_app, API routes, storage_root (skip without --run-e2e) |
+
+**T4 合计: 86 passed, 3 skipped (E2E marker)**
+
+### T4 补充: 迁移 + E2E 补全
+
+| 模块 | 状态 | 用例数 | 备注 |
+|------|------|--------|------|
+| console/logging_handler.py | ✅ | 15 | 从 tests_legacy 迁移: basic/emit/logger/thread-safety/lazy-init/active-run |
+| remote/known_hosts.py | ✅ | 9 | 从 tests_legacy 迁移: format/parse, fingerprint, CRUD, lock timeout, write error |
+| remote/ssh_backend.py | ✅ | 10 | 从 tests_legacy 迁移: AutoBackend fallback, OpenSSH preconditions, resolve_ssh_path |
+| E2E full_workflow | ✅ | 3 | SDK init→log→finish→verify, context manager, failed run |
+| E2E cli_commands | ✅ | 4 | config --show, --help, export empty, unknown subcommand |
+
+**T4+补充 合计: 41 passed**
+**T1+T2+T3+T4(全) 总计: 504 passed, 5 skipped**
+
+✅ tests_legacy/ 已删除 (git rm -r)
+
+## 发现的 Bug
+（测试过程中发现的 bug 记录在此，遵循 .warprules 规则 7：测试代码和修复分开提交）
+
+1. **save_user_config 无法删键** — `config/user_config.py` 的 `save_user_config()` 使用 dict merge 更新，无法删除已有键。导致 `_migrate_legacy_xor_connections()` 迁移后 `ssh_connections` 残留在 config.json 中。**已修复**：改为逐 key 遍历，value 为 None 时 pop 删除。新增 2 个测试用例。
+
+2. **Run.finish() 二次调用死锁** — `sdk.py` 的 `finish()` 方法调用 `storage_backend.close()` 关闭 ConnectionPool，但未将 `self.storage_backend` 置为 `None`。第二次 `finish()` 时在空队列上永久阻塞。**已修复**：`close()` 后加 `self.storage_backend = None`。测试 `test_run_double_finish_idempotent` 已移除绕过，走真实 SQLite 路径验证。
+
+## Phase S1: Bug 修复 ✅ 完成
+
+（详见上方 Bug 列表 #1, #2）
+
+## Phase S2: 补齐缺失测试 ✅ 完成
+
+| 批次 | 状态 | 新增用例数 | 内容 |
+|------|------|-----------|------|
+| S2.1 Viewer fixture + health/storage/config API | ✅ | 9 | viewer fixture 基础设施, 3 个 API 测试文件 |
+| S2.2 runs + projects + metrics API | ✅ | 25 | 列表/详情/软删除/恢复/更新/paths/tree/metrics/progress/cache |
+| S2.3 export + import + sqlite_sync | ✅ | 10 | CSV/report/environment, zip import, filesystem→SQLite sync |
+| S2.4 client_server + client/utils | ✅ | 9 | httpx ASGI transport 联调, metrics_to_dataframe, runs_to_dataframe |
+| S2.5 补充已有文件缺失用例 | ✅ | 6 | no_pil, console_capture, disabled, retry, tags, fallback |
+
+**S2 合计: 59 新增测试**
+
+新增文件:
+- tests/fixtures/viewer.py (重写: 含 populated_viewer_storage, viewer_app, viewer_client)
+- tests/integration/test_viewer_health_api.py
+- tests/integration/test_viewer_storage_api.py
+- tests/integration/test_viewer_config_api.py
+- tests/integration/test_viewer_runs_api.py
+- tests/integration/test_viewer_projects_api.py
+- tests/integration/test_viewer_metrics_api.py
+- tests/integration/test_viewer_export_api.py
+- tests/integration/test_viewer_import_api.py
+- tests/integration/test_viewer_sqlite_sync.py
+- tests/integration/test_client_server.py
+- tests/unit/client/test_utils.py
+
+修改文件 (补充用例):
+- tests/unit/test_sdk_media.py (+TestLogImageNoPil)
+- tests/integration/test_sdk_lifecycle.py (+console_capture, +disabled)
+- tests/unit/client/test_http_client.py (+TestRetryBehaviour)
+- tests/integration/test_sdk_storage.py (+test_run_tags_via_set_tags)
+
+**S2 后全量: 555 passed, 15 skipped**
+
+### S2-final: 10 项补充 + E2E 门禁移除 + sync deleted_at 修复
+
+- 移除 `--run-e2e` 门禁，E2E 测试默认运行
+- 修复 `sync_filesystem_to_db` 未持久化 `deleted_at` 的 bug
+- 新增 10 个测试用例覆盖边缘场景
+
+**S2-final 后: 575 passed, 5 skipped** (commit e505a38)
+
+## Phase S3: 最终补齐 + Bug 修复 ✅ 完成
+
+| 批次 | 状态 | 内容 |
+|------|------|------|
+| A8 | ✅ | 修复 migration 不删除 ssh_connections 的 bug + 更新测试断言 |
+| A2 | ✅ | E2E CLI: +6 subprocess --help smoke tests (viewer/export/export-data/manage/rate-limit/delete) |
+| A1 | ✅ | E2E full workflow: SDK→Viewer→Client 链式验证 |
+| A3 | ✅ | E2E viewer startup: 初始化 backend + shutdown 关闭 backend |
+| A4 | ✅ | Integration runs API: empty recycle bin + get run assets |
+| A5 | ✅ | Integration export API: report success/501 测试 |
+| A6 | ✅ | Integration import API: import 后 sync 验证 |
+| A7 | ✅ | Integration sqlite_sync: startup sync + partial data 容错 |
+
+发现 Bug:
+3. **empty_recycle_bin 不清理 SQLite** — `POST /api/recycle-bin/empty` 只删除文件目录，不清理 SQLite 中的 soft-delete 记录，导致回收站列表仍显示已永久删除的 run。**已修复**：添加 `backend.delete_run_with_orphan_assets()` 调用。
+
+**S3 合计: +16 tests, +2 bug fixes**
+**最终全量: 591 passed, 5 skipped**
+
+## Phase C: 覆盖率提升 ✅ 完成
+
+初始覆盖率: 55% (591 passed)
+
+| 批次 | 状态 | 新增用例数 | 内容 |
+|------|------|-----------|------|
+| C1 | ✅ | 3 | cli.py: export 创建 tar.gz, export→import 往返, import 缺失归档错误 |
+| C2 | ✅ | 5 | projects API: list_runs_by_name, exact/prefix path, soft-delete batch, export path JSON |
+| C3 | ✅ | 2 | metrics API: response headers, downsample small data |
+| C4 | ✅ | 3 | cleanup.py: delete_run_completely, dry_run, nonexistent run |
+| C5 | ✅ | 3 | ui_preferences API: get empty, save+load, reset column widths |
+| C6 | ✅ | 3 | config API: SSH connections CRUD (get empty, save+list, delete) |
+
+基础设施修复:
+- 将 sync thread 抑制从 viewer fixture 提升到 root conftest session-scoped autouse fixture，修复 TestSdkToViewerChain 等直接创建 TestClient 的测试中的 access violation 竞态
+
+新增文件:
+- tests/integration/test_assets_cleanup.py
+
+**C 合计: +19 tests**
+**最终全量: 610 passed, 5 skipped, 覆盖率 58%**
+
+---
+*此文档为唯一进度文档，遵循 .warprules 规则 11*

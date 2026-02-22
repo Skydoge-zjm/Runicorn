@@ -26,7 +26,11 @@ def save_user_config(update: Dict[str, Any]) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         cur = load_user_config()
-        cur.update(update or {})
+        for key, value in (update or {}).items():
+            if value is None:
+                cur.pop(key, None)
+            else:
+                cur[key] = value
         path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         # Silent failure to avoid breaking training loops; user can retry via CLI

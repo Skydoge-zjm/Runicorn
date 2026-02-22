@@ -1012,9 +1012,17 @@ async def get_saved_connections() -> Dict[str, Any]:
     try:
         from ...config import load_saved_connections
         connections = load_saved_connections()
+        # Only return entries with valid 'kind' field (new frontend format).
+        # Legacy entries from the old SSH API lack 'kind' and would cause
+        # the frontend to mis-convert ALL entries through its old-to-new
+        # migration path, corrupting server/connection relationships.
+        valid = [
+            c for c in connections
+            if c.get('kind') in ('server', 'connection')
+        ]
         return {
             "ok": True,
-            "connections": connections
+            "connections": valid
         }
     except Exception as e:
         logger.error(f"Failed to load saved connections: {e}")

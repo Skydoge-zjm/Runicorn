@@ -256,8 +256,14 @@ def get_rate_limiter() -> EndpointRateLimiter:
                 )
                 logger.debug(f"Configured {endpoint}: {endpoint_config.get('max_requests')}/{endpoint_config.get('window_seconds')}s")
             
-            # Store settings
-            _endpoint_limiter._settings = config.get("settings", {})
+            # Production defaults for local-only API (overridden by config if present)
+            _endpoint_limiter._settings = {
+                "enable_rate_limiting": False,
+                "log_violations": True,
+                "whitelist_localhost": True,
+            }
+            config_settings = config.get("settings", {})
+            _endpoint_limiter._settings.update(config_settings)
             
             logger.info(f"Loaded rate limit configuration with {len(endpoints)} custom endpoints")
             

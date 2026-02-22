@@ -181,6 +181,15 @@ def sync_filesystem_to_db(
             try:
                 backend.create_experiment(exp)
                 inserted += 1
+                # create_experiment does not persist deleted_at; apply via
+                # soft_delete_experiments so the DB record mirrors the disk state.
+                if exp.deleted_at is not None:
+                    try:
+                        backend.soft_delete_experiments(
+                            [run_id], reason=exp.delete_reason or "synced_deleted",
+                        )
+                    except Exception:
+                        pass
             except Exception as exc:
                 logger.debug("Failed to sync run %s to SQLite: %s", run_id, exc)
                 continue

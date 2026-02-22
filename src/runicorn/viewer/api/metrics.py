@@ -332,6 +332,9 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
     """
     await websocket.accept()
     
+    # Shutdown signal from app state
+    shutdown_event = getattr(websocket.app.state, 'shutdown_event', None)
+    
     # find_run_entry_fast works with WebSocket too (same .app.state)
     entry = find_run_entry_fast(websocket, run_id)  # type: ignore[arg-type]
     
@@ -361,12 +364,24 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
         # Keep checking for log file
         try:
             while not log_file.exists():
-                await asyncio.sleep(2)
+                if shutdown_event and shutdown_event.is_set():
+                    return
+                # Event-aware sleep: wake immediately on shutdown
+                if shutdown_event:
+                    try:
+                        await asyncio.wait_for(shutdown_event.wait(), timeout=2)
+                        return  # shutdown signalled
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(2)
                 # Send periodic keep-alive to prevent timeout
                 if not log_file.exists():
                     await websocket.ping()
         except WebSocketDisconnect:
             logger.debug(f"WebSocket disconnected while waiting for logs for run {run_id}")
+            return
+        except asyncio.CancelledError:
             return
         except Exception:
             return
@@ -402,6 +417,10 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
             max_idle_time = 3600  # 1 hour timeout
             
             while True:
+                # Check for shutdown signal
+                if shutdown_event and shutdown_event.is_set():
+                    break
+                
                 # Check for timeout
                 current_time = time_module.time()
                 idle_time = current_time - last_activity
@@ -431,10 +450,21 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
                     else:
                         delay = 2.0  # Long idle: 2s
                     
-                    await asyncio.sleep(delay)
+                    # Use event-aware sleep: wake immediately on shutdown
+                    if shutdown_event:
+                        try:
+                            await asyncio.wait_for(shutdown_event.wait(), timeout=delay)
+                            break  # shutdown_event was set
+                        except asyncio.TimeoutError:
+                            pass  # normal timeout, continue polling
+                    else:
+                        await asyncio.sleep(delay)
                     
     except WebSocketDisconnect:
         logger.debug(f"WebSocket disconnected for run {run_id}")
+        return
+    except asyncio.CancelledError:
+        logger.debug(f"WebSocket cancelled for run {run_id} (server shutting down)")
         return
     except Exception as e:
         logger.error(f"WebSocket error for run {run_id}: {e}")
