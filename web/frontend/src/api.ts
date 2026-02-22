@@ -533,3 +533,39 @@ export async function updateRunTags(runId: string, tags: string[]): Promise<{ ok
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
+
+// ----- Path helpers -----
+export async function softDeleteByPath(path: string) {
+  const res = await fetch(url('/paths/soft-delete'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ deleted_count: number }>
+}
+
+export async function listPaths(includeStats = true) {
+  const qs = includeStats ? '?include_stats=true' : ''
+  const res = await fetch(url(`/paths${qs}`))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+// ----- Column width config -----
+export async function getColumnWidths(tableKey: string, sizeKey: string) {
+  const res = await fetch(url(`/config/column-widths?table=${tableKey}&size=${sizeKey}`))
+  if (!res.ok) return null
+  return res.json()
+}
+
+export async function saveColumnWidths(payload: {
+  table: string; size: string; widths: Record<string, number>;
+  window_width: number; window_height: number;
+}) {
+  await fetch(url('/config/column-widths'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}

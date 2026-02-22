@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { debounce } from 'lodash'
+import { getColumnWidths as apiGetColumnWidths, saveColumnWidths as apiSaveColumnWidths } from '../api'
 
 interface ColumnWidths {
   [key: string]: number
@@ -57,13 +58,9 @@ export function useColumnWidths(
   const loadPreferences = async () => {
     try {
       const sizeKey = getWindowSizeCategory(windowSize.width, windowSize.height)
-      const response = await fetch(`/api/config/column-widths?table=${tableKey}&size=${sizeKey}`)
-      
-      if (response.ok) {
-        const data = await response.json()
-        if (data.widths) {
-          setColumnWidths({ ...defaultWidths, ...data.widths })
-        }
+      const data = await apiGetColumnWidths(tableKey, sizeKey)
+      if (data?.widths) {
+        setColumnWidths({ ...defaultWidths, ...data.widths })
       }
     } catch (error) {
       console.warn('Failed to load column width preferences:', error)
@@ -74,16 +71,12 @@ export function useColumnWidths(
     debounce(async (widths: ColumnWidths) => {
       try {
         const sizeKey = getWindowSizeCategory(windowSize.width, windowSize.height)
-        await fetch('/api/config/column-widths', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            table: tableKey,
-            size: sizeKey,
-            widths: widths,
-            window_width: windowSize.width,
-            window_height: windowSize.height
-          })
+        await apiSaveColumnWidths({
+          table: tableKey,
+          size: sizeKey,
+          widths,
+          window_width: windowSize.width,
+          window_height: windowSize.height,
         })
       } catch (error) {
         console.warn('Failed to save column width preferences:', error)

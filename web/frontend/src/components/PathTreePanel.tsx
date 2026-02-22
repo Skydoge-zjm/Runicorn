@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { DataNode, TreeProps } from 'antd/es/tree'
 import type { MenuProps } from 'antd'
+import { listPaths } from '../api'
 import logger from '../utils/logger'
 
 interface PathStats {
@@ -242,11 +243,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
   const fetchPathTree = useCallback(async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/paths?include_stats=true')
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      const data = await response.json()
+      const data = await listPaths(true)
       setTreeData(data)
       
       // Auto-expand first level on initial load

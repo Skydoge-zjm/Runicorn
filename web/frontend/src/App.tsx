@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
+import { Layout, Tag, Button, ConfigProvider, theme, Select } from 'antd'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
-import { Routes, Route, Link, useLocation } from 'react-router-dom'
+import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { SettingOutlined, ExperimentOutlined, CloudServerOutlined, DashboardOutlined, AppstoreOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
 import ExperimentPage from './pages/ExperimentPage'
@@ -16,18 +16,17 @@ import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
 import { SettingsProvider } from './contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
 
-const { Header, Content, Footer } = Layout
+const { Content } = Layout
+
+const navItems = [
+  { key: 'experiments', path: '/', icon: <ExperimentOutlined />, labelKey: 'menu.experiments' },
+  { key: 'assets', path: '/assets', icon: <AppstoreOutlined />, labelKey: 'menu.assets' },
+  { key: 'performance', path: '/performance', icon: <DashboardOutlined />, labelKey: 'menu.performance' },
+  { key: 'remote', path: '/remote', icon: <CloudServerOutlined />, labelKey: 'menu.remote' },
+]
 
 export default function App() {
   const location = useLocation()
-  const getSelectedKey = () => {
-    if (location.pathname.startsWith('/performance')) return 'performance'
-    if (location.pathname.startsWith('/remote')) return 'remote'
-    if (location.pathname.startsWith('/assets')) return 'assets'
-    if (location.pathname.startsWith('/runs/')) return 'experiments'  // Detail page also under experiments
-    return 'experiments'  // Default to experiments
-  }
-  const selected = [getSelectedKey()]
   const { t, i18n} = useTranslation()
   // UI Settings with persistence
   const defaultSettings: UiSettings = {
@@ -209,20 +208,40 @@ export default function App() {
           display: 'flex',
           flexDirection: 'column',
         }}>
-          <Header style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <div style={{ color: '#fff', fontWeight: 700, marginRight: 24 }}>{t('app.title')}</div>
-            <Menu
-              theme="dark"
-              mode="horizontal"
-              selectedKeys={selected}
-              items={[
-                { key: 'experiments', icon: <ExperimentOutlined />, label: <Link to="/">{t('menu.experiments')}</Link> },
-                { key: 'assets', icon: <AppstoreOutlined />, label: <Link to="/assets">{t('menu.assets')}</Link> },
-                { key: 'performance', icon: <DashboardOutlined />, label: <Link to="/performance">{t('menu.performance')}</Link> },
-                { key: 'remote', icon: <CloudServerOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
-              ]}
-              style={{ flex: 1, minWidth: 0 }}
-            />
+          <header style={{
+            display: 'flex',
+            alignItems: 'center',
+            height: 48,
+            borderBottom: `1px solid ${isDark ? '#2D3748' : '#E5E7EB'}`,
+            background: isDark ? '#1A1D27' : '#FFFFFF',
+            padding: '0 24px',
+            flexShrink: 0,
+          }}>
+            <div style={{ fontWeight: 700, color: settings.accentColor, marginRight: 32, fontSize: 15 }}>
+              {t('app.title')}
+            </div>
+            <nav style={{ display: 'flex', gap: 24, flex: 1 }}>
+              {navItems.map(item => (
+                <NavLink
+                  key={item.key}
+                  to={item.path}
+                  end={item.path === '/'}
+                  style={({ isActive }) => ({
+                    color: isActive ? settings.accentColor : (isDark ? '#A0AEC0' : '#4A5568'),
+                    borderBottom: isActive ? `2px solid ${settings.accentColor}` : '2px solid transparent',
+                    padding: '12px 0',
+                    textDecoration: 'none',
+                    fontSize: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'color 0.2s, border-color 0.2s',
+                  })}
+                >
+                  {item.icon} {t(item.labelKey)}
+                </NavLink>
+              ))}
+            </nav>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {apiStatus === 'ok' && <Tag color="green">{t('tag.api_ok')}</Tag>}
               {apiStatus === 'loading' && <Tag color="processing">{t('tag.api_loading')}</Tag>}
@@ -234,9 +253,13 @@ export default function App() {
                 style={{ width: 88 }}
                 options={[{ value: 'en', label: 'EN' }, { value: 'zh', label: '中文' }]}
               />
-              <Button type="link" icon={<SettingOutlined style={{ color: '#fff' }} />} onClick={() => setSettingsOpen(true)} />
+              <Button
+                type="text"
+                icon={<SettingOutlined style={{ color: isDark ? '#A0AEC0' : '#4A5568' }} />}
+                onClick={() => setSettingsOpen(true)}
+              />
             </div>
-          </Header>
+          </header>
           <Content style={{ 
             flex: 1,
             padding: '16px 24px',

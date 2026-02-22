@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Button, Input, Space, Switch, Tag, Tooltip, message } from 'antd'
 import { useTranslation } from 'react-i18next'
 import AnsiToHtml from 'ansi-to-html'
+import { useSettings } from '../contexts/SettingsContext'
 
 // Constants
 const MAX_LINES = 5000
@@ -25,8 +26,8 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// ANSI converter instance with terminal-like colors
-const ansiConverter = new AnsiToHtml({
+// Dark theme ANSI converter
+const darkConverter = new AnsiToHtml({
   fg: '#e6e9ef',
   bg: '#0b1020',
   newline: false,
@@ -40,6 +41,24 @@ const ansiConverter = new AnsiToHtml({
     5: '#b294bb',   // magenta
     6: '#8abeb7',   // cyan
     7: '#c5c8c6',   // white
+  },
+})
+
+// Light theme ANSI converter
+const lightConverter = new AnsiToHtml({
+  fg: '#374151',
+  bg: '#F8F9FA',
+  newline: false,
+  escapeXML: true,
+  colors: {
+    0: '#374151',   // black
+    1: '#DC2626',   // red
+    2: '#16A34A',   // green
+    3: '#CA8A04',   // yellow
+    4: '#2563EB',   // blue
+    5: '#9333EA',   // magenta
+    6: '#0891B2',   // cyan
+    7: '#6B7280',   // white
   },
 })
 
@@ -67,6 +86,9 @@ interface LogsViewerProps {
 
 export default function LogsViewer({ url }: LogsViewerProps) {
   const { t } = useTranslation()
+  const { settings } = useSettings()
+  const isDark = settings.theme === 'dark'
+  const ansiConverter = isDark ? darkConverter : lightConverter
   
   const [allLines, setAllLines] = useState<string[]>([])
   const [autoScroll, setAutoScroll] = useState(true)
@@ -200,7 +222,7 @@ export default function LogsViewer({ url }: LogsViewerProps) {
         style={{ display: 'flex', minHeight: 20 }}
       >
         <span style={{ 
-          color: '#6c7a89', 
+          color: isDark ? '#6c7a89' : '#9CA3AF', 
           minWidth: 50, 
           textAlign: 'right', 
           paddingRight: 12,
@@ -215,7 +237,7 @@ export default function LogsViewer({ url }: LogsViewerProps) {
         />
       </div>
     )
-  }, [searchKeyword])
+  }, [searchKeyword, isDark, ansiConverter])
 
   const copyAll = useCallback(async () => {
     try {
@@ -267,8 +289,8 @@ export default function LogsViewer({ url }: LogsViewerProps) {
         style={{ 
           height: 320, 
           overflow: 'auto', 
-          background: '#0b1020', 
-          color: '#e6e9ef', 
+          background: isDark ? '#0b1020' : '#F8F9FA', 
+          color: isDark ? '#e6e9ef' : '#374151', 
           padding: 12, 
           borderRadius: 8, 
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', 

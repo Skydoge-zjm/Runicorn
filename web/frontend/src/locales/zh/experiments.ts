@@ -127,6 +127,7 @@ export default {
   'run.updated': '更新于：{{time}}',
   'run.refresh': '刷新',
   'run.refreshed': '已刷新',
+  'run.compare_with': '与其他对比...',
 
   'metrics.title': '指标',
   'metrics.more_columns': '多列布局',

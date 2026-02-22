@@ -127,6 +127,7 @@ export default {
   'run.updated': 'Updated: {{time}}',
   'run.refresh': 'Refresh',
   'run.refreshed': 'Refreshed',
+  'run.compare_with': 'Compare with...',
   
   'metrics.title': 'Metrics',
   'metrics.more_columns': 'More Columns',
