@@ -21,5 +21,5 @@ Write-Host "Copying build files..." -ForegroundColor Cyan
 Copy-Item -Path "web\frontend\dist\*" -Destination "src\runicorn\webui\" -Recurse -Force
 
 # Start viewer
-Write-Host "Starting runicorn viewer..." -ForegroundColor Green
-runicorn viewer
+# Write-Host "Starting runicorn viewer..." -ForegroundColor Green
+# runicorn viewer

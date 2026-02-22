@@ -37,11 +37,11 @@ export default function App() {
     density: 'default',
     
     // Layout & Visual Effects
-    glass: true,
-    backgroundType: 'gradient',
+    glass: false,
+    backgroundType: 'color',
     backgroundImageUrl: '',
     backgroundGradient: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
-    backgroundColor: '#0b1220',
+    backgroundColor: '#F8F9FA',
     backgroundOpacity: 0.9,
     backgroundBlur: 8,
     
