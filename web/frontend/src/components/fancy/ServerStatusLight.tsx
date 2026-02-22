@@ -6,7 +6,12 @@
 
 import React from 'react'
 import { motion } from 'framer-motion'
-import { remotePageConfig } from '../../config/animation_config/remote'
+
+const STATUS_COLORS: Record<string, string> = {
+  online: '#52c41a',
+  offline: '#ff4d4f',
+  connecting: '#faad14',
+}
 
 interface ServerStatusLightProps {
   status: 'online' | 'offline' | 'connecting'
@@ -17,25 +22,28 @@ export const ServerStatusLight: React.FC<ServerStatusLightProps> = ({
   status,
   label
 }) => {
-  const config = remotePageConfig.statusLight
-  const color = config.colors[status]
+  const color = STATUS_COLORS[status] || STATUS_COLORS.offline
   const shouldPulse = status === 'online' || status === 'connecting'
   
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
       <motion.div
         style={{
-          width: config.size,
-          height: config.size,
+          width: 12,
+          height: 12,
           borderRadius: '50%',
           background: color,
           position: 'relative'
         }}
         animate={shouldPulse ? {
-          boxShadow: config.pulseAnimation.boxShadow
+          boxShadow: [
+            '0 0 0 0 rgba(82, 196, 26, 0.7)',
+            '0 0 0 10px rgba(82, 196, 26, 0)',
+          ]
         } : {}}
         transition={{
-          ...config.pulseAnimation.transition,
+          duration: 1.5,
+          ease: 'easeOut' as const,
           repeat: shouldPulse ? Infinity : 0
         }}
       />

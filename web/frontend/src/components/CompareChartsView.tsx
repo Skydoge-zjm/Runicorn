@@ -7,7 +7,7 @@
  * Optimization: Uses ECharts legend.selected to toggle series visibility
  * instead of re-rendering the entire chart when hiding/showing runs.
  */
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { Row, Col, Empty, Spin, Card, Checkbox, Space, Button, Tooltip, theme } from 'antd'
 import { LineChartOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -39,6 +39,8 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
   
   // Visible metrics state (all visible by default)
   const [visibleMetrics, setVisibleMetrics] = useState<Set<string>>(new Set())
+  // Track metrics the user has explicitly hidden (to avoid re-showing on refresh)
+  const removedByUser = useRef<Set<string>>(new Set())
 
   // Calculate common metrics (present in at least 2 runs)
   const commonMetrics = useMemo(() => {
@@ -60,9 +62,25 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
       .sort()
   }, [metricsMap])
 
-  // Initialize visible metrics when commonMetrics changes
+  // Incrementally update visible metrics when commonMetrics changes
   useEffect(() => {
-    setVisibleMetrics(new Set(commonMetrics))
+    setVisibleMetrics(prev => {
+      const next = new Set(prev)
+      // Add newly appeared metrics (unless user explicitly hid them)
+      for (const m of commonMetrics) {
+        if (!prev.has(m) && !removedByUser.current.has(m)) {
+          next.add(m)
+        }
+      }
+      // Remove metrics that no longer exist
+      for (const m of prev) {
+        if (!commonMetrics.includes(m)) {
+          next.delete(m)
+          removedByUser.current.delete(m)
+        }
+      }
+      return next
+    })
   }, [commonMetrics])
 
   // Determine best x-axis key available across runs
@@ -87,8 +105,10 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
       const next = new Set(prev)
       if (next.has(metric)) {
         next.delete(metric)
+        removedByUser.current.add(metric)
       } else {
         next.add(metric)
+        removedByUser.current.delete(metric)
       }
       return next
     })
@@ -98,8 +118,10 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
   const toggleAll = () => {
     if (visibleMetrics.size === commonMetrics.length) {
       setVisibleMetrics(new Set())
+      commonMetrics.forEach(m => removedByUser.current.add(m))
     } else {
       setVisibleMetrics(new Set(commonMetrics))
+      removedByUser.current.clear()
     }
   }
 

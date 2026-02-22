@@ -15,8 +15,7 @@ import CompareChartsView from '../components/CompareChartsView'
 import { ExperimentListSkeleton } from '../components/LoadingSkeleton'
 import ResizableTitle from '../components/ResizableTitle'
 import { useColumnWidths } from '../hooks/useColumnWidths'
-import FancyEmpty from '../components/fancy/FancyEmpty'
-import AnimatedStatusBadge from '../components/fancy/AnimatedStatusBadge'
+import StatusTag from '../components/StatusTag'
 import logger from '../utils/logger'
 import type { ColumnsType, TableProps } from 'antd/es/table'
 import type { SorterResult } from 'antd/es/table/interface'
@@ -921,7 +920,7 @@ const ExperimentPage: React.FC = () => {
         onResize: handleResize('status'),
       }),
       render: (status, record) => {
-        return <AnimatedStatusBadge status={status} />
+        return <StatusTag status={status} />
       },
     },
     {
@@ -1310,12 +1309,14 @@ const ExperimentPage: React.FC = () => {
                 onChange={(_, __, sorter) => setSortedInfo(sorter as SorterResult<RunData>)}
                 locale={{
                   emptyText: (
-                    <FancyEmpty
-                      title={t('experiments.no_runs') || 'No experiments yet'}
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
                       description={t('experiments.no_runs_desc') || 'Start tracking your ML experiments.'}
-                      actionText={t('experiments.view_quickstart') || 'View Quickstart'}
-                      onAction={() => window.open('https://github.com/runicorn/runicorn#quick-start', '_blank')}
-                    />
+                    >
+                      <Button type="primary" onClick={() => window.open('https://github.com/runicorn/runicorn#quick-start', '_blank')}>
+                        {t('experiments.view_quickstart') || 'View Quickstart'}
+                      </Button>
+                    </Empty>
                   ),
                 }}
               />

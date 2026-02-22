@@ -29,7 +29,9 @@ import {
   InputNumber,
   Radio,
   Checkbox,
-  Divider
+  Divider,
+  Statistic,
+  theme
 } from 'antd'
 import {
   CloudServerOutlined,
@@ -45,8 +47,6 @@ import RemoteConfigCard from '../components/remote/RemoteConfigCard'
 import CondaEnvSelector from '../components/remote/CondaEnvSelector'
 import HostKeyModal from '../components/remote/HostKeyModal'
 import DismissibleAlert from '../components/DismissibleAlert'
-import FancyStatCard from '../components/fancy/FancyStatCard'
-import { colorConfig } from '../config/animation_config'
 
 import { useRemoteSessions } from '../hooks/useRemoteSessions'
 import { useSavedConnections } from '../hooks/useSavedConnections'
@@ -79,6 +79,7 @@ const { Title, Paragraph, Text } = Typography
 
 export default function RemoteViewerPage() {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [connecting, setConnecting] = useState(false)
   const [fetchingEnvs, setFetchingEnvs] = useState(false)
   const [fetchingConfig, setFetchingConfig] = useState(false)
@@ -681,28 +682,34 @@ export default function RemoteViewerPage() {
         {/* Statistics */}
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col span={8}>
-            <FancyStatCard
-              title={t('remote.stats.activeSessions')}
-              value={activeSessions.length}
-              icon={<ThunderboltOutlined />}
-              gradientColors={colorConfig.gradients.primary}
-            />
+            <Card size="small">
+              <Statistic
+                title={t('remote.stats.activeSessions')}
+                value={activeSessions.length}
+                prefix={<ThunderboltOutlined />}
+                valueStyle={{ color: token.colorPrimary }}
+              />
+            </Card>
           </Col>
           <Col span={8}>
-            <FancyStatCard
-              title={t('remote.stats.savedConfigs')}
-              value={profileCount}
-              icon={<SaveOutlined />}
-              gradientColors={colorConfig.gradients.info}
-            />
+            <Card size="small">
+              <Statistic
+                title={t('remote.stats.savedConfigs')}
+                value={profileCount}
+                prefix={<SaveOutlined />}
+                valueStyle={{ color: token.colorInfo }}
+              />
+            </Card>
           </Col>
           <Col span={8}>
-            <FancyStatCard
-              title={t('remote.stats.connectedServers')}
-              value={connectedServers}
-              icon={<CloudServerOutlined />}
-              gradientColors={colorConfig.gradients.success}
-            />
+            <Card size="small">
+              <Statistic
+                title={t('remote.stats.connectedServers')}
+                value={connectedServers}
+                prefix={<CloudServerOutlined />}
+                valueStyle={{ color: token.colorSuccess }}
+              />
+            </Card>
           </Col>
         </Row>
 

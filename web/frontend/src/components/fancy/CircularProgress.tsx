@@ -6,7 +6,16 @@
 
 import React, { useEffect } from 'react'
 import { motion, useSpring, useTransform } from 'framer-motion'
-import { runDetailPageConfig } from '../../config/animation_config/run_detail'
+
+const GPU_PROGRESS_CONFIG = {
+  size: 120,
+  strokeWidth: 8,
+  colors: {
+    low: ['#52c41a', '#73d13d'] as [string, string],
+    medium: ['#faad14', '#ffc53d'] as [string, string],
+    high: ['#ff4d4f', '#ff7875'] as [string, string],
+  },
+} as const
 
 interface CircularProgressProps {
   value: number  // 0-100
@@ -21,7 +30,7 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
   sublabel,
   size
 }) => {
-  const config = runDetailPageConfig.gpuProgress
+  const config = GPU_PROGRESS_CONFIG
   const radius = (size || config.size) / 2
   const strokeWidth = config.strokeWidth
   const normalizedRadius = radius - strokeWidth / 2
@@ -108,8 +117,8 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
         textAlign: 'center'
       }}>
         <motion.div style={{
-          fontSize: config.labelFontSize,
-          fontWeight: config.labelFontWeight,
+          fontSize: 28,
+          fontWeight: 700,
           lineHeight: 1,
           fontVariantNumeric: 'tabular-nums'
         }}>
@@ -117,8 +126,8 @@ export const CircularProgress: React.FC<CircularProgressProps> = ({
         </motion.div>
         {sublabel && (
           <div style={{
-            fontSize: config.sublabelFontSize,
-            color: config.sublabelColor,
+            fontSize: 12,
+            color: '#8c8c8c',
             marginTop: 4
           }}>
             {sublabel}

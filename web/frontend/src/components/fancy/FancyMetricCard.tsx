@@ -1,18 +1,16 @@
 /**
- * FancyMetricCard - Enhanced Chart Card with Gradient Border
- * 
- * Wraps metric charts with fancy styling
+ * FancyMetricCard - Chart Card wrapper
+ *
+ * Wraps metric charts with clean Card styling.
  */
 
 import React from 'react'
 import { Card, Space, Button, Tooltip } from 'antd'
-import { 
-  FullscreenOutlined, 
-  DownloadOutlined, 
-  LineChartOutlined 
+import {
+  FullscreenOutlined,
+  DownloadOutlined,
+  LineChartOutlined
 } from '@ant-design/icons'
-import { motion } from 'framer-motion'
-import { runDetailPageConfig } from '../../config/animation_config/run_detail'
 import type { ReactNode } from 'react'
 
 interface FancyMetricCardProps {
@@ -30,23 +28,13 @@ export const FancyMetricCard: React.FC<FancyMetricCardProps> = ({
   onDownload,
   extra
 }) => {
-  const config = runDetailPageConfig.metricCard
-  
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={config.hoverEffect}
-      transition={{ duration: 0.3 }}
-    >
+    <div style={{ transition: 'box-shadow 0.15s ease' }}>
       <Card
         title={
           <Space>
-            <LineChartOutlined style={{ color: config.headerIconColor }} />
-            <span style={{ 
-              fontWeight: config.headerFontWeight, 
-              fontSize: config.headerFontSize 
-            }}>
+            <LineChartOutlined />
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
               {title}
             </span>
           </Space>
@@ -79,21 +67,14 @@ export const FancyMetricCard: React.FC<FancyMetricCardProps> = ({
         }
         bordered={false}
         style={{
-          borderRadius: config.borderRadius,
+          borderRadius: 8,
           overflow: 'hidden',
-          boxShadow: config.boxShadow,
-          position: 'relative'
-        }}
-        headStyle={{
-          padding: config.headerPadding,
-          background: `linear-gradient(135deg, ${config.headerGradient[0]}15, ${config.headerGradient[1]}15)`,
-          borderBottom: `2px solid ${config.headerGradient[0]}30`
         }}
         bodyStyle={{ padding: 16 }}
       >
         {children}
       </Card>
-    </motion.div>
+    </div>
   )
 }
 
