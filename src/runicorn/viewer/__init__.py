@@ -75,6 +75,9 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     # Add rate limiting middleware
     app.add_middleware(RateLimitMiddleware)
     
+    # Shutdown signal for WebSocket handlers
+    app.state.shutdown_event = asyncio.Event()
+    
     # Background task for status checking
     _status_check_task = None
     _sync_thread = None
@@ -103,6 +106,9 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     @app.on_event("shutdown") 
     async def shutdown_event():
         """Cleanup background tasks and connections on app shutdown."""
+        # Signal all WebSocket handlers to exit their loops
+        app.state.shutdown_event.set()
+        
         # Wait for sync thread to finish before closing the backend,
         # so we don't close SQLite while sync is still writing.
         if _sync_thread is not None and _sync_thread.is_alive():
