@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { Button, Input, Space, Switch, Tag, Tooltip, message } from 'antd'
+import { DownOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import AnsiToHtml from 'ansi-to-html'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSettings } from '../contexts/SettingsContext'
 
 // Constants
 const MAX_LINES = 5000
 const RECONNECT_BASE_MS = 500
 const RECONNECT_MAX_MS = 10000
+const SCROLL_BOTTOM_THRESHOLD = 50
 
 /**
  * Escape HTML special characters to prevent XSS attacks.
@@ -176,68 +179,69 @@ export default function LogsViewer({ url }: LogsViewerProps) {
     }
   }, [url])
 
-  // Auto-scroll effect
-  useEffect(() => {
-    if (autoScroll && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight
-    }
-  }, [allLines, autoScroll])
-
   // Filter and search lines
   const displayLines = useMemo(() => {
     let lines = allLines
-    
     if (filterTqdm) {
       lines = lines.filter(line => !isTqdmLine(line))
     }
-    
     if (searchKeyword) {
       const keyword = searchKeyword.toLowerCase()
       lines = lines.filter(line => line.toLowerCase().includes(keyword))
     }
-    
     return lines
   }, [allLines, filterTqdm, searchKeyword])
 
-  // Render line with ANSI colors and search highlight
-  const renderLine = useCallback((line: string, index: number) => {
-    let html: string
-    try {
-      html = ansiConverter.toHtml(line)
-    } catch {
-      // Fallback to escaped plain text if ANSI conversion fails
-      html = escapeHtml(line)
+  // Cache ANSI HTML conversions to avoid re-parsing on scroll
+  const htmlLines = useMemo(() => {
+    return displayLines.map(line => {
+      try {
+        return ansiConverter.toHtml(line)
+      } catch {
+        return escapeHtml(line)
+      }
+    })
+  }, [displayLines, ansiConverter])
+
+  // Virtual scroll
+  const virtualizer = useVirtualizer({
+    count: displayLines.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => 20,
+    overscan: 30,
+  })
+
+  // Smart auto-scroll: disable when user scrolls away from bottom
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_BOTTOM_THRESHOLD
+    if (!atBottom && autoScroll) {
+      setAutoScroll(false)
     }
-    
-    // Highlight search keyword (with proper HTML escaping to prevent XSS)
-    if (searchKeyword) {
-      const regex = new RegExp(`(${escapeRegex(searchKeyword)})`, 'gi')
-      html = html.replace(regex, '<mark style="background:#f0c674;color:#1d1f21">$1</mark>')
+  }, [autoScroll])
+
+  // Auto-scroll when new lines arrive
+  useEffect(() => {
+    if (autoScroll && displayLines.length > 0) {
+      virtualizer.scrollToIndex(displayLines.length - 1, { align: 'end' })
     }
-    
-    return (
-      <div 
-        key={index} 
-        className="log-line"
-        style={{ display: 'flex', minHeight: 20 }}
-      >
-        <span style={{ 
-          color: isDark ? '#6c7a89' : '#9CA3AF', 
-          minWidth: 50, 
-          textAlign: 'right', 
-          paddingRight: 12,
-          userSelect: 'none',
-          flexShrink: 0,
-        }}>
-          {index + 1}
-        </span>
-        <span 
-          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
-          dangerouslySetInnerHTML={{ __html: html }} 
-        />
-      </div>
-    )
-  }, [searchKeyword, isDark, ansiConverter])
+  }, [displayLines.length, autoScroll, virtualizer])
+
+  // Resume auto-scroll and jump to bottom
+  const resumeAutoScroll = useCallback(() => {
+    setAutoScroll(true)
+    if (displayLines.length > 0) {
+      virtualizer.scrollToIndex(displayLines.length - 1, { align: 'end' })
+    }
+  }, [virtualizer, displayLines.length])
+
+  // Highlight search keyword in pre-converted HTML
+  const highlightHtml = useCallback((html: string) => {
+    if (!searchKeyword) return html
+    const regex = new RegExp(`(${escapeRegex(searchKeyword)})`, 'gi')
+    return html.replace(regex, '<mark style="background:#f0c674;color:#1d1f21">$1</mark>')
+  }, [searchKeyword])
 
   const copyAll = useCallback(async () => {
     try {
@@ -264,7 +268,7 @@ export default function LogsViewer({ url }: LogsViewerProps) {
   }, [connected, nextRetryMs, t])
 
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       <Space style={{ marginBottom: 8 }} wrap>
         {statusTag}
         <Tooltip title={t('logs.tooltip.autoscroll')}>
@@ -284,21 +288,71 @@ export default function LogsViewer({ url }: LogsViewerProps) {
         <Button size="small" onClick={clearLogs}>{t('logs.clear')}</Button>
         <Button size="small" onClick={copyAll}>{t('logs.copy')}</Button>
       </Space>
-      <div 
-        ref={containerRef} 
-        style={{ 
-          height: 320, 
-          overflow: 'auto', 
-          background: isDark ? '#0b1020' : '#F8F9FA', 
-          color: isDark ? '#e6e9ef' : '#374151', 
-          padding: 12, 
-          borderRadius: 8, 
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', 
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        style={{
+          height: 320,
+          overflow: 'auto',
+          background: isDark ? '#0b1020' : '#F8F9FA',
+          color: isDark ? '#e6e9ef' : '#374151',
+          padding: '12px 0',
+          borderRadius: 8,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
           fontSize: 12,
         }}
       >
-        {displayLines.map((line, index) => renderLine(line, index))}
+        <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
+          {virtualizer.getVirtualItems().map(virtualRow => (
+            <div
+              key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualRow.start}px)`,
+                display: 'flex',
+                padding: '0 12px',
+                minHeight: 20,
+              }}
+            >
+              <span style={{
+                color: isDark ? '#6c7a89' : '#9CA3AF',
+                minWidth: 50,
+                textAlign: 'right',
+                paddingRight: 12,
+                userSelect: 'none',
+                flexShrink: 0,
+              }}>
+                {virtualRow.index + 1}
+              </span>
+              <span
+                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                dangerouslySetInnerHTML={{ __html: highlightHtml(htmlLines[virtualRow.index]) }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
+      {!autoScroll && displayLines.length > 0 && (
+        <Button
+          size="small"
+          icon={<DownOutlined />}
+          onClick={resumeAutoScroll}
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            right: 24,
+            zIndex: 10,
+            opacity: 0.9,
+          }}
+        >
+          {t('logs.resume_autoscroll')}
+        </Button>
+      )}
     </div>
   )
 }

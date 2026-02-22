@@ -148,6 +148,7 @@ export default {
   'logs.copy': '复制',
   'logs.copied': '已复制日志到剪贴板',
   'logs.copy_failed': '复制失败',
+  'logs.resume_autoscroll': '恢复自动滚动',
   
   'gpu.util': '利用率',
   'gpu.mem': '显存',

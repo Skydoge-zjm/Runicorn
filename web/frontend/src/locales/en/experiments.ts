@@ -148,6 +148,7 @@ export default {
   'logs.copy': 'Copy',
   'logs.copied': 'Copied logs to clipboard',
   'logs.copy_failed': 'Copy failed',
+  'logs.resume_autoscroll': 'Resume Auto-scroll',
   
   'gpu.util': 'Util',
   'gpu.mem': 'Memory',
