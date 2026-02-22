@@ -366,7 +366,15 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
             while not log_file.exists():
                 if shutdown_event and shutdown_event.is_set():
                     return
-                await asyncio.sleep(2)
+                # Event-aware sleep: wake immediately on shutdown
+                if shutdown_event:
+                    try:
+                        await asyncio.wait_for(shutdown_event.wait(), timeout=2)
+                        return  # shutdown signalled
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(2)
                 # Send periodic keep-alive to prevent timeout
                 if not log_file.exists():
                     await websocket.ping()
@@ -442,7 +450,15 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
                     else:
                         delay = 2.0  # Long idle: 2s
                     
-                    await asyncio.sleep(delay)
+                    # Use event-aware sleep: wake immediately on shutdown
+                    if shutdown_event:
+                        try:
+                            await asyncio.wait_for(shutdown_event.wait(), timeout=delay)
+                            break  # shutdown_event was set
+                        except asyncio.TimeoutError:
+                            pass  # normal timeout, continue polling
+                    else:
+                        await asyncio.sleep(delay)
                     
     except WebSocketDisconnect:
         logger.debug(f"WebSocket disconnected for run {run_id}")

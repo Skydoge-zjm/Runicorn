@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import signal
 from pathlib import Path
 from typing import Optional
 
@@ -102,17 +103,40 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             import threading
             _sync_thread = threading.Thread(target=_run_sync, daemon=True)
             _sync_thread.start()
+        
+        # Install a SIGINT wrapper so that shutdown_event is set BEFORE
+        # uvicorn starts waiting for connections to close.  This lets
+        # WebSocket handlers exit their loops promptly on Ctrl+C.
+        try:
+            original_sigint = signal.getsignal(signal.SIGINT)
+            
+            def _on_sigint(signum, frame):
+                app.state.shutdown_event.set()
+                # Chain to uvicorn's original handler so it proceeds with shutdown
+                if callable(original_sigint) and original_sigint is not signal.SIG_DFL:
+                    original_sigint(signum, frame)
+                else:
+                    raise KeyboardInterrupt
+            
+            signal.signal(signal.SIGINT, _on_sigint)
+        except (OSError, ValueError):
+            # signal.signal() can only be called from the main thread;
+            # if we're not there, fall back to on_event("shutdown") only.
+            logger.debug("Could not install SIGINT wrapper (not main thread)")
     
     @app.on_event("shutdown") 
     async def shutdown_event():
         """Cleanup background tasks and connections on app shutdown."""
-        # Signal all WebSocket handlers to exit their loops
+        # Ensure the event is set (covers the case where signal handler
+        # was not installed, e.g. non-main thread or SIGTERM shutdown).
         app.state.shutdown_event.set()
         
         # Wait for sync thread to finish before closing the backend,
         # so we don't close SQLite while sync is still writing.
         if _sync_thread is not None and _sync_thread.is_alive():
-            _sync_thread.join(timeout=10)
+            await asyncio.get_event_loop().run_in_executor(
+                None, lambda: _sync_thread.join(timeout=5)
+            )
             if _sync_thread.is_alive():
                 logger.warning("Sync thread did not finish within timeout")
         
