@@ -288,6 +288,9 @@ class SQLiteStorageBackend(StorageBackend):
     
     def _initialize_schema(self) -> None:
         """Initialize database schema from SQL file."""
+        # Migrate old schema before applying current schema.sql
+        self._migrate_legacy_schema()
+        
         schema_path = Path(__file__).parent / "schema.sql"
         
         try:
@@ -302,6 +305,89 @@ class SQLiteStorageBackend(StorageBackend):
         except Exception as e:
             logger.error(f"Failed to initialize database schema: {e}")
             raise
+    
+    def _migrate_legacy_schema(self) -> None:
+        """Migrate old schema (project/name) to new schema (path/alias/workspace_root).
+        
+        Old schema had 'project' and 'name' columns on the experiments table.
+        New schema replaced them with 'path' (flexible hierarchy), 'alias', and
+        'workspace_root'.  Since CREATE TABLE IF NOT EXISTS won't alter an
+        existing table, the views in schema.sql that reference 'path' would fail
+        on an old DB.  This method detects the old layout and upgrades it
+        in-place before schema.sql runs.
+        """
+        conn = self.pool.get_connection()
+        try:
+            # Check if experiments table exists at all
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='experiments'"
+            )
+            if not cursor.fetchone():
+                return  # Fresh install, nothing to migrate
+            
+            # Read existing columns
+            cursor = conn.execute("PRAGMA table_info(experiments)")
+            columns = {row[1] for row in cursor}
+            
+            if 'project' not in columns:
+                return  # Already fully migrated or unknown schema
+            
+            needs_add_columns = 'path' not in columns
+            
+            logger.info("Detected legacy schema (project/name), migrating to new schema (path/alias/workspace_root)...")
+            
+            # Step 1: Add new columns if not yet present
+            if needs_add_columns:
+                for col_sql in [
+                    "ALTER TABLE experiments ADD COLUMN path TEXT NOT NULL DEFAULT 'default'",
+                    "ALTER TABLE experiments ADD COLUMN alias TEXT",
+                    "ALTER TABLE experiments ADD COLUMN workspace_root TEXT",
+                ]:
+                    try:
+                        conn.execute(col_sql)
+                    except sqlite3.OperationalError:
+                        pass  # Column already exists
+                
+                # Migrate data: path = project/name (or just project if name is empty)
+                conn.execute("""
+                    UPDATE experiments
+                    SET path = CASE
+                        WHEN name IS NOT NULL AND name != '' THEN project || '/' || name
+                        ELSE project
+                    END
+                    WHERE path = 'default'
+                """)
+            
+            # Step 2: Drop ALL views on experiments (they'll be recreated by schema.sql)
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='view'"
+            )
+            for row in cursor.fetchall():
+                conn.execute(f"DROP VIEW IF EXISTS {row[0]}")
+            
+            # Step 3: Drop any indexes referencing legacy columns
+            cursor = conn.execute(
+                "SELECT name, sql FROM sqlite_master "
+                "WHERE type='index' AND tbl_name='experiments' AND sql IS NOT NULL"
+            )
+            for row in cursor.fetchall():
+                if 'project' in row[1] or '"name"' in row[1] or ', name' in row[1] or '(name' in row[1]:
+                    conn.execute(f"DROP INDEX IF EXISTS {row[0]}")
+            
+            # Step 4: Drop legacy columns (SQLite 3.35+ / Python 3.12+)
+            for col in ('project', 'name'):
+                try:
+                    conn.execute(f"ALTER TABLE experiments DROP COLUMN {col}")
+                except sqlite3.OperationalError as e:
+                    logger.debug(f"Could not drop column {col}: {e}")
+            
+            conn.commit()
+            logger.info("Legacy schema migration completed")
+            
+        except Exception as e:
+            logger.warning(f"Legacy schema migration failed: {e}")
+        finally:
+            self.pool.return_connection(conn)
     
     def create_experiment(self, experiment: ExperimentRecord) -> str:
         """Create experiment in SQLite database."""
