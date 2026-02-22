@@ -26,7 +26,7 @@ class TestGetConfig:
 class TestSetUserRootDir:
 
     def test_set_valid_path(
-        self, viewer_client: TestClient, tmp_path: Path
+        self, viewer_client: TestClient, tmp_path: Path, mock_config_root
     ) -> None:
         target = tmp_path / "new_storage"
         resp = viewer_client.post(
