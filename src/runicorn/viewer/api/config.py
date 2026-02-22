@@ -37,7 +37,7 @@ async def get_config(request: Request) -> Dict[str, Any]:
     config_file_path = get_config_file_path()
     
     return {
-        "user_root_dir": str(get_user_root_dir() or ""),
+        "user_root_dir": str(get_user_root_dir() or storage_root),
         "storage": str(storage_root),
         "config_file": str(config_file_path),
     }
