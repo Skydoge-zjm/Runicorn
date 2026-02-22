@@ -188,12 +188,13 @@ class ConnectionPool:
     
     def _create_connection(self) -> sqlite3.Connection:
         """Create a new SQLite connection with optimizations."""
-        conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        conn = sqlite3.connect(str(self.db_path), timeout=10.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row  # Enable dict-like access
         
         # Performance optimizations
         conn.execute("PRAGMA journal_mode=WAL")        # Write-Ahead Logging
         conn.execute("PRAGMA synchronous=NORMAL")      # Balance safety and speed
+        conn.execute("PRAGMA busy_timeout=10000")      # Wait up to 10s on lock
         conn.execute("PRAGMA temp_store=memory")       # Store temp data in memory
         conn.execute("PRAGMA mmap_size=268435456")     # 256MB memory mapping
         conn.execute("PRAGMA cache_size=10000")        # 10MB cache
