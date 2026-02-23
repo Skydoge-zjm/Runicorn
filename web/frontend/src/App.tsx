@@ -93,6 +93,11 @@ export default function App() {
   }, [])
 
   const isDark = settings.themeMode === 'dark' || (settings.themeMode === 'auto' && systemDark)
+
+  // Sync body background with theme so opacity=0 backgrounds still look correct
+  useEffect(() => {
+    document.documentElement.style.background = isDark ? '#141414' : '#ffffff'
+  }, [isDark])
   const algorithms = useMemo(() => {
     const arr: any[] = [isDark ? theme.darkAlgorithm : theme.defaultAlgorithm]
     if (settings.density === 'compact') arr.push(theme.compactAlgorithm)

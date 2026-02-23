@@ -68,28 +68,65 @@
 }
 
 
-/* Smooth scrollbar */
+/* Make table fill container height so scrollbar stays at bottom */
+.enhanced-table.ant-table-wrapper,
+.enhanced-table .ant-spin-nested-loading,
+.enhanced-table .ant-spin-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.enhanced-table .ant-table {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.enhanced-table .ant-table-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.enhanced-table .ant-table-content,
+.enhanced-table .ant-table-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto !important;
+}
+
+/* Scrollbar styling */
+.enhanced-table .ant-table-content,
 .enhanced-table .ant-table-body {
   scrollbar-width: thin;
-  scrollbar-color: #d9d9d9 transparent;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
+.enhanced-table .ant-table-content::-webkit-scrollbar,
 .enhanced-table .ant-table-body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
+.enhanced-table .ant-table-content::-webkit-scrollbar-track,
 .enhanced-table .ant-table-body::-webkit-scrollbar-track {
   background: transparent;
 }
 
+.enhanced-table .ant-table-content::-webkit-scrollbar-thumb,
 .enhanced-table .ant-table-body::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
 }
 
+.enhanced-table .ant-table-content::-webkit-scrollbar-thumb:hover,
 .enhanced-table .ant-table-body::-webkit-scrollbar-thumb:hover {
-  background: #bfbfbf;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* Global focus-visible indicator for keyboard navigation */

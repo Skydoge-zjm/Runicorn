@@ -197,7 +197,22 @@ const MetricChart = memo(function MetricChart({
       if (isSingleRun && runIndex === 0) {
         const bp = getBestType(yKey)
         if (bp) {
-          s.markPoint = { data: [{ type: bp, name: bp === 'max' ? 'Best (max)' : 'Best (min)' }], symbolSize: 60 }
+          s.markPoint = {
+            symbol: 'pin',
+            symbolSize: 40,
+            label: {
+              show: true,
+              position: 'inside',
+              formatter: (p: any) => {
+                const v = p.value
+                if (v == null) return ''
+                return String(parseFloat(Number(v).toPrecision(4)))
+              },
+              fontSize: 11,
+              fontWeight: 600,
+            },
+            data: [{ type: bp, name: bp === 'max' ? 'Best' : 'Best' }],
+          }
         }
         
         // Stage separators
@@ -264,18 +279,22 @@ const MetricChart = memo(function MetricChart({
         }
     
     return {
+      textStyle: { color: token.colorText },
       title: { text: title, left: 'center', top: 8,
-        textStyle: { fontSize: 16, fontWeight: 600 }
+        textStyle: { fontSize: 16, fontWeight: 600, color: token.colorText }
       },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
       legend: legendConfig,
       ...(colors.length > 0 && { color: colors }),
-      xAxis: isSingleRun ? { type: 'category', data: xAxisData } : { type: 'value', name: xKey },
+      xAxis: isSingleRun
+        ? { type: 'category', data: xAxisData, axisLabel: { color: token.colorTextSecondary }, axisLine: { lineStyle: { color: token.colorBorder } } }
+        : { type: 'value', name: xKey, axisLabel: { color: token.colorTextSecondary }, axisLine: { lineStyle: { color: token.colorBorder } } },
       yAxis: {
         type: useLog ? 'log' : 'value',
         scale: dynamicScale,
         min: dynamicScale ? 'dataMin' : 0,
         axisLabel: {
+          color: token.colorTextSecondary,
           formatter: (v: number) => {
             if (v === 0) return '0'
             const abs = Math.abs(v)
@@ -284,6 +303,8 @@ const MetricChart = memo(function MetricChart({
             return String(parseFloat(v.toPrecision(4)))
           },
         },
+        axisLine: { lineStyle: { color: token.colorBorder } },
+        splitLine: { lineStyle: { color: token.colorBorderSecondary } },
       },
       grid: { left: 50, right: 30, top: gridTop, bottom: 80, show: settings.showGridLines },
       dataZoom: [{ type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 40 }],
@@ -292,7 +313,7 @@ const MetricChart = memo(function MetricChart({
       animation: settings.enableChartAnimations,
       animationDuration: settings.enableChartAnimations ? 1000 : 0,
     }
-  }, [runs, xKey, xAxisKey, yKey, title, useLog, dynamicScale, smoothing, presentCols, isSingleRun, primaryRun, settings, token.colorBorder, showLegend, colors, legendSelected])
+  }, [runs, xKey, xAxisKey, yKey, title, useLog, dynamicScale, smoothing, presentCols, isSingleRun, primaryRun, settings, token.colorText, token.colorTextSecondary, token.colorBorder, token.colorBorderSecondary, showLegend, colors, legendSelected])
 
   const exportCsv = () => {
     try {

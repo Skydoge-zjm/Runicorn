@@ -43,8 +43,8 @@ interface PathTreePanelProps {
   style?: React.CSSProperties
 }
 
-// Custom styles for the tree
-const treeStyles = `
+// Build theme-aware custom styles for the tree
+const buildTreeStyles = (token: any) => `
   .path-tree-panel .ant-tree {
     background: transparent;
     font-size: 13px;
@@ -59,11 +59,15 @@ const treeStyles = `
   }
   
   .path-tree-panel .ant-tree-treenode:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: ${token?.colorFillTertiary || 'rgba(255,255,255,0.08)'};
   }
   
   .path-tree-panel .ant-tree-treenode-selected {
-    background: #e6f4ff !important;
+    background: ${token?.colorPrimaryBg || 'rgba(22,119,255,0.16)'} !important;
+  }
+
+  .path-tree-panel .ant-tree-treenode-selected:hover {
+    background: ${token?.colorPrimaryBg || 'rgba(22,119,255,0.16)'} !important;
   }
   
   .path-tree-panel .ant-tree-treenode-selected::before {
@@ -73,8 +77,12 @@ const treeStyles = `
     top: 2px;
     bottom: 2px;
     width: 3px;
-    background: #1677ff;
+    background: ${token?.colorPrimary || '#1677ff'};
     border-radius: 0 2px 2px 0;
+  }
+
+  .path-tree-panel .ant-tree-node-content-wrapper.ant-tree-node-selected {
+    background: transparent !important;
   }
   
   .path-tree-panel .ant-tree-node-content-wrapper {
@@ -90,7 +98,7 @@ const treeStyles = `
   .path-tree-panel .ant-tree-switcher {
     width: 20px;
     line-height: 28px;
-    color: #faad14;
+    color: ${token?.colorWarning || '#faad14'};
   }
   
   .path-tree-panel .ant-tree-indent-unit {
@@ -103,11 +111,11 @@ const treeStyles = `
   
   /* Tree lines - more subtle */
   .path-tree-panel .ant-tree-indent-unit::before {
-    border-color: #e8e8e8 !important;
+    border-color: ${token?.colorBorderSecondary || '#434343'} !important;
   }
   
   .path-tree-panel .ant-tree-switcher-line-icon {
-    color: #d9d9d9;
+    color: ${token?.colorTextQuaternary || '#8c8c8c'};
   }
   
   /* Running indicator pulse animation */
@@ -228,16 +236,24 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
   const [contextMenuPath, setContextMenuPath] = useState<string | null>(null)
   const treeRef = useRef<HTMLDivElement>(null)
 
-  // Inject custom styles
+  const treeStyles = useMemo(
+    () => buildTreeStyles(token),
+    [token.colorFillTertiary, token.colorPrimaryBg, token.colorPrimary, token.colorWarning, token.colorBorderSecondary, token.colorTextQuaternary]
+  )
+
+  // Inject/update theme-aware custom styles
   useEffect(() => {
     const styleId = 'path-tree-panel-styles'
-    if (!document.getElementById(styleId)) {
+    const existing = document.getElementById(styleId) as HTMLStyleElement | null
+    if (existing) {
+      existing.textContent = treeStyles
+    } else {
       const styleEl = document.createElement('style')
       styleEl.id = styleId
       styleEl.textContent = treeStyles
       document.head.appendChild(styleEl)
     }
-  }, [])
+  }, [treeStyles])
 
   // Fetch path tree from API
   const fetchPathTree = useCallback(async () => {

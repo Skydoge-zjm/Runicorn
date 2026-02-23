@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Card, Space, Alert, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge, Row, Col, Typography, Statistic, Divider, Collapse, Tabs } from 'antd'
+import { Card, Space, Alert, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge, Row, Col, Typography, Statistic, Divider, Collapse, Tabs, theme } from 'antd'
 import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, LineChartOutlined, MinusOutlined, ReloadOutlined, RocketOutlined, ClockCircleOutlined, CalendarOutlined, FolderOpenOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { getRunDetail, getStepMetrics } from '../api'
 import LogsViewer from '../components/LogsViewer'
@@ -41,6 +41,7 @@ export default function RunDetailPage() {
   const { id = '' } = useParams()
   const { t } = useTranslation()
   const { settings } = useSettings()
+  const { token } = theme.useToken()
   const navigate = useNavigate()
   const [detail, setDetail] = useState<any>(null)
   const [stepMetrics, setStepMetrics] = useState<{ columns: string[]; rows: any[]; total?: number; sampled?: number }>({ columns: [], rows: [] })
@@ -370,10 +371,10 @@ export default function RunDetailPage() {
                 minWidth: 300, 
                 maxWidth: '100%', 
                 overflow: 'hidden',
-                border: '1px solid #f0f0f0',
+                border: `1px solid ${token.colorBorderSecondary}`,
                 borderRadius: '6px',
                 padding: '8px',
-                backgroundColor: '#fff'
+                backgroundColor: token.colorBgContainer
               }}>
                 <ErrorBoundary fallback={`Chart error: ${k}`}>
                   <LazyChartWrapper height={chartHeight}>

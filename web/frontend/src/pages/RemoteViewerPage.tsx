@@ -690,7 +690,7 @@ export default function RemoteViewerPage() {
       </div>
 
       {/* Main content: Two columns - fills remaining space */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
         <Row gutter={24}>
         {/* Left Column: Saved Servers */}
         <Col xs={24} lg={12}>

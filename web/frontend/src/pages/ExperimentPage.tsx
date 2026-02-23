@@ -436,7 +436,7 @@ const ExperimentPage: React.FC = () => {
 
                 <Card bordered={false}
                   style={{ borderRadius: 8, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-                  bodyStyle={{ padding: 0, flex: 1, minHeight: 0, overflow: 'auto' }}>
+                  bodyStyle={{ padding: 0, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   <Table
                     className="enhanced-table"
                     components={{ header: { cell: ResizableTitle } }}

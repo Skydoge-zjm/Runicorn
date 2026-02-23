@@ -178,7 +178,7 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
   }
 
   return (
-    <div style={{ height: '100%', overflow: 'auto', padding: '0 4px' }}>
+    <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', padding: '0 4px' }}>
       {/* Header with metric toggles */}
       <Card
         size="small"
