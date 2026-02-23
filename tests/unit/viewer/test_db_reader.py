@@ -158,7 +158,7 @@ class TestSyncFilesystemToDb:
 
         run_dir = _populate_run(storage_root, "sync_del_001")
         write_json(run_dir / "status.json", {"status": "finished"})
-        soft_delete_run(run_dir, reason="test")
+        soft_delete_run(run_dir, storage_root=storage_root, reason="test")
 
         inserted = sync_filesystem_to_db(storage_root, sqlite_backend)
         assert inserted == 1

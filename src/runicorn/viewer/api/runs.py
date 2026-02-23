@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import logging
 import os
+import re
+import shutil
 import tempfile
 import mimetypes
 import zipfile
@@ -252,6 +254,12 @@ class RunUpdatePayload(BaseModel):
     tags: Optional[List[str]] = None
 
 
+class MoveRunsPayload(BaseModel):
+    """Model for move runs request."""
+    run_ids: List[str]
+    target_path: str
+
+
 @router.patch("/runs/{run_id}")
 async def update_run(run_id: str, request: Request, payload: RunUpdatePayload) -> Dict[str, Any]:
     """
@@ -321,6 +329,101 @@ async def update_run(run_id: str, request: Request, payload: RunUpdatePayload) -
         "ok": True,
         "alias": meta.get("alias"),
         "tags": meta.get("tags", []),
+    }
+
+
+_SAFE_PATH_RE = re.compile(r'^[a-zA-Z0-9_/\-. ]+$')
+
+
+@router.post("/runs/move")
+async def move_runs(request: Request, payload: MoveRunsPayload) -> Dict[str, Any]:
+    """
+    Move runs to a different path by physically relocating their directories.
+
+    Args:
+        payload: run_ids and target_path
+
+    Returns:
+        Summary of moved/failed runs
+    """
+    storage_root = get_storage_root(request)
+    target_path = payload.target_path.strip().strip("/")
+
+    # Validate target_path
+    if not target_path:
+        raise HTTPException(status_code=400, detail="target_path is required")
+    if ".." in target_path:
+        raise HTTPException(status_code=400, detail="target_path must not contain '..'")
+    if not _SAFE_PATH_RE.match(target_path):
+        raise HTTPException(status_code=400, detail="target_path contains invalid characters")
+
+    if not payload.run_ids:
+        raise HTTPException(status_code=400, detail="run_ids is required")
+    if not validate_batch_size(len(payload.run_ids), max_size=100):
+        raise HTTPException(status_code=400, detail="Cannot move more than 100 runs at once")
+
+    backend = get_backend(request)
+    moved: List[Dict[str, str]] = []
+    failed: List[Dict[str, str]] = []
+
+    for run_id in payload.run_ids:
+        if not validate_run_id(run_id):
+            failed.append({"run_id": run_id, "error": "invalid run_id format"})
+            continue
+
+        entry = find_run_dir_by_id(storage_root, run_id)
+        if not entry:
+            failed.append({"run_id": run_id, "error": "run not found"})
+            continue
+
+        old_dir = entry.dir
+        old_path = entry.path or "default"
+        new_dir = storage_root / "runs" / target_path / run_id
+
+        if old_dir == new_dir:
+            # Already at target — skip silently
+            moved.append({"run_id": run_id, "old_path": old_path, "new_path": target_path})
+            continue
+
+        if new_dir.exists():
+            failed.append({"run_id": run_id, "error": "target directory already exists"})
+            continue
+
+        try:
+            new_dir.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(old_dir), str(new_dir))
+
+            # Update meta.json
+            meta_path = new_dir / "meta.json"
+            meta = read_json(meta_path)
+            if isinstance(meta, dict):
+                meta["path"] = target_path
+                import json
+                with open(meta_path, "w", encoding="utf-8") as f:
+                    json.dump(meta, f, indent=2, ensure_ascii=False)
+
+            # Update DB
+            if backend is not None:
+                try:
+                    backend.update_experiment(run_id, {
+                        "path": target_path,
+                        "run_dir": str(new_dir),
+                    })
+                except Exception as e:
+                    logger.debug(f"DB update failed for moved run {run_id}: {e}")
+
+            moved.append({"run_id": run_id, "old_path": old_path, "new_path": target_path})
+            logger.info(f"Moved run {run_id}: {old_path} -> {target_path}")
+        except Exception as e:
+            logger.error(f"Failed to move run {run_id}: {e}")
+            failed.append({"run_id": run_id, "error": str(e)})
+
+    return {
+        "ok": True,
+        "moved_count": len(moved),
+        "failed_count": len(failed),
+        "moved": moved,
+        "failed": failed,
     }
 
 
@@ -522,6 +625,7 @@ async def soft_delete_runs(request: Request, payload: Dict[str, Any] = Body(...)
                 detail=f"Invalid run_id format: {run_id}"
             )
     
+    backend = get_backend(request)
     results = {}
     for run_id in run_ids:
         entry = find_run_dir_by_id(storage_root, run_id)
@@ -534,17 +638,28 @@ async def soft_delete_runs(request: Request, payload: Dict[str, Any] = Body(...)
             results[run_id] = {"success": False, "error": "already deleted"}
             continue
         
-        success = soft_delete_run(entry.dir, "user_deleted")
+        run_path = entry.path
+        success, error, new_dir = soft_delete_run(
+            entry.dir,
+            storage_root=storage_root,
+            reason="user_deleted",
+            original_path=run_path,
+        )
         results[run_id] = {"success": success}
+        if error:
+            results[run_id]["error"] = error
         
         # Dual-write to SQLite
-        if success:
-            backend = get_backend(request)
-            if backend is not None:
-                try:
-                    backend.soft_delete_experiments([run_id], reason="user_deleted")
-                except Exception:
-                    pass
+        if success and backend is not None:
+            try:
+                backend.soft_delete_experiments([run_id], reason="user_deleted")
+                if new_dir is not None:
+                    backend.update_experiment(run_id, {
+                        "run_dir": str(new_dir),
+                        "path": run_path or "default",
+                    })
+            except Exception:
+                pass
     
     successful_deletes = sum(1 for r in results.values() if r["success"])
     return {
@@ -671,8 +786,10 @@ async def restore_runs(request: Request, payload: Dict[str, Any] = Body(...)) ->
             results[run_id] = {"success": False, "error": "run not deleted"}
             continue
         
-        success = restore_run(entry.dir)
+        success, error, new_dir = restore_run(entry.dir, storage_root=storage_root)
         results[run_id] = {"success": success}
+        if error:
+            results[run_id]["error"] = error
         
         # Dual-write to SQLite
         if success:
@@ -680,6 +797,14 @@ async def restore_runs(request: Request, payload: Dict[str, Any] = Body(...)) ->
             if backend is not None:
                 try:
                     backend.restore_experiments([run_id])
+                    # Update run_dir + path when the run was moved out of .recycle
+                    if new_dir is not None and new_dir != entry.dir:
+                        meta = read_json(new_dir / "meta.json")
+                        restored_path = (meta.get("path") if isinstance(meta, dict) else None) or entry.path
+                        backend.update_experiment(run_id, {
+                            "run_dir": str(new_dir),
+                            "path": restored_path or "default",
+                        })
                 except Exception:
                     pass
     

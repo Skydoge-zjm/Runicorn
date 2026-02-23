@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 
-from ...storage.file_utils import iter_all_runs, read_json, write_json
+from ...storage.file_utils import iter_all_runs, read_json, write_json, is_run_deleted
 from ..utils.helpers import is_within_directory
 from ..services.db_reader import get_backend, sync_filesystem_to_db
 
@@ -404,7 +404,7 @@ if HAS_MULTIPART:
                 raise HTTPException(status_code=400, detail="Preview archive no longer exists")
         else:
             if file is None:
-                raise HTTPException(status_code=400, detail="file is required when preview_token is not provided")
+                raise HTTPException(status_code=422, detail="file is required when preview_token is not provided")
             try:
                 suffix = ".zip" if file.filename and file.filename.lower().endswith(".zip") else ".tar.gz"
             except Exception:
@@ -439,6 +439,35 @@ if HAS_MULTIPART:
                     tmp_path.unlink(missing_ok=True)
             except Exception:
                 pass
+
+        # Remove stale deleted copies for re-imported runs.
+        # Unified flow: deleted runs live under .recycle, so stale copies are
+        # deleted from there. Keep a legacy fallback for old in-place markers.
+        revived_ids: List[str] = []
+        for entry in iter_all_runs(storage_root, include_deleted=True):
+            if entry.dir.name in archive_run_ids and is_run_deleted(entry.dir):
+                try:
+                    if ".recycle" in entry.dir.parts:
+                        import shutil as _shutil
+                        _shutil.rmtree(entry.dir)
+                        logger.info(f"Removed stale .recycle copy for re-imported run: {entry.dir.name}")
+                    else:
+                        # Legacy compatibility: old soft-deletes were in-place.
+                        (entry.dir / ".deleted").unlink()
+                        logger.info(f"Removed legacy in-place .deleted marker for re-imported run: {entry.dir.name}")
+                    revived_ids.append(entry.dir.name)
+                except Exception:
+                    pass
+
+        # Restore re-imported runs in DB
+        if revived_ids:
+            backend = get_backend(request)
+            if backend is not None:
+                for rid in revived_ids:
+                    try:
+                        backend.restore_experiments([rid])
+                    except Exception:
+                        pass
 
         # Delta
         after_entries = iter_all_runs(storage_root)

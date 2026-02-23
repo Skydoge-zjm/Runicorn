@@ -13,13 +13,13 @@
  * - Smooth animations
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Tree, Spin, Empty, Input, Tooltip, Dropdown, Modal, theme } from 'antd'
-import { FolderOutlined, FolderOpenOutlined, SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, AppstoreOutlined, LoadingOutlined } from '@ant-design/icons'
+import { Tree, Spin, Empty, Input, Tooltip, Dropdown, Modal, message, theme } from 'antd'
+import { FolderOutlined, FolderOpenOutlined, FolderAddOutlined, SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, AppstoreOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { DataNode, TreeProps } from 'antd/es/tree'
 import type { MenuProps } from 'antd'
-import { listPaths } from '../api'
+import { listPaths, createPath } from '../api'
 import logger from '../utils/logger'
 
 interface PathStats {
@@ -40,6 +40,9 @@ interface PathTreePanelProps {
   onSelectPath: (path: string | null) => void
   onBatchDelete?: (path: string) => void
   onBatchExport?: (path: string) => void
+  onMoveRuns?: (runIds: string[], targetPath: string) => void
+  /** Increment to trigger a tree refresh from the parent */
+  refreshSignal?: number
   style?: React.CSSProperties
 }
 
@@ -157,7 +160,8 @@ const buildTreeData = (
   tree: Record<string, any>,
   parentPath: string = '',
   stats?: Record<string, PathStats>,
-  token?: any
+  token?: any,
+  dropTargetPath?: string | null,
 ): DataNode[] => {
   const nodes: DataNode[] = []
   
@@ -165,6 +169,7 @@ const buildTreeData = (
     const currentPath = parentPath ? `${parentPath}/${key}` : key
     const hasChildren = Object.keys(children).length > 0
     const pathStats = stats?.[currentPath]
+    const isDropTarget = dropTargetPath === currentPath
     
     nodes.push({
       key: currentPath,
@@ -175,6 +180,10 @@ const buildTreeData = (
           gap: 6,
           width: '100%',
           paddingRight: 4,
+          borderRadius: 4,
+          outline: isDropTarget ? `2px dashed ${token?.colorPrimary || '#1677ff'}` : 'none',
+          background: isDropTarget ? (token?.colorPrimaryBgHover || 'rgba(22,119,255,0.12)') : 'transparent',
+          transition: 'outline 0.1s, background 0.1s',
         }}>
           <span style={{ 
             flex: 1, 
@@ -211,7 +220,7 @@ const buildTreeData = (
           )}
         </span>
       ),
-      children: hasChildren ? buildTreeData(children, currentPath, stats, token) : undefined,
+      children: hasChildren ? buildTreeData(children, currentPath, stats, token, dropTargetPath) : undefined,
       isLeaf: !hasChildren,
     })
   }
@@ -220,11 +229,15 @@ const buildTreeData = (
   return nodes.sort((a, b) => String(a.key).localeCompare(String(b.key)))
 }
 
+const DRAG_MIME = 'application/runicorn-run-ids'
+
 const PathTreePanel: React.FC<PathTreePanelProps> = ({
   selectedPath,
   onSelectPath,
   onBatchDelete,
   onBatchExport,
+  onMoveRuns,
+  refreshSignal,
   style,
 }) => {
   const { t } = useTranslation()
@@ -234,6 +247,9 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([])
   const [searchText, setSearchText] = useState('')
   const [contextMenuPath, setContextMenuPath] = useState<string | null>(null)
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null)
+  const [newFolderParent, setNewFolderParent] = useState<string | null>(null)
+  const [newFolderName, setNewFolderName] = useState('')
   const treeRef = useRef<HTMLDivElement>(null)
 
   const treeStyles = useMemo(
@@ -276,7 +292,14 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
 
   useEffect(() => {
     fetchPathTree()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-fetch when parent signals a data change
+  useEffect(() => {
+    if (refreshSignal && refreshSignal > 0) {
+      fetchPathTree()
+    }
+  }, [refreshSignal]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist expanded keys to localStorage
   useEffect(() => {
@@ -322,7 +345,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
   const treeNodes = useMemo(() => {
     if (!treeData?.tree) return []
     
-    const nodes = buildTreeData(treeData.tree, '', treeData.stats, token)
+    const nodes = buildTreeData(treeData.tree, '', treeData.stats, token, dropTargetPath)
     
     // Filter by search text
     if (searchText) {
@@ -346,7 +369,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
     }
     
     return nodes
-  }, [treeData, searchText, token])
+  }, [treeData, searchText, token, dropTargetPath])
 
   // Handle tree node selection
   const handleSelect: TreeProps['onSelect'] = (selectedKeys) => {
@@ -368,8 +391,36 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
     setExpandedKeys(keys)
   }
 
+  // Create folder handler
+  const handleCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim()
+    if (!name) return
+    const fullPath = newFolderParent ? `${newFolderParent}/${name}` : name
+    try {
+      await createPath(fullPath)
+      message.success(t('experiments.folder_created', { path: fullPath }))
+      setNewFolderParent(null)
+      setNewFolderName('')
+      fetchPathTree()
+    } catch (e: any) {
+      message.error(typeof e?.message === 'string' ? e.message : t('experiments.folder_create_failed'))
+    }
+  }, [newFolderName, newFolderParent, t, fetchPathTree])
+
   // Context menu items
   const contextMenuItems: MenuProps['items'] = [
+    {
+      key: 'new_folder',
+      icon: <FolderAddOutlined />,
+      label: t('experiments.new_subfolder'),
+      onClick: () => {
+        if (contextMenuPath) {
+          setNewFolderParent(contextMenuPath)
+          setNewFolderName('')
+        }
+      },
+    },
+    { type: 'divider' },
     {
       key: 'delete',
       icon: <DeleteOutlined />,
@@ -403,6 +454,36 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
   const handleRightClick: TreeProps['onRightClick'] = ({ node }) => {
     setContextMenuPath(String(node.key))
   }
+
+  // --- Drag-and-drop handlers ---
+  const handleDragOver = useCallback((path: string) => (e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes(DRAG_MIME)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropTargetPath(path)
+  }, [])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear if leaving the node (not entering a child)
+    const related = e.relatedTarget as HTMLElement | null
+    if (related && (e.currentTarget as HTMLElement).contains(related)) return
+    setDropTargetPath(null)
+  }, [])
+
+  const handleDrop = useCallback((path: string) => (e: React.DragEvent) => {
+    e.preventDefault()
+    setDropTargetPath(null)
+    const raw = e.dataTransfer.getData(DRAG_MIME)
+    if (!raw || !onMoveRuns) return
+    try {
+      const ids: string[] = JSON.parse(raw)
+      if (ids.length > 0) {
+        onMoveRuns(ids, path)
+      }
+    } catch {
+      // ignore
+    }
+  }, [onMoveRuns])
 
   if (loading && !treeData) {
     return (
@@ -452,17 +533,25 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
             <FolderOutlined style={{ marginRight: 6, color: token.colorWarning }} />
             {t('experiments.path_tree')}
           </span>
-          <Tooltip title={t('runs.refresh')}>
-            <ReloadOutlined 
-              style={{ 
-                cursor: 'pointer', 
-                color: token.colorTextSecondary,
-                transition: 'color 0.2s',
-              }}
-              onClick={fetchPathTree}
-              spin={loading}
-            />
-          </Tooltip>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Tooltip title={t('experiments.new_folder')}>
+              <PlusOutlined
+                style={{ cursor: 'pointer', color: token.colorTextSecondary, fontSize: 12 }}
+                onClick={() => { setNewFolderParent(''); setNewFolderName('') }}
+              />
+            </Tooltip>
+            <Tooltip title={t('runs.refresh')}>
+              <ReloadOutlined 
+                style={{ 
+                  cursor: 'pointer', 
+                  color: token.colorTextSecondary,
+                  transition: 'color 0.2s',
+                }}
+                onClick={fetchPathTree}
+                spin={loading}
+              />
+            </Tooltip>
+          </div>
         </div>
         <Input
           size="small"
@@ -483,8 +572,20 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         minHeight: 0,  // Important for flex child scrolling
       }}>
         {/* "All Runs" option */}
+        <Dropdown
+          menu={{ items: [{
+            key: 'new_folder',
+            icon: <FolderAddOutlined />,
+            label: t('experiments.new_folder'),
+            onClick: () => { setNewFolderParent(''); setNewFolderName('') },
+          }] }}
+          trigger={['contextMenu']}
+        >
         <motion.div
           onClick={() => onSelectPath(null)}
+          onDragOver={handleDragOver('default')}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop('default')}
           whileHover={{ backgroundColor: selectedPath === null ? token.colorPrimaryBg : token.colorFillTertiary }}
           whileTap={{ scale: 0.98 }}
           style={{
@@ -492,7 +593,9 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
             cursor: 'pointer',
             borderRadius: 4,
             margin: '0 4px 4px',
-            background: selectedPath === null ? token.colorPrimaryBg : 'transparent',
+            background: dropTargetPath === 'default'
+              ? token.colorPrimaryBgHover
+              : selectedPath === null ? token.colorPrimaryBg : 'transparent',
             color: selectedPath === null ? token.colorPrimary : token.colorText,
             fontWeight: selectedPath === null ? 600 : 400,
             fontSize: 13,
@@ -501,6 +604,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
             gap: 6,
             position: 'relative',
             borderLeft: selectedPath === null ? `3px solid ${token.colorPrimary}` : '3px solid transparent',
+            outline: dropTargetPath === 'default' ? `2px dashed ${token.colorPrimary}` : 'none',
             transition: 'all 0.15s ease',
           }}
         >
@@ -528,6 +632,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
             </span>
           )}
         </motion.div>
+        </Dropdown>
 
         {/* Path tree */}
         <AnimatePresence mode="wait">
@@ -542,7 +647,59 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
                 menu={{ items: contextMenuItems }}
                 trigger={['contextMenu']}
               >
-                <div>
+                <div
+                  onDragOver={(e) => {
+                    // Find closest tree node to highlight
+                    if (!e.dataTransfer.types.includes(DRAG_MIME)) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    const target = (e.target as HTMLElement).closest('.ant-tree-treenode') as HTMLElement | null
+                    if (target) {
+                      const key = target.getAttribute('data-key') || target.querySelector('.ant-tree-node-content-wrapper')?.closest('[data-key]')?.getAttribute('data-key')
+                      // Try to find key from the tree node's title
+                      const titleEl = target.querySelector('.ant-tree-node-content-wrapper')
+                      if (titleEl) {
+                        // Walk treeNodes to find matching key by DOM position
+                        const allNodes = treeRef.current?.querySelectorAll('.ant-tree-treenode')
+                        if (allNodes) {
+                          const idx = Array.from(allNodes).indexOf(target)
+                          // Flatten tree to get key by index
+                          const flatKeys: string[] = []
+                          const flatten = (nodes: DataNode[]) => {
+                            for (const n of nodes) {
+                              flatKeys.push(String(n.key))
+                              if (n.children && expandedKeys.includes(n.key)) flatten(n.children)
+                            }
+                          }
+                          flatten(treeNodes)
+                          if (idx >= 0 && idx < flatKeys.length) {
+                            setDropTargetPath(flatKeys[idx])
+                            return
+                          }
+                        }
+                      }
+                      if (key) setDropTargetPath(key)
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    const related = e.relatedTarget as HTMLElement | null
+                    if (related && (e.currentTarget as HTMLElement).contains(related)) return
+                    setDropTargetPath(null)
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    if (dropTargetPath && dropTargetPath !== 'default') {
+                      const raw = e.dataTransfer.getData(DRAG_MIME)
+                      if (raw && onMoveRuns) {
+                        try {
+                          const ids: string[] = JSON.parse(raw)
+                          if (ids.length > 0) onMoveRuns(ids, dropTargetPath)
+                        } catch {}
+                      }
+                    }
+                    setDropTargetPath(null)
+                  }}
+                >
                   <Tree
                     showLine={{ showLeafIcon: false }}
                     switcherIcon={({ expanded }) => 
@@ -612,6 +769,35 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* New Folder Modal */}
+      <Modal
+        title={t('experiments.new_folder')}
+        open={newFolderParent !== null}
+        onCancel={() => setNewFolderParent(null)}
+        onOk={handleCreateFolder}
+        okText={t('experiments.create')}
+        cancelText={t('experiments.cancel')}
+        width={380}
+        destroyOnClose
+      >
+        {newFolderParent !== null && (
+          <div>
+            {newFolderParent && (
+              <div style={{ marginBottom: 8, fontSize: 12, color: token.colorTextSecondary }}>
+                {t('experiments.parent_path')}: <code style={{ color: token.colorPrimary }}>{newFolderParent}</code>
+              </div>
+            )}
+            <Input
+              placeholder={t('experiments.folder_name_placeholder')}
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onPressEnter={handleCreateFolder}
+              autoFocus
+            />
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { Table, Button, Card, Space, Input, Tag, message, Modal, Tooltip, Empty,
 import { EyeOutlined, DeleteOutlined, CopyOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { softDeleteRuns, exportRunsZip } from '../api'
+import { softDeleteRuns, exportRunsZip, moveRuns } from '../api'
 import { useExperimentData, type RunData } from '../hooks/useExperimentData'
 import { useExperimentFilters } from '../hooks/useExperimentFilters'
 import { useCompareMode } from '../hooks/useCompareMode'
@@ -63,6 +63,8 @@ const ExperimentPage: React.FC = () => {
   } = useExperimentFilters(runs)
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
+  const [pathTreeRefresh, setPathTreeRefresh] = useState(0)
+  const bumpPathTree = useCallback(() => setPathTreeRefresh(n => n + 1), [])
 
   const {
     compareMode,
@@ -130,6 +132,7 @@ const ExperimentPage: React.FC = () => {
           if (result.deleted_count > 0) {
             message.success(t('experiments.soft_delete_success', { count: result.deleted_count }))
             await fetchRuns(false)
+            bumpPathTree()
           } else {
             message.warning('No runs were moved to recycle bin')
           }
@@ -155,6 +158,25 @@ const ExperimentPage: React.FC = () => {
       message.error({ content: t('experiments.export_failed'), key: 'export' })
     }
   }, [selectedRowKeys, t])
+
+  // Move handler (called from PathTreePanel drop)
+  const handleMoveRuns = useCallback(async (runIds: string[], targetPath: string) => {
+    try {
+      const res = await moveRuns(runIds, targetPath)
+      if (res.moved_count > 0) {
+        message.success(t('experiments.move_success', { count: res.moved_count, path: targetPath }))
+        setSelectedRowKeys(prev => prev.filter(k => !runIds.includes(k)))
+        await fetchRuns(false)
+        bumpPathTree()
+      }
+      if (res.failed_count > 0) {
+        message.warning(t('experiments.move_partial_fail', { count: res.failed_count }))
+      }
+    } catch (error) {
+      logger.error('Move failed:', error)
+      message.error(t('experiments.move_failed'))
+    }
+  }, [t, fetchRuns])
 
   // Table columns
   const columns: ColumnsType<RunData> = useMemo(() => [
@@ -337,7 +359,10 @@ const ExperimentPage: React.FC = () => {
                 style={{ width: treePanelWidth, flexShrink: 0, borderRadius: 8, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', position: 'relative' }}>
                 <PathTreePanel
                   selectedPath={selectedTreePath} onSelectPath={setSelectedTreePath}
-                  onBatchDelete={handleBatchDeleteByPath} onBatchExport={handleBatchExportByPath}
+                  onBatchDelete={async (path) => { await handleBatchDeleteByPath(path); bumpPathTree() }}
+                  onBatchExport={handleBatchExportByPath}
+                  onMoveRuns={handleMoveRuns}
+                  refreshSignal={pathTreeRefresh}
                   style={{ height: '100%', minHeight: 0 }}
                 />
                 <div onMouseDown={handleResizeStart}
@@ -395,6 +420,14 @@ const ExperimentPage: React.FC = () => {
                     }}
                     scroll={{ x: 1200 }} size="middle"
                     onRow={(record) => ({
+                      draggable: true,
+                      onDragStart: (e: React.DragEvent) => {
+                        const ids = selectedRowKeys.includes(record.run_id)
+                          ? selectedRowKeys
+                          : [record.run_id]
+                        e.dataTransfer.setData('application/runicorn-run-ids', JSON.stringify(ids))
+                        e.dataTransfer.effectAllowed = 'move'
+                      },
                       onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') navigate(`/runs/${record.run_id}`) },
                       tabIndex: 0,
                     })}
@@ -417,7 +450,7 @@ const ExperimentPage: React.FC = () => {
         </div>
       </div>
 
-      <RecycleBin open={recycleBinOpen} onClose={() => setRecycleBinOpen(false)} onRestore={() => fetchRuns(false)} />
+      <RecycleBin open={recycleBinOpen} onClose={() => setRecycleBinOpen(false)} onRestore={() => { fetchRuns(false); bumpPathTree() }} />
 
       <AddTagModal open={tagModalOpen} existingTags={tagModalCurrentTags}
         allTags={allTagsFromRuns} onConfirm={handleAddTagFromModal} onClose={handleCloseTagModal} />

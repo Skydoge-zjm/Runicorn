@@ -597,6 +597,23 @@ export async function updateRunTags(runId: string, tags: string[]): Promise<{ ok
   return res.json()
 }
 
+// ----- Move runs -----
+export async function moveRuns(runIds: string[], targetPath: string) {
+  const res = await fetch(url('/runs/move'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ run_ids: runIds, target_path: targetPath }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{
+    ok: boolean
+    moved_count: number
+    failed_count: number
+    moved: Array<{ run_id: string; old_path: string; new_path: string }>
+    failed: Array<{ run_id: string; error: string }>
+  }>
+}
+
 // ----- Path helpers -----
 export async function softDeleteByPath(path: string) {
   const res = await fetch(url('/paths/soft-delete'), {
@@ -606,6 +623,16 @@ export async function softDeleteByPath(path: string) {
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json() as Promise<{ deleted_count: number }>
+}
+
+export async function createPath(path: string) {
+  const res = await fetch(url('/paths/create'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ ok: boolean; path: string }>
 }
 
 export async function listPaths(includeStats = true) {

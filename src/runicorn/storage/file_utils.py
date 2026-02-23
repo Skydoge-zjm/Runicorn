@@ -209,52 +209,139 @@ def is_run_deleted(run_dir: Path) -> bool:
     return (run_dir / ".deleted").exists()
 
 
-def soft_delete_run(run_dir: Path, reason: str = "user_deleted") -> bool:
+def soft_delete_run(
+    run_dir: Path,
+    storage_root: Path,
+    reason: str = "user_deleted",
+    original_path: str | None = None,
+) -> tuple[bool, str | None, Path | None]:
     """
-    Mark a run as deleted by creating .deleted marker file.
+    Soft-delete a run by marking it and moving it to ``runs/.recycle/<run_id>``.
     
     Args:
         run_dir: Path to the run directory
+        storage_root: Storage root directory
         reason: Reason for deletion
+        original_path: Original path in the tree (stored for restore)
         
     Returns:
-        True if successful, False otherwise
+        (success, error_message, recycle_run_dir) tuple
     """
     try:
-        deleted_info = {
-            "deleted_at": time.time(),
-            "reason": reason,
-            "original_status": read_json(run_dir / "status.json").get("status", "unknown")
-        }
         deleted_file = run_dir / ".deleted"
-        write_json(deleted_file, deleted_info)
-        logger.info(f"Soft deleted run: {run_dir.name}")
-        return True
+        deleted_info = read_json(deleted_file) if deleted_file.exists() else {}
+        if not isinstance(deleted_info, dict):
+            deleted_info = {}
+
+        # Best-effort path inference for restore
+        meta = read_json(run_dir / "meta.json")
+        inferred_path = (
+            original_path
+            or deleted_info.get("original_path")
+            or (meta.get("path") if isinstance(meta, dict) else None)
+        )
+        if not inferred_path:
+            try:
+                runs_root = storage_root / "runs"
+                rel_parent = run_dir.parent.relative_to(runs_root)
+                rel_str = rel_parent.as_posix()
+                if rel_str and rel_str not in {".", ".recycle"} and not rel_str.startswith(".recycle/"):
+                    inferred_path = rel_str
+            except Exception:
+                pass
+
+        # Ensure marker content exists/complete
+        deleted_info.setdefault("deleted_at", time.time())
+        deleted_info.setdefault("reason", reason)
+        deleted_info.setdefault(
+            "original_status",
+            read_json(run_dir / "status.json").get("status", "unknown"),
+        )
+        if inferred_path:
+            deleted_info["original_path"] = inferred_path
+
+        deleted_file = run_dir / ".deleted"
+        if not write_json(deleted_file, deleted_info):
+            return False, "marker_write_failed", None
+
+        # Move into recycle bin (unified delete location)
+        in_recycle = ".recycle" in run_dir.parts
+        if not in_recycle:
+            recycle_root = storage_root / "runs" / ".recycle"
+            recycle_root.mkdir(parents=True, exist_ok=True)
+            target_dir = recycle_root / run_dir.name
+            if target_dir.exists():
+                logger.warning(f"Recycle target already exists: {target_dir}")
+                return False, "conflict", None
+            import shutil
+            shutil.move(str(run_dir), str(target_dir))
+            run_dir = target_dir
+
+        logger.info(f"Soft deleted run to recycle: {run_dir.name}")
+        return True, None, run_dir
     except Exception as e:
         logger.error(f"Failed to soft delete run {run_dir.name}: {e}")
-        return False
+        return False, str(e), None
 
 
-def restore_run(run_dir: Path) -> bool:
+def restore_run(
+    run_dir: Path,
+    storage_root: Path | None = None,
+) -> tuple[bool, str | None, Path | None]:
     """
-    Restore a soft-deleted run by removing .deleted marker.
-    
-    Args:
-        run_dir: Path to the run directory
-        
+    Restore a soft-deleted run.
+
+    If the run lives under ``.recycle`` (moved there by folder-delete),
+    it is moved back to its original path first.
+
     Returns:
-        True if successful, False otherwise
+        (success, error_message, new_run_dir) tuple.
+        *new_run_dir* is the directory the run now lives in (may differ
+        from the input *run_dir* when the run was moved out of .recycle).
     """
     try:
         deleted_file = run_dir / ".deleted"
-        if deleted_file.exists():
-            deleted_file.unlink()
-            logger.info(f"Restored run: {run_dir.name}")
-            return True
-        return False
+        if not deleted_file.exists():
+            return False, "not_deleted", None
+
+        deleted_info = read_json(deleted_file)
+
+        # Unified flow: deleted runs should live in .recycle and must be moved back.
+        in_recycle = ".recycle" in run_dir.parts
+        if in_recycle:
+            if storage_root is None:
+                return False, "storage_root_required", None
+            original_path = (
+                deleted_info.get("original_path")
+                if isinstance(deleted_info, dict)
+                else None
+            )
+            if not original_path:
+                meta = read_json(run_dir / "meta.json")
+                original_path = meta.get("path") if isinstance(meta, dict) else None
+            if not original_path:
+                return False, "missing_original_path", None
+
+            target_parent = storage_root / "runs" / original_path
+            target_parent.mkdir(parents=True, exist_ok=True)
+            target_dir = target_parent / run_dir.name
+            if target_dir.exists():
+                logger.warning(f"Restore target already exists: {target_dir}")
+                return False, "conflict", None
+            import shutil
+            shutil.move(str(run_dir), str(target_dir))
+            run_dir = target_dir
+            logger.info(f"Moved run {run_dir.name} back from .recycle to {original_path}")
+
+        # Remove .deleted marker
+        marker = run_dir / ".deleted"
+        if marker.exists():
+            marker.unlink()
+        logger.info(f"Restored run: {run_dir.name}")
+        return True, None, run_dir
     except Exception as e:
         logger.error(f"Failed to restore run {run_dir.name}: {e}")
-        return False
+        return False, str(e), None
 
 
 def list_run_dirs_legacy(root: Path) -> List[Path]:
@@ -342,14 +429,16 @@ def _scan_runs_recursive(
         for item in sorted(current_dir.iterdir(), key=lambda p: p.name.lower()):
             if not item.is_dir():
                 continue
+            # Skip .recycle for normal listing; include it when scanning deleted runs
+            if item.name == ".recycle" and not include_deleted:
+                continue
             
             # Check if this is a run directory (has meta.json or status.json)
             is_run = (item / "meta.json").exists() or (item / "status.json").exists()
             
             if is_run:
-                # Filter out soft-deleted runs unless explicitly requested
-                if not include_deleted and is_run_deleted(item):
-                    continue
+                # Unified model: active listing excludes .recycle entirely.
+                # No per-run .deleted check is needed in the normal path.
                 # This is a run directory
                 entries.append(RunEntry(path=current_path or None, dir=item))
             else:
