@@ -100,34 +100,6 @@
   overflow: auto !important;
 }
 
-/* Scrollbar styling */
-.enhanced-table .ant-table-content,
-.enhanced-table .ant-table-body {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
-}
-
-.enhanced-table .ant-table-content::-webkit-scrollbar,
-.enhanced-table .ant-table-body::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.enhanced-table .ant-table-content::-webkit-scrollbar-track,
-.enhanced-table .ant-table-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.enhanced-table .ant-table-content::-webkit-scrollbar-thumb,
-.enhanced-table .ant-table-body::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 3px;
-}
-
-.enhanced-table .ant-table-content::-webkit-scrollbar-thumb:hover,
-.enhanced-table .ant-table-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-}
 
 /* Global focus-visible indicator for keyboard navigation */
 *:focus-visible {

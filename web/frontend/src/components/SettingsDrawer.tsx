@@ -143,11 +143,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           </div>
         </Space>
       </Card>
-    </Space>
-  )
 
-  const renderLayoutTab = () => (
-    <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Card size="small" title={<Space><BgColorsOutlined />{t('settings.cards.background')}</Space>}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <div>
@@ -498,10 +494,11 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
       onClose={onClose} 
       destroyOnClose
       styles={{
-        body: { padding: '16px' }
+        body: { padding: '16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }
       }}
     >
       <Tabs
+        className="settings-drawer-tabs"
         defaultActiveKey="appearance"
         items={[
           {
@@ -513,16 +510,6 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
               </Space>
             ),
             children: renderAppearanceTab(),
-          },
-          {
-            key: 'layout',
-            label: (
-              <Space>
-                <BgColorsOutlined />
-                <span>{t('settings.tabs.layout')}</span>
-              </Space>
-            ),
-            children: renderLayoutTab(),
           },
           {
             key: 'data',

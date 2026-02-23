@@ -108,7 +108,16 @@ export default function App() {
     const t: any = { colorPrimary: settings.accentColor }
     if (settings.density === 'loose') {
       t.borderRadius = 10
-      t.padding = 16
+      t.padding = 20
+      t.paddingLG = 28
+      t.paddingContentVertical = 16
+      t.paddingContentHorizontal = 24
+      t.marginLG = 28
+      t.fontSize = 15
+      t.fontSizeLG = 18
+      t.controlHeight = 38
+      t.controlHeightLG = 48
+      t.controlHeightSM = 30
     }
     return t
   }, [settings.accentColor, settings.density])

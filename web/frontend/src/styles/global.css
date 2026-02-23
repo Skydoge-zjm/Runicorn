@@ -1,0 +1,60 @@
+/**
+ * Global styles
+ */
+
+/* ---- Thin scrollbar for all elements ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Dark mode scrollbar (applied via class on html element or media query) */
+@media (prefers-color-scheme: dark) {
+  html[style*="background: rgb(20"] * {
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  }
+  html[style*="background: rgb(20"] *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+  }
+  html[style*="background: rgb(20"] *::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+}
+
+/* Settings Drawer: tabs bar stays fixed, only content scrolls */
+.settings-drawer-tabs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.settings-drawer-tabs > .ant-tabs-nav {
+  flex-shrink: 0;
+  margin-bottom: 0;
+}
+
+.settings-drawer-tabs > .ant-tabs-content-holder {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
