@@ -7,7 +7,6 @@ import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
 import RunAssets from '../components/RunAssets'
 import { RunDetailSkeleton } from '../components/LoadingSkeleton'
-import GpuMetricsCard from '../components/GpuMetricsCard'
 import LazyChartWrapper from '../components/LazyChartWrapper'
 import ErrorBoundary from '../components/ErrorBoundary'
 import { formatDuration, formatTimestamp } from '../utils/format'
@@ -67,7 +66,6 @@ export default function RunDetailPage() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
-  const [gpu, _setGpu] = useState<{ util: number; mem: number; power: number; temp: number; gpus?: any[] } | null>(null)
 
 
   const loadDetail = async (showLoading = true) => {
@@ -211,7 +209,6 @@ export default function RunDetailPage() {
     { key: 'overview', label: t('run.tabs.overview') },
     { key: 'logs', label: t('logs.title') },
     { key: 'assets', label: t('run.assets.title') },
-    { key: 'system', label: t('system.title') },
   ]
 
   return (
@@ -223,7 +220,7 @@ export default function RunDetailPage() {
       padding: 16,
     }}>
       {/* Main scrollable content */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: activeTab === 'logs' ? 'hidden' : 'auto', display: 'flex', flexDirection: 'column' }}>
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
@@ -412,7 +409,7 @@ export default function RunDetailPage() {
           </Card>
         </div>
 
-        <div style={{ display: activeTab === 'logs' ? 'block' : 'none' }}>
+        <div style={{ display: activeTab === 'logs' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <Card
             title={
               <Space>
@@ -421,22 +418,13 @@ export default function RunDetailPage() {
                 <Tag color="cyan">Real-time</Tag>
               </Space>
             }
-            styles={{ body: { padding: 0 } }}
+            styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } }}
+            style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
           >
             <ErrorBoundary fallback="Logs loading error">
               <LogsViewer url={logUrl} />
             </ErrorBoundary>
           </Card>
-        </div>
-
-        <div style={{ display: activeTab === 'system' ? 'block' : 'none' }}>
-          {detail?.status === 'running' && gpu?.gpus && gpu.gpus.length > 0 ? (
-            <GpuMetricsCard gpus={gpu.gpus} loading={detailLoading} />
-          ) : (
-            <Card>
-              <Alert type="info" showIcon message={t('gpu.not_available')} />
-            </Card>
-          )}
         </div>
       </div>
     </div>

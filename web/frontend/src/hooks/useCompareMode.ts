@@ -31,7 +31,7 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
       const selectedRuns = runs.filter(r => compareIdsFromUrl.includes(r.run_id))
       if (selectedRuns.length < 2) return
       const runInfos: CompareRunInfo[] = selectedRuns.map(r => ({
-        runId: r.run_id, path: r.path, alias: r.alias, status: r.status,
+        runId: r.run_id, path: r.path, alias: r.alias, tags: r.tags || [], status: r.status,
       }))
       const labels = new Map<string, string>()
       selectedRuns.forEach(r => {
@@ -61,7 +61,7 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
     }
     const selectedRuns = runs.filter(r => selectedRowKeys.includes(r.run_id))
     const runInfos: CompareRunInfo[] = selectedRuns.map(r => ({
-      runId: r.run_id, path: r.path, alias: r.alias, status: r.status,
+      runId: r.run_id, path: r.path, alias: r.alias, tags: r.tags || [], status: r.status,
     }))
     const labels = new Map<string, string>()
     selectedRuns.forEach(r => {

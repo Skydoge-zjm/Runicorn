@@ -20,6 +20,7 @@ export interface CompareRunInfo {
   runId: string
   path: string
   alias: string | null
+  tags: string[]
   status: string
 }
 
@@ -222,11 +223,20 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                 </div>
               </Tooltip>
 
-              {/* Alias */}
-              {run.alias && (
-                <Tag color="purple" style={{ fontSize: 11, marginTop: 2 }}>
-                  {run.alias}
-                </Tag>
+              {/* Alias & Tags */}
+              {(run.alias || (run.tags && run.tags.length > 0)) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                  {run.alias && (
+                    <Tag color="purple" style={{ fontSize: 11, margin: 0 }}>
+                      {run.alias}
+                    </Tag>
+                  )}
+                  {run.tags?.map(tag => (
+                    <Tag key={tag} style={{ fontSize: 11, margin: 0 }}>
+                      {tag}
+                    </Tag>
+                  ))}
+                </div>
               )}
             </motion.div>
           )

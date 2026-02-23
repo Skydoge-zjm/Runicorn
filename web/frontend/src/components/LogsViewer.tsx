@@ -268,8 +268,8 @@ export default function LogsViewer({ url }: LogsViewerProps) {
   }, [connected, nextRetryMs, t])
 
   return (
-    <div style={{ position: 'relative' }}>
-      <Space style={{ marginBottom: 8 }} wrap>
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <Space style={{ marginBottom: 8, flexShrink: 0, padding: '8px 12px 0' }} wrap>
         {statusTag}
         <Tooltip title={t('logs.tooltip.autoscroll')}>
           <span>{t('logs.autoscroll')} <Switch checked={autoScroll} onChange={setAutoScroll} style={{ marginLeft: 6 }} /></span>
@@ -292,7 +292,8 @@ export default function LogsViewer({ url }: LogsViewerProps) {
         ref={containerRef}
         onScroll={handleScroll}
         style={{
-          height: 320,
+          flex: 1,
+          minHeight: 200,
           overflow: 'auto',
           background: isDark ? '#0b1020' : '#F8F9FA',
           color: isDark ? '#e6e9ef' : '#374151',
