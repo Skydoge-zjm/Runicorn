@@ -360,10 +360,10 @@ const ExperimentPage: React.FC = () => {
       render: (_, record) => (
         <Space size="small">
           <Tooltip title={t('table.view')}>
-            <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/runs/${record.run_id}`)} />
+            <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/runs/${record.run_id}`)} aria-label="View run details" />
           </Tooltip>
           <Tooltip title={t('experiments.delete') || 'Delete'}>
-            <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete([record.run_id])} />
+            <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete([record.run_id])} aria-label="Delete run" />
           </Tooltip>
         </Space>
       ),
@@ -453,6 +453,10 @@ const ExperimentPage: React.FC = () => {
                       showTotal: (total, range) => `${range[0]}-${range[1]} / ${total}`,
                     }}
                     scroll={{ x: 1200 }} size="middle"
+                    onRow={(record) => ({
+                      onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') navigate(`/runs/${record.run_id}`) },
+                      tabIndex: 0,
+                    })}
                     onChange={(_, __, sorter) => setSortedInfo(sorter as SorterResult<RunData>)}
                     locale={{
                       emptyText: (

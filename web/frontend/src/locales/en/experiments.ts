@@ -128,6 +128,7 @@ export default {
   'run.refresh': 'Refresh',
   'run.refreshed': 'Refreshed',
   'run.compare_with': 'Compare with...',
+  'run.tabs.overview': 'Overview',
   
   'metrics.title': 'Metrics',
   'metrics.more_columns': 'More Columns',

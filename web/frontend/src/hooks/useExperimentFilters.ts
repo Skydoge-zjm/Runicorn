@@ -25,8 +25,9 @@ export function useExperimentFilters(runs: RunData[]) {
     localStorage.setItem('experiment_preferences', JSON.stringify({ pageSize }))
   }, [pageSize])
 
-  // Tree panel state
+  // Tree panel state — auto-collapse on narrow screens
   const [treePanelCollapsed, setTreePanelCollapsed] = useState(() => {
+    if (window.innerWidth < 768) return true
     return localStorage.getItem('tree_panel_collapsed') === 'true'
   })
   const [treePanelWidth, setTreePanelWidth] = useState(() => {

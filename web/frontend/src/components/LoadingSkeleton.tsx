@@ -1,6 +1,5 @@
 import React from 'react'
 import { Card, Skeleton, Row, Col, Space } from 'antd'
-import designTokens from '../styles/designTokens'
 
 /**
  * Loading Skeleton for Experiment List Page
@@ -9,7 +8,7 @@ export function ExperimentListSkeleton() {
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="large">
       {/* Statistics Cards Skeleton */}
-      <Row gutter={[designTokens.spacing.md, designTokens.spacing.md]}>
+      <Row gutter={[16, 16]}>
         {[1, 2, 3, 4].map(i => (
           <Col xs={24} sm={12} md={6} key={i}>
             <Card>
@@ -51,7 +50,7 @@ export function RunDetailSkeleton() {
       </Card>
       
       {/* Metrics Charts */}
-      <Row gutter={[designTokens.spacing.md, designTokens.spacing.md]}>
+      <Row gutter={[16, 16]}>
         {[1, 2, 3, 4].map(i => (
           <Col xs={24} md={12} key={i}>
             <Card>
@@ -80,8 +79,8 @@ export function MetricChartSkeleton({ height = 320 }: { height?: number }) {
     <Card 
       size="small"
       style={{ 
-        marginBottom: designTokens.spacing.md,
-        borderRadius: designTokens.borderRadius.md,
+        marginBottom: 16,
+        borderRadius: 8,
       }}
     >
       {/* Controls Skeleton */}

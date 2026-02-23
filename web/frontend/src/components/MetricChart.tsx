@@ -11,7 +11,6 @@ import { ExportOutlined } from '@ant-design/icons'
 import AutoResizeEChart from './AutoResizeEChart'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
-import designTokens from '../styles/designTokens'
 
 const { Text } = Typography
 
@@ -253,8 +252,8 @@ const MetricChart = memo(function MetricChart({
     const legendConfig = showLegend 
       ? { 
           data: legendData, 
-          top: designTokens.spacing.xl, 
-          type: runs.length > 3 ? 'scroll' : 'plain', 
+          top: 32, 
+          type: runs.length > 3 ? 'scroll' : 'plain',
           padding: [5, 10],
           ...(legendSelected && { selected: legendSelected }),
         }
@@ -265,8 +264,8 @@ const MetricChart = memo(function MetricChart({
         }
     
     return {
-      title: { text: title, left: 'center', top: designTokens.spacing.xs,
-        textStyle: { fontSize: designTokens.typography.fontSize.md, fontWeight: designTokens.typography.fontWeight.semibold }
+      title: { text: title, left: 'center', top: 8,
+        textStyle: { fontSize: 16, fontWeight: 600 }
       },
       tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
       legend: legendConfig,
@@ -321,8 +320,8 @@ const MetricChart = memo(function MetricChart({
     <div>
       <Card 
         size="small"
-        style={{ marginBottom: designTokens.spacing.md, borderRadius: designTokens.borderRadius.md }}
-        styles={{ body: { padding: `${designTokens.spacing.sm}px ${designTokens.spacing.md}px` } }}
+        style={{ marginBottom: 16, borderRadius: 8 }}
+        styles={{ body: { padding: '12px 16px' } }}
       >
         <Space wrap size="small" style={{ width: '100%' }}>
           <Tooltip title={t('chart.log_y_tooltip')}>
@@ -333,7 +332,7 @@ const MetricChart = memo(function MetricChart({
           </Tooltip>
           <Divider type="vertical" style={{ margin: '0 4px' }} />
           <Space size="small" style={{ minWidth: 140, maxWidth: 200 }}>
-            <Text type="secondary" style={{ fontSize: designTokens.typography.fontSize.xs, whiteSpace: 'nowrap' }}>{t('chart.smooth')}:</Text>
+            <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{t('chart.smooth')}:</Text>
             <Slider min={0} max={0.95} step={0.05} value={smoothing} onChange={(v) => setSmoothing(Array.isArray(v) ? v[0] : v)} style={{ width: 90 }} tooltip={{ formatter: (v) => v ? `${(v * 100).toFixed(0)}%` : t('chart.off') }} />
           </Space>
           {isSingleRun && (

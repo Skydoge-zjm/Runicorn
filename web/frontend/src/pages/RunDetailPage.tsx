@@ -1,18 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { Card, Space, Alert, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge, Row, Col, Typography, Statistic, Divider, Collapse } from 'antd'
+import { useParams, useNavigate } from 'react-router-dom'
+import { Card, Space, Alert, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge, Row, Col, Typography, Statistic, Divider, Collapse, Tabs } from 'antd'
 import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, LineChartOutlined, MinusOutlined, ReloadOutlined, RocketOutlined, ClockCircleOutlined, CalendarOutlined, FolderOpenOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined } from '@ant-design/icons'
-import { getRunDetail, getStepMetrics, getGpuTelemetry } from '../api'
-import { useNavigate } from 'react-router-dom'
+import { getRunDetail, getStepMetrics } from '../api'
 import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
 import RunAssets from '../components/RunAssets'
 import { RunDetailSkeleton } from '../components/LoadingSkeleton'
-import FancyMetricCard from '../components/fancy/FancyMetricCard'
-import CircularProgress from '../components/fancy/CircularProgress'
-import StatusTag from '../components/StatusTag'
 import GpuMetricsCard from '../components/GpuMetricsCard'
 import LazyChartWrapper from '../components/LazyChartWrapper'
+import ErrorBoundary from '../components/ErrorBoundary'
 import { formatDuration, formatTimestamp } from '../utils/format'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
@@ -59,6 +56,7 @@ export default function RunDetailPage() {
   const [twoCol, setTwoCol] = useState<boolean>(() => {
     try { return localStorage.getItem(`run:${id}:layout:twoCol`) === '1' } catch { return true }
   })
+  const [activeTab, setActiveTab] = useState('overview')
   
   // Add responsive layout detection
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
@@ -80,7 +78,7 @@ export default function RunDetailPage() {
       setLastUpdateTime(new Date())
     } catch (error) {
       logger.error('Failed to load run detail:', error)
-      message.error(t('run.load_failed') || 'Failed to load run details')
+      message.error(t('run.load_failed'))
     } finally {
       if (showLoading) setDetailLoading(false)
     }
@@ -108,7 +106,7 @@ export default function RunDetailPage() {
     } catch (error) {
       logger.error('Failed to load step metrics:', error)
       if (showLoading) {
-        message.error(t('run.metrics_failed') || 'Failed to load metrics')
+        message.error(t('run.metrics_failed'))
       }
     } finally {
       if (showLoading) setMetricsLoading(false)
@@ -209,6 +207,13 @@ export default function RunDetailPage() {
     return <RunDetailSkeleton />
   }
 
+  const tabItems = [
+    { key: 'overview', label: t('run.tabs.overview') },
+    { key: 'logs', label: t('logs.title') },
+    { key: 'assets', label: t('run.assets.title') },
+    { key: 'system', label: t('system.title') },
+  ]
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -219,10 +224,19 @@ export default function RunDetailPage() {
     }}>
       {/* Main scrollable content */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <Space direction="vertical" size="middle" style={{ 
-          width: '100%', 
-          maxWidth: '100%',
-        }}>
+        <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          destroyInactiveTabPane={false}
+          items={tabItems}
+          style={{ marginBottom: 16 }}
+        />
+
+        <div style={{ display: activeTab === 'overview' ? 'block' : 'none' }}>
+          <Space direction="vertical" size="middle" style={{
+            width: '100%',
+            maxWidth: '100%',
+          }}>
       {/* Top Header Card */}
       <Card bodyStyle={{ padding: '20px 24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
@@ -275,21 +289,21 @@ export default function RunDetailPage() {
         <Row gutter={[24, 16]}>
           <Col xs={24} sm={12} md={8}>
             <Statistic 
-              title={t('run.stats.duration') || "Duration"} 
+              title={t('run.stats.duration')} 
               value={detail?.duration ? formatDuration(detail.duration * 1000) : '-'} 
               prefix={<ClockCircleOutlined />} 
             />
           </Col>
           <Col xs={24} sm={12} md={8}>
             <Statistic 
-              title={t('run.stats.total_steps') || "Total Steps"} 
+              title={t('run.stats.total_steps')} 
               value={stepMetrics.total ?? stepMetrics.rows?.length ?? 0} 
               prefix={<ThunderboltOutlined />} 
             />
           </Col>
           <Col xs={24} sm={12} md={8}>
              <Statistic 
-              title={t('run.stats.assets') || "Assets"} 
+              title={t('run.stats.assets')} 
               value={(detail?.assets_count || 0)} 
               prefix={<RocketOutlined />} 
             />
@@ -298,7 +312,7 @@ export default function RunDetailPage() {
 
         {/* Collapsible Details */}
         <Collapse ghost style={{ marginTop: 16 }}>
-          <Panel header={t('run.more_details') || "More Details (Paths, Logs)"} key="1">
+          <Panel header={t('run.more_details')} key="1">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>
                 <Text type="secondary" style={{ display: 'inline-block', width: 100 }}>{t('run.descriptions.run_id')}:</Text>
@@ -317,11 +331,6 @@ export default function RunDetailPage() {
         </Collapse>
       </Card>
       
-      {/* GPU Metrics Card - only show when run is running */}
-      {detail?.status === 'running' && gpu?.gpus && gpu.gpus.length > 0 && (
-        <GpuMetricsCard gpus={gpu.gpus} loading={detailLoading} />
-      )}
-
 
       <Card 
         title={
@@ -334,7 +343,7 @@ export default function RunDetailPage() {
         } 
         extra={(
           <Space wrap>
-            <Tooltip title={t('metrics.more_columns_tooltip') || 'Display charts in multiple columns'}>
+            <Tooltip title={t('metrics.more_columns_tooltip')}>
               <span>{t('metrics.more_columns')} <Switch checked={twoCol} onChange={setTwoCol} /></span>
             </Tooltip>
             <span>{t('compare.stepx')} <Select size="small" value={stepXAxis} onChange={v => setStepXAxis(v as any)} style={{ width: 140 }} options={[
@@ -367,48 +376,68 @@ export default function RunDetailPage() {
                 padding: '8px',
                 backgroundColor: '#fff'
               }}>
-                <LazyChartWrapper height={chartHeight}>
-                  <MetricChart 
-                    runs={[{ id, metrics: stepMetrics }]}
-                    xKey={stepXAxis} 
-                    yKey={k} 
-                    title={k} 
-                    height={chartHeight}
-                    group={`step-group-${id}`} 
-                    persistKey={`run:${id}:step:${k}`} 
-                  />
-                </LazyChartWrapper>
+                <ErrorBoundary fallback={`Chart error: ${k}`}>
+                  <LazyChartWrapper height={chartHeight}>
+                    <MetricChart 
+                      runs={[{ id, metrics: stepMetrics }]}
+                      xKey={stepXAxis} 
+                      yKey={k} 
+                      title={k} 
+                      height={chartHeight}
+                      group={`step-group-${id}`} 
+                      persistKey={`run:${id}:step:${k}`} 
+                    />
+                  </LazyChartWrapper>
+                </ErrorBoundary>
               </div>
             ))}
           </div>
         )}
       </Card>
-
-      <Card 
-        title={
-          <Space>
-            <RocketOutlined /> 
-            {t('run.assets.title') || 'Assets'}
           </Space>
-        }
-      >
-        <RunAssets runId={id} />
-      </Card>
+        </div>
 
-      {/* 实时日志 */}
-      <Card 
-        title={
-          <Space>
-            <DatabaseOutlined />
-            <span>{t('logs.title')}</span>
-            <Tag color="cyan">Real-time</Tag>
-          </Space>
-        }
-        styles={{ body: { padding: 0 } }}
-      >
-        <LogsViewer url={logUrl} />
-      </Card>
-        </Space>
+        <div style={{ display: activeTab === 'assets' ? 'block' : 'none' }}>
+          <Card
+            title={
+              <Space>
+                <RocketOutlined />
+                {t('run.assets.title')}
+              </Space>
+            }
+          >
+            <ErrorBoundary fallback="Assets loading error">
+              <RunAssets runId={id} />
+            </ErrorBoundary>
+          </Card>
+        </div>
+
+        <div style={{ display: activeTab === 'logs' ? 'block' : 'none' }}>
+          <Card
+            title={
+              <Space>
+                <DatabaseOutlined />
+                <span>{t('logs.title')}</span>
+                <Tag color="cyan">Real-time</Tag>
+              </Space>
+            }
+            styles={{ body: { padding: 0 } }}
+          >
+            <ErrorBoundary fallback="Logs loading error">
+              <LogsViewer url={logUrl} />
+            </ErrorBoundary>
+          </Card>
+        </div>
+
+        <div style={{ display: activeTab === 'system' ? 'block' : 'none' }}>
+          {detail?.status === 'running' && gpu?.gpus && gpu.gpus.length > 0 ? (
+            <GpuMetricsCard gpus={gpu.gpus} loading={detailLoading} />
+          ) : (
+            <Card>
+              <Alert type="info" showIcon message={t('gpu.not_available')} />
+            </Card>
+          )}
+        </div>
       </div>
     </div>
   )

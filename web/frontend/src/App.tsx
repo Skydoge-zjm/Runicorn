@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Layout, Tag, Button, ConfigProvider, theme, Select } from 'antd'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
@@ -17,6 +18,16 @@ import { SettingsProvider } from './contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
 
 const { Content } = Layout
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5000,
+      refetchOnWindowFocus: true,
+      retry: 1,
+    },
+  },
+})
 
 const navItems = [
   { key: 'experiments', path: '/', icon: <ExperimentOutlined />, labelKey: 'menu.experiments' },
@@ -186,6 +197,7 @@ export default function App() {
   }, [settings.autoRefresh, settings.refreshInterval])
 
   return (
+    <QueryClientProvider client={queryClient}>
     <ConfigProvider
       locale={i18n.language?.startsWith('zh') ? zhCN : enUS}
       theme={{
@@ -238,7 +250,7 @@ export default function App() {
                     transition: 'color 0.2s, border-color 0.2s',
                   })}
                 >
-                  {item.icon} {t(item.labelKey)}
+                  {item.icon} <span className="nav-label">{t(item.labelKey)}</span>
                 </NavLink>
               ))}
             </nav>
@@ -257,6 +269,7 @@ export default function App() {
                 type="text"
                 icon={<SettingOutlined style={{ color: isDark ? '#A0AEC0' : '#4A5568' }} />}
                 onClick={() => setSettingsOpen(true)}
+                aria-label="Open settings"
               />
             </div>
           </header>
@@ -293,5 +306,6 @@ export default function App() {
         <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} value={settings} onChange={setSettings} />
       </SettingsProvider>
     </ConfigProvider>
+    </QueryClientProvider>
   )
 }
