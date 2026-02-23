@@ -4,7 +4,7 @@ import { Table, Button, Card, Space, Input, Tag, message, Modal, Tooltip, Empty,
 import { EyeOutlined, DeleteOutlined, CopyOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { softDeleteRuns } from '../api'
+import { softDeleteRuns, exportRunsZip } from '../api'
 import { useExperimentData, type RunData } from '../hooks/useExperimentData'
 import { useExperimentFilters } from '../hooks/useExperimentFilters'
 import { useCompareMode } from '../hooks/useCompareMode'
@@ -35,16 +35,6 @@ const ECHARTS_COLORS = [
 
 interface ResizeCallbackData {
   size: { width: number }
-}
-
-// Utility function for safe CSV value
-const csvEscape = (value: any): string => {
-  if (value === null || value === undefined) return ''
-  const str = String(value)
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`
-  }
-  return str
 }
 
 const ExperimentPage: React.FC = () => {
@@ -153,72 +143,18 @@ const ExperimentPage: React.FC = () => {
     })
   }, [selectedRowKeys, t, deleteLoading, fetchRuns, token])
 
-  // Export handlers
-  const handleExportJSON = useCallback(async () => {
+  // Export handler
+  const handleExportZip = useCallback(async () => {
     if (selectedRowKeys.length === 0) return
-    const selectedRunData = runs.filter(r => selectedRowKeys.includes(r.run_id))
     try {
-      const exportData = {
-        export_time: new Date().toISOString(),
-        total_runs: selectedRunData.length,
-        runs: selectedRunData.map(run => ({
-          run_id: run.run_id, path: run.path, alias: run.alias,
-          status: run.status, created: run.created, summary: run.summary,
-        }))
-      }
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `runicorn_export_${new Date().toISOString().slice(0, 10)}.json`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      message.success(t('experiments.export_success', { count: selectedRunData.length }))
+      message.loading({ content: t('experiments.exporting'), key: 'export', duration: 0 })
+      await exportRunsZip(selectedRowKeys)
+      message.success({ content: t('experiments.export_success', { count: selectedRowKeys.length }), key: 'export' })
     } catch (error) {
       logger.error('Export failed:', error)
-      message.error(t('experiments.export_failed'))
+      message.error({ content: t('experiments.export_failed'), key: 'export' })
     }
-  }, [selectedRowKeys, runs, t])
-
-  const handleExportCSV = useCallback(async () => {
-    if (selectedRowKeys.length === 0) return
-    const selectedRunData = runs.filter(r => selectedRowKeys.includes(r.run_id))
-    try {
-      const headers = [
-        'Run ID', 'Path', 'Alias', 'Status', 'Created Time',
-        'Final Loss', 'Learning Rate', 'Batch Size', 'Epochs',
-        'Best Metric Value', 'Best Metric Name'
-      ]
-      const rows = selectedRunData.map(run => [
-        csvEscape(run.run_id), csvEscape(run.path), csvEscape(run.alias),
-        csvEscape(run.status), csvEscape(new Date(run.created).toLocaleString()),
-        csvEscape(run.summary?.final_loss?.toFixed(6) || ''),
-        csvEscape(run.summary?.learning_rate || ''),
-        csvEscape(run.summary?.batch_size || ''),
-        csvEscape(run.summary?.total_epochs || ''),
-        csvEscape(run.best_metric_value?.toFixed(4) || ''),
-        csvEscape(run.best_metric_name || '')
-      ])
-      const BOM = '\uFEFF'
-      const csvContent = BOM + [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-      link.download = `runicorn_experiments_${timestamp}.csv`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      message.success(t('experiments.export_success', { count: selectedRunData.length }))
-    } catch (error) {
-      logger.error('Export failed:', error)
-      message.error(t('experiments.export_failed'))
-    }
-  }, [selectedRowKeys, runs, t])
+  }, [selectedRowKeys, t])
 
   // Table columns
   const columns: ColumnsType<RunData> = useMemo(() => [
@@ -434,7 +370,7 @@ const ExperimentPage: React.FC = () => {
                   onRefresh={() => fetchRuns(true)} onAutoRefreshChange={setAutoRefresh}
                   selectedCount={selectedRowKeys.length}
                   onCompare={handleCompare} onDelete={() => handleDelete()}
-                  onExportJSON={handleExportJSON} onExportCSV={handleExportCSV}
+                  onExportZip={handleExportZip}
                   onOpenRecycleBin={() => setRecycleBinOpen(true)}
                 />
 

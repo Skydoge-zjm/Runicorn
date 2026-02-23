@@ -168,21 +168,84 @@ export async function getSSHConnectionDetails(key: string) {
   return res.json() as Promise<{ ok: boolean; connection: any }>  
 }
 
+export async function exportRunsZip(runIds: string[]) {
+  const res = await fetch(url('/runs/export'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ run_ids: runIds }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  const blob = await res.blob()
+  const downloadUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = downloadUrl
+  const disposition = res.headers.get('content-disposition')
+  const match = disposition?.match(/filename="?([^"]+)"?/)
+  const ts = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '').replace(/(\d{8})(\d{6})/, '$1_$2')
+  a.download = match?.[1] || `runicorn_export_${runIds.length}runs_${ts}.zip`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(downloadUrl)
+}
+
+export interface ImportPreviewResult {
+  ok: boolean
+  token: string
+  filename: string
+  runs: { run_id: string; path: string; files_count: number; conflict: boolean }[]
+  total_runs: number
+  total_files: number
+  conflict_count: number
+  conflict_run_ids: string[]
+}
+
+export async function previewImport(file: File): Promise<ImportPreviewResult> {
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(url('/import/preview'), {
+    method: 'POST',
+    body: fd,
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export interface ImportArchiveResult {
+  ok: boolean
+  imported_files: number
+  new_run_dirs: string[]
+  new_run_ids: string[]
+  skipped_run_ids: string[]
+  skipped_count: number
+  storage: string
+  mode: string
+  isolate_base: string | null
+}
+
+export async function confirmImport(previewToken: string, mode: 'merge' | 'isolate'): Promise<ImportArchiveResult> {
+  const fd = new FormData()
+  fd.append('preview_token', previewToken)
+  fd.append('mode', mode)
+  const res = await fetch(url('/import/archive'), {
+    method: 'POST',
+    body: fd,
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+/** Legacy: direct import without preview (backwards compat) */
 export async function importArchive(file: File) {
   const fd = new FormData()
   fd.append('file', file)
+  fd.append('mode', 'merge')
   const res = await fetch(url('/import/archive'), {
     method: 'POST',
     body: fd
   })
   if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{
-    ok: boolean
-    imported_files: number
-    new_run_dirs: string[]
-    new_run_ids: string[]
-    storage: string
-  }>
+  return res.json() as Promise<ImportArchiveResult>
 }
 
 // ----- Unified SSH helpers -----

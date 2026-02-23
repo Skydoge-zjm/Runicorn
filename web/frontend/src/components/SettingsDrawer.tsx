@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Alert, theme } from 'antd'
+import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Alert, Modal, Tag, theme } from 'antd'
+import { WarningOutlined } from '@ant-design/icons'
 import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, InfoCircleOutlined, ThunderboltOutlined, GlobalOutlined, ExportOutlined } from '@ant-design/icons'
-import { getConfig, setUserRootDir as apiSetUserRootDir, importArchive } from '../api'
+import { getConfig, setUserRootDir as apiSetUserRootDir, previewImport, confirmImport } from '../api'
+import type { ImportPreviewResult } from '../api'
 import { useTranslation } from 'react-i18next'
 import SystemInfoPanel from './SystemInfoPanel'
 import DismissedAlertsManager from './DismissedAlertsManager'
@@ -61,10 +63,9 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
   const [storagePath, setStoragePath] = useState<string>('')
   const [savingRoot, setSavingRoot] = useState(false)
   const [importing, setImporting] = useState(false)
-
-  
-
-  
+  const [previewData, setPreviewData] = useState<ImportPreviewResult | null>(null)
+  const [importMode, setImportMode] = useState<'merge' | 'isolate'>('isolate')
+  const [confirming, setConfirming] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -321,9 +322,9 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
               beforeUpload={async (file) => {
                 try {
                   setImporting(true)
-                  const res = await importArchive(file as any)
-                  const added = (res?.new_run_ids || []).length
-                  message.success(t('offline_import.success', { count: added }))
+                  const preview = await previewImport(file as any)
+                  setPreviewData(preview)
+                  setImportMode(preview.conflict_count > 0 ? 'isolate' : 'isolate')
                 } catch (e: any) {
                   message.error(typeof e?.message === 'string' ? e.message : t('offline_import.failed'))
                 } finally {
@@ -336,9 +337,96 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
               <div style={{ padding: '8px', textAlign: 'center' }}>
                 <div style={{ marginBottom: 4, fontSize: '14px' }}>{t('offline_import.drag')}</div>
                 <div style={{ fontSize: '11px', color: token.colorTextSecondary }}>{t('offline_import.supports')}</div>
-                {importing && <div style={{ marginTop: 4, color: token.colorPrimary, fontSize: '12px' }}>{t('offline_import.importing')}</div>}
+                {importing && <div style={{ marginTop: 4, color: token.colorPrimary, fontSize: '12px' }}>{t('offline_import.previewing')}</div>}
               </div>
             </Upload.Dragger>
+
+            <Modal
+              title={t('offline_import.preview_title')}
+              open={!!previewData}
+              onCancel={() => setPreviewData(null)}
+              confirmLoading={confirming}
+              onOk={async () => {
+                if (!previewData) return
+                setConfirming(true)
+                try {
+                  const res = await confirmImport(previewData.token, importMode)
+                  const added = (res?.new_run_ids || []).length
+                  const skipped = res?.skipped_count || 0
+                  message.success(t(
+                    skipped > 0 ? 'offline_import.success_with_skip' : 'offline_import.success',
+                    { count: added, skipped },
+                  ))
+                  setPreviewData(null)
+                } catch (e: any) {
+                  message.error(typeof e?.message === 'string' ? e.message : t('offline_import.failed'))
+                } finally {
+                  setConfirming(false)
+                }
+              }}
+              okText={t('offline_import.confirm_import')}
+              cancelText={t('experiments.cancel')}
+              width={520}
+            >
+              {previewData && (
+                <div>
+                  <div style={{ marginBottom: 12 }}>
+                    <Typography.Text strong>{t('offline_import.file_label')}</Typography.Text>
+                    <Typography.Text style={{ marginLeft: 8 }}>{previewData.filename}</Typography.Text>
+                  </div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <Typography.Text strong>
+                      {t('offline_import.detected_runs', { count: previewData.total_runs, files: previewData.total_files })}
+                    </Typography.Text>
+                  </div>
+
+                  <div style={{ maxHeight: 200, overflow: 'auto', marginBottom: 12, border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 6, padding: 8 }}>
+                    {previewData.runs.map((r) => (
+                      <div key={r.run_id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', fontSize: 12 }}>
+                        <code style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.path ? `${r.path}/` : ''}{r.run_id}
+                        </code>
+                        <span style={{ color: token.colorTextSecondary, flexShrink: 0 }}>{r.files_count} files</span>
+                        {r.conflict && <Tag color="warning" style={{ marginRight: 0, fontSize: 11 }}>{t('offline_import.conflict')}</Tag>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {previewData.conflict_count > 0 && (
+                    <Alert
+                      type="warning"
+                      icon={<WarningOutlined />}
+                      showIcon
+                      message={t('offline_import.conflict_warning', { count: previewData.conflict_count })}
+                      style={{ marginBottom: 12 }}
+                    />
+                  )}
+
+                  <div>
+                    <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
+                      {t('offline_import.mode_label')}
+                    </Typography.Text>
+                    <Radio.Group value={importMode} onChange={(e) => setImportMode(e.target.value)}>
+                      <Space direction="vertical">
+                        <Radio value="isolate">
+                          <div>
+                            <div style={{ fontWeight: 500 }}>{t('offline_import.mode_isolate')}</div>
+                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>{t('offline_import.mode_isolate_desc')}</div>
+                          </div>
+                        </Radio>
+                        <Radio value="merge">
+                          <div>
+                            <div style={{ fontWeight: 500 }}>{t('offline_import.mode_merge')}</div>
+                            <div style={{ fontSize: 11, color: token.colorTextSecondary }}>{t('offline_import.mode_merge_desc')}</div>
+                          </div>
+                        </Radio>
+                      </Space>
+                    </Radio.Group>
+                  </div>
+                </div>
+              )}
+            </Modal>
           </div>
         </Space>
       </Card>

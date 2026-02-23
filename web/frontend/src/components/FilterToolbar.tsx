@@ -1,7 +1,7 @@
 import { Card, Space, Input, Select, Button, Checkbox, Dropdown, Tooltip } from 'antd'
 import {
   SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined,
-  LineChartOutlined, DownOutlined, FileExcelOutlined, FileTextOutlined,
+  LineChartOutlined,
   SyncOutlined, UndoOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -27,8 +27,7 @@ interface FilterToolbarProps {
   selectedCount: number
   onCompare: () => void
   onDelete: () => void
-  onExportJSON: () => void
-  onExportCSV: () => void
+  onExportZip: () => void
   onOpenRecycleBin: () => void
 }
 
@@ -39,25 +38,11 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
   projects,
   treePanelCollapsed, onToggleTreePanel,
   loading, autoRefresh, onRefresh, onAutoRefreshChange,
-  selectedCount, onCompare, onDelete, onExportJSON, onExportCSV,
+  selectedCount, onCompare, onDelete, onExportZip,
   onOpenRecycleBin,
 }) => {
   const { t } = useTranslation()
 
-  const exportMenuItems = [
-    {
-      key: 'json',
-      icon: <FileTextOutlined />,
-      label: t('experiments.export_json'),
-      onClick: onExportJSON,
-    },
-    {
-      key: 'csv',
-      icon: <FileExcelOutlined />,
-      label: t('experiments.export_csv'),
-      onClick: onExportCSV,
-    },
-  ]
 
   return (
     <Card
@@ -129,11 +114,9 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
               <Button icon={<LineChartOutlined />} onClick={onCompare} disabled={selectedCount < 2}>
                 {t('experiments.compare')} ({selectedCount})
               </Button>
-              <Dropdown menu={{ items: exportMenuItems }} trigger={['click']}>
-                <Button icon={<ExportOutlined />}>
-                  {t('experiments.export')} ({selectedCount}) <DownOutlined />
-                </Button>
-              </Dropdown>
+              <Button icon={<ExportOutlined />} onClick={onExportZip}>
+                {t('experiments.export')} ({selectedCount})
+              </Button>
               <Button danger icon={<DeleteOutlined />} onClick={onDelete}>
                 {t('experiments.delete')} ({selectedCount})
               </Button>
