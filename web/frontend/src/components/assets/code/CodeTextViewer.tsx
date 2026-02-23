@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Space, Tooltip, Typography } from 'antd'
 import { MinusOutlined, PlusOutlined, SearchOutlined, CompressOutlined, ExpandOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -111,33 +111,33 @@ export default function CodeTextViewer(props: { value: string; filename?: string
       dom.className = 'cm-search'
 
       const label = document.createElement('label')
-      label.textContent = (t('assets.code_search.find') || 'Find') + ':'
+      label.textContent = (t('assets.code_search.find')) + ':'
 
       const input = document.createElement('input')
       input.className = 'cm-textfield'
       input.type = 'text'
       input.setAttribute('main-field', 'true')
-      input.placeholder = t('assets.code_search.placeholder') || ''
+      input.placeholder = t('assets.code_search.placeholder')
 
       const btnPrev = document.createElement('button')
       btnPrev.className = 'cm-button'
       btnPrev.type = 'button'
-      btnPrev.textContent = t('assets.code_search.previous') || 'Previous'
+      btnPrev.textContent = t('assets.code_search.previous')
 
       const btnNext = document.createElement('button')
       btnNext.className = 'cm-button'
       btnNext.type = 'button'
-      btnNext.textContent = t('assets.code_search.next') || 'Next'
+      btnNext.textContent = t('assets.code_search.next')
 
       const btnAll = document.createElement('button')
       btnAll.className = 'cm-button'
       btnAll.type = 'button'
-      btnAll.textContent = t('assets.code_search.all') || 'All'
+      btnAll.textContent = t('assets.code_search.all')
 
       const btnClose = document.createElement('button')
       btnClose.className = 'cm-button'
       btnClose.type = 'button'
-      btnClose.textContent = t('assets.code_search.close') || 'Close'
+      btnClose.textContent = t('assets.code_search.close')
 
       const mkCheckbox = (key: string, fallback: string) => {
         const wrap = document.createElement('label')
@@ -475,7 +475,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
         }}
       >
         <Space size={6} wrap>
-          <Tooltip title={t('assets.code_viewer.search') || 'Search (Ctrl+F)'}>
+          <Tooltip title={t('assets.code_viewer.search')}>
             <Button
               type="default"
               size="small"
@@ -486,7 +486,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
               }}
             />
           </Tooltip>
-          <Tooltip title={t('assets.code_viewer.fold_all') || 'Fold all'}>
+          <Tooltip title={t('assets.code_viewer.fold_all')}>
             <Button
               type="default"
               size="small"
@@ -497,7 +497,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
               }}
             />
           </Tooltip>
-          <Tooltip title={t('assets.code_viewer.unfold_all') || 'Unfold all'}>
+          <Tooltip title={t('assets.code_viewer.unfold_all')}>
             <Button
               type="default"
               size="small"
@@ -512,7 +512,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
 
         <Space size={6} wrap align="center">
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t('assets.code_viewer.font_size') || 'Font size'}: {fontSize}px
+            {t('assets.code_viewer.font_size')}: {fontSize}px
           </Typography.Text>
           <Button
             type="default"

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Space, Spin, Tree, Typography } from 'antd'
 import { FileTextOutlined, FolderOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -106,7 +106,7 @@ export default function CodeArchivePreview(props: { runId?: string; archivePath:
         if (cl) {
           const n = Number(cl)
           if (Number.isFinite(n) && n > 50 * 1024 * 1024) {
-            throw new Error(t('assets.code_preview.zip_too_large') || 'Zip too large to preview in browser')
+            throw new Error(t('assets.code_preview.zip_too_large'))
           }
         }
         const buf = await res.arrayBuffer()
@@ -143,7 +143,7 @@ export default function CodeArchivePreview(props: { runId?: string; archivePath:
 
     const f = zip.file(path)
     if (!f) {
-      setFileError(t('assets.code_preview.file_not_found') || 'File not found in zip')
+      setFileError(t('assets.code_preview.file_not_found'))
       return
     }
 
@@ -152,14 +152,14 @@ export default function CodeArchivePreview(props: { runId?: string; archivePath:
       const maybeTextByName = isProbablyTextFilename(path)
       const maybeText = maybeTextByName || isProbablyTextBytes(bytes)
       if (!maybeText) {
-        setFileError(t('assets.code_preview.binary_or_unsupported') || 'Binary or unsupported file type')
+        setFileError(t('assets.code_preview.binary_or_unsupported'))
         return
       }
 
       const content = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
       if (content.length > 400_000) {
         setFileText(content.slice(0, 400_000))
-        setFileError(t('assets.code_preview.truncated') || 'Truncated (file too large)')
+        setFileError(t('assets.code_preview.truncated'))
         return
       }
       setFileText(content)
@@ -169,7 +169,7 @@ export default function CodeArchivePreview(props: { runId?: string; archivePath:
   }
 
   if (!props.runId) {
-    return <Text type="secondary">{t('assets.code_preview.no_run_id') || 'No run id to fetch code archive.'}</Text>
+    return <Text type="secondary">{t('assets.code_preview.no_run_id')}</Text>
   }
 
   if (loading) {
@@ -181,7 +181,7 @@ export default function CodeArchivePreview(props: { runId?: string; archivePath:
   }
 
   if (error) {
-    return <Alert type="error" showIcon message={t('assets.code_preview.failed_to_load') || 'Failed to load code archive'} description={error} />
+    return <Alert type="error" showIcon message={t('assets.code_preview.failed_to_load')} description={error} />
   }
 
   return (
@@ -191,7 +191,7 @@ export default function CodeArchivePreview(props: { runId?: string; archivePath:
           <Space wrap>
             {href ? (
               <Button size="small" onClick={() => window.open(href, '_blank')}>
-                {t('assets.code_preview.download_zip') || 'Download Zip'}
+                {t('assets.code_preview.download_zip')}
               </Button>
             ) : null}
           </Space>
@@ -200,7 +200,7 @@ export default function CodeArchivePreview(props: { runId?: string; archivePath:
             showIcon
             expandAction="click"
             selectedKeys={selectedPath ? [selectedPath] : []}
-            onSelect={(keys: any, info: any) => {
+            onSelect={(_keys: any, info: any) => {
               const k = String(info?.node?.key || '')
               if (!info?.node?.isLeaf) return
               if (k) loadFile(k)
@@ -211,7 +211,7 @@ export default function CodeArchivePreview(props: { runId?: string; archivePath:
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Text type="secondary">{selectedPath || (t('assets.code_preview.select_file') || 'Select a file')}</Text>
+          <Text type="secondary">{selectedPath || (t('assets.code_preview.select_file'))}</Text>
           {fileError ? <Alert type="warning" showIcon message={fileError} /> : null}
           {selectedPath && !fileError ? (
             <CodeTextViewer value={fileText || ''} filename={selectedPath} maxHeight={520} />

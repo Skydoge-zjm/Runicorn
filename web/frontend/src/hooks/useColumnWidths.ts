@@ -6,12 +6,7 @@ interface ColumnWidths {
   [key: string]: number
 }
 
-interface WindowSizeKey {
-  width: number
-  height: number
-}
-
-// Get window size category for grouping similar sizes
+// Get window size category
 const getWindowSizeCategory = (width: number, height: number): string => {
   // Round to nearest 100px to group similar window sizes
   const roundedWidth = Math.round(width / 100) * 100

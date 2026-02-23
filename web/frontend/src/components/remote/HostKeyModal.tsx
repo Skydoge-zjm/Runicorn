@@ -1,4 +1,3 @@
-import React from 'react'
 import { Alert, Descriptions, Modal, Space, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 

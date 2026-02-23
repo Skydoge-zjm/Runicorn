@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Layout, Tag, Button, ConfigProvider, theme, Select } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { Routes, Route, NavLink } from 'react-router-dom'
 import { SettingOutlined, ExperimentOutlined, CloudServerOutlined, DashboardOutlined, AppstoreOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
 import ExperimentPage from './pages/ExperimentPage'
@@ -37,7 +37,6 @@ const navItems = [
 ]
 
 export default function App() {
-  const location = useLocation()
   const { t, i18n} = useTranslation()
   // UI Settings with persistence
   const defaultSettings: UiSettings = {
@@ -165,7 +164,7 @@ export default function App() {
   }, [])
 
   const [apiStatus, setApiStatus] = useState<'ok' | 'down' | 'loading'>('loading')
-  const [failureCount, setFailureCount] = useState(0)
+  const [, setFailureCount] = useState(0)
   
   useEffect(() => {
     let active = true

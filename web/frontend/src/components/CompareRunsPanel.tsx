@@ -9,9 +9,9 @@
  * - Eye icon to toggle run visibility in charts
  * - Auto-refresh indicator when running experiments exist
  */
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import { Button, Tag, Tooltip, theme } from 'antd'
-import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, QuestionCircleOutlined, EyeOutlined, EyeInvisibleOutlined, PlusOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, QuestionCircleOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -38,7 +38,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
   colors,
   visibleRunIds,
   onToggleRunVisibility,
-  onAddRuns,
+  onAddRuns: _onAddRuns,
   onBack,
   style,
 }) => {
@@ -93,17 +93,16 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
           onClick={onBack}
           style={{ marginBottom: 8, padding: '4px 8px' }}
         >
-          {t('experiments.back_to_list') || 'Back to List'}
+          {t('experiments.back_to_list')}
         </Button>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: token.colorText }}>
-            {t('experiments.comparing_runs', { count: runs.length }) || `Comparing ${runs.length} runs`}
+            {t('experiments.comparing_runs', { count: runs.length })}
           </div>
         </div>
         {/* Visible count */}
         <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
-          {t('experiments.visible_runs', { count: visibleCount, total: runs.length }) || 
-            `${visibleCount}/${runs.length} visible`}
+          {t('experiments.visible_runs', { count: visibleCount, total: runs.length })}
         </div>
         {/* Auto-refresh indicator */}
         {hasRunning && (
@@ -116,7 +115,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
             gap: 4,
           }}>
             <SyncOutlined spin style={{ fontSize: 10 }} />
-            {t('experiments.auto_refreshing') || 'Auto-refreshing'}
+            {t('experiments.auto_refreshing')}
           </div>
         )}
       </div>
@@ -180,8 +179,8 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                 {getStatusIcon(run.status)}
                 {/* Eye toggle */}
                 <Tooltip title={isVisible 
-                  ? (t('experiments.hide_run') || 'Hide from charts') 
-                  : (t('experiments.show_run') || 'Show in charts')}>
+                  ? (t('experiments.hide_run')) 
+                  : (t('experiments.show_run'))}>
                   <span
                     onClick={(e) => {
                       e.stopPropagation()
@@ -200,7 +199,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
               </div>
 
               {/* Path */}
-              <Tooltip title={`${t('experiments.click_to_view') || 'Click to view details'}: ${run.path}`}>
+              <Tooltip title={`${t('experiments.click_to_view')}: ${run.path}`}>
                 <div
                   style={{
                     fontSize: 12,

@@ -5,7 +5,6 @@
  * Supports multiple GPUs with responsive column layout
  */
 
-import React from 'react'
 import { Card, Row, Col, Progress, Space, Typography, theme } from 'antd'
 import { 
   ThunderboltOutlined, 

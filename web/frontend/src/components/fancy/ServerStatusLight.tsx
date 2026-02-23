@@ -4,7 +4,6 @@
  * Shows online/offline/connecting status with pulse animation
  */
 
-import React from 'react'
 import { motion } from 'framer-motion'
 
 const STATUS_COLORS: Record<string, string> = {

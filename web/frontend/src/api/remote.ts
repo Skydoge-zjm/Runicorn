@@ -20,8 +20,8 @@ import { ApiError } from '../types/remote'
 const API_BASE = '/api/remote'
 
 async function parseResponsePayload(response: Response): Promise<unknown> {
-  const contentType = response.headers.get('content-type') || ''
-  if (contentType.includes('application/json')) {
+  const contentType = response.headers.get('content-type')
+  if (contentType?.includes('application/json')) {
     try {
       return await response.json()
     } catch {

@@ -4,9 +4,9 @@
  * Allows users to view and restore dismissed alerts in settings
  */
 
-import React, { useState, useEffect } from 'react'
-import { Card, List, Button, Space, Empty, message, Tooltip } from 'antd'
-import { DeleteOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons'
+import { useState, useEffect } from 'react'
+import { Card, List, Button, Empty, message, Tooltip } from 'antd'
+import { ReloadOutlined, EyeOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { getDismissedAlerts, undismissAlert, clearDismissedAlerts } from '../api/preferences'
 

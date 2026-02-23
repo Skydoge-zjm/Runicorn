@@ -1,4 +1,3 @@
-import React from 'react'
 import { Card, Space, Input, Select, Button, Checkbox, Dropdown, Tooltip } from 'antd'
 import {
   SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined,
@@ -49,13 +48,13 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
     {
       key: 'json',
       icon: <FileTextOutlined />,
-      label: t('experiments.export_json') || 'Export as JSON',
+      label: t('experiments.export_json'),
       onClick: onExportJSON,
     },
     {
       key: 'csv',
       icon: <FileExcelOutlined />,
-      label: t('experiments.export_csv') || 'Export as CSV',
+      label: t('experiments.export_csv'),
       onClick: onExportCSV,
     },
   ]
@@ -70,8 +69,8 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
       <Space style={{ width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <Space wrap>
           <Tooltip title={treePanelCollapsed
-            ? (t('experiments.show_tree') || 'Show path tree')
-            : (t('experiments.hide_tree') || 'Hide path tree')
+            ? (t('experiments.show_tree'))
+            : (t('experiments.hide_tree'))
           }>
             <Button
               icon={treePanelCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
@@ -79,7 +78,7 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
             />
           </Tooltip>
           <Input
-            placeholder={t('experiments.search_placeholder') || 'Search runs...'}
+            placeholder={t('experiments.search_placeholder')}
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => onSearchChange(e.target.value)}
@@ -91,7 +90,7 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
             onChange={onProjectFilterChange}
             style={{ width: 140 }}
             options={[
-              { value: 'all', label: t('experiments.all_projects') || 'All Projects' },
+              { value: 'all', label: t('experiments.all_projects') },
               ...projects.map(p => ({ value: p, label: p }))
             ]}
           />
@@ -100,10 +99,10 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
             onChange={onStatusFilterChange}
             style={{ width: 120 }}
             options={[
-              { value: 'all', label: t('experiments.all_status') || 'All Status' },
-              { value: 'running', label: t('experiments.running') || 'Running' },
-              { value: 'finished', label: t('experiments.finished') || 'Finished' },
-              { value: 'failed', label: t('experiments.failed') || 'Failed' },
+              { value: 'all', label: t('experiments.all_status') },
+              { value: 'running', label: t('experiments.running') },
+              { value: 'finished', label: t('experiments.finished') },
+              { value: 'failed', label: t('experiments.failed') },
             ]}
           />
           <Button
@@ -111,16 +110,16 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
             onClick={onRefresh}
             loading={loading}
           >
-            {t('runs.refresh') || 'Refresh'}
+            {t('runs.refresh')}
           </Button>
           <Checkbox
             checked={autoRefresh}
             onChange={(e) => onAutoRefreshChange(e.target.checked)}
           >
-            {t('experiments.auto_refresh') || 'Auto'}
+            {t('experiments.auto_refresh')}
           </Checkbox>
           <Button icon={<UndoOutlined />} onClick={onOpenRecycleBin}>
-            {t('experiments.recycle_bin') || 'Bin'}
+            {t('experiments.recycle_bin')}
           </Button>
         </Space>
 
@@ -128,15 +127,15 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
           {selectedCount > 0 && (
             <>
               <Button icon={<LineChartOutlined />} onClick={onCompare} disabled={selectedCount < 2}>
-                {t('experiments.compare') || 'Compare'} ({selectedCount})
+                {t('experiments.compare')} ({selectedCount})
               </Button>
               <Dropdown menu={{ items: exportMenuItems }} trigger={['click']}>
                 <Button icon={<ExportOutlined />}>
-                  {t('experiments.export') || 'Export'} ({selectedCount}) <DownOutlined />
+                  {t('experiments.export')} ({selectedCount}) <DownOutlined />
                 </Button>
               </Dropdown>
               <Button danger icon={<DeleteOutlined />} onClick={onDelete}>
-                {t('experiments.delete') || 'Delete'} ({selectedCount})
+                {t('experiments.delete')} ({selectedCount})
               </Button>
             </>
           )}

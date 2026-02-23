@@ -29,10 +29,10 @@ export function useInlineEditing(
       setRuns(prev => prev.map(r =>
         r.run_id === runId ? { ...r, alias: newAlias } : r
       ))
-      message.success(t('experiments.alias_updated') || 'Alias updated')
+      message.success(t('experiments.alias_updated'))
     } catch (error) {
       logger.error('Failed to update alias:', error)
-      message.error(t('experiments.alias_update_failed') || 'Failed to update alias')
+      message.error(t('experiments.alias_update_failed'))
     } finally {
       setAliasUpdateLoading(false)
       setEditingRunId(null)
@@ -56,10 +56,10 @@ export function useInlineEditing(
       setRuns(prev => prev.map(r =>
         r.run_id === runId ? { ...r, tags: newTags } : r
       ))
-      message.success(t('experiments.tags_updated') || 'Tags updated')
+      message.success(t('experiments.tags_updated'))
     } catch (error) {
       logger.error('Failed to update tags:', error)
-      message.error(t('experiments.tags_update_failed') || 'Failed to update tags')
+      message.error(t('experiments.tags_update_failed'))
     }
   }, [t, setRuns])
 

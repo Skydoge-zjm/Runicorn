@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { Alert, Space, Switch, Typography, Collapse } from 'antd'
 import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined } from '@ant-design/icons'
@@ -59,7 +59,7 @@ export default function GpuTelemetry() {
     return () => clearInterval(timer)
   }, [paused])
 
-  const { times, gpuNames, seriesUtil, seriesMem, seriesPower, seriesTemp } = useMemo(() => {
+  const { times, gpuNames: _gpuNames, seriesUtil, seriesMem, seriesPower, seriesTemp } = useMemo(() => {
     const samples = bufferRef.current
     const times = samples.map(s => new Date((s.ts || 0) * 1000).toLocaleTimeString())
     const maxGpuCount = samples.reduce((m, s) => Math.max(m, s.gpus?.length || 0), 0)

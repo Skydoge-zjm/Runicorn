@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import { Alert, Space, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 import CodeArchivePreview from './code/CodeArchivePreview'
@@ -31,7 +31,7 @@ export default function AssetPreview(props: { runId?: string; asset: any; archiv
   }
 
   if (!props.archivePath) {
-    return <Text type="secondary">{t('assets.preview.no_archive') || 'No archived file available.'}</Text>
+    return <Text type="secondary">{t('assets.preview.no_archive')}</Text>
   }
 
   if (kind === 'code') {
@@ -48,10 +48,10 @@ export default function AssetPreview(props: { runId?: string; asset: any; archiv
       <Alert
         type="info"
         showIcon
-        message={t('assets.preview.no_inline') || 'No inline preview'}
-        description={t('assets.preview.not_previewable') || 'This asset type is not previewable yet.'}
+        message={t('assets.preview.no_inline')}
+        description={t('assets.preview.not_previewable')}
       />
-      <Text type="secondary">{t('assets.preview.try_download') || 'Try downloading it.'}</Text>
+      <Text type="secondary">{t('assets.preview.try_download')}</Text>
     </Space>
   )
 }

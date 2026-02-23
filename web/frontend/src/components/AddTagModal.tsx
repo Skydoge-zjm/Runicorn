@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Modal, Input, Button, Tag, Space, Typography, Divider } from 'antd'
 import { useTranslation } from 'react-i18next'
 
@@ -76,12 +76,12 @@ const AddTagModal: React.FC<AddTagModalProps> = ({
 
   return (
     <Modal
-      title={t('experiments.add_tag_title') || 'Add Tag'}
+      title={t('experiments.add_tag_title')}
       open={open}
       onCancel={onClose}
       footer={[
         <Button key="cancel" onClick={onClose}>
-          {t('common.cancel') || 'Cancel'}
+          {t('common.cancel')}
         </Button>,
         <Button 
           key="confirm" 
@@ -89,7 +89,7 @@ const AddTagModal: React.FC<AddTagModalProps> = ({
           onClick={handleConfirm}
           disabled={!inputValue.trim()}
         >
-          {t('common.confirm') || 'Confirm'}
+          {t('common.confirm')}
         </Button>,
       ]}
       width={400}
@@ -97,7 +97,7 @@ const AddTagModal: React.FC<AddTagModalProps> = ({
     >
       <div style={{ marginBottom: 16 }}>
         <Input
-          placeholder={t('experiments.enter_tag') || 'Enter tag name...'}
+          placeholder={t('experiments.enter_tag')}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -111,7 +111,7 @@ const AddTagModal: React.FC<AddTagModalProps> = ({
           <Divider style={{ margin: '12px 0 8px' }} />
           <div>
             <Text type="secondary" style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
-              {t('experiments.history_tags') || 'History Tags'}
+              {t('experiments.history_tags')}
             </Text>
             <Space size={[4, 8]} wrap>
               {historyTags.map(tag => (
@@ -133,7 +133,7 @@ const AddTagModal: React.FC<AddTagModalProps> = ({
           <Divider style={{ margin: '12px 0 8px' }} />
           <div>
             <Text type="secondary" style={{ fontSize: 12, marginBottom: 8, display: 'block' }}>
-              {t('experiments.recommended_tags') || 'Recommended Tags'}
+              {t('experiments.recommended_tags')}
             </Text>
             <Space size={[4, 8]} wrap>
               {recommendedTags.map(tag => (

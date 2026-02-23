@@ -4,7 +4,6 @@
  * Replaces AnimatedStatusBadge with a clean, static design.
  */
 
-import React from 'react'
 import { Tag } from 'antd'
 import {
   SyncOutlined,

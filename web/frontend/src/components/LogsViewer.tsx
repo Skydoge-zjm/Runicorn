@@ -90,7 +90,7 @@ interface LogsViewerProps {
 export default function LogsViewer({ url }: LogsViewerProps) {
   const { t } = useTranslation()
   const { settings } = useSettings()
-  const isDark = settings.theme === 'dark'
+  const isDark = settings.themeMode === 'dark'
   const ansiConverter = isDark ? darkConverter : lightConverter
   
   const [allLines, setAllLines] = useState<string[]>([])

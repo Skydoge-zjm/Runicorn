@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Tooltip, Select, Alert, theme } from 'antd'
+import { useEffect, useState } from 'react'
+import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Alert, theme } from 'antd'
 import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, InfoCircleOutlined, ThunderboltOutlined, GlobalOutlined, ExportOutlined } from '@ant-design/icons'
 import { getConfig, setUserRootDir as apiSetUserRootDir, importArchive } from '../api'
 import { useTranslation } from 'react-i18next'
@@ -56,13 +56,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
   const { t } = useTranslation()
   const { token } = theme.useToken()
   const set = (patch: Partial<UiSettings>) => onChange({ ...value, ...patch })
-  const densityTips = {
-    compact: t('settings.appearance.density_compact'),
-    default: t('settings.appearance.density_default'),
-    loose: t('settings.appearance.density_loose'),
-  } as const
-
-  // ----- Data directory (user_root_dir) settings -----
+  // ----- Data directory
   const [userRootDir, setUserRootDir] = useState<string>('')
   const [storagePath, setStoragePath] = useState<string>('')
   const [savingRoot, setSavingRoot] = useState(false)
@@ -289,7 +283,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
         <Space direction="vertical" style={{ width: '100%' }}>
           <Alert 
             type="info" 
-            message={t('settings.data.current_storage', { path: storagePath || t('settings.data.not_configured') || 'Not configured' })}
+            message={t('settings.data.current_storage', { path: storagePath || t('settings.data.not_configured') })}
             style={{ marginBottom: 12 }}
           />
           

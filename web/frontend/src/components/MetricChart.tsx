@@ -5,7 +5,7 @@
  * - Single run (runs.length === 1): Shows best point markers and stage separators
  * - Multi-run (runs.length > 1): Shows multiple series for comparison overlay
  */
-import React, { useEffect, useMemo, useRef, useState, memo } from 'react'
+import { useEffect, useMemo, useRef, useState, memo } from 'react'
 import { Space, Switch, Tooltip, Slider, Select, Button, Card, Typography, Divider, theme } from 'antd'
 import { ExportOutlined } from '@ant-design/icons'
 import AutoResizeEChart from './AutoResizeEChart'

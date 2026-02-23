@@ -56,7 +56,7 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
 
   const handleCompare = useCallback(async () => {
     if (selectedRowKeys.length < 2) {
-      message.warning(t('experiments.select_multiple') || 'Please select at least 2 runs to compare')
+      message.warning(t('experiments.select_multiple'))
       return
     }
     const selectedRuns = runs.filter(r => selectedRowKeys.includes(r.run_id))
@@ -88,7 +88,7 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
       setCompareMetrics(metricsMap)
     } catch (error) {
       logger.error('Failed to fetch metrics for comparison:', error)
-      message.error(t('experiments.compare_fetch_failed') || 'Failed to load metrics')
+      message.error(t('experiments.compare_fetch_failed'))
     } finally {
       setCompareLoading(false)
     }
@@ -104,7 +104,7 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
   }, [])
 
   const handleAddRuns = useCallback(() => {
-    message.info(t('experiments.add_runs_coming_soon') || 'Add runs feature coming soon')
+    message.info(t('experiments.add_runs_coming_soon'))
   }, [t])
 
   const handleExitCompare = useCallback(() => {

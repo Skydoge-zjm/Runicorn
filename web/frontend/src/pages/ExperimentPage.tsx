@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Table, Button, Card, Space, Input, Tag, message, Modal, Tooltip, Empty, Badge, theme } from 'antd'
 import { EyeOutlined, DeleteOutlined, CopyOutlined, PlusOutlined } from '@ant-design/icons'
@@ -26,10 +26,11 @@ import type { SorterResult } from 'antd/es/table/interface'
 import '../styles/resizable-table.css'
 import '../styles/enhanced-table.css'
 
-// ECharts default color palette
+// ECharts color palette (purple #b07cd0 lightened from default #9a60b4
+// for Deuteranopia accessibility — original had near-identical luminance to blue)
 const ECHARTS_COLORS = [
   '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
-  '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'
+  '#3ba272', '#fc8452', '#b07cd0', '#ea7ccc'
 ]
 
 interface ResizeCallbackData {
@@ -64,7 +65,7 @@ const ExperimentPage: React.FC = () => {
     projectFilter, setProjectFilter,
     statusFilter, setStatusFilter,
     selectedTreePath, setSelectedTreePath,
-    sortedInfo, setSortedInfo,
+    setSortedInfo,
     pageSize, setPageSize,
     treePanelCollapsed, setTreePanelCollapsed,
     treePanelWidth, isResizing, handleResizeStart,
@@ -112,22 +113,22 @@ const ExperimentPage: React.FC = () => {
   const handleDelete = useCallback((explicitRunIds?: string[]) => {
     const idsToDelete = explicitRunIds || selectedRowKeys
     if (idsToDelete.length === 0) {
-      message.warning(t('experiments.select_one_delete') || 'Please select at least one run to delete')
+      message.warning(t('experiments.select_one_delete'))
       return
     }
     Modal.confirm({
-      title: t('experiments.move_to_bin_title') || 'Move to Recycle Bin',
+      title: t('experiments.move_to_bin_title'),
       content: (
         <div>
           <p>{t('experiments.soft_delete_confirm_content', { count: idsToDelete.length })}</p>
           <p style={{ color: token.colorPrimary, fontWeight: 500 }}>
-            {t('experiments.soft_delete_note') || 'Files will be preserved and can be restored later.'}
+            {t('experiments.soft_delete_note')}
           </p>
         </div>
       ),
-      okText: t('experiments.move_to_bin') || 'Move to Bin',
+      okText: t('experiments.move_to_bin'),
       okType: 'primary',
-      cancelText: t('experiments.cancel') || 'Cancel',
+      cancelText: t('experiments.cancel'),
       okButtonProps: { loading: deleteLoading },
       onOk: async () => {
         setDeleteLoading(true)
@@ -142,7 +143,7 @@ const ExperimentPage: React.FC = () => {
           }
         } catch (error) {
           logger.error('Delete failed:', error)
-          message.error(t('experiments.delete_failed') || 'Failed to move runs to recycle bin')
+          message.error(t('experiments.delete_failed'))
         } finally {
           setDeleteLoading(false)
         }
@@ -175,7 +176,7 @@ const ExperimentPage: React.FC = () => {
       message.success(t('experiments.export_success', { count: selectedRunData.length }))
     } catch (error) {
       logger.error('Export failed:', error)
-      message.error(t('experiments.export_failed') || 'Failed to export runs')
+      message.error(t('experiments.export_failed'))
     }
   }, [selectedRowKeys, runs, t])
 
@@ -213,7 +214,7 @@ const ExperimentPage: React.FC = () => {
       message.success(t('experiments.export_success', { count: selectedRunData.length }))
     } catch (error) {
       logger.error('Export failed:', error)
-      message.error(t('experiments.export_failed') || 'Failed to export runs')
+      message.error(t('experiments.export_failed'))
     }
   }, [selectedRowKeys, runs, t])
 
@@ -243,13 +244,13 @@ const ExperimentPage: React.FC = () => {
               onBlur={() => handleAliasSave(record.run_id)}
               onKeyDown={(e) => { if (e.key === 'Escape') handleAliasCancel() }}
               autoFocus style={{ width: '100%' }}
-              placeholder={t('experiments.alias_placeholder') || 'Enter alias...'}
+              placeholder={t('experiments.alias_placeholder')}
               disabled={aliasUpdateLoading}
             />
           )
         }
         return (
-          <Tooltip title={t('experiments.double_click_edit') || 'Double-click to edit'}>
+          <Tooltip title={t('experiments.double_click_edit')}>
             <div style={{ cursor: 'pointer', minHeight: 22, display: 'flex', alignItems: 'center' }}
               onDoubleClick={() => handleAliasEdit(record.run_id, text)}>
               {text ? <Tag color="purple">{text}</Tag> : <span style={{ color: token.colorTextDisabled }}>-</span>}
@@ -269,7 +270,7 @@ const ExperimentPage: React.FC = () => {
             {currentTags.map(tag => (
               <Tag key={tag} closable onClose={(e) => { e.preventDefault(); e.stopPropagation(); handleRemoveTag(record.run_id, tag, currentTags) }} style={{ marginRight: 0 }}>{tag}</Tag>
             ))}
-            <Tooltip title={t('experiments.add_tag') || 'Add tag'}>
+            <Tooltip title={t('experiments.add_tag')}>
               <Tag onClick={(e) => { e.stopPropagation(); handleOpenTagModal(record.run_id, currentTags) }}
                 style={{ cursor: 'pointer', borderStyle: 'dashed', background: 'transparent' }}>
                 <PlusOutlined />
@@ -288,10 +289,10 @@ const ExperimentPage: React.FC = () => {
         return (
           <Space size={4}>
             <Tooltip title={text}><code style={{ fontSize: '12px', cursor: 'pointer' }}>{suffix}</code></Tooltip>
-            <Tooltip title={t('common.copy') || 'Copy'}>
+            <Tooltip title={t('common.copy')}>
               <Button type="text" size="small" icon={<CopyOutlined style={{ fontSize: 12 }} />}
                 style={{ padding: '0 4px', height: 20, minWidth: 20 }}
-                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(text); message.success(t('common.copied') || 'Copied!') }}
+                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(text); message.success(t('common.copied')) }}
               />
             </Tooltip>
           </Space>
@@ -322,7 +323,7 @@ const ExperimentPage: React.FC = () => {
       onHeaderCell: () => ({ width: columnWidths.created, onResize: handleResize('created') }),
     },
     {
-      title: t('experiments.best_metric') || 'Best Metric', key: 'best_metric',
+      title: t('experiments.best_metric'), key: 'best_metric',
       width: columnWidths.best_metric,
       onHeaderCell: () => ({ width: columnWidths.best_metric, onResize: handleResize('best_metric') }),
       render: (_, record) => {
@@ -340,7 +341,7 @@ const ExperimentPage: React.FC = () => {
       },
     },
     {
-      title: t('experiments.assets') || 'Assets', key: 'assets',
+      title: t('experiments.assets'), key: 'assets',
       width: columnWidths.assets,
       onHeaderCell: () => ({ width: columnWidths.assets, onResize: handleResize('assets') }),
       render: (_, record) => {
@@ -362,7 +363,7 @@ const ExperimentPage: React.FC = () => {
           <Tooltip title={t('table.view')}>
             <Button type="link" icon={<EyeOutlined />} onClick={() => navigate(`/runs/${record.run_id}`)} aria-label="View run details" />
           </Tooltip>
-          <Tooltip title={t('experiments.delete') || 'Delete'}>
+          <Tooltip title={t('experiments.delete')}>
             <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDelete([record.run_id])} aria-label="Delete run" />
           </Tooltip>
         </Space>
@@ -461,9 +462,9 @@ const ExperimentPage: React.FC = () => {
                     locale={{
                       emptyText: (
                         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description={t('experiments.no_runs_desc') || 'Start tracking your ML experiments.'}>
+                          description={t('experiments.no_runs_desc')}>
                           <Button type="primary" onClick={() => window.open('https://github.com/runicorn/runicorn#quick-start', '_blank')}>
-                            {t('experiments.view_quickstart') || 'View Quickstart'}
+                            {t('experiments.view_quickstart')}
                           </Button>
                         </Empty>
                       ),

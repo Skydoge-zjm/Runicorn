@@ -7,7 +7,7 @@
  * Optimization: Uses ECharts legend.selected to toggle series visibility
  * instead of re-rendering the entire chart when hiding/showing runs.
  */
-import React, { useMemo, useState, useEffect, useRef } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { Row, Col, Empty, Spin, Card, Checkbox, Space, Button, Tooltip, theme } from 'antd'
 import { LineChartOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -153,7 +153,7 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
           minHeight: 300,
         }}
       >
-        <Spin size="large" tip={t('experiments.loading_metrics') || 'Loading metrics...'} />
+        <Spin size="large" tip={t('experiments.loading_metrics')} />
       </div>
     )
   }
@@ -171,7 +171,7 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
       >
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={t('experiments.no_common_metrics') || 'No common metrics found in selected runs'}
+          description={t('experiments.no_common_metrics')}
         />
       </div>
     )
@@ -189,14 +189,14 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <LineChartOutlined style={{ color: token.colorPrimary }} />
             <span style={{ fontWeight: 500 }}>
-              {t('experiments.common_metrics') || 'Common Metrics'}
+              {t('experiments.common_metrics')}
             </span>
           </div>
           
           {/* Toggle all button */}
           <Tooltip title={visibleMetrics.size === commonMetrics.length 
-            ? (t('experiments.hide_all') || 'Hide All') 
-            : (t('experiments.show_all') || 'Show All')}>
+            ? (t('experiments.hide_all')) 
+            : (t('experiments.show_all'))}>
             <Button
               size="small"
               type="text"
@@ -229,13 +229,13 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
       {displayedMetrics.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={t('experiments.no_metrics_selected') || 'No metrics selected'}
+          description={t('experiments.no_metrics_selected')}
           style={{ marginTop: 48 }}
         />
       ) : visibleRunCount < 2 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={t('experiments.need_two_visible') || 'Need at least 2 visible runs to compare'}
+          description={t('experiments.need_two_visible')}
           style={{ marginTop: 48 }}
         />
       ) : (

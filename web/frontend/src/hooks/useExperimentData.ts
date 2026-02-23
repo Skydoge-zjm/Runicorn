@@ -114,14 +114,14 @@ export function useExperimentData(_locationKey: string) {
     try {
       const result = await apiSoftDeleteByPath(path)
       if (result.deleted_count > 0) {
-        message.success(t('experiments.soft_delete_success', { count: result.deleted_count }) || `Moved ${result.deleted_count} runs to recycle bin`)
+        message.success(t('experiments.soft_delete_success', { count: result.deleted_count }))
         fetchRuns(false)
       } else {
-        message.info(t('experiments.no_runs_to_delete') || 'No runs to delete in this path')
+        message.info(t('experiments.no_runs_to_delete'))
       }
     } catch (error) {
       logger.error('Batch delete by path failed:', error)
-      message.error(t('experiments.delete_failed') || 'Failed to delete runs')
+      message.error(t('experiments.delete_failed'))
     }
   }, [t, fetchRuns])
 
@@ -134,10 +134,10 @@ export function useExperimentData(_locationKey: string) {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      message.success(t('experiments.export_started') || 'Export started')
+      message.success(t('experiments.export_started'))
     } catch (error) {
       logger.error('Batch export by path failed:', error)
-      message.error(t('experiments.export_failed') || 'Failed to export runs')
+      message.error(t('experiments.export_failed'))
     }
   }, [t])
 

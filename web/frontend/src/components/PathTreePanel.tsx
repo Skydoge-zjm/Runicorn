@@ -12,7 +12,7 @@
  * - Keyboard navigation support
  * - Smooth animations
  */
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Tree, Spin, Empty, Input, Tooltip, Dropdown, Modal, theme } from 'antd'
 import { FolderOutlined, FolderOpenOutlined, SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, AppstoreOutlined, LoadingOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -357,15 +357,14 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
     {
       key: 'delete',
       icon: <DeleteOutlined />,
-      label: t('experiments.delete_path') || 'Delete all runs in this path',
+      label: t('experiments.delete_path'),
       danger: true,
       onClick: () => {
         if (contextMenuPath && onBatchDelete) {
           Modal.confirm({
-            title: t('experiments.delete_path_confirm_title') || 'Delete Path',
-            content: t('experiments.delete_path_confirm', { path: contextMenuPath }) || 
-              `Delete all runs under "${contextMenuPath}"?`,
-            okText: t('experiments.delete') || 'Delete',
+            title: t('experiments.delete_path_confirm_title'),
+            content: t('experiments.delete_path_confirm', { path: contextMenuPath }),
+            okText: t('experiments.delete'),
             okType: 'danger',
             onOk: () => onBatchDelete(contextMenuPath),
           })
@@ -375,7 +374,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
     {
       key: 'export',
       icon: <ExportOutlined />,
-      label: t('experiments.export_path') || 'Export all runs in this path',
+      label: t('experiments.export_path'),
       onClick: () => {
         if (contextMenuPath && onBatchExport) {
           onBatchExport(contextMenuPath)
@@ -435,9 +434,9 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         }}>
           <span style={{ fontWeight: 600, fontSize: 13, color: token.colorText }}>
             <FolderOutlined style={{ marginRight: 6, color: token.colorWarning }} />
-            {t('experiments.path_tree') || 'Paths'}
+            {t('experiments.path_tree')}
           </span>
-          <Tooltip title={t('runs.refresh') || 'Refresh'}>
+          <Tooltip title={t('runs.refresh')}>
             <ReloadOutlined 
               style={{ 
                 cursor: 'pointer', 
@@ -451,7 +450,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         </div>
         <Input
           size="small"
-          placeholder={t('experiments.search_path') || 'Search paths...'}
+          placeholder={t('experiments.search_path')}
           prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
@@ -490,7 +489,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
           }}
         >
           <AppstoreOutlined style={{ color: selectedPath === null ? token.colorPrimary : token.colorTextTertiary }} />
-          <span style={{ flex: 1 }}>{t('experiments.all_runs') || 'All Runs'}</span>
+          <span style={{ flex: 1 }}>{t('experiments.all_runs')}</span>
           {totalStats && (
             <span style={{ 
               display: 'flex',
@@ -555,8 +554,8 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
                   searchText 
-                    ? (t('experiments.no_path_match') || 'No matching paths')
-                    : (t('experiments.no_paths') || 'No paths yet')
+                    ? (t('experiments.no_path_match'))
+                    : (t('experiments.no_paths'))
                 }
                 style={{ marginTop: 32 }}
               />
@@ -582,7 +581,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
               flexShrink: 0,
             }}
           >
-            <span style={{ color: token.colorTextTertiary }}>{t('experiments.filtering') || 'Filtering'}:</span>
+            <span style={{ color: token.colorTextTertiary }}>{t('experiments.filtering')}:</span>
             <code style={{ 
               marginLeft: 6, 
               color: token.colorPrimary,

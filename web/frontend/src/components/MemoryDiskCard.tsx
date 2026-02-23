@@ -4,12 +4,11 @@
  * Displays memory and disk metrics in a combined view
  */
 
-import React from 'react'
 import { Card, Row, Col, Progress, Space, Typography, Statistic, theme, Divider } from 'antd'
 import { DatabaseOutlined, HddOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 interface MemoryMetrics {
   total: number

@@ -4,14 +4,12 @@
  * Displays information about an active Remote Viewer session
  */
 
-import React from 'react'
 import {
   Card,
   Space,
   Button,
   Descriptions,
   Alert,
-  Badge,
   Typography,
   Modal
 } from 'antd'
@@ -19,8 +17,7 @@ import {
   LinkOutlined,
   StopOutlined,
   DisconnectOutlined,
-  CloudServerOutlined,
-  ReloadOutlined
+  CloudServerOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
@@ -37,14 +34,6 @@ interface RemoteSessionCardProps {
   onOpen?: (session: RemoteSession) => void
   onStop?: (session: RemoteSession) => Promise<void>
   onDisconnect?: (session: RemoteSession) => Promise<void>
-}
-
-const statusColorMap: Record<string, 'success' | 'processing' | 'default' | 'error'> = {
-  running: 'success',
-  connecting: 'processing',
-  stopping: 'processing',
-  stopped: 'default',
-  error: 'error'
 }
 
 const statusMessageMap: Record<string, string> = {

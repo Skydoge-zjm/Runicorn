@@ -4,7 +4,7 @@
  * Displays available conda environments for user selection
  */
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Card,
   List,
@@ -13,7 +13,6 @@ import {
   Space,
   Tag,
   Typography,
-  Alert,
   Empty,
   Spin,
   Row,
@@ -32,7 +31,7 @@ import type { CondaEnv } from '../../types/remote'
 import { getRemoteConfig, getLocalVersion } from '../../api/remote'
 import DismissibleAlert from '../DismissibleAlert'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 interface CondaEnvSelectorProps {
   envs: CondaEnv[]

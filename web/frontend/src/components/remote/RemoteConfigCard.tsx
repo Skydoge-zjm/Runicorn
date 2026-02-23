@@ -4,7 +4,6 @@
  * Displays remote server configuration for user confirmation
  */
 
-import React from 'react'
 import {
   Card,
   Descriptions,

@@ -5,13 +5,12 @@
  * Monitors: CPU, Memory, Disk, GPU
  */
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, Space, Alert, Typography, Tag, Tooltip, Tabs, Empty } from 'antd'
 import { 
   ThunderboltOutlined, 
   DashboardOutlined,
   DatabaseOutlined,
-  HddOutlined,
   FireOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'

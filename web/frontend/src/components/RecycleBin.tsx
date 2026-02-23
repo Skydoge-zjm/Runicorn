@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Modal, Table, Button, Space, Tag, message, Tooltip, Alert, Typography, Popconfirm, Descriptions, Spin } from 'antd'
 import { DeleteOutlined, UndoOutlined, ClearOutlined, InfoCircleOutlined, ExclamationCircleOutlined, FileOutlined } from '@ant-design/icons'
-import { listDeletedRuns, restoreRuns, emptyRecycleBin, permanentDeleteRunsBatch, getRunAssetRefs, type RunAssetRefs } from '../api'
+import { listDeletedRuns, restoreRuns, permanentDeleteRunsBatch, getRunAssetRefs, type RunAssetRefs } from '../api'
 import { useTranslation } from 'react-i18next'
 import logger from '../utils/logger'
 
@@ -20,15 +20,6 @@ interface RecycleBinProps {
   open: boolean
   onClose: () => void
   onRestore?: () => void
-}
-
-// Format bytes to human readable
-const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
 export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps) {
@@ -54,7 +45,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       setDeletedRuns(result.deleted_runs || [])
     } catch (error) {
       logger.error('Failed to fetch deleted runs:', error)
-      message.error(t('recycle_bin.fetch_failed') || 'Failed to load recycle bin')
+      message.error(t('recycle_bin.fetch_failed'))
     } finally {
       setLoading(false)
     }
@@ -87,7 +78,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
 
   const handleRestore = async () => {
     if (selectedRowKeys.length === 0) {
-      message.warning(t('recycle_bin.select_to_restore') || 'Please select runs to restore')
+      message.warning(t('recycle_bin.select_to_restore'))
       return
     }
 
@@ -96,7 +87,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       const result = await restoreRuns(selectedRowKeys)
       
       if (result.restored_count > 0) {
-        message.success(t('recycle_bin.restore_success', { count: result.restored_count }) || `Restored ${result.restored_count} runs`)
+        message.success(t('recycle_bin.restore_success', { count: result.restored_count }))
         setSelectedRowKeys([])
         fetchDeletedRuns()
         onRestore?.()
@@ -105,7 +96,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       }
     } catch (error) {
       logger.error('Restore failed:', error)
-      message.error(t('recycle_bin.restore_failed') || 'Failed to restore runs')
+      message.error(t('recycle_bin.restore_failed'))
     } finally {
       setRestoreLoading(false)
     }
@@ -114,7 +105,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
   // Permanent delete with asset cleanup
   const handlePermanentDelete = async () => {
     if (selectedRowKeys.length === 0) {
-      message.warning(t('recycle_bin.select_to_delete') || 'Please select runs to delete')
+      message.warning(t('recycle_bin.select_to_delete'))
       return
     }
 
@@ -123,14 +114,11 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       const result = await permanentDeleteRunsBatch(selectedRowKeys, false)
       
       if (result.deleted_count > 0) {
-        const bytesMsg = result.total_bytes_freed > 0 
-          ? ` (${formatBytes(result.total_bytes_freed)} freed)` 
-          : ''
         message.success(
           t('recycle_bin.permanent_delete_success', { 
             count: result.deleted_count,
             blobs: result.total_blobs_deleted 
-          }) || `Permanently deleted ${result.deleted_count} runs, ${result.total_blobs_deleted} blobs${bytesMsg}`
+          })
         )
         setSelectedRowKeys([])
         setPreviewRunId(null)
@@ -141,7 +129,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       }
     } catch (error) {
       logger.error('Permanent delete failed:', error)
-      message.error(t('recycle_bin.permanent_delete_failed') || 'Failed to permanently delete runs')
+      message.error(t('recycle_bin.permanent_delete_failed'))
     } finally {
       setPermanentDeleteLoading(false)
     }
@@ -153,23 +141,19 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       // Use permanent delete for all runs to clean up assets
       const allRunIds = deletedRuns.map(r => r.id)
       if (allRunIds.length === 0) {
-        message.info(t('recycle_bin.already_empty') || 'Recycle bin is already empty')
+        message.info(t('recycle_bin.already_empty'))
         setEmptyLoading(false)
         return
       }
       
       const result = await permanentDeleteRunsBatch(allRunIds, false)
-      const bytesMsg = result.total_bytes_freed > 0 
-        ? ` (${formatBytes(result.total_bytes_freed)} freed)` 
-        : ''
       message.success(
-        t('recycle_bin.empty_success', { count: result.deleted_count }) || 
-        `Permanently deleted ${result.deleted_count} runs${bytesMsg}`
+        t('recycle_bin.empty_success', { count: result.deleted_count })
       )
       fetchDeletedRuns()
     } catch (error) {
       logger.error('Empty bin failed:', error)
-      message.error(t('recycle_bin.empty_failed') || 'Failed to empty recycle bin')
+      message.error(t('recycle_bin.empty_failed'))
     } finally {
       setEmptyLoading(false)
     }
@@ -182,7 +166,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       key: 'id',
       width: 200,
       render: (id: string) => (
-        <Tooltip title={t('recycle_bin.click_to_preview') || 'Click to preview assets'}>
+        <Tooltip title={t('recycle_bin.click_to_preview')}>
           <Typography.Text 
             code 
             style={{ fontSize: '12px', cursor: 'pointer' }}
@@ -247,7 +231,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       width: 100,
       render: (_: any, record: DeletedRun) => (
         <Space size="small">
-          <Tooltip title={t('recycle_bin.restore_single') || 'Restore'}>
+          <Tooltip title={t('recycle_bin.restore_single')}>
             <Button 
               type="text"
               size="small"
@@ -257,19 +241,19 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
                 try {
                   const result = await restoreRuns([record.id])
                   if (result.restored_count > 0) {
-                    message.success(t('recycle_bin.restore_success', { count: 1 }) || 'Restored 1 run')
+                    message.success(t('recycle_bin.restore_success', { count: 1 }))
                     fetchDeletedRuns()
                     onRestore?.()
                   }
                 } catch (error) {
-                  message.error(t('recycle_bin.restore_failed') || 'Failed to restore')
+                  message.error(t('recycle_bin.restore_failed'))
                 } finally {
                   setRestoreLoading(false)
                 }
               }}
             />
           </Tooltip>
-          <Tooltip title={t('recycle_bin.preview_assets') || 'Preview assets'}>
+          <Tooltip title={t('recycle_bin.preview_assets')}>
             <Button 
               type="text"
               size="small"
@@ -287,7 +271,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       title={
         <Space>
           <DeleteOutlined />
-          <span>{t('recycle_bin.title') || 'Recycle Bin'}</span>
+          <span>{t('recycle_bin.title')}</span>
           <Tag color="orange">{deletedRuns.length}</Tag>
         </Space>
       }
@@ -296,7 +280,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       width={950}
       footer={[
         <Button key="close" onClick={onClose}>
-          {t('experiments.cancel') || 'Close'}
+          {t('experiments.cancel')}
         </Button>,
         <Button 
           key="restore" 
@@ -306,23 +290,23 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
           disabled={selectedRowKeys.length === 0}
           onClick={handleRestore}
         >
-          {t('recycle_bin.restore_selected') || 'Restore Selected'} 
+          {t('recycle_bin.restore_selected')} 
           {selectedRowKeys.length > 0 && ` (${selectedRowKeys.length})`}
         </Button>,
         <Popconfirm
           key="permanent"
-          title={t('recycle_bin.permanent_delete_title') || 'Permanently Delete'}
+          title={t('recycle_bin.permanent_delete_title')}
           description={
             <div style={{ maxWidth: 300 }}>
-              <p>{t('recycle_bin.permanent_delete_desc') || 'This will permanently delete selected runs and their orphaned assets. Assets shared with other runs will be kept.'}</p>
+              <p>{t('recycle_bin.permanent_delete_desc')}</p>
               <p style={{ color: '#ff4d4f', fontWeight: 500 }}>
-                {t('recycle_bin.permanent_delete_warning') || 'This cannot be undone!'}
+                {t('recycle_bin.permanent_delete_warning')}
               </p>
             </div>
           }
-          okText={t('recycle_bin.permanent_delete_confirm') || 'Yes, Delete Permanently'}
+          okText={t('recycle_bin.permanent_delete_confirm')}
           okType="danger"
-          cancelText={t('experiments.cancel') || 'Cancel'}
+          cancelText={t('experiments.cancel')}
           onConfirm={handlePermanentDelete}
           icon={<ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
         >
@@ -332,24 +316,24 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
             loading={permanentDeleteLoading}
             disabled={selectedRowKeys.length === 0}
           >
-            {t('recycle_bin.permanent_delete') || 'Delete Permanently'}
+            {t('recycle_bin.permanent_delete')}
             {selectedRowKeys.length > 0 && ` (${selectedRowKeys.length})`}
           </Button>
         </Popconfirm>,
         <Popconfirm
           key="empty"
-          title={t('recycle_bin.empty_confirm_title') || 'Empty Recycle Bin'}
+          title={t('recycle_bin.empty_confirm_title')}
           description={
             <div style={{ maxWidth: 300 }}>
-              <p>{t('recycle_bin.empty_confirm_desc') || 'This will permanently delete ALL runs in recycle bin and their orphaned assets.'}</p>
+              <p>{t('recycle_bin.empty_confirm_desc')}</p>
               <p style={{ color: '#ff4d4f', fontWeight: 500 }}>
-                {t('recycle_bin.permanent_delete_warning') || 'This cannot be undone!'}
+                {t('recycle_bin.permanent_delete_warning')}
               </p>
             </div>
           }
-          okText={t('recycle_bin.empty_confirm') || 'Yes, Delete All'}
+          okText={t('recycle_bin.empty_confirm')}
           okType="danger"
-          cancelText={t('experiments.cancel') || 'Cancel'}
+          cancelText={t('experiments.cancel')}
           onConfirm={handleEmptyBin}
           icon={<ExclamationCircleOutlined style={{ color: '#ff4d4f' }} />}
         >
@@ -360,15 +344,15 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
             loading={emptyLoading}
             disabled={deletedRuns.length === 0}
           >
-            {t('recycle_bin.empty_bin') || 'Empty Bin'}
+            {t('recycle_bin.empty_bin')}
           </Button>
         </Popconfirm>
       ]}
     >
       <Space direction="vertical" style={{ width: '100%' }} size="middle">
         <Alert
-          message={t('recycle_bin.description') || 'Recycle Bin contains soft-deleted experiments. Files are preserved and can be restored.'}
-          description={t('recycle_bin.permanent_delete_info') || 'Permanent deletion will also clean up orphaned assets (datasets, pretrained models, code snapshots) that are only used by the deleted runs.'}
+          message={t('recycle_bin.description')}
+          description={t('recycle_bin.permanent_delete_info')}
           type="info"
           icon={<InfoCircleOutlined />}
           showIcon
@@ -388,14 +372,13 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
             pageSize: 8,
             showSizeChanger: false,
             showTotal: (total, range) => 
-              t('recycle_bin.table_total', { from: range[0], to: range[1], total }) || 
-              `${range[0]}-${range[1]} of ${total} items`
+              t('recycle_bin.table_total', { from: range[0], to: range[1], total })
           }}
           locale={{
             emptyText: (
               <div style={{ padding: 20, textAlign: 'center' }}>
                 <Typography.Text type="secondary">
-                  {t('recycle_bin.empty_state') || 'Recycle bin is empty'}
+                  {t('recycle_bin.empty_state')}
                 </Typography.Text>
               </div>
             )
@@ -411,7 +394,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
             background: '#fafafa'
           }}>
             <Typography.Title level={5} style={{ marginTop: 0 }}>
-              <FileOutlined /> {t('recycle_bin.asset_preview') || 'Asset Preview'}: {previewRunId}
+              <FileOutlined /> {t('recycle_bin.asset_preview')}: {previewRunId}
             </Typography.Title>
             
             {previewLoading ? (
@@ -420,11 +403,11 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
               </div>
             ) : assetRefs ? (
               <Descriptions column={2} size="small" bordered>
-                <Descriptions.Item label={t('recycle_bin.orphaned_assets') || 'Orphaned Assets'} span={2}>
+                <Descriptions.Item label={t('recycle_bin.orphaned_assets')} span={2}>
                   <Space direction="vertical" size="small" style={{ width: '100%' }}>
                     {assetRefs.orphaned_assets.length === 0 ? (
                       <Typography.Text type="secondary">
-                        {t('recycle_bin.no_orphaned') || 'No orphaned assets (all shared with other runs)'}
+                        {t('recycle_bin.no_orphaned')}
                       </Typography.Text>
                     ) : (
                       assetRefs.orphaned_assets.map((a, i) => (
@@ -435,11 +418,11 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
                     )}
                   </Space>
                 </Descriptions.Item>
-                <Descriptions.Item label={t('recycle_bin.shared_assets') || 'Shared Assets'} span={2}>
+                <Descriptions.Item label={t('recycle_bin.shared_assets')} span={2}>
                   <Space direction="vertical" size="small" style={{ width: '100%' }}>
                     {assetRefs.shared_assets.length === 0 ? (
                       <Typography.Text type="secondary">
-                        {t('recycle_bin.no_shared') || 'No shared assets'}
+                        {t('recycle_bin.no_shared')}
                       </Typography.Text>
                     ) : (
                       assetRefs.shared_assets.map((a, i) => (
@@ -452,20 +435,20 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
                     )}
                   </Space>
                 </Descriptions.Item>
-                <Descriptions.Item label={t('recycle_bin.will_delete') || 'Will Delete'}>
+                <Descriptions.Item label={t('recycle_bin.will_delete')}>
                   <Typography.Text type="danger">
-                    {assetRefs.orphaned_count} {t('recycle_bin.assets') || 'assets'}
+                    {assetRefs.orphaned_count} {t('recycle_bin.assets')}
                   </Typography.Text>
                 </Descriptions.Item>
-                <Descriptions.Item label={t('recycle_bin.will_keep') || 'Will Keep'}>
+                <Descriptions.Item label={t('recycle_bin.will_keep')}>
                   <Typography.Text type="success">
-                    {assetRefs.shared_count} {t('recycle_bin.assets') || 'assets'}
+                    {assetRefs.shared_count} {t('recycle_bin.assets')}
                   </Typography.Text>
                 </Descriptions.Item>
               </Descriptions>
             ) : (
               <Typography.Text type="secondary">
-                {t('recycle_bin.no_asset_info') || 'No asset information available for this run'}
+                {t('recycle_bin.no_asset_info')}
               </Typography.Text>
             )}
           </div>
@@ -473,7 +456,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
         
         {selectedRowKeys.length > 0 && (
           <Alert
-            message={t('recycle_bin.selection_info', { count: selectedRowKeys.length }) || `${selectedRowKeys.length} runs selected`}
+            message={t('recycle_bin.selection_info', { count: selectedRowKeys.length })}
             type="info"
             style={{ marginTop: 8 }}
           />

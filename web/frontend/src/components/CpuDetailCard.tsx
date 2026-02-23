@@ -4,7 +4,6 @@
  * Displays detailed CPU metrics including per-core utilization
  */
 
-import React from 'react'
 import { Card, Row, Col, Progress, Space, Typography, Statistic, theme } from 'antd'
 import { ThunderboltOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'

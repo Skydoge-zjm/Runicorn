@@ -4,7 +4,7 @@
  * Main page for managing Remote Viewer sessions (VSCode Remote-like architecture)
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Card,
   Space,
@@ -58,7 +58,6 @@ import {
   startRemoteViewer,
   stopRemoteViewer,
   disconnectRemote,
-  testConnection,
   acceptKnownHost,
   listKnownHosts,
   removeKnownHost
@@ -384,36 +383,6 @@ export default function RemoteViewerPage() {
     setWizardEditProfileId(null)
     serverForm.resetFields()
     message.info(t('remote.message.cancelled'))
-  }
-
-  /**
-   * Handle connection test
-   */
-  const handleTest = async (config: SSHConnectionConfig) => {
-    const target = `${config.username}@${config.host}:${config.port}`
-    try {
-      const result = await runWithHostKeyConfirmation(() => testConnection(config), target)
-      if (result.success) {
-        message.success({
-          content: (
-            <div>
-              <div>{t('remote.message.testSuccess')}</div>
-              {result.pythonVersion && (
-                <div style={{ fontSize: '12px', marginTop: 4 }}>
-                  Python {result.pythonVersion}
-                </div>
-              )}
-            </div>
-          ),
-          duration: 3
-        })
-      } else {
-        throw new Error(result.error || 'Connection test failed')
-      }
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : t('remote.message.testFailed'))
-      throw error
-    }
   }
 
   /**

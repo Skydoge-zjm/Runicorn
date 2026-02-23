@@ -4,8 +4,8 @@
  * Alert that can be permanently dismissed with "Don't show again" checkbox
  */
 
-import React, { useState, useEffect } from 'react'
-import { Alert, Checkbox, Space } from 'antd'
+import { useState, useEffect } from 'react'
+import { Alert, Checkbox } from 'antd'
 import type { AlertProps } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { dismissAlert, getDismissedAlerts } from '../api/preferences'
