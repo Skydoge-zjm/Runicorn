@@ -9,32 +9,23 @@
  * Note: Simplified to avoid animation conflicts with page unmounting
  */
 
-import { motion, AnimatePresence } from 'framer-motion'
-import { useLocation } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import type { ReactNode } from 'react'
 
 export const PageTransition = ({ children }: { children: ReactNode }) => {
-  const location = useLocation()
-  
   return (
-    <AnimatePresence mode="sync" initial={false}>
-      <motion.div
-        key={location.pathname}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.15 }}
-        style={{ 
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: 0,
-          overflow: 'hidden',
-        }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
+    <div
+      style={{ 
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        overflow: 'hidden',
+      }}
+    >
+      {children}
+    </div>
   )
 }
 

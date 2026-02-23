@@ -271,7 +271,20 @@ const MetricChart = memo(function MetricChart({
       legend: legendConfig,
       ...(colors.length > 0 && { color: colors }),
       xAxis: isSingleRun ? { type: 'category', data: xAxisData } : { type: 'value', name: xKey },
-      yAxis: { type: useLog ? 'log' : 'value', scale: dynamicScale, min: dynamicScale ? 'dataMin' : 0 },
+      yAxis: {
+        type: useLog ? 'log' : 'value',
+        scale: dynamicScale,
+        min: dynamicScale ? 'dataMin' : 0,
+        axisLabel: {
+          formatter: (v: number) => {
+            if (v === 0) return '0'
+            const abs = Math.abs(v)
+            if (abs >= 1e6) return parseFloat((v / 1e6).toPrecision(4)) + 'M'
+            if (abs >= 1e4) return parseFloat((v / 1e3).toPrecision(4)) + 'k'
+            return String(parseFloat(v.toPrecision(4)))
+          },
+        },
+      },
       grid: { left: 50, right: 30, top: gridTop, bottom: 80, show: settings.showGridLines },
       dataZoom: [{ type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 40 }],
       toolbox: { feature: { restore: {}, saveAsImage: {} }, right: 10 },
