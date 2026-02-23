@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import ReactECharts, { EChartsReactProps } from 'echarts-for-react'
 import * as echarts from 'echarts'
 
-export default function AutoResizeEChart(props: EChartsReactProps & { group?: string }) {
+export default function AutoResizeEChart(props: EChartsReactProps & { group?: string; onChartReady?: (instance: any) => void }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<ReactECharts>(null as any)
 
@@ -47,9 +47,16 @@ export default function AutoResizeEChart(props: EChartsReactProps & { group?: st
     }
   }, [props.group])
 
+  // Expose ECharts instance to parent via callback
+  useEffect(() => {
+    if (!props.onChartReady) return
+    const inst = (chartRef.current as any)?.getEchartsInstance?.()
+    if (inst) props.onChartReady(inst)
+  })
+
   // Ensure the chart takes full size of its container
   const style = useMemo(() => ({ width: '100%', height: '100%', ...(props.style || {}) }), [props.style])
-  const { group, style: _ignoredStyle, ...rest } = props as any
+  const { group, onChartReady: _ign, style: _ignoredStyle, ...rest } = props as any
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>

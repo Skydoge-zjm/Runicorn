@@ -82,6 +82,8 @@ const ExperimentPage: React.FC = () => {
     toggleRunVisibility, handleAddRuns,
   } = useCompareMode(runs, selectedRowKeys)
 
+  const [hoveredRunId, setHoveredRunId] = useState<string | null>(null)
+
   const {
     editingRunId, editingAlias, setEditingAlias, aliasUpdateLoading,
     handleAliasEdit, handleAliasSave, handleAliasCancel,
@@ -388,6 +390,7 @@ const ExperimentPage: React.FC = () => {
               <CompareRunsPanel
                 runs={compareRunInfos} colors={ECHARTS_COLORS}
                 visibleRunIds={visibleRunIds} onToggleRunVisibility={toggleRunVisibility}
+                onHoverRun={setHoveredRunId} hoveredRunId={hoveredRunId}
                 onAddRuns={handleAddRuns} onBack={handleExitCompare}
                 style={{ height: '100%', minHeight: 0 }}
               />
@@ -417,6 +420,7 @@ const ExperimentPage: React.FC = () => {
                 runIds={compareRunInfos.map(r => r.runId)} visibleRunIds={visibleRunIds}
                 metricsMap={compareMetrics} runLabels={compareRunLabels}
                 colors={ECHARTS_COLORS} loading={compareLoading}
+                hoveredRunId={hoveredRunId} onHoverRun={setHoveredRunId}
               />
             ) : (
               <>

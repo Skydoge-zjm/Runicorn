@@ -5,7 +5,7 @@
  * - Single run (runs.length === 1): Shows best point markers and stage separators
  * - Multi-run (runs.length > 1): Shows multiple series for comparison overlay
  */
-import { useEffect, useMemo, useRef, useState, memo } from 'react'
+import { useEffect, useMemo, useRef, useState, memo, useCallback } from 'react'
 import { Space, Switch, Tooltip, Slider, Select, Button, Card, Typography, Divider, theme } from 'antd'
 import { ExportOutlined } from '@ant-design/icons'
 import AutoResizeEChart from './AutoResizeEChart'
@@ -41,6 +41,8 @@ export interface MetricChartProps {
   showLegend?: boolean  // Default true, set false for inline compare mode
   colors?: string[]     // Custom colors for each run
   legendSelected?: Record<string, boolean>  // Control series visibility via legend
+  highlightRunId?: string | null  // Highlight a specific run's series on hover
+  onHighlightRun?: (runId: string | null) => void  // Callback when user hovers a series in chart
 }
 
 /** EMA smoothing function */
@@ -64,7 +66,7 @@ function getBestType(key: string): 'max' | 'min' | undefined {
 }
 
 const MetricChart = memo(function MetricChart({ 
-  runs, xKey, yKey, title, height, persistKey, group, showLegend = true, colors = [], legendSelected 
+  runs, xKey, yKey, title, height, persistKey, group, showLegend = true, colors = [], legendSelected, highlightRunId, onHighlightRun 
 }: MetricChartProps) {
   const { t } = useTranslation()
   const { settings } = useSettings()
@@ -75,6 +77,37 @@ const MetricChart = memo(function MetricChart({
   const primaryRun = runs[0]
   const presentCols = primaryRun?.metrics?.columns || []
   
+  // Ref to ECharts instance for imperative highlight (avoids re-render)
+  const chartInstRef = useRef<any>(null)
+  const onChartReady = useCallback((inst: any) => { chartInstRef.current = inst }, [])
+
+  // Imperative highlight via ref — no re-render needed
+  const highlightRef = useRef(highlightRunId)
+  highlightRef.current = highlightRunId
+  useEffect(() => {
+    const inst = chartInstRef.current
+    if (!inst) return
+    inst.dispatchAction({ type: 'downplay' })
+    if (highlightRunId) {
+      inst.dispatchAction({ type: 'highlight', seriesName: highlightRunId })
+    }
+  }, [highlightRunId])
+
+  // Stable onEvents for chart mouse interaction (no new refs on re-render)
+  // NOTE: use globalout instead of mouseout; mouseout fires too often when moving across
+  // chart elements and can prematurely clear the shared hover state.
+  const chartEvents = useMemo(() => {
+    if (!onHighlightRun || isSingleRun) return undefined
+    return {
+      mouseover: (params: any) => {
+        if (params?.componentType === 'series' && params.seriesName) {
+          onHighlightRun(params.seriesName)
+        }
+      },
+      globalout: () => { onHighlightRun(null) },
+    }
+  }, [onHighlightRun, isSingleRun])
+
   // Chart controls
   const effectiveHeight = height ?? settings.defaultChartHeight
   const [useLog, setUseLog] = useState(false)
@@ -190,6 +223,17 @@ const MetricChart = memo(function MetricChart({
         ...(seriesColor && {
           lineStyle: { color: seriesColor },
           itemStyle: { color: seriesColor },
+        }),
+        // Multi-run: configure emphasis/blur for hover highlight
+        ...(!isSingleRun && {
+          emphasis: {
+            lineStyle: { width: 3 },
+            focus: 'series',
+          },
+          blur: {
+            lineStyle: { opacity: 0.8, width: 1 },
+            itemStyle: { opacity: 0.8 },
+          },
         }),
       }
       
@@ -380,7 +424,12 @@ const MetricChart = memo(function MetricChart({
         </Space>
       </Card>
       <div style={{ height: effectiveHeight as any, width: '100%' }}>
-        <AutoResizeEChart option={option as any} group={group} />
+        <AutoResizeEChart
+          option={option as any}
+          group={group}
+          onChartReady={onChartReady}
+          {...(chartEvents && { onEvents: chartEvents })}
+        />
       </div>
     </div>
   )
@@ -441,7 +490,8 @@ const MetricChart = memo(function MetricChart({
     prevProps.height === nextProps.height &&
     prevProps.persistKey === nextProps.persistKey &&
     prevProps.group === nextProps.group &&
-    prevProps.showLegend === nextProps.showLegend
+    prevProps.showLegend === nextProps.showLegend &&
+    prevProps.highlightRunId === nextProps.highlightRunId
   )
 })
 

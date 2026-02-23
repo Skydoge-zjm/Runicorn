@@ -21,6 +21,8 @@ interface CompareChartsViewProps {
   runLabels: Map<string, string>  // runId -> display label (path or alias)
   colors: string[]
   loading: boolean
+  hoveredRunId?: string | null  // Highlight a specific run across all charts
+  onHoverRun?: (runId: string | null) => void  // Callback when user hovers a series in a chart
 }
 
 // X-axis keys to exclude from comparison
@@ -33,6 +35,8 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
   runLabels,
   colors,
   loading,
+  hoveredRunId,
+  onHoverRun,
 }) => {
   const { t } = useTranslation()
   const { token } = theme.useToken()
@@ -276,6 +280,8 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
                       showLegend={false}
                       colors={chartColors}
                       legendSelected={legendSelected}
+                      highlightRunId={hoveredRunId}
+                      onHighlightRun={onHoverRun}
                     />
                   </Card>
                 </motion.div>

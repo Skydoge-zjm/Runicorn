@@ -28,6 +28,8 @@ interface CompareRunsPanelProps {
   colors: string[]
   visibleRunIds: Set<string>
   onToggleRunVisibility: (runId: string) => void
+  onHoverRun?: (runId: string | null) => void
+  hoveredRunId?: string | null
   onAddRuns: () => void
   onBack: () => void
   style?: React.CSSProperties
@@ -38,6 +40,8 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
   colors,
   visibleRunIds,
   onToggleRunVisibility,
+  onHoverRun,
+  hoveredRunId,
   onAddRuns: _onAddRuns,
   onBack,
   style,
@@ -131,6 +135,8 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
       >
         {runs.map((run, index) => {
           const isVisible = visibleRunIds.has(run.runId)
+          const isHovered = hoveredRunId === run.runId
+          const runColor = colors[index] || token.colorTextDisabled
           return (
             <motion.div
               key={run.runId}
@@ -142,13 +148,15 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                 marginBottom: 8,
                 background: token.colorBgContainer,
                 borderRadius: 8,
-                border: `1px solid ${token.colorBorderSecondary}`,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                border: isHovered ? `2px solid ${runColor}` : `1px solid ${token.colorBorderSecondary}`,
+                boxShadow: isHovered ? `0 0 8px ${runColor}40` : '0 1px 2px rgba(0,0,0,0.03)',
                 opacity: isVisible ? 1 : 0.5,
                 cursor: 'pointer',
-                transition: 'all 0.2s',
+                transition: 'all 0.15s',
               }}
               onClick={() => navigate(`/runs/${run.runId}`)}
+              onMouseEnter={() => onHoverRun?.(run.runId)}
+              onMouseLeave={() => onHoverRun?.(null)}
               whileHover={{ scale: 1.01, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
             >
               {/* Color dot + Run ID + Eye toggle */}
