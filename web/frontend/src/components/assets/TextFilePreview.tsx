@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Space, Spin, Typography, theme } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { downloadRunAssetUrl } from '../../api'
 
@@ -7,6 +7,7 @@ const { Text } = Typography
 
 export default function TextFilePreview(props: { runId?: string; archivePath: string; filename?: string }) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [text, setText] = useState<string>('')
@@ -68,7 +69,7 @@ export default function TextFilePreview(props: { runId?: string; archivePath: st
       ) : error ? (
         <Alert type="error" showIcon message={t('assets.preview.failed_to_load')} description={error} />
       ) : (
-        <pre style={{ margin: 0, maxHeight: 520, overflow: 'auto' }}>{text || '-'}</pre>
+        <pre style={{ margin: 0, maxHeight: 520, overflow: 'auto', background: token.colorBgLayout, color: token.colorText, padding: 12, borderRadius: 6, border: `1px solid ${token.colorBorderSecondary}` }}>{text || '-'}</pre>
       )}
     </Space>
   )

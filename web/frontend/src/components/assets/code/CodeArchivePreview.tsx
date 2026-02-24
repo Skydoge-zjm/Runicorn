@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Space, Spin, Tree, Typography } from 'antd'
+import { Alert, Button, Space, Spin, Tree, Typography, theme } from 'antd'
 import { FileTextOutlined, FolderOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import JSZip from 'jszip'
@@ -74,6 +74,7 @@ function buildTree(paths: string[]): TreeNode[] {
 
 export default function CodeArchivePreview(props: { runId?: string; archivePath: string }) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [zip, setZip] = useState<JSZip | null>(null)
@@ -186,7 +187,7 @@ export default function CodeArchivePreview(props: { runId?: string; archivePath:
 
   return (
     <div style={{ display: 'flex', gap: 12, width: '100%', minHeight: 420 }}>
-      <div style={{ width: 320, borderRight: '1px solid #f0f0f0', paddingRight: 12, overflow: 'auto' }}>
+      <div style={{ width: 320, borderRight: `1px solid ${token.colorBorderSecondary}`, paddingRight: 12, overflow: 'auto' }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Space wrap>
             {href ? (

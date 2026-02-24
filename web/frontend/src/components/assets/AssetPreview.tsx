@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Alert, Space, Typography } from 'antd'
+import { Alert, Space, Typography, theme } from 'antd'
 import { useTranslation } from 'react-i18next'
 import CodeArchivePreview from './code/CodeArchivePreview'
 import TextFilePreview from './TextFilePreview'
@@ -9,6 +9,7 @@ const { Text } = Typography
 
 export default function AssetPreview(props: { runId?: string; asset: any; archivePath?: string }) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const kind = String(props.asset?.kind || '')
 
   const configText = useMemo(() => {
@@ -24,7 +25,7 @@ export default function AssetPreview(props: { runId?: string; asset: any; archiv
 
   if (kind === 'config') {
     return (
-      <pre style={{ margin: 0, maxHeight: 520, overflow: 'auto' }}>
+      <pre style={{ margin: 0, maxHeight: 520, overflow: 'auto', background: token.colorBgLayout, color: token.colorText, padding: 12, borderRadius: 6, border: `1px solid ${token.colorBorderSecondary}` }}>
         {configText || '-'}
       </pre>
     )

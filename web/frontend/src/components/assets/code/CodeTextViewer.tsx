@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Space, Tooltip, Typography } from 'antd'
+import { Button, Space, Tooltip, Typography, theme } from 'antd'
 import { MinusOutlined, PlusOutlined, SearchOutlined, CompressOutlined, ExpandOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { Compartment, EditorState } from '@codemirror/state'
@@ -75,6 +75,8 @@ function pickLanguageExtension(filename?: string) {
 
 export default function CodeTextViewer(props: { value: string; filename?: string; maxHeight?: number }) {
   const { t, i18n } = useTranslation()
+  const { token } = theme.useToken()
+  const isDark = parseInt((token.colorBgContainer || '#ffffff').replace('#', '').slice(0, 2), 16) < 128
   const parentRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
 
@@ -248,7 +250,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           height: '100%',
         },
         '.cm-editor': {
-          backgroundColor: '#ffffff',
+          backgroundColor: token.colorBgContainer,
         },
         '.cm-scroller': {
           overflow: 'auto',
@@ -262,6 +264,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           position: 'relative',
           zIndex: 2,
           background: 'transparent',
+          color: token.colorText,
         },
         '.cm-selectionLayer': {
           mixBlendMode: 'normal',
@@ -269,12 +272,12 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           pointerEvents: 'none',
         },
         '.cm-selectionLayer .cm-selectionBackground': {
-          background: 'rgba(22, 119, 255, 0.35)',
+          background: isDark ? 'rgba(22, 119, 255, 0.45)' : 'rgba(22, 119, 255, 0.35)',
           opacity: 1,
           mixBlendMode: 'normal',
         },
         '&.cm-focused .cm-selectionLayer .cm-selectionBackground': {
-          background: 'rgba(22, 119, 255, 0.45)',
+          background: isDark ? 'rgba(22, 119, 255, 0.55)' : 'rgba(22, 119, 255, 0.45)',
           opacity: 1,
           mixBlendMode: 'normal',
         },
@@ -289,38 +292,38 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           backgroundColor: 'rgba(22, 119, 255, 0.28) !important',
         },
         '.cm-gutters': {
-          backgroundColor: '#fafafa',
-          borderRight: '1px solid #e5e7eb',
-          color: '#6b7280',
+          backgroundColor: token.colorBgLayout,
+          borderRight: `1px solid ${token.colorBorderSecondary}`,
+          color: token.colorTextSecondary,
         },
         '.cm-activeLine': {
-          backgroundColor: '#f8fafc',
+          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
         },
         '.cm-activeLineGutter': {
-          backgroundColor: '#f3f4f6',
+          backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
         },
         '.cm-foldGutter .cm-gutterElement': {
           paddingLeft: '4px',
           paddingRight: '4px',
         },
         '.cm-searchMatch': {
-          backgroundColor: '#fff7d6',
-          outline: '1px solid #ffd666',
+          backgroundColor: isDark ? 'rgba(255, 214, 102, 0.25)' : '#fff7d6',
+          outline: `1px solid ${isDark ? 'rgba(255, 214, 102, 0.5)' : '#ffd666'}`,
         },
         '.cm-searchMatch.cm-searchMatch-selected': {
-          backgroundColor: '#ffe7ba',
-          outline: '1px solid #ffc069',
+          backgroundColor: isDark ? 'rgba(255, 192, 105, 0.35)' : '#ffe7ba',
+          outline: `1px solid ${isDark ? 'rgba(255, 192, 105, 0.6)' : '#ffc069'}`,
         },
 
         '.cm-panels': {
-          backgroundColor: '#fafafa',
-          color: '#111827',
+          backgroundColor: token.colorBgLayout,
+          color: token.colorText,
         },
         '.cm-panels.cm-panels-top': {
-          borderBottom: '1px solid #e5e7eb',
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
         },
         '.cm-panels.cm-panels-bottom': {
-          borderTop: '1px solid #e5e7eb',
+          borderTop: `1px solid ${token.colorBorderSecondary}`,
         },
         '.cm-panel': {
           padding: '8px 10px',
@@ -334,50 +337,50 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           boxShadow: 'none',
         },
         '.cm-panel.cm-search label': {
-          color: '#6b7280',
+          color: token.colorTextSecondary,
         },
         '.cm-panel.cm-search .cm-textfield': {
           height: '28px',
           padding: '0 10px',
           borderRadius: '8px',
-          border: '1px solid #d9d9d9',
+          border: `1px solid ${token.colorBorder}`,
           outline: 'none',
-          background: '#ffffff',
-          color: '#111827',
+          background: token.colorBgContainer,
+          color: token.colorText,
           boxShadow: 'none',
         },
         '.cm-panel.cm-search .cm-textfield:focus': {
-          borderColor: '#1677ff',
-          boxShadow: '0 0 0 2px rgba(22, 119, 255, 0.15)',
+          borderColor: token.colorPrimary,
+          boxShadow: `0 0 0 2px ${token.colorPrimaryBg}`,
         },
         '.cm-panel.cm-search .cm-button': {
           height: '28px',
           padding: '0 10px',
           borderRadius: '8px',
-          border: '1px solid #d9d9d9',
-          background: '#ffffff',
-          color: '#111827',
+          border: `1px solid ${token.colorBorder}`,
+          background: token.colorBgContainer,
+          color: token.colorText,
           cursor: 'pointer',
         },
         '.cm-panel.cm-search .cm-button:hover': {
-          background: '#f5f5f5',
-          borderColor: '#c9cdd4',
+          background: token.colorFillTertiary,
+          borderColor: token.colorBorderSecondary,
         },
         '.cm-panel.cm-search .cm-button:active': {
-          background: '#f0f0f0',
+          background: token.colorFillSecondary,
         },
         '.cm-panel.cm-search .cm-button:focus': {
           outline: 'none',
-          boxShadow: '0 0 0 2px rgba(22, 119, 255, 0.15)',
-          borderColor: '#1677ff',
+          boxShadow: `0 0 0 2px ${token.colorPrimaryBg}`,
+          borderColor: token.colorPrimary,
         },
         '.cm-panel.cm-search input[type="checkbox"]': {
           transform: 'translateY(1px)',
         },
       },
-      { dark: false },
+      { dark: isDark },
     )
-  }, [fontSize, props.maxHeight])
+  }, [fontSize, props.maxHeight, isDark, token])
 
   const baseExtensions = useMemo(
     () => [
@@ -469,9 +472,9 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           justifyContent: 'space-between',
           marginBottom: 8,
           padding: '6px 8px',
-          border: '1px solid #e5e7eb',
+          border: `1px solid ${token.colorBorderSecondary}`,
           borderRadius: 10,
-          background: '#fafafa',
+          background: token.colorBgLayout,
         }}
       >
         <Space size={6} wrap>
@@ -534,10 +537,10 @@ export default function CodeTextViewer(props: { value: string; filename?: string
         ref={parentRef}
         style={{
           width: '100%',
-          border: '1px solid #e5e7eb',
+          border: `1px solid ${token.colorBorderSecondary}`,
           borderRadius: 8,
           overflow: 'hidden',
-          background: '#fff',
+          background: token.colorBgContainer,
         }}
       />
     </div>
