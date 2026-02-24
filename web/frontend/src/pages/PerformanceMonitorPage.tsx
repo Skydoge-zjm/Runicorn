@@ -14,12 +14,13 @@ import {
   FireOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { getGpuTelemetry, getSystemMonitor } from '../api'
+import { getSystemMonitor } from '../api'
 import GpuMetricsCard from '../components/GpuMetricsCard'
 import GpuTelemetry from '../components/GpuTelemetry'
 import CpuDetailCard from '../components/CpuDetailCard'
 import MemoryDiskCard from '../components/MemoryDiskCard'
 import { useSettings } from '../contexts/SettingsContext'
+import { useGpuTelemetry } from '../contexts/GpuTelemetryContext'
 
 const { Title, Text } = Typography
 
@@ -38,42 +39,17 @@ interface GpuData {
 export default function PerformanceMonitorPage() {
   const { t } = useTranslation()
   const { settings: value } = useSettings()
-  
-  const [gpus, setGpus] = useState<GpuData[]>([])
-  const [gpuAvailable, setGpuAvailable] = useState<boolean | null>(null)
-  const [gpuReason, setGpuReason] = useState<string>('')
-  const [gpuLoading, setGpuLoading] = useState(true)
-  
+  const gpu = useGpuTelemetry()
+
+  // Derive GPU state from global context
+  const gpuAvailable = gpu.available
+  const gpuReason = gpu.reason
+  const lastSample = gpu.samples[gpu.samples.length - 1]
+  const gpus: GpuData[] = lastSample?.gpus || []
+  const gpuLoading = gpu.available === null
+
   const [systemMetrics, setSystemMetrics] = useState<any>(null)
   const [systemLoading, setSystemLoading] = useState(true)
-
-  // Poll GPU data
-  useEffect(() => {
-    let timer: any
-    const poll = async () => {
-      try {
-        const res = await getGpuTelemetry()
-        if (!res?.available) {
-          setGpuAvailable(false)
-          setGpuReason(res?.reason || t('gpu.not_available'))
-          setGpuLoading(false)
-          return
-        }
-        setGpuAvailable(true)
-        setGpus(res.gpus || [])
-        setGpuLoading(false)
-      } catch (e: any) {
-        setGpuAvailable(false)
-        setGpuReason(e?.message || t('gpu.not_available'))
-        setGpuLoading(false)
-      }
-    }
-    
-    poll()
-    timer = setInterval(poll, 2000)
-    
-    return () => clearInterval(timer)
-  }, [t])
 
   // Poll system metrics
   useEffect(() => {
@@ -91,10 +67,10 @@ export default function PerformanceMonitorPage() {
     }
     
     poll()
-    timer = setInterval(poll, 2000)
+    timer = setInterval(poll, (value.refreshInterval ?? 2) * 1000)
     
     return () => clearInterval(timer)
-  }, [])
+  }, [value.refreshInterval])
 
   // Build tab items based on settings
   const tabItems = []
@@ -105,7 +81,7 @@ export default function PerformanceMonitorPage() {
       key: 'cpu',
       label: (
         <span>
-          <ThunderboltOutlined />
+          <ThunderboltOutlined style={{ marginRight: 6 }} />
           {t('performance.tab_cpu', 'CPU')}
         </span>
       ),
@@ -119,7 +95,7 @@ export default function PerformanceMonitorPage() {
       key: 'memory-disk',
       label: (
         <span>
-          <DatabaseOutlined />
+          <DatabaseOutlined style={{ marginRight: 6 }} />
           {t('performance.tab_memory_disk', 'Memory & Disk')}
         </span>
       ),
@@ -133,7 +109,7 @@ export default function PerformanceMonitorPage() {
       key: 'gpu-metrics',
       label: (
         <span>
-          <FireOutlined />
+          <FireOutlined style={{ marginRight: 6 }} />
           {t('performance.tab_gpu_metrics', 'GPU Metrics')}
         </span>
       ),
@@ -147,15 +123,11 @@ export default function PerformanceMonitorPage() {
       key: 'gpu-telemetry',
       label: (
         <span>
-          <ThunderboltOutlined />
+          <ThunderboltOutlined style={{ marginRight: 6 }} />
           {t('performance.tab_gpu_telemetry', 'GPU Telemetry')}
         </span>
       ),
-      children: (
-        <Card>
-          <GpuTelemetry />
-        </Card>
-      )
+      children: <GpuTelemetry />
     })
   }
 
@@ -172,7 +144,7 @@ export default function PerformanceMonitorPage() {
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Space>
-              <Title level={3} style={{ margin: 0 }}>
+              <Title level={4} style={{ margin: 0 }}>
                 <DashboardOutlined /> {t('performance.title')}
               </Title>
               <Tooltip title={t('performance.polling_hint', 'Auto-polling every 2 seconds')}>
@@ -198,7 +170,6 @@ export default function PerformanceMonitorPage() {
           items={tabItems}
           defaultActiveKey="cpu"
           size="large"
-          destroyInactiveTabPane
         />
       ) : (
         <Card>

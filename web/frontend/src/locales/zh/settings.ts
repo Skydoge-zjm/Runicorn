@@ -178,6 +178,8 @@ export default {
   'settings.performance.show_memory_disk_tab': '显示内存与磁盘模块',
   'settings.performance.show_gpu_metrics_tab': '显示 GPU 指标模块',
   'settings.performance.show_gpu_telemetry_tab': '显示 GPU 曲线模块',
+  'settings.performance.gpu_background_collect': 'GPU 后台采集',
+  'settings.performance.gpu_collect_restart_hint': '设置已保存，重启应用后生效。',
   
   // Dismissed Alerts
   'settings.dismissedAlerts': '已关闭的提示',

@@ -92,6 +92,13 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
         )
         logger.info("Started background process status checker")
         
+        # Start GPU background collector
+        from .services.gpu import GpuCollector
+        from ..config import load_user_config
+        gpu_cfg = load_user_config().get("gpu_background_collect", True)
+        app.state.gpu_collector = GpuCollector(enabled=bool(gpu_cfg))
+        app.state.gpu_collector.start()
+        
         # Sync filesystem runs into SQLite (background, non-blocking)
         if app.state.storage_backend is not None:
             def _run_sync():
@@ -148,6 +155,10 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             except asyncio.CancelledError:
                 pass
             logger.info("Stopped background process status checker")
+        
+        # Stop GPU background collector
+        if hasattr(app.state, 'gpu_collector'):
+            app.state.gpu_collector.stop()
         
         # Close Remote Viewer sessions
         if hasattr(app.state, 'viewer_manager'):

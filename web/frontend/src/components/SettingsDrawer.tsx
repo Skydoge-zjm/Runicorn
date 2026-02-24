@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Alert, Modal, Tag, theme } from 'antd'
 import { WarningOutlined } from '@ant-design/icons'
 import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, InfoCircleOutlined, ThunderboltOutlined, GlobalOutlined, ExportOutlined } from '@ant-design/icons'
-import { getConfig, setUserRootDir as apiSetUserRootDir, previewImport, confirmImport } from '../api'
+import { getConfig, setUserRootDir as apiSetUserRootDir, previewImport, confirmImport, getGpuTelemetryConfig, setGpuTelemetryConfig } from '../api'
 import type { ImportPreviewResult } from '../api'
 import { useTranslation } from 'react-i18next'
 import SystemInfoPanel from './SystemInfoPanel'
@@ -48,6 +48,39 @@ const gradientPresets: { label: string; value: string }[] = [
   { label: 'Ocean', value: 'linear-gradient(135deg, #5ee7df 0%, #b490ca 100%)' },
   { label: 'Forest', value: 'linear-gradient(135deg, #a8e063 0%, #56ab2f 100%)' },
 ]
+
+/** Server-side GPU background collection toggle. */
+function GpuBackgroundCollectToggle() {
+  const { t } = useTranslation()
+  const [enabled, setEnabled] = useState<boolean | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    getGpuTelemetryConfig()
+      .then(r => { if (active) setEnabled(r.enabled) })
+      .catch(() => {})
+    return () => { active = false }
+  }, [])
+
+  const toggle = async (checked: boolean) => {
+    setLoading(true)
+    try {
+      const res = await setGpuTelemetryConfig(checked)
+      setEnabled(res.enabled)
+      message.info(t('settings.performance.gpu_collect_restart_hint', 'Restart the app for changes to take full effect.'))
+    } catch {}
+    setLoading(false)
+  }
+
+  if (enabled === null) return null
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Typography.Text strong>{t('settings.performance.gpu_background_collect', 'GPU Background Collection')}</Typography.Text>
+      <Switch checked={enabled} onChange={toggle} loading={loading} />
+    </div>
+  )
+}
 
 export default function SettingsDrawer({ open, onClose, value, onChange }: {
   open: boolean
@@ -526,6 +559,11 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
           
           <Divider style={{ margin: '16px 0' }} />
           
+          {/* GPU Background Collection - server-side setting */}
+          <GpuBackgroundCollectToggle />
+          
+          <Divider style={{ margin: '16px 0' }} />
+          
           {/* Performance Monitor Tab Controls */}
           <Typography.Text strong style={{ display: 'block', marginBottom: 12 }}>
             {t('settings.performance.tabs_title', 'Performance Monitor Tabs')}
@@ -563,6 +601,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
                 onChange={(checked) => set({ showGpuTelemetryTab: checked })} 
               />
             </div>
+            
           </Space>
         </Space>
       </Card>

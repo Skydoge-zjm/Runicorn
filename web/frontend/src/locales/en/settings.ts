@@ -178,6 +178,8 @@ export default {
   'settings.performance.show_memory_disk_tab': 'Show Memory & Disk Tab',
   'settings.performance.show_gpu_metrics_tab': 'Show GPU Metrics Tab',
   'settings.performance.show_gpu_telemetry_tab': 'Show GPU Telemetry Tab',
+  'settings.performance.gpu_background_collect': 'GPU Background Collection',
+  'settings.performance.gpu_collect_restart_hint': 'Setting saved. Restart the app for changes to take full effect.',
   
   // Dismissed Alerts
   'settings.dismissedAlerts': 'Dismissed Alerts',

@@ -70,6 +70,28 @@ export async function getGpuTelemetry() {
   return res.json()
 }
 
+export async function getGpuTelemetryHistory() {
+  const res = await fetch(url('/gpu/telemetry/history'))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ available: boolean; enabled: boolean; samples: any[] }>
+}
+
+export async function getGpuTelemetryConfig() {
+  const res = await fetch(url('/gpu/telemetry/config'))
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ enabled: boolean }>
+}
+
+export async function setGpuTelemetryConfig(enabled: boolean) {
+  const res = await fetch(url('/gpu/telemetry/config'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json() as Promise<{ ok: boolean; enabled: boolean }>
+}
+
 export async function getSystemMonitor() {
   const res = await fetch(url('/system/monitor'))
   if (!res.ok) throw new Error(await res.text())

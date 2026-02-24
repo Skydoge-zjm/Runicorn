@@ -15,6 +15,7 @@ import { PageTransition } from './components/animations/PageTransition'
 import { health, getConfig } from './api'
 import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
 import { SettingsProvider } from './contexts/SettingsContext'
+import { GpuTelemetryProvider } from './contexts/GpuTelemetryContext'
 import { useTranslation } from 'react-i18next'
 
 const { Content } = Layout
@@ -222,6 +223,7 @@ export default function App() {
       }}
     >
       <SettingsProvider value={{ settings, setSettings }}>
+      <GpuTelemetryProvider>
         <div style={bgStyle} />
         <Layout style={{ 
           height: '100vh',
@@ -332,6 +334,7 @@ export default function App() {
           </Content>
         </Layout>
         <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} value={settings} onChange={setSettings} />
+      </GpuTelemetryProvider>
       </SettingsProvider>
     </ConfigProvider>
     </QueryClientProvider>

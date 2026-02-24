@@ -5,14 +5,98 @@ Provides GPU telemetry data through nvidia-smi integration.
 """
 from __future__ import annotations
 
+import collections
 import logging
 import os
 import shutil
 import subprocess
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Background GPU collector
+# ---------------------------------------------------------------------------
+
+_MAX_SAMPLES = 43200  # 24h at 2s interval
+
+
+class GpuCollector:
+    """Background daemon that periodically samples GPU telemetry.
+
+    Samples are stored in a bounded deque so that the most recent 24 h
+    of data (at the configured interval) is always available via
+    ``get_history()``.
+    """
+
+    def __init__(self, *, enabled: bool = True, interval: float = 2.0):
+        self._enabled = enabled
+        self._interval = interval
+        self._buffer: collections.deque = collections.deque(maxlen=_MAX_SAMPLES)
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+
+    # -- public API --
+
+    def start(self) -> None:
+        """Start the collector thread (if enabled)."""
+        if not self._enabled:
+            logger.info("GPU background collector disabled by config")
+            return
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        logger.info("GPU background collector started (interval=%.1fs)", self._interval)
+
+    def stop(self) -> None:
+        """Stop the collector thread."""
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5)
+            self._thread = None
+        logger.info("GPU background collector stopped")
+
+    def is_enabled(self) -> bool:
+        return self._enabled
+
+    def set_enabled(self, enabled: bool) -> None:
+        """Enable or disable background collection (persists to config)."""
+        from ...config import save_user_config
+        self._enabled = enabled
+        save_user_config({"gpu_background_collect": enabled})
+        if enabled:
+            self.start()
+        else:
+            self.stop()
+
+    def get_history(self) -> List[Dict[str, Any]]:
+        """Return a copy of all buffered samples."""
+        with self._lock:
+            return list(self._buffer)
+
+    def get_latest(self) -> Optional[Dict[str, Any]]:
+        """Return the most recent sample, or *None*."""
+        with self._lock:
+            return self._buffer[-1] if self._buffer else None
+
+    # -- internals --
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                sample = get_gpu_telemetry()
+                if sample.get("available"):
+                    with self._lock:
+                        self._buffer.append(sample)
+            except Exception:
+                logger.debug("GPU collector poll error", exc_info=True)
+            self._stop_event.wait(self._interval)
 
 
 def find_nvidia_smi() -> Optional[str]:

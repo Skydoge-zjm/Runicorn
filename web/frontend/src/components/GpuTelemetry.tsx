@@ -1,66 +1,33 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import ReactECharts from 'echarts-for-react'
-import { Alert, Space, Switch, Typography, Collapse } from 'antd'
-import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, FireOutlined } from '@ant-design/icons'
-import { getGpuTelemetry } from '../api'
+import * as echarts from 'echarts'
+import { Alert, Col, Row, theme } from 'antd'
 import { useTranslation } from 'react-i18next'
-
-interface GpuSample {
-  ts: number
-  gpus: Array<{
-    index: number
-    name: string
-    util_gpu?: number
-    mem_used_pct?: number
-    power_w?: number
-    power_limit_w?: number
-    temp_c?: number
-  }>
-}
-
-const MAX_POINTS = 120 // keep last 120 samples
+import { useGpuTelemetry } from '../contexts/GpuTelemetryContext'
 
 export default function GpuTelemetry() {
   const { t } = useTranslation()
-  const [available, setAvailable] = useState<boolean | null>(null)
-  const [reason, setReason] = useState<string>('')
-  const [paused, setPaused] = useState(false)
-  const bufferRef = useRef<GpuSample[]>([])
-  const [tick, setTick] = useState(0)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [activeKeys, setActiveKeys] = useState<string[]>([])
+  const { token } = theme.useToken()
+  const { available, reason, samples, tick, subscribe, unsubscribe } = useGpuTelemetry()
 
+  // When background collection is off, this ensures polling runs while the component is mounted
+  useEffect(() => { subscribe(); return unsubscribe }, [subscribe, unsubscribe])
+
+  // Ref array for 4 chart instances, used for echarts.connect linkage
+  const chartRefs = useRef<(ReactECharts | null)[]>([null, null, null, null])
+
+  // Connect all 4 charts so dataZoom & legend toggle sync across them
   useEffect(() => {
-    let timer: any
-    const poll = async () => {
-      if (paused) return
-      try {
-        const res = await getGpuTelemetry()
-        if (!res?.available) {
-          setAvailable(false)
-          setReason(res?.reason || t('gpu.not_available'))
-          return
-        }
-        setAvailable(true)
-        const sample: GpuSample = { ts: res.ts || Date.now() / 1000, gpus: res.gpus || [] }
-        const arr = bufferRef.current.slice()
-        arr.push(sample)
-        while (arr.length > MAX_POINTS) arr.shift()
-        bufferRef.current = arr
-        setTick((x) => x + 1)
-      } catch (e: any) {
-        setAvailable(false)
-        setReason(e?.message || t('gpu.not_available'))
-      }
-    }
-    // immediate fetch, then interval
-    poll()
-    timer = setInterval(poll, 2000)
-    return () => clearInterval(timer)
-  }, [paused])
+    const GROUP = 'gpu-telemetry'
+    const instances = chartRefs.current
+      .map(r => r?.getEchartsInstance?.())
+      .filter((inst): inst is echarts.ECharts => !!inst)
+    if (instances.length < 2) return
+    instances.forEach(inst => { inst.group = GROUP })
+    echarts.connect(GROUP)
+  })
 
-  const { times, gpuNames: _gpuNames, seriesUtil, seriesMem, seriesPower, seriesTemp } = useMemo(() => {
-    const samples = bufferRef.current
+  const { times, seriesUtil, seriesMem, seriesPower, seriesTemp } = useMemo(() => {
     const times = samples.map(s => new Date((s.ts || 0) * 1000).toLocaleTimeString())
     const maxGpuCount = samples.reduce((m, s) => Math.max(m, s.gpus?.length || 0), 0)
     const gpuNames: string[] = []
@@ -75,141 +42,86 @@ export default function GpuTelemetry() {
         smooth: true,
         showSymbol: false,
         connectNulls: true,
+        sampling: 'lttb',
+        large: true,
         data: samples.map(s => {
           const v = s.gpus && s.gpus[i] ? pick(s.gpus[i]) : null
           return v == null ? null : Number(v)
         })
       }))
     }
-    const seriesUtil = buildSeries(g => g.util_gpu)
-    const seriesMem = buildSeries(g => g.mem_used_pct)
-    const seriesPower = buildSeries(g => g.power_w)
-    const seriesTemp = buildSeries(g => g.temp_c)
-    return { times, gpuNames, seriesUtil, seriesMem, seriesPower, seriesTemp }
-  }, [tick])
-
-  const summary = useMemo(() => {
-    const last = bufferRef.current[bufferRef.current.length - 1]
-    const res = { utilAvg: 0, memAvg: 0, powerNow: 0, powerMax: 0, tempMax: 0 }
-    if (!last || !last.gpus || last.gpus.length === 0) return res
-    const g = last.gpus
-    const n = g.length
-    const sum = (arr: number[]) => arr.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0)
-    const vals = {
-      util: g.map(x => Number(x.util_gpu ?? 0)),
-      mem: g.map(x => Number(x.mem_used_pct ?? 0)),
-      pwr: g.map(x => Number(x.power_w ?? 0)),
-      pmax: g.map(x => Number(x.power_limit_w ?? 0)),
-      temp: g.map(x => Number(x.temp_c ?? 0)),
+    return {
+      times,
+      seriesUtil: buildSeries(g => g.util_gpu),
+      seriesMem: buildSeries(g => g.mem_used_pct),
+      seriesPower: buildSeries(g => g.power_w),
+      seriesTemp: buildSeries(g => g.temp_c),
     }
-    res.utilAvg = Math.round(sum(vals.util) / n)
-    res.memAvg = Math.round(sum(vals.mem) / n)
-    res.powerNow = Math.round(sum(vals.pwr))
-    res.powerMax = Math.round(sum(vals.pmax))
-    res.tempMax = Math.max(...vals.temp)
-    return res
   }, [tick])
 
-  const baseGrid = { left: 48, right: 16, top: 40, bottom: 40 }
+  // Theme-aware chart base options
+  const textColor = token.colorText
+  const subTextColor = token.colorTextSecondary
+  const borderColor = token.colorBorderSecondary
+  const baseGrid = { left: 48, right: 16, top: 36, bottom: 44 }
 
-  const optUtil = useMemo(() => ({
-    title: { text: t('gpu.chart.util') },
+  const makeOption = (title: string, series: any[], yAxisOpts?: any) => ({
+    title: { text: title, textStyle: { color: textColor, fontSize: 13, fontWeight: 600 } },
     tooltip: { trigger: 'axis' },
-    legend: { data: seriesUtil.map(s => s.name) },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value', min: 0, max: 100 },
+    legend: { data: series.map(s => s.name), textStyle: { color: subTextColor, fontSize: 11 }, top: 2, right: 8, type: 'scroll' },
+    xAxis: { type: 'category', data: times, axisLabel: { color: subTextColor, fontSize: 10 }, axisLine: { lineStyle: { color: borderColor } }, splitLine: { show: false } },
+    yAxis: { type: 'value', min: 0, max: 100, ...yAxisOpts, axisLabel: { color: subTextColor, fontSize: 10 }, splitLine: { lineStyle: { color: borderColor, type: 'dashed' } } },
     grid: baseGrid,
-    dataZoom: [ { type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 8 } ],
-    series: seriesUtil,
-  }), [times, seriesUtil, t])
+    dataZoom: [
+      { type: 'inside', throttle: 50 },
+      { type: 'slider', height: 14, bottom: 4, borderColor: 'transparent', backgroundColor: borderColor + '33',
+        fillerColor: token.colorPrimary + '22', handleSize: '60%',
+        start: Math.max(0, 100 - (times.length > 0 ? 300 / times.length * 100 : 100)), end: 100 },
+    ],
+    series,
+  })
 
-  const optMem = useMemo(() => ({
-    title: { text: t('gpu.chart.mem') },
-    tooltip: { trigger: 'axis' },
-    legend: { data: seriesMem.map(s => s.name) },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value', min: 0, max: 100 },
-    grid: baseGrid,
-    dataZoom: [ { type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 8 } ],
-    series: seriesMem,
-  }), [times, seriesMem, t])
-
-  const optPower = useMemo(() => ({
-    title: { text: t('gpu.chart.power') },
-    tooltip: { trigger: 'axis' },
-    legend: { data: seriesPower.map(s => s.name) },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value', min: 'dataMin', scale: true },
-    grid: baseGrid,
-    dataZoom: [ { type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 8 } ],
-    series: seriesPower,
-  }), [times, seriesPower, t])
-
-  const optTemp = useMemo(() => ({
-    title: { text: t('gpu.chart.temp') },
-    tooltip: { trigger: 'axis' },
-    legend: { data: seriesTemp.map(s => s.name) },
-    xAxis: { type: 'category', data: times },
-    yAxis: { type: 'value', min: 'dataMin', scale: true },
-    grid: baseGrid,
-    dataZoom: [ { type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 8 } ],
-    series: seriesTemp,
-  }), [times, seriesTemp, t])
+  const optUtil = useMemo(() => makeOption(t('gpu.chart.util'), seriesUtil), [times, seriesUtil, t, textColor, subTextColor, borderColor])
+  const optMem = useMemo(() => makeOption(t('gpu.chart.mem'), seriesMem), [times, seriesMem, t, textColor, subTextColor, borderColor])
+  const optPower = useMemo(() => makeOption(t('gpu.chart.power'), seriesPower, { min: 'dataMin', max: undefined, scale: true }), [times, seriesPower, t, textColor, subTextColor, borderColor])
+  const optTemp = useMemo(() => makeOption(t('gpu.chart.temp'), seriesTemp, { min: 'dataMin', max: undefined, scale: true }), [times, seriesTemp, t, textColor, subTextColor, borderColor])
 
   if (available === false) {
     return <Alert type="warning" showIcon message={t('gpu.not_available')} description={reason || undefined} />
   }
 
+  const chartStyle = { height: 220, width: '100%' }
+  const cellStyle: React.CSSProperties = {
+    border: `1px solid ${borderColor}`,
+    borderRadius: 8,
+    padding: '8px 4px 0',
+    background: token.colorBgContainer,
+  }
+
   return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
-      <Space align="center" style={{ marginBottom: 8 }}>
-        <Typography.Text type="secondary">{t('polling.every2s')}</Typography.Text>
-        <span style={{ marginLeft: 12 }}>{t('pause')} <Switch checked={paused} onChange={setPaused} /></span>
-      </Space>
-
-      <Collapse
-        activeKey={activeKeys}
-        onChange={(k) => {
-          setActiveKeys(k as string[])
-          setTimeout(() => { try { window.dispatchEvent(new Event('resize')) } catch {} }, 350)
-        }}
-        items={[
-          { key: 'util', label: t('gpu.chart.util'), children: (
-            <ReactECharts option={optUtil as any} style={{ height: 260, width: '100%' }} />
-          ) },
-          { key: 'mem', label: t('gpu.chart.mem'), children: (
-            <ReactECharts option={optMem as any} style={{ height: 260, width: '100%' }} />
-          ) },
-          { key: 'power', label: t('gpu.chart.power'), children: (
-            <ReactECharts option={optPower as any} style={{ height: 260, width: '100%' }} />
-          ) },
-          { key: 'temp', label: t('gpu.chart.temp'), children: (
-            <ReactECharts option={optTemp as any} style={{ height: 260, width: '100%' }} />
-          ) },
-        ]}
-      />
-
-      {/* Static compact badges when panels are collapsed */}
-      {available && (activeKeys.indexOf('power') === -1) && (
-        <div style={{ position: 'absolute', right: 12, top: 12, background: 'rgba(0,0,0,0.55)', color: '#fff', borderRadius: 8, padding: '4px 8px', pointerEvents: 'none' }}>
-          <ThunderboltOutlined style={{ marginRight: 6 }} />{t('gpu.power')} {summary.powerNow}{summary.powerMax ? `/${summary.powerMax}` : ''} W
-        </div>
-      )}
-      {available && (activeKeys.indexOf('util') === -1) && (
-        <div style={{ position: 'absolute', right: 12, top: 44, background: 'rgba(0,0,0,0.55)', color: '#fff', borderRadius: 8, padding: '4px 8px', pointerEvents: 'none' }}>
-          <DashboardOutlined style={{ marginRight: 6 }} />{t('gpu.util')} {summary.utilAvg}%
-        </div>
-      )}
-      {available && (activeKeys.indexOf('mem') === -1) && (
-        <div style={{ position: 'absolute', right: 12, top: 76, background: 'rgba(0,0,0,0.55)', color: '#fff', borderRadius: 8, padding: '4px 8px', pointerEvents: 'none' }}>
-          <DatabaseOutlined style={{ marginRight: 6 }} />{t('gpu.mem')} {summary.memAvg}%
-        </div>
-      )}
-      {available && (activeKeys.indexOf('temp') === -1) && (
-        <div style={{ position: 'absolute', right: 12, top: 108, background: 'rgba(0,0,0,0.55)', color: '#fff', borderRadius: 8, padding: '4px 8px', pointerEvents: 'none' }}>
-          <FireOutlined style={{ marginRight: 6 }} />{t('gpu.temp')} {summary.tempMax}°C
-        </div>
-      )}
+    <div>
+      <Row gutter={[12, 12]}>
+        <Col xs={24} md={12}>
+          <div style={cellStyle}>
+            <ReactECharts ref={el => { chartRefs.current[0] = el }} option={optUtil as any} style={chartStyle} />
+          </div>
+        </Col>
+        <Col xs={24} md={12}>
+          <div style={cellStyle}>
+            <ReactECharts ref={el => { chartRefs.current[1] = el }} option={optMem as any} style={chartStyle} />
+          </div>
+        </Col>
+        <Col xs={24} md={12}>
+          <div style={cellStyle}>
+            <ReactECharts ref={el => { chartRefs.current[2] = el }} option={optPower as any} style={chartStyle} />
+          </div>
+        </Col>
+        <Col xs={24} md={12}>
+          <div style={cellStyle}>
+            <ReactECharts ref={el => { chartRefs.current[3] = el }} option={optTemp as any} style={chartStyle} />
+          </div>
+        </Col>
+      </Row>
     </div>
   )
 }

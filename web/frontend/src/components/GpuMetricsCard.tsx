@@ -179,7 +179,6 @@ const GpuMetricsCard: React.FC<GpuMetricsCardProps> = ({ gpus, loading = false }
     <Card 
       title={t('gpu.monitor_title')}
       loading={loading}
-      style={{ marginTop: 16 }}
     >
       <Row gutter={[16, 24]} justify="center">
         {gpus.map((gpu, index) => renderGpuColumn(gpu, index))}
