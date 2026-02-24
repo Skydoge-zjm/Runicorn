@@ -5,12 +5,7 @@
  */
 
 import { motion } from 'framer-motion'
-
-const STATUS_COLORS: Record<string, string> = {
-  online: '#52c41a',
-  offline: '#ff4d4f',
-  connecting: '#faad14',
-}
+import { theme } from 'antd'
 
 interface ServerStatusLightProps {
   status: 'online' | 'offline' | 'connecting'
@@ -21,7 +16,15 @@ export const ServerStatusLight: React.FC<ServerStatusLightProps> = ({
   status,
   label
 }) => {
-  const color = STATUS_COLORS[status] || STATUS_COLORS.offline
+  const { token } = theme.useToken()
+
+  const statusColors: Record<string, string> = {
+    online: token.colorSuccess,
+    offline: token.colorError,
+    connecting: token.colorWarning,
+  }
+
+  const color = statusColors[status] || statusColors.offline
   const shouldPulse = status === 'online' || status === 'connecting'
   
   return (
@@ -36,8 +39,8 @@ export const ServerStatusLight: React.FC<ServerStatusLightProps> = ({
         }}
         animate={shouldPulse ? {
           boxShadow: [
-            '0 0 0 0 rgba(82, 196, 26, 0.7)',
-            '0 0 0 10px rgba(82, 196, 26, 0)',
+            `0 0 0 0 ${color}b3`,
+            `0 0 0 10px ${color}00`,
           ]
         } : {}}
         transition={{
@@ -47,7 +50,7 @@ export const ServerStatusLight: React.FC<ServerStatusLightProps> = ({
         }}
       />
       {label && (
-        <span style={{ fontSize: 13, color: '#595959' }}>
+        <span style={{ fontSize: 13, color: token.colorTextSecondary }}>
           {label}
         </span>
       )}

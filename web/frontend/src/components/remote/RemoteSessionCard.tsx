@@ -11,7 +11,8 @@ import {
   Descriptions,
   Alert,
   Typography,
-  Modal
+  Modal,
+  theme
 } from 'antd'
 import {
   LinkOutlined,
@@ -51,6 +52,7 @@ export default function RemoteSessionCard({
   onDisconnect
 }: RemoteSessionCardProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
 
   const handleOpen = () => {
     const url = `http://localhost:${session.localPort}`
@@ -161,7 +163,7 @@ export default function RemoteSessionCard({
       />
 
       {/* Session Details */}
-      <div style={{ marginTop: 16, color: '#888', fontSize: '12px' }}>
+      <div style={{ marginTop: 16, fontSize: 12 }}>
         <Text type="secondary">Session ID: {session.sessionId}</Text>
       </div>
     </Card>

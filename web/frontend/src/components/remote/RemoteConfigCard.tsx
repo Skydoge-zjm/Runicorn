@@ -13,7 +13,8 @@ import {
   Tag,
   Typography,
   Input,
-  Form
+  Form,
+  theme
 } from 'antd'
 import {
   CheckCircleOutlined,
@@ -42,6 +43,7 @@ export default function RemoteConfigCard({
   loading = false
 }: RemoteConfigCardProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [form] = Form.useForm()
 
   const handleConfirm = async () => {
@@ -63,7 +65,7 @@ export default function RemoteConfigCard({
     <Card
       title={
         <Space>
-          <CheckCircleOutlined style={{ color: '#52c41a' }} />
+          <CheckCircleOutlined style={{ color: token.colorSuccess }} />
           <span>{t('remote.config.title')}</span>
         </Space>
       }

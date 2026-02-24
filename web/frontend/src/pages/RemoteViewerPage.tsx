@@ -106,6 +106,8 @@ export default function RemoteViewerPage() {
   const [knownHosts, setKnownHosts] = useState<KnownHostsEntry[]>([])
   const [knownHostsLoading, setKnownHostsLoading] = useState(false)
   const [securityDrawerOpen, setSecurityDrawerOpen] = useState(false)
+  const [wizardProgress, setWizardProgress] = useState<string | null>(null)
+  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Hooks
   const { sessions, refetch: refetchSessions } = useRemoteSessions()
@@ -258,18 +260,34 @@ export default function RemoteViewerPage() {
    */
   const connectAndListEnvs = async (config: SSHConnectionConfig) => {
     setConnecting(true)
+    setWizardProgress(t('remote.wizard.progress_connecting'))
     
     try {
       const connectionId = `${config.username}@${config.host}:${config.port}`
 
-      // 1. Connect via SSH
+      // Simulate sub-step: show "authenticating" after a short delay during the single API call
+      progressTimerRef.current = setTimeout(() => {
+        setWizardProgress(t('remote.wizard.progress_authenticating'))
+      }, 1500)
+
+      // 1. Connect via SSH (includes auth)
       await runWithHostKeyConfirmation(() => connectRemote(config), connectionId)
+      if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
       
+      // 2. Finding conda
+      setWizardProgress(t('remote.wizard.progress_finding_conda'))
       setFetchingEnvs(true)
+
+      progressTimerRef.current = setTimeout(() => {
+        setWizardProgress(t('remote.wizard.progress_listing_envs'))
+      }, 2000)
       
-      // 3. List conda environments (show loading state)
+      // 3. List conda environments
       const envsResult = await listCondaEnvs(connectionId)
+      if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
       
+      setWizardProgress(null)
+
       // 4. Store connection state with environments
       setSSHConnection({
         connectionId,
@@ -280,6 +298,8 @@ export default function RemoteViewerPage() {
       })
       
     } catch (error) {
+      if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+      setWizardProgress(null)
       // Clean up on error
       await disconnectRemote(config.host, config.port, config.username).catch(() => {})
       throw error
@@ -917,10 +937,10 @@ export default function RemoteViewerPage() {
       </Row>
       </div>
 
-      <Drawer
+      <Modal
         title={wizardTitle}
         open={wizardOpen}
-        onClose={() => {
+        onCancel={() => {
           if (sshConnection) {
             void handleCancelConfig()
             return
@@ -931,11 +951,24 @@ export default function RemoteViewerPage() {
           setSSHConnection(null)
           serverForm.resetFields()
         }}
-        width={560}
+        width={720}
+        footer={null}
         destroyOnClose
+        centered
+        styles={{ body: { display: 'flex', flexDirection: 'column', padding: '16px 24px 12px' } }}
       >
-        <div style={{ minHeight: 520 }}>
+        {/* Step content */}
+        <div style={{ flex: 1, minHeight: 420, maxHeight: 'calc(80vh - 180px)', overflowY: 'auto', overflowX: 'hidden' }}>
           {!sshConnection ? (
+            wizardProgress ? (
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                minHeight: 320, gap: 24,
+              }}>
+                <Spin size="large" />
+                <Text style={{ fontSize: 16, color: token.colorTextSecondary }}>{wizardProgress}</Text>
+              </div>
+            ) : (
             <>
               {wizardServerId && wizardServer ? (
                 <Alert
@@ -1055,6 +1088,7 @@ export default function RemoteViewerPage() {
                 </Space>
               </Form>
             </>
+            )
           ) : sshConnection.remoteConfig ? (
             <Spin spinning={fetchingConfig} tip={t('remote.config.fetchingConfig')}>
               <RemoteConfigCard
@@ -1084,7 +1118,61 @@ export default function RemoteViewerPage() {
             </Spin>
           )}
         </div>
-      </Drawer>
+
+        {/* Step indicator dots */}
+        {(() => {
+          const step = !sshConnection ? 0 : sshConnection.remoteConfig ? 2 : 1
+          const steps = [
+            t('remote.wizard.step_connect'),
+            t('remote.wizard.step_environment'),
+            t('remote.wizard.step_config'),
+          ]
+          return (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+              paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}`, marginTop: 16,
+            }}>
+              {/* Dots + lines row */}
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                {steps.map((_, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
+                    {i > 0 && (
+                      <div style={{
+                        width: 48, height: 2,
+                        background: i <= step ? token.colorPrimary : token.colorBorderSecondary,
+                        transition: 'background 0.3s',
+                      }} />
+                    )}
+                    <div style={{
+                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                      background: i <= step ? token.colorPrimary : 'transparent',
+                      border: `2px solid ${i <= step ? token.colorPrimary : token.colorBorderSecondary}`,
+                      transition: 'all 0.3s',
+                    }} />
+                  </div>
+                ))}
+              </div>
+              {/* Labels row */}
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                {steps.map((label, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
+                    {i > 0 && <div style={{ width: 48 }} />}
+                    <span style={{
+                      width: 28, textAlign: 'center',
+                      fontSize: 13,
+                      color: i <= step ? token.colorPrimary : token.colorTextQuaternary,
+                      transition: 'color 0.3s',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
+      </Modal>
 
       <Drawer
         title={t('remote.knownHosts.title')}

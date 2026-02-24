@@ -194,4 +194,15 @@ export default {
   'remote.config.pathNotExistsHint': 'The directory will be created automatically on first use',
   'remote.config.fetchingConfig': 'Fetching server configuration...',
   'remote.config.fetchFailed': 'Failed to fetch server configuration',
+
+  // Wizard steps
+  'remote.wizard.step_connect': 'Connect',
+  'remote.wizard.step_environment': 'Environment',
+  'remote.wizard.step_config': 'Configure',
+
+  // Wizard progress
+  'remote.wizard.progress_connecting': 'Establishing SSH connection...',
+  'remote.wizard.progress_authenticating': 'Authenticating...',
+  'remote.wizard.progress_finding_conda': 'Searching for Conda...',
+  'remote.wizard.progress_listing_envs': 'Listing environments...',
 }

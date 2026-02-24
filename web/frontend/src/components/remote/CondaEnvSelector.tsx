@@ -17,7 +17,8 @@ import {
   Spin,
   Row,
   Col,
-  Modal
+  Modal,
+  theme
 } from 'antd'
 import {
   CheckCircleOutlined,
@@ -59,6 +60,7 @@ export default function CondaEnvSelector({
   loading = false
 }: CondaEnvSelectorProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [selectedEnv, setSelectedEnv] = useState<string>(() => {
     if (initialEnv && envs.some(e => e.name === initialEnv)) {
       return initialEnv
@@ -244,15 +246,15 @@ export default function CondaEnvSelector({
             <p>{t('remote.env.runicornNotInstalledMessage')}</p>
             <p style={{ marginTop: 16 }}>{t('remote.env.installInstructions')}</p>
             <pre style={{ 
-              background: '#f5f5f5', 
+              background: token.colorFillTertiary, 
               padding: '12px', 
               borderRadius: '4px',
               fontSize: '13px',
               lineHeight: '1.5'
             }}>
-              <div style={{ color: '#999' }}># {t('remote.env.activateCommand')}</div>
+              <div style={{ color: token.colorTextQuaternary }}># {t('remote.env.activateCommand')}</div>
               <div>{activateCmd}</div>
-              <div style={{ marginTop: 8, color: '#999' }}># {t('remote.env.installCommand')}</div>
+              <div style={{ marginTop: 8, color: token.colorTextQuaternary }}># {t('remote.env.installCommand')}</div>
               <div>pip install runicorn</div>
             </pre>
           </div>
@@ -273,7 +275,7 @@ export default function CondaEnvSelector({
             <p>{t('remote.env.versionTooOldMessage', { version: versionInfo.runicornVersion })}</p>
             <p style={{ marginTop: 16 }}>{t('remote.env.upgradeInstructions')}</p>
             <pre style={{ 
-              background: '#f5f5f5', 
+              background: token.colorFillTertiary, 
               padding: '12px', 
               borderRadius: '4px',
               fontSize: '13px',
@@ -296,11 +298,11 @@ export default function CondaEnvSelector({
         content: (
           <div>
             <p>{t('remote.env.versionMismatchMessage')}</p>
-            <div style={{ marginTop: 16, padding: '12px', background: '#fff7e6', borderRadius: '4px' }}>
+            <div style={{ marginTop: 16, padding: '12px', background: token.colorWarningBg, borderRadius: '4px' }}>
               <div><strong>{t('remote.env.localVersion')}:</strong> {localVersion}</div>
               <div style={{ marginTop: 4 }}><strong>{t('remote.env.remoteVersion')}:</strong> {versionInfo.runicornVersion}</div>
             </div>
-            <p style={{ marginTop: 16, color: '#faad14' }}>{t('remote.env.versionMismatchWarning')}</p>
+            <p style={{ marginTop: 16, color: token.colorWarning }}>{t('remote.env.versionMismatchWarning')}</p>
           </div>
         ),
         okText: t('remote.env.continueAnyway'),
@@ -331,7 +333,7 @@ export default function CondaEnvSelector({
     <Card
       title={
         <Space>
-          <CheckCircleOutlined style={{ color: '#52c41a' }} />
+          <CheckCircleOutlined style={{ color: token.colorSuccess }} />
           <span>{t('remote.env.title')}</span>
         </Space>
       }
@@ -366,7 +368,7 @@ export default function CondaEnvSelector({
               <List.Item
                 style={{
                   cursor: 'pointer',
-                  background: selectedEnv === env.name ? '#f0f5ff' : 'transparent',
+                  background: selectedEnv === env.name ? token.colorPrimaryBg : 'transparent',
                   padding: '6px 12px',
                   borderRadius: '4px',
                   marginBottom: '2px',
