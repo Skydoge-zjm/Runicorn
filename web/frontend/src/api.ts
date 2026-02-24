@@ -76,20 +76,26 @@ export async function getGpuTelemetryHistory() {
   return res.json() as Promise<{ available: boolean; enabled: boolean; samples: any[] }>
 }
 
+export interface GpuCollectorConfig {
+  enabled: boolean
+  interval_sec: number
+  max_duration_h: number
+}
+
 export async function getGpuTelemetryConfig() {
   const res = await fetch(url('/gpu/telemetry/config'))
   if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ enabled: boolean }>
+  return res.json() as Promise<GpuCollectorConfig>
 }
 
-export async function setGpuTelemetryConfig(enabled: boolean) {
+export async function setGpuTelemetryConfig(patch: Partial<GpuCollectorConfig>) {
   const res = await fetch(url('/gpu/telemetry/config'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled }),
+    body: JSON.stringify(patch),
   })
   if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; enabled: boolean }>
+  return res.json() as Promise<{ ok: boolean } & GpuCollectorConfig>
 }
 
 export async function getSystemMonitor() {

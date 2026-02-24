@@ -26,15 +26,18 @@ export default function DismissibleAlert({
   ...alertProps
 }: DismissibleAlertProps) {
   const { t } = useTranslation()
+  const [loaded, setLoaded] = useState(false)
   const [visible, setVisible] = useState(true)
   const [dontShowAgain, setDontShowAgain] = useState(false)
   const [dismissed, setDismissed] = useState(false)
 
   // Check if alert was previously dismissed
   useEffect(() => {
+    let active = true
     const checkDismissed = async () => {
       try {
         const dismissedAlerts = await getDismissedAlerts()
+        if (!active) return
         if (dismissedAlerts.includes(alertId)) {
           setDismissed(true)
           setVisible(false)
@@ -42,8 +45,10 @@ export default function DismissibleAlert({
       } catch (error) {
         console.error('Failed to check dismissed alerts:', error)
       }
+      if (active) setLoaded(true)
     }
     checkDismissed()
+    return () => { active = false }
   }, [alertId])
 
   const handleClose = async () => {
@@ -60,8 +65,8 @@ export default function DismissibleAlert({
     }
   }
 
-  // Don't render if dismissed
-  if (dismissed || !visible) {
+  // Don't render until check completes, or if dismissed
+  if (!loaded || dismissed || !visible) {
     return null
   }
 

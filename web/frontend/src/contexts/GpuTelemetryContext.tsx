@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { getGpuTelemetry, getGpuTelemetryHistory } from '../api'
-import { useSettings } from './SettingsContext'
+import { getGpuTelemetry, getGpuTelemetryHistory, getGpuTelemetryConfig } from '../api'
 
 interface GpuSample {
   ts: number
@@ -29,21 +28,25 @@ interface GpuTelemetryState {
 const GpuTelemetryContext = createContext<GpuTelemetryState | undefined>(undefined)
 
 export function GpuTelemetryProvider({ children }: { children: ReactNode }) {
-  const { settings } = useSettings()
   const [available, setAvailable] = useState<boolean | null>(null)
   const [reason, setReason] = useState('')
   const bufferRef = useRef<GpuSample[]>([])
   const [tick, setTick] = useState(0)
   const [subscribers, setSubscribers] = useState(0)
+  const intervalRef = useRef(2) // GPU poll interval (seconds), fetched from backend config
 
   const subscribe = useCallback(() => setSubscribers(n => n + 1), [])
   const unsubscribe = useCallback(() => setSubscribers(n => Math.max(0, n - 1)), [])
 
-  // On app start: fetch server-side history (may contain up to 24 h of data)
+  // On app start: fetch config + server-side history
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
+        // Fetch backend GPU config for polling interval
+        const cfg = await getGpuTelemetryConfig().catch(() => null)
+        if (!cancelled && cfg) intervalRef.current = cfg.interval_sec || 2
+
         const hist = await getGpuTelemetryHistory()
         if (cancelled) return
         if (hist.samples?.length) {
@@ -102,9 +105,9 @@ export function GpuTelemetryProvider({ children }: { children: ReactNode }) {
         if (!cancelled) { setAvailable(false); setReason(e?.message || '') }
       }
     }
-    const timer = setInterval(poll, (settings.refreshInterval ?? 2) * 1000)
+    const timer = setInterval(poll, intervalRef.current * 1000)
     return () => { cancelled = true; clearInterval(timer) }
-  }, [subscribers, settings.refreshInterval])
+  }, [subscribers])
 
   return (
     <GpuTelemetryContext.Provider value={{ available, reason, samples: bufferRef.current, tick, subscribe, unsubscribe }}>

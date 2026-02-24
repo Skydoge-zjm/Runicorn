@@ -21,21 +21,23 @@ logger = logging.getLogger(__name__)
 # Background GPU collector
 # ---------------------------------------------------------------------------
 
-_MAX_SAMPLES = 43200  # 24h at 2s interval
+def _max_samples(interval: float, max_duration_h: float) -> int:
+    """Compute deque maxlen from interval and max duration."""
+    return max(60, int(max_duration_h * 3600 / max(interval, 0.5)))
 
 
 class GpuCollector:
     """Background daemon that periodically samples GPU telemetry.
 
-    Samples are stored in a bounded deque so that the most recent 24 h
-    of data (at the configured interval) is always available via
-    ``get_history()``.
+    Samples are stored in a bounded deque whose size is derived from
+    ``interval_sec`` and ``max_duration_h``.
     """
 
-    def __init__(self, *, enabled: bool = True, interval: float = 2.0):
+    def __init__(self, *, enabled: bool = True, interval_sec: float = 2.0, max_duration_h: float = 24.0):
         self._enabled = enabled
-        self._interval = interval
-        self._buffer: collections.deque = collections.deque(maxlen=_MAX_SAMPLES)
+        self._interval = interval_sec
+        self._max_duration_h = max_duration_h
+        self._buffer: collections.deque = collections.deque(maxlen=_max_samples(interval_sec, max_duration_h))
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -65,14 +67,42 @@ class GpuCollector:
     def is_enabled(self) -> bool:
         return self._enabled
 
-    def set_enabled(self, enabled: bool) -> None:
-        """Enable or disable background collection (persists to config)."""
+    def get_interval(self) -> float:
+        return self._interval
+
+    def get_max_duration_h(self) -> float:
+        return self._max_duration_h
+
+    def set_config(self, *, enabled: Optional[bool] = None,
+                   interval_sec: Optional[float] = None,
+                   max_duration_h: Optional[float] = None) -> None:
+        """Update collector config and persist to config.json.
+
+        Changes to interval / max_duration take effect on next app restart;
+        enable/disable takes effect immediately.
+        """
         from ...config import save_user_config
-        self._enabled = enabled
-        save_user_config({"gpu_background_collect": enabled})
-        if enabled:
+        patch: dict = {}
+        if enabled is not None:
+            self._enabled = enabled
+            patch["gpu_background_collect"] = enabled
+        if interval_sec is not None:
+            self._interval = max(0.5, min(interval_sec, 60))
+            patch["gpu_interval_sec"] = self._interval
+        if max_duration_h is not None:
+            self._max_duration_h = max(0.5, min(max_duration_h, 48))
+            patch["gpu_max_duration_h"] = self._max_duration_h
+        if interval_sec is not None or max_duration_h is not None:
+            new_maxlen = _max_samples(self._interval, self._max_duration_h)
+            with self._lock:
+                old = list(self._buffer)
+                self._buffer = collections.deque(old[-new_maxlen:], maxlen=new_maxlen)
+        if patch:
+            save_user_config(patch)
+        # immediate start/stop based on enabled
+        if enabled is True:
             self.start()
-        else:
+        elif enabled is False:
             self.stop()
 
     def get_history(self) -> List[Dict[str, Any]]:

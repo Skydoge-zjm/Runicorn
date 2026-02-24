@@ -95,8 +95,12 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
         # Start GPU background collector
         from .services.gpu import GpuCollector
         from ..config import load_user_config
-        gpu_cfg = load_user_config().get("gpu_background_collect", True)
-        app.state.gpu_collector = GpuCollector(enabled=bool(gpu_cfg))
+        ucfg = load_user_config()
+        app.state.gpu_collector = GpuCollector(
+            enabled=bool(ucfg.get("gpu_background_collect", True)),
+            interval_sec=float(ucfg.get("gpu_interval_sec", 2)),
+            max_duration_h=float(ucfg.get("gpu_max_duration_h", 24)),
+        )
         app.state.gpu_collector.start()
         
         # Sync filesystem runs into SQLite (background, non-blocking)

@@ -45,7 +45,13 @@ async def gpu_telemetry_config(request: Request) -> Dict[str, Any]:
     Get GPU background collector configuration.
     """
     collector = getattr(request.app.state, "gpu_collector", None)
-    return {"enabled": collector.is_enabled() if collector else False}
+    if collector is None:
+        return {"enabled": False, "interval_sec": 2, "max_duration_h": 24}
+    return {
+        "enabled": collector.is_enabled(),
+        "interval_sec": collector.get_interval(),
+        "max_duration_h": collector.get_max_duration_h(),
+    }
 
 
 @router.post("/gpu/telemetry/config")
@@ -54,12 +60,25 @@ async def set_gpu_telemetry_config(
     payload: Dict[str, Any] = Body(...),
 ) -> Dict[str, Any]:
     """
-    Enable or disable GPU background collection.
-    Persists to config.json and immediately starts/stops the collector.
+    Update GPU background collector configuration.
+    Accepts: enabled (bool), interval_sec (float), max_duration_h (float).
+    Persists to config.json; enable/disable takes effect immediately,
+    interval/duration changes take full effect after restart.
     """
     collector = getattr(request.app.state, "gpu_collector", None)
     if collector is None:
         return {"ok": False, "error": "GPU collector not initialized"}
-    enabled = bool(payload.get("enabled", True))
-    collector.set_enabled(enabled)
-    return {"ok": True, "enabled": collector.is_enabled()}
+    kwargs: Dict[str, Any] = {}
+    if "enabled" in payload:
+        kwargs["enabled"] = bool(payload["enabled"])
+    if "interval_sec" in payload:
+        kwargs["interval_sec"] = float(payload["interval_sec"])
+    if "max_duration_h" in payload:
+        kwargs["max_duration_h"] = float(payload["max_duration_h"])
+    collector.set_config(**kwargs)
+    return {
+        "ok": True,
+        "enabled": collector.is_enabled(),
+        "interval_sec": collector.get_interval(),
+        "max_duration_h": collector.get_max_duration_h(),
+    }
