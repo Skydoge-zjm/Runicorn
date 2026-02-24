@@ -236,30 +236,45 @@ export default function App() {
           <header style={{
             display: 'flex',
             alignItems: 'center',
-            height: 48,
+            height: 56,
             borderBottom: `1px solid ${isDark ? '#2D3748' : '#E5E7EB'}`,
             background: isDark ? '#1A1D27' : '#FFFFFF',
-            padding: '0 24px',
+            padding: '0 20px',
             flexShrink: 0,
           }}>
-            <div style={{ fontWeight: 700, color: settings.accentColor, marginRight: 32, fontSize: 15 }}>
-              {t('app.title')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 24, flexShrink: 0 }}>
+              <img
+                src="/logo.jpg"
+                alt="Runicorn"
+                style={{ height: 32, width: 32, borderRadius: 6, objectFit: 'cover' }}
+              />
+              <span style={{ fontWeight: 700, fontSize: 18, color: isDark ? '#E2E8F0' : '#1A202C', letterSpacing: -0.3 }}>
+                {t('app.title')}
+              </span>
             </div>
-            <nav style={{ display: 'flex', gap: 24, flex: 1 }}>
+            <div style={{
+              width: 1,
+              height: 24,
+              background: isDark ? '#2D3748' : '#E2E8F0',
+              marginRight: 20,
+              flexShrink: 0,
+            }} />
+            <nav style={{ display: 'flex', gap: 20, flex: 1 }}>
               {navItems.map(item => (
                 <NavLink
                   key={item.key}
                   to={item.path}
                   end={item.path === '/'}
                   style={({ isActive }) => ({
-                    color: isActive ? settings.accentColor : (isDark ? '#A0AEC0' : '#4A5568'),
+                    color: isActive ? settings.accentColor : (isDark ? '#8899A6' : '#718096'),
                     borderBottom: isActive ? `2px solid ${settings.accentColor}` : '2px solid transparent',
-                    padding: '12px 0',
+                    padding: '16px 0',
                     textDecoration: 'none',
                     fontSize: 14,
+                    fontWeight: isActive ? 600 : 400,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 5,
                     transition: 'color 0.2s, border-color 0.2s',
                   })}
                 >

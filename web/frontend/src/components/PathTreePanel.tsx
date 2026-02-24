@@ -14,7 +14,7 @@
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Tree, Spin, Empty, Input, Tooltip, Dropdown, Modal, message, theme } from 'antd'
-import { FolderOutlined, FolderOpenOutlined, FolderAddOutlined, SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, AppstoreOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons'
+import { FolderOutlined, FolderFilled, FolderOpenFilled, FolderAddOutlined, SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, AppstoreOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { DataNode, TreeProps } from 'antd/es/tree'
@@ -58,7 +58,7 @@ const buildTreeStyles = (token: any) => `
     border-radius: 4px;
     transition: all 0.15s ease;
     align-items: center;
-    min-height: 28px;
+    min-height: 24px;
   }
   
   .path-tree-panel .ant-tree-treenode:hover {
@@ -99,26 +99,55 @@ const buildTreeStyles = (token: any) => `
   }
   
   .path-tree-panel .ant-tree-switcher {
-    width: 20px;
-    line-height: 28px;
-    color: ${token?.colorWarning || '#faad14'};
+    width: 18px;
+    line-height: 24px;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .path-tree-panel .ant-tree-switcher .ant-tree-switcher-icon {
+    font-size: 9px !important;
+    color: ${token?.colorTextTertiary || '#8c8c8c'};
+    transition: transform 0.15s ease;
+  }
+  
+  .path-tree-panel .ant-tree-indent {
+    align-self: stretch;
+    display: inline-flex !important;
   }
   
   .path-tree-panel .ant-tree-indent-unit {
-    width: 16px;
+    width: 14px;
+    position: relative;
+    align-self: stretch;
+  }
+  
+  .path-tree-panel .ant-tree-indent-unit::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    bottom: -2px;
+    left: 6px;
+    width: 1px;
+    background: ${token?.colorTextQuaternary || '#8c8c8c'};
+    pointer-events: none;
+  }
+  
+  .path-tree-panel .ant-tree-treenode {
+    overflow: visible;
   }
   
   .path-tree-panel .ant-tree-list-holder-inner {
     padding: 4px 0;
   }
   
-  /* Tree lines - more subtle */
-  .path-tree-panel .ant-tree-indent-unit::before {
-    border-color: ${token?.colorBorderSecondary || '#434343'} !important;
+  .path-tree-panel .all-runs-item:hover {
+    background: ${token?.colorFillTertiary || 'rgba(255,255,255,0.08)'} !important;
   }
   
-  .path-tree-panel .ant-tree-switcher-line-icon {
-    color: ${token?.colorTextQuaternary || '#8c8c8c'};
+  .path-tree-panel .all-runs-item.all-runs-selected:hover {
+    background: ${token?.colorPrimaryBg || 'rgba(22,119,255,0.16)'} !important;
   }
   
   /* Running indicator pulse animation */
@@ -162,6 +191,7 @@ const buildTreeData = (
   stats?: Record<string, PathStats>,
   token?: any,
   dropTargetPath?: string | null,
+  expandedKeys?: React.Key[],
 ): DataNode[] => {
   const nodes: DataNode[] = []
   
@@ -170,6 +200,7 @@ const buildTreeData = (
     const hasChildren = Object.keys(children).length > 0
     const pathStats = stats?.[currentPath]
     const isDropTarget = dropTargetPath === currentPath
+    const isExpanded = expandedKeys?.includes(currentPath)
     
     nodes.push({
       key: currentPath,
@@ -185,6 +216,10 @@ const buildTreeData = (
           background: isDropTarget ? (token?.colorPrimaryBgHover || 'rgba(22,119,255,0.12)') : 'transparent',
           transition: 'outline 0.1s, background 0.1s',
         }}>
+          {isExpanded
+            ? <FolderOpenFilled style={{ color: token?.colorWarning || '#faad14', fontSize: 14, flexShrink: 0 }} />
+            : <FolderFilled style={{ color: token?.colorWarning || '#faad14', fontSize: 14, flexShrink: 0 }} />
+          }
           <span style={{ 
             flex: 1, 
             overflow: 'hidden', 
@@ -220,7 +255,7 @@ const buildTreeData = (
           )}
         </span>
       ),
-      children: hasChildren ? buildTreeData(children, currentPath, stats, token, dropTargetPath) : undefined,
+      children: hasChildren ? buildTreeData(children, currentPath, stats, token, dropTargetPath, expandedKeys) : undefined,
       isLeaf: !hasChildren,
     })
   }
@@ -345,7 +380,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
   const treeNodes = useMemo(() => {
     if (!treeData?.tree) return []
     
-    const nodes = buildTreeData(treeData.tree, '', treeData.stats, token, dropTargetPath)
+    const nodes = buildTreeData(treeData.tree, '', treeData.stats, token, dropTargetPath, expandedKeys)
     
     // Filter by search text
     if (searchText) {
@@ -369,7 +404,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
     }
     
     return nodes
-  }, [treeData, searchText, token, dropTargetPath])
+  }, [treeData, searchText, token, dropTargetPath, expandedKeys])
 
   // Handle tree node selection
   const handleSelect: TreeProps['onSelect'] = (selectedKeys) => {
@@ -581,13 +616,12 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
           }] }}
           trigger={['contextMenu']}
         >
-        <motion.div
+        <div
+          className={`all-runs-item${selectedPath === null ? ' all-runs-selected' : ''}`}
           onClick={() => onSelectPath(null)}
           onDragOver={handleDragOver('default')}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop('default')}
-          whileHover={{ backgroundColor: selectedPath === null ? token.colorPrimaryBg : token.colorFillTertiary }}
-          whileTap={{ scale: 0.98 }}
           style={{
             padding: '6px 12px',
             cursor: 'pointer',
@@ -631,7 +665,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
               </span>
             </span>
           )}
-        </motion.div>
+        </div>
         </Dropdown>
 
         {/* Path tree */}
@@ -701,12 +735,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
                   }}
                 >
                   <Tree
-                    showLine={{ showLeafIcon: false }}
-                    switcherIcon={({ expanded }) => 
-                      expanded 
-                        ? <FolderOpenOutlined style={{ color: token.colorWarning }} /> 
-                        : <FolderOutlined style={{ color: token.colorWarning }} />
-                    }
+                    blockNode
                     treeData={treeNodes}
                     selectedKeys={selectedPath ? [selectedPath] : []}
                     expandedKeys={expandedKeys}
