@@ -271,6 +271,21 @@ export async function listCondaEnvs(connectionId: string): Promise<any> {
 }
 
 /**
+ * Batch-check runicorn installation for all environments in one call.
+ * Returns a map of env_name -> { pythonVersion, runicornVersion }.
+ */
+export async function getEnvConfigs(connectionId: string): Promise<Record<string, { pythonVersion?: string; runicornVersion?: string | null }>> {
+  const response = await fetch(
+    `${API_BASE}/env-configs?connection_id=${encodeURIComponent(connectionId)}`
+  )
+
+  await ensureOk(response, 'Failed to get environment configurations')
+
+  const data = await response.json()
+  return data.configs || {}
+}
+
+/**
  * Get remote server runicorn configuration
  */
 export async function getRemoteConfig(connectionId: string, condaEnv: string = 'system'): Promise<any> {

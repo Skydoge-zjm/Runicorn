@@ -29,7 +29,7 @@ import {
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { CondaEnv } from '../../types/remote'
-import { getRemoteConfig, getLocalVersion } from '../../api/remote'
+import { getRemoteConfig, getEnvConfigs, getLocalVersion } from '../../api/remote'
 import DismissibleAlert from '../DismissibleAlert'
 
 const { Text } = Typography
@@ -124,47 +124,42 @@ export default function CondaEnvSelector({
     fetchLocalVersion()
   }, [])
   
-  // Detect versions for all environments on mount (with concurrency limit)
+  // Batch-detect runicorn versions for all environments in one call
   useEffect(() => {
     if (!localVersion) return // Wait for local version to be loaded
     
     const detectEnvironments = async () => {
-      const CONCURRENT_LIMIT = 3 // Detect 3 environments at a time
-      
-      // Process environments in batches
-      for (let i = 0; i < envs.length; i += CONCURRENT_LIMIT) {
-        const batch = envs.slice(i, i + CONCURRENT_LIMIT)
+      try {
+        // Single HTTP call → single SSH roundtrip for all envs
+        const configs = await getEnvConfigs(connectionId)
         
-        // Detect batch concurrently
-        await Promise.all(
-          batch.map(async (env) => {
-            try {
-              const config = await getRemoteConfig(connectionId, env.name)
-              const versionStatus = config.runicornVersion 
-                ? compareVersions(config.runicornVersion, localVersion)
-                : undefined
-              
-              setEnvVersions(prev => ({
-                ...prev,
-                [env.name]: {
-                  pythonVersion: config.pythonVersion,
-                  runicornVersion: config.runicornVersion,
-                  versionStatus,
-                  loading: false,
-                  error: false
-                }
-              }))
-            } catch (error) {
-              setEnvVersions(prev => ({
-                ...prev,
-                [env.name]: {
-                  loading: false,
-                  error: true
-                }
-              }))
+        const updated: Record<string, EnvVersionInfo> = {}
+        for (const env of envs) {
+          const cfg = configs[env.name]
+          if (cfg) {
+            const versionStatus = cfg.runicornVersion
+              ? compareVersions(cfg.runicornVersion, localVersion)
+              : undefined
+            updated[env.name] = {
+              pythonVersion: cfg.pythonVersion || env.pythonVersion,
+              runicornVersion: cfg.runicornVersion ?? undefined,
+              versionStatus,
+              loading: false,
+              error: false
             }
-          })
-        )
+          } else {
+            updated[env.name] = { loading: false, error: true }
+          }
+        }
+        setEnvVersions(updated)
+      } catch (error) {
+        // Fallback: mark all as error
+        const errState: Record<string, EnvVersionInfo> = {}
+        for (const env of envs) {
+          errState[env.name] = { loading: false, error: true }
+        }
+        setEnvVersions(errState)
+        console.error('Batch env config check failed:', error)
       }
     }
     

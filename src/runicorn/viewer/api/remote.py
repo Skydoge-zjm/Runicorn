@@ -617,6 +617,84 @@ async def list_conda_envs(
         )
 
 
+@router.get("/remote/env-configs")
+async def get_env_configs(
+    request: Request,
+    connection_id: str
+) -> Dict[str, Any]:
+    """
+    Batch-check runicorn installation for all detected environments.
+    
+    Returns runicorn version info for every environment in one HTTP call,
+    using a single SSH roundtrip instead of N individual requests.
+    
+    Args:
+        connection_id: SSH connection ID (format: user@host:port)
+        
+    Returns:
+        Dict with env_name -> { runicornVersion, pythonVersion } mapping
+    """
+    if not hasattr(request.app.state, 'connection_pool'):
+        raise HTTPException(
+            status_code=400,
+            detail="Connection pool not initialized"
+        )
+    
+    pool: SSHConnectionPool = request.app.state.connection_pool
+    
+    # Parse connection_id
+    try:
+        username_host, port_str = connection_id.rsplit(":", 1)
+        username, host = username_host.split("@", 1)
+        port = int(port_str)
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid connection_id format: {connection_id}"
+        )
+    
+    # Get connection
+    connection = pool.get_connection(host, port, username)
+    if not connection or not connection.is_connected:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Connection not found or inactive: {connection_id}"
+        )
+    
+    try:
+        from ...remote.environment import RemoteEnvironmentDetector
+        
+        detector = RemoteEnvironmentDetector(connection)
+        
+        # Use cached env list (populated by prior list_conda_envs call)
+        envs = detector.detect_all_environments()
+        
+        # Build list of (env_name, python_path) for batch check
+        env_paths = []
+        for env in envs:
+            env_paths.append((env.name, env.python_path))
+        
+        # Single SSH roundtrip for all runicorn checks
+        runicorn_versions = detector.batch_check_runicorn(env_paths)
+        
+        # Build response
+        configs = {}
+        for env in envs:
+            configs[env.name] = {
+                "pythonVersion": env.version,
+                "runicornVersion": runicorn_versions.get(env.name),
+            }
+        
+        return {"ok": True, "configs": configs}
+        
+    except Exception as e:
+        logger.error(f"Failed to batch check env configs: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check environment configurations: {str(e)}"
+        )
+
+
 @router.get("/remote/config")
 async def get_remote_config(
     request: Request,
