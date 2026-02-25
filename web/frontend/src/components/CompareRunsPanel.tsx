@@ -80,7 +80,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
         height: '100%',
         minHeight: 0,
         borderRight: `1px solid ${token.colorBorderSecondary}`,
-        background: token.colorBgLayout,
+        background: token.colorBgContainer,
       }}
     >
       {/* Header */}

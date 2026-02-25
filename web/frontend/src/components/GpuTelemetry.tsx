@@ -67,7 +67,7 @@ export default function GpuTelemetry() {
 
   const makeOption = (title: string, series: any[], yAxisOpts?: any) => ({
     title: { text: title, textStyle: { color: textColor, fontSize: 13, fontWeight: 600 } },
-    tooltip: { trigger: 'axis' },
+    tooltip: { trigger: 'axis', confine: true, backgroundColor: token.colorBgElevated, borderColor: token.colorBorder, textStyle: { color: textColor } },
     legend: { data: series.map(s => s.name), textStyle: { color: subTextColor, fontSize: 11 }, top: 2, right: 8, type: 'scroll' },
     xAxis: { type: 'category', data: times, axisLabel: { color: subTextColor, fontSize: 10 }, axisLine: { lineStyle: { color: borderColor } }, splitLine: { show: false } },
     yAxis: { type: 'value', min: 0, max: 100, ...yAxisOpts, axisLabel: { color: subTextColor, fontSize: 10 }, splitLine: { lineStyle: { color: borderColor, type: 'dashed' } } },
@@ -81,10 +81,12 @@ export default function GpuTelemetry() {
     series,
   })
 
-  const optUtil = useMemo(() => makeOption(t('gpu.chart.util'), seriesUtil), [times, seriesUtil, t, textColor, subTextColor, borderColor])
-  const optMem = useMemo(() => makeOption(t('gpu.chart.mem'), seriesMem), [times, seriesMem, t, textColor, subTextColor, borderColor])
-  const optPower = useMemo(() => makeOption(t('gpu.chart.power'), seriesPower, { min: 'dataMin', max: undefined, scale: true }), [times, seriesPower, t, textColor, subTextColor, borderColor])
-  const optTemp = useMemo(() => makeOption(t('gpu.chart.temp'), seriesTemp, { min: 'dataMin', max: undefined, scale: true }), [times, seriesTemp, t, textColor, subTextColor, borderColor])
+  const bgElevated = token.colorBgElevated
+  const tooltipBorder = token.colorBorder
+  const optUtil = useMemo(() => makeOption(t('gpu.chart.util'), seriesUtil), [times, seriesUtil, t, textColor, subTextColor, borderColor, bgElevated, tooltipBorder])
+  const optMem = useMemo(() => makeOption(t('gpu.chart.mem'), seriesMem), [times, seriesMem, t, textColor, subTextColor, borderColor, bgElevated, tooltipBorder])
+  const optPower = useMemo(() => makeOption(t('gpu.chart.power'), seriesPower, { min: 'dataMin', max: undefined, scale: true }), [times, seriesPower, t, textColor, subTextColor, borderColor, bgElevated, tooltipBorder])
+  const optTemp = useMemo(() => makeOption(t('gpu.chart.temp'), seriesTemp, { min: 'dataMin', max: undefined, scale: true }), [times, seriesTemp, t, textColor, subTextColor, borderColor, bgElevated, tooltipBorder])
 
   if (available === false) {
     return <Alert type="warning" showIcon message={t('gpu.not_available')} description={reason || undefined} />

@@ -1,111 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Alert, Modal, Tag, theme } from 'antd'
+import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Alert, Modal, Tag, Select, theme } from 'antd'
 import { WarningOutlined } from '@ant-design/icons'
 import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, InfoCircleOutlined, ThunderboltOutlined, EyeOutlined, ExportOutlined, BellOutlined, DashboardOutlined } from '@ant-design/icons'
-import { getConfig, setUserRootDir as apiSetUserRootDir, previewImport, confirmImport, getGpuTelemetryConfig, setGpuTelemetryConfig, type GpuCollectorConfig } from '../api'
+import { getConfig, setUserRootDir as apiSetUserRootDir, previewImport, confirmImport } from '../api'
 import type { ImportPreviewResult } from '../api'
 import { useTranslation } from 'react-i18next'
 import SystemInfoPanel from './SystemInfoPanel'
 import DismissedAlertsManager from './DismissedAlertsManager'
+import GpuCollectorSettings from './settings/GpuCollectorSettings'
+import { gradientPresets, themePresets, detectActivePreset } from './settings/themePresets'
+import type { UiSettings } from './settings/themePresets'
 
-export type UiSettings = {
-  // Appearance
-  themeMode: 'light' | 'dark' | 'auto'
-  accentColor: string
-  density: 'compact' | 'default' | 'loose'
-  
-  // Layout & Visual Effects
-  glass: boolean
-  backgroundType: 'image' | 'gradient' | 'color'
-  backgroundImageUrl: string
-  backgroundGradient: string
-  backgroundColor: string
-  backgroundOpacity: number
-  backgroundBlur: number
-  
-  // Performance & Behavior
-  autoRefresh: boolean
-  refreshInterval: number
-  animationsEnabled: boolean
-  enableSounds: boolean
-  
-  // Charts & Data Display
-  defaultChartHeight: number
-  showGridLines: boolean
-  enableChartAnimations: boolean
-  maxDataPoints: number
-  
-  // Performance Monitor Tab Settings
-  showCpuTab: boolean
-  showMemoryDiskTab: boolean
-  showGpuMetricsTab: boolean
-  showGpuTelemetryTab: boolean
-}
-
-const gradientPresets: { label: string; value: string }[] = [
-  { label: 'Aurora', value: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)' },
-  { label: 'Sunset', value: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)' },
-  { label: 'Ocean', value: 'linear-gradient(135deg, #5ee7df 0%, #b490ca 100%)' },
-  { label: 'Forest', value: 'linear-gradient(135deg, #a8e063 0%, #56ab2f 100%)' },
-]
-
-/** Server-side GPU collector settings (enable, interval, max duration). */
-function GpuCollectorSettings() {
-  const { t } = useTranslation()
-  const { token } = theme.useToken()
-  const [cfg, setCfg] = useState<GpuCollectorConfig | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    let active = true
-    getGpuTelemetryConfig()
-      .then(r => { if (active) setCfg(r) })
-      .catch(() => {})
-    return () => { active = false }
-  }, [])
-
-  const update = async (patch: Partial<GpuCollectorConfig>) => {
-    setSaving(true)
-    try {
-      const res = await setGpuTelemetryConfig(patch)
-      setCfg({ enabled: res.enabled, interval_sec: res.interval_sec, max_duration_h: res.max_duration_h })
-      message.info(t('settings.performance.gpu_collect_restart_hint'))
-    } catch {}
-    setSaving(false)
-  }
-
-  if (!cfg) return null
-  return (
-    <Space direction="vertical" style={{ width: '100%' }} size={8}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography.Text strong>{t('settings.performance.gpu_background_collect', 'GPU Background Collection')}</Typography.Text>
-        <Switch checked={cfg.enabled} onChange={v => update({ enabled: v })} loading={saving} />
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Typography.Text>{t('settings.performance.gpu_poll_interval', 'Poll Interval')}</Typography.Text>
-        <InputNumber
-          min={1} max={10} step={1}
-          value={cfg.interval_sec}
-          onChange={v => v != null && update({ interval_sec: v })}
-          style={{ width: 80 }}
-          disabled={saving}
-        />
-        <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{t('settings.units.seconds', 's')}</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Typography.Text>{t('settings.performance.gpu_max_duration', 'Max History')}</Typography.Text>
-        <InputNumber
-          min={1} max={24} step={1}
-          value={cfg.max_duration_h}
-          onChange={v => v != null && update({ max_duration_h: v })}
-          style={{ width: 80 }}
-          disabled={saving}
-        />
-        <span style={{ fontSize: 12, color: token.colorTextSecondary }}>{t('settings.units.hours', 'h')}</span>
-      </div>
-    </Space>
-  )
-}
+// Re-export so existing consumers (App.tsx, SettingsContext.tsx) don't need to change imports
+export type { UiSettings }
 
 export default function SettingsDrawer({ open, onClose, value, onChange }: {
   open: boolean
@@ -173,6 +80,32 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
 
       {appearanceSub === 'theme' && (
         <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <div>
+            <Typography.Text strong>{t('settings.preset.label')}</Typography.Text>
+            <Select
+              value={detectActivePreset(value)}
+              onChange={(key) => {
+                const preset = themePresets.find(p => p.key === key)
+                if (preset) set(preset.settings)
+              }}
+              placeholder={t('settings.preset.custom')}
+              style={{ width: '100%', marginTop: 8 }}
+              options={themePresets.map(p => ({
+                label: (
+                  <Space size={8}>
+                    <span style={{
+                      display: 'inline-block', width: 14, height: 14, borderRadius: 7,
+                      background: `linear-gradient(135deg, ${p.swatch[0]} 0%, ${p.swatch[1]} 100%)`,
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      verticalAlign: 'middle',
+                    }} />
+                    {t(p.labelKey)}
+                  </Space>
+                ),
+                value: p.key,
+              }))}
+            />
+          </div>
           <Card size="small" title={<Space><AppstoreOutlined />{t('settings.cards.theme')}</Space>}>
             <Space direction="vertical" style={{ width: '100%' }}>
               <div>
@@ -199,6 +132,44 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
                     format="hex"
                   />
                 </div>
+              </div>
+              <div>
+                <Typography.Text strong>{t('settings.surface_color')}</Typography.Text>
+                {value.themeMode === 'auto' ? (
+                  <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+                    <div>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('settings.theme.light')}</Typography.Text>
+                      <div style={{ marginTop: 4 }}>
+                        <ColorPicker 
+                          value={value.surfaceColor} 
+                          onChange={(c) => set({ surfaceColor: c.toHexString() })}
+                          showText
+                          format="hex"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('settings.theme.dark')}</Typography.Text>
+                      <div style={{ marginTop: 4 }}>
+                        <ColorPicker 
+                          value={value.surfaceColorDark} 
+                          onChange={(c) => set({ surfaceColorDark: c.toHexString() })}
+                          showText
+                          format="hex"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 8 }}>
+                    <ColorPicker 
+                      value={value.themeMode === 'dark' ? value.surfaceColorDark : value.surfaceColor} 
+                      onChange={(c) => set(value.themeMode === 'dark' ? { surfaceColorDark: c.toHexString() } : { surfaceColor: c.toHexString() })}
+                      showText
+                      format="hex"
+                    />
+                  </div>
+                )}
               </div>
               <div>
                 <Typography.Text strong>{t('settings.appearance.density')}</Typography.Text>
@@ -265,14 +236,41 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
               {value.backgroundType === 'color' && (
                 <div>
                   <Typography.Text strong>{t('background.color')}</Typography.Text>
-                  <div style={{ marginTop: 8 }}>
-                    <ColorPicker 
-                      value={value.backgroundColor} 
-                      onChange={(c) => set({ backgroundColor: c.toHexString() })}
-                      showText
-                      format="hex"
-                    />
-                  </div>
+                  {value.themeMode === 'auto' ? (
+                    <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
+                      <div>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('settings.theme.light')}</Typography.Text>
+                        <div style={{ marginTop: 4 }}>
+                          <ColorPicker 
+                            value={value.backgroundColor} 
+                            onChange={(c) => set({ backgroundColor: c.toHexString() })}
+                            showText
+                            format="hex"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('settings.theme.dark')}</Typography.Text>
+                        <div style={{ marginTop: 4 }}>
+                          <ColorPicker 
+                            value={value.backgroundColorDark} 
+                            onChange={(c) => set({ backgroundColorDark: c.toHexString() })}
+                            showText
+                            format="hex"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ marginTop: 8 }}>
+                      <ColorPicker 
+                        value={value.themeMode === 'dark' ? value.backgroundColorDark : value.backgroundColor} 
+                        onChange={(c) => set(value.themeMode === 'dark' ? { backgroundColorDark: c.toHexString() } : { backgroundColor: c.toHexString() })}
+                        showText
+                        format="hex"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
               <div>
@@ -348,6 +346,13 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
                   <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.grid_lines.desc')}</div>
                 </div>
                 <Switch checked={value.showGridLines} onChange={(checked) => set({ showGridLines: checked })} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <Typography.Text strong>{t('settings.charts.compare_tooltip_id')}</Typography.Text>
+                  <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>{t('settings.charts.compare_tooltip_id_desc')}</div>
+                </div>
+                <Switch checked={value.compareTooltipShowId} onChange={(checked) => set({ compareTooltipShowId: checked })} />
               </div>
               <Divider style={{ margin: '8px 0' }} />
               <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>

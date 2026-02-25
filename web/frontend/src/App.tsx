@@ -51,7 +51,10 @@ export default function App() {
     backgroundType: 'color',
     backgroundImageUrl: '',
     backgroundGradient: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F0F2F5',
+    backgroundColorDark: '#0d0d12',
+    surfaceColor: '#ffffff',
+    surfaceColorDark: '#1e1e2e',
     backgroundOpacity: 0.9,
     backgroundBlur: 8,
     
@@ -66,6 +69,7 @@ export default function App() {
     showGridLines: true,
     enableChartAnimations: true,
     maxDataPoints: 1000,
+    compareTooltipShowId: false,
     
     // Performance Monitor Tab Settings
     showCpuTab: true,
@@ -105,8 +109,13 @@ export default function App() {
     return arr
   }, [isDark, settings.density])
 
+  const surfaceBg = isDark ? settings.surfaceColorDark : settings.surfaceColor
+
   const tokenOverrides = useMemo(() => {
-    const t: any = { colorPrimary: settings.accentColor }
+    const t: any = {
+      colorPrimary: settings.accentColor,
+      colorBgContainer: isDark ? settings.surfaceColorDark : settings.surfaceColor,
+    }
     if (settings.density === 'loose') {
       t.borderRadius = 10
       t.padding = 20
@@ -121,7 +130,7 @@ export default function App() {
       t.controlHeightSM = 30
     }
     return t
-  }, [settings.accentColor, settings.density])
+  }, [settings.accentColor, settings.density, isDark, settings.surfaceColor, settings.surfaceColorDark])
 
   const bgStyle = useMemo<React.CSSProperties>(() => {
     const s: React.CSSProperties = {
@@ -137,10 +146,10 @@ export default function App() {
     } else if (settings.backgroundType === 'gradient') {
       s.backgroundImage = settings.backgroundGradient
     } else {
-      s.background = settings.backgroundColor
+      s.background = isDark ? settings.backgroundColorDark : settings.backgroundColor
     }
     return s
-  }, [settings.backgroundType, settings.backgroundImageUrl, settings.backgroundGradient, settings.backgroundColor, settings.backgroundOpacity])
+  }, [settings.backgroundType, settings.backgroundImageUrl, settings.backgroundGradient, settings.backgroundColor, settings.backgroundOpacity, isDark])
 
   const wrapperStyle = useMemo<React.CSSProperties>(() => {
     const baseStyle: React.CSSProperties = {
@@ -160,7 +169,7 @@ export default function App() {
     }
     return { 
       ...baseStyle,
-      background: isDark ? '#111a2c' : '#fff' 
+      background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.35)',
     }
   }, [settings.glass, settings.backgroundBlur, settings.animationsEnabled, isDark])
 
@@ -239,8 +248,8 @@ export default function App() {
             display: 'flex',
             alignItems: 'center',
             height: 56,
-            borderBottom: `1px solid ${isDark ? '#2D3748' : '#E5E7EB'}`,
-            background: isDark ? '#1A1D27' : '#FFFFFF',
+            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
+            background: surfaceBg,
             padding: '0 20px',
             flexShrink: 0,
           }}>
@@ -250,14 +259,14 @@ export default function App() {
                 alt="Runicorn"
                 style={{ height: 32, width: 32, borderRadius: 6, objectFit: 'cover' }}
               />
-              <span style={{ fontWeight: 700, fontSize: 18, color: isDark ? '#E2E8F0' : '#1A202C', letterSpacing: -0.3 }}>
+              <span style={{ fontWeight: 700, fontSize: 18, color: isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.88)', letterSpacing: -0.3 }}>
                 {t('app.title')}
               </span>
             </div>
             <div style={{
               width: 1,
               height: 24,
-              background: isDark ? '#2D3748' : '#E2E8F0',
+              background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)',
               marginRight: 20,
               flexShrink: 0,
             }} />
@@ -268,7 +277,7 @@ export default function App() {
                   to={item.path}
                   end={item.path === '/'}
                   style={({ isActive }) => ({
-                    color: isActive ? settings.accentColor : (isDark ? '#8899A6' : '#718096'),
+                    color: isActive ? settings.accentColor : (isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)'),
                     borderBottom: isActive ? `2px solid ${settings.accentColor}` : '2px solid transparent',
                     padding: '16px 0',
                     textDecoration: 'none',
@@ -297,7 +306,7 @@ export default function App() {
               />
               <Button
                 type="text"
-                icon={<SettingOutlined style={{ color: isDark ? '#A0AEC0' : '#4A5568' }} />}
+                icon={<SettingOutlined style={{ color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />}
                 onClick={() => setSettingsOpen(true)}
                 aria-label="Open settings"
               />

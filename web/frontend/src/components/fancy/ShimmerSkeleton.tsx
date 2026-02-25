@@ -6,6 +6,7 @@
  */
 
 import { motion } from 'framer-motion'
+import { theme } from 'antd'
 
 interface ShimmerSkeletonProps {
   width?: string | number
@@ -18,11 +19,12 @@ export const ShimmerSkeleton: React.FC<ShimmerSkeletonProps> = ({
   height = 20,
   borderRadius = 4
 }) => {
+  const { token } = theme.useToken()
   return (
     <div style={{
       width,
       height,
-      backgroundColor: '#f0f0f0',
+      backgroundColor: token.colorFillTertiary,
       borderRadius,
       overflow: 'hidden',
       position: 'relative'
@@ -53,6 +55,7 @@ export const ShimmerSkeleton: React.FC<ShimmerSkeletonProps> = ({
  * FancyCardSkeleton - Skeleton for fancy stat cards
  */
 export const FancyCardSkeleton: React.FC = () => {
+  const { token } = theme.useToken()
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -60,7 +63,7 @@ export const FancyCardSkeleton: React.FC = () => {
       style={{
         padding: 24,
         borderRadius: 16,
-        background: 'linear-gradient(135deg, #f5f5f5, #e8e8e8)',
+        background: `linear-gradient(135deg, ${token.colorFillQuaternary}, ${token.colorFillTertiary})`,
         minHeight: 140
       }}
     >

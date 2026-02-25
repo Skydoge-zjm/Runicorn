@@ -76,7 +76,12 @@ function pickLanguageExtension(filename?: string) {
 export default function CodeTextViewer(props: { value: string; filename?: string; maxHeight?: number }) {
   const { t, i18n } = useTranslation()
   const { token } = theme.useToken()
-  const isDark = parseInt((token.colorBgContainer || '#ffffff').replace('#', '').slice(0, 2), 16) < 128
+  const isDark = parseInt((token.colorBgBase || '#ffffff').replace('#', '').slice(0, 2), 16) < 128
+
+  // Code area uses fixed pure black / white — not affected by surface color setting
+  const codeBg = isDark ? '#000000' : '#ffffff'
+  const codeBgSub = isDark ? '#080810' : '#f6f6f6'
+
   const parentRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
 
@@ -250,7 +255,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           height: '100%',
         },
         '.cm-editor': {
-          backgroundColor: token.colorBgContainer,
+          backgroundColor: codeBg,
         },
         '.cm-scroller': {
           overflow: 'auto',
@@ -292,7 +297,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           backgroundColor: 'rgba(22, 119, 255, 0.28) !important',
         },
         '.cm-gutters': {
-          backgroundColor: token.colorBgLayout,
+          backgroundColor: codeBgSub,
           borderRight: `1px solid ${token.colorBorderSecondary}`,
           color: token.colorTextSecondary,
         },
@@ -316,7 +321,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
         },
 
         '.cm-panels': {
-          backgroundColor: token.colorBgLayout,
+          backgroundColor: codeBgSub,
           color: token.colorText,
         },
         '.cm-panels.cm-panels-top': {
@@ -345,7 +350,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           borderRadius: '8px',
           border: `1px solid ${token.colorBorder}`,
           outline: 'none',
-          background: token.colorBgContainer,
+          background: codeBg,
           color: token.colorText,
           boxShadow: 'none',
         },
@@ -358,7 +363,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           padding: '0 10px',
           borderRadius: '8px',
           border: `1px solid ${token.colorBorder}`,
-          background: token.colorBgContainer,
+          background: codeBgSub,
           color: token.colorText,
           cursor: 'pointer',
         },
@@ -474,7 +479,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           padding: '6px 8px',
           border: `1px solid ${token.colorBorderSecondary}`,
           borderRadius: 10,
-          background: token.colorBgLayout,
+          background: codeBgSub,
         }}
       >
         <Space size={6} wrap>
@@ -540,7 +545,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           border: `1px solid ${token.colorBorderSecondary}`,
           borderRadius: 8,
           overflow: 'hidden',
-          background: token.colorBgContainer,
+          background: codeBg,
         }}
       />
     </div>

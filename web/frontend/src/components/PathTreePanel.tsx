@@ -54,11 +54,11 @@ const buildTreeStyles = (token: any) => `
   }
   
   .path-tree-panel .ant-tree-treenode {
-    padding: 0 4px;
+    padding: 0 4px !important;
     border-radius: 4px;
     transition: all 0.15s ease;
     align-items: center;
-    min-height: 24px;
+    min-height: 20px;
   }
   
   .path-tree-panel .ant-tree-treenode:hover {
@@ -89,9 +89,10 @@ const buildTreeStyles = (token: any) => `
   }
   
   .path-tree-panel .ant-tree-node-content-wrapper {
-    padding: 2px 4px;
+    padding: 0 4px;
     border-radius: 4px;
     transition: all 0.15s ease;
+    line-height: 22px;
   }
   
   .path-tree-panel .ant-tree-node-content-wrapper:hover {
@@ -100,7 +101,7 @@ const buildTreeStyles = (token: any) => `
   
   .path-tree-panel .ant-tree-switcher {
     width: 18px;
-    line-height: 24px;
+    line-height: 22px;
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
@@ -139,7 +140,7 @@ const buildTreeStyles = (token: any) => `
   }
   
   .path-tree-panel .ant-tree-list-holder-inner {
-    padding: 4px 0;
+    padding: 2px 0;
   }
   
   .path-tree-panel .all-runs-item:hover {
@@ -528,7 +529,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         alignItems: 'center', 
         justifyContent: 'center',
         padding: 24,
-        background: token.colorBgLayout,
+        background: token.colorBgContainer,
       }}>
         <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />
       </div>
@@ -547,7 +548,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         height: '100%',
         minHeight: 0,  // Important for flex child to allow shrinking
         borderRight: `1px solid ${token.colorBorderSecondary}`,
-        background: token.colorBgLayout,
+        background: token.colorBgContainer,
         outline: 'none',
       }}
     >

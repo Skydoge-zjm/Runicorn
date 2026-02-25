@@ -327,7 +327,33 @@ const MetricChart = memo(function MetricChart({
       title: { text: title, left: 'center', top: 8,
         textStyle: { fontSize: 16, fontWeight: 600, color: token.colorText }
       },
-      tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        axisPointer: { type: 'cross', label: { show: true } },
+        backgroundColor: token.colorBgElevated,
+        borderColor: token.colorBorder,
+        textStyle: { color: token.colorText },
+        // Multi-run compare: show label instead of run ID (unless user opted to show ID)
+        // Always provide explicit formatter so echarts merge mode replaces correctly
+        ...(!isSingleRun && {
+          formatter: (params: any) => {
+            if (!Array.isArray(params) || params.length === 0) return ''
+            const idToLabel: Record<string, string> = {}
+            if (!settings.compareTooltipShowId) {
+              for (const r of runs) { idToLabel[r.id] = r.label || r.id }
+            }
+            const header = params[0].axisValueLabel ?? params[0].axisValue ?? ''
+            const lines = params.map((p: any) => {
+              const marker = p.marker || ''
+              const name = settings.compareTooltipShowId ? p.seriesName : (idToLabel[p.seriesName] || p.seriesName)
+              const val = Array.isArray(p.value) ? p.value[1] : p.value
+              return `${marker} ${name}&nbsp;&nbsp;<b>${val}</b>`
+            })
+            return `<b>${header}</b><br/>` + lines.join('<br/>')
+          },
+        }),
+      },
       legend: legendConfig,
       ...(colors.length > 0 && { color: colors }),
       xAxis: isSingleRun
@@ -357,7 +383,7 @@ const MetricChart = memo(function MetricChart({
       animation: settings.enableChartAnimations,
       animationDuration: settings.enableChartAnimations ? 1000 : 0,
     }
-  }, [runs, xKey, xAxisKey, yKey, title, useLog, dynamicScale, smoothing, presentCols, isSingleRun, primaryRun, settings, token.colorText, token.colorTextSecondary, token.colorBorder, token.colorBorderSecondary, showLegend, colors, legendSelected])
+  }, [runs, xKey, xAxisKey, yKey, title, useLog, dynamicScale, smoothing, presentCols, isSingleRun, primaryRun, settings, token.colorText, token.colorTextSecondary, token.colorBorder, token.colorBorderSecondary, token.colorBgElevated, showLegend, colors, legendSelected])
 
   const exportCsv = () => {
     try {

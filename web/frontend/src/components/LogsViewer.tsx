@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { Button, Input, Space, Switch, Tag, Tooltip, message } from 'antd'
+import { Button, Input, Space, Switch, Tag, Tooltip, message, theme } from 'antd'
 import { DownOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import AnsiToHtml from 'ansi-to-html'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useSettings } from '../contexts/SettingsContext'
 
 // Constants
 const MAX_LINES = 5000
@@ -32,7 +31,7 @@ function escapeRegex(text: string): string {
 // Dark theme ANSI converter
 const darkConverter = new AnsiToHtml({
   fg: '#e6e9ef',
-  bg: '#0b1020',
+  bg: '#000000',
   newline: false,
   escapeXML: true,
   colors: {
@@ -50,7 +49,7 @@ const darkConverter = new AnsiToHtml({
 // Light theme ANSI converter
 const lightConverter = new AnsiToHtml({
   fg: '#374151',
-  bg: '#F8F9FA',
+  bg: '#ffffff',
   newline: false,
   escapeXML: true,
   colors: {
@@ -89,8 +88,8 @@ interface LogsViewerProps {
 
 export default function LogsViewer({ url }: LogsViewerProps) {
   const { t } = useTranslation()
-  const { settings } = useSettings()
-  const isDark = settings.themeMode === 'dark'
+  const { token } = theme.useToken()
+  const isDark = parseInt((token.colorBgBase || '#ffffff').replace('#', '').slice(0, 2), 16) < 128
   const ansiConverter = isDark ? darkConverter : lightConverter
   
   const [allLines, setAllLines] = useState<string[]>([])
@@ -295,7 +294,7 @@ export default function LogsViewer({ url }: LogsViewerProps) {
           flex: 1,
           minHeight: 200,
           overflow: 'auto',
-          background: isDark ? '#0b1020' : '#F8F9FA',
+          background: isDark ? '#000000' : '#ffffff',
           color: isDark ? '#e6e9ef' : '#374151',
           padding: '12px 0',
           borderRadius: 8,

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Modal, Table, Button, Space, Tag, message, Tooltip, Alert, Typography, Popconfirm, Descriptions, Spin } from 'antd'
+import { Modal, Table, Button, Space, Tag, message, Tooltip, Alert, Typography, Popconfirm, Descriptions, Spin, theme } from 'antd'
 import { DeleteOutlined, UndoOutlined, ClearOutlined, InfoCircleOutlined, ExclamationCircleOutlined, FileOutlined } from '@ant-design/icons'
 import { listDeletedRuns, restoreRuns, permanentDeleteRunsBatch, getRunAssetRefs, type RunAssetRefs } from '../api'
 import { useTranslation } from 'react-i18next'
@@ -24,6 +24,7 @@ interface RecycleBinProps {
 
 export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [deletedRuns, setDeletedRuns] = useState<DeletedRun[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
@@ -192,7 +193,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       width: 150,
       render: (path: string) => (
         <Tooltip title={path}>
-          <code style={{ fontSize: '12px', color: '#1677ff' }}>{path}</code>
+          <code style={{ fontSize: '12px', color: token.colorPrimary }}>{path}</code>
         </Tooltip>
       )
     },
@@ -204,7 +205,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
       render: (alias: string | null) => alias ? (
         <Tag color="purple">{alias}</Tag>
       ) : (
-        <span style={{ color: '#999' }}>-</span>
+        <span style={{ color: token.colorTextQuaternary }}>-</span>
       )
     },
     {
@@ -396,10 +397,10 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
         {/* Asset preview panel */}
         {previewRunId && (
           <div style={{ 
-            border: '1px solid #d9d9d9', 
+            border: `1px solid ${token.colorBorder}`, 
             borderRadius: 8, 
             padding: 16,
-            background: '#fafafa'
+            background: token.colorBgContainer,
           }}>
             <Typography.Title level={5} style={{ marginTop: 0 }}>
               <FileOutlined /> {t('recycle_bin.asset_preview')}: {previewRunId}
