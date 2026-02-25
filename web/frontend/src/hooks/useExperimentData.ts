@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { message } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSettings } from '../contexts/SettingsContext'
-import { listRuns, checkAllStatus, softDeleteByPath as apiSoftDeleteByPath } from '../api'
+import { listRuns, softDeleteByPath as apiSoftDeleteByPath } from '../api'
 import logger from '../utils/logger'
 
 export interface RunData {
@@ -52,8 +52,6 @@ export function useExperimentData(_locationKey: string) {
   const { t } = useTranslation()
   const { settings, setSettings } = useSettings()
   const queryClient = useQueryClient()
-  const [statusCheckLoading, setStatusCheckLoading] = useState(false)
-
   const autoRefresh = settings.autoRefresh
   const setAutoRefresh = (checked: boolean) => {
     setSettings({ ...settings, autoRefresh: checked })
@@ -92,24 +90,6 @@ export function useExperimentData(_locationKey: string) {
     await queryClient.invalidateQueries({ queryKey: ['runs'] })
   }, [queryClient])
 
-  const handleStatusCheck = useCallback(async () => {
-    setStatusCheckLoading(true)
-    try {
-      const result = await checkAllStatus()
-      if (result.updated > 0) {
-        message.success(`Updated ${result.updated} experiment statuses`)
-        fetchRuns(false)
-      } else {
-        message.info('All experiment statuses are up to date')
-      }
-    } catch (error) {
-      logger.error('Status check failed:', error)
-      message.error('Failed to check experiment statuses')
-    } finally {
-      setStatusCheckLoading(false)
-    }
-  }, [fetchRuns])
-
   const handleBatchDeleteByPath = useCallback(async (path: string) => {
     try {
       const result = await apiSoftDeleteByPath(path)
@@ -144,7 +124,7 @@ export function useExperimentData(_locationKey: string) {
   return {
     runs, setRuns, loading, projects, stats,
     autoRefresh, setAutoRefresh,
-    fetchRuns, statusCheckLoading, handleStatusCheck,
+    fetchRuns,
     handleBatchDeleteByPath, handleBatchExportByPath,
   }
 }

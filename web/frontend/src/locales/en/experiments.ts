@@ -308,5 +308,14 @@ export default {
   'config.description': 'This build is a read-only viewer for local runs stored under your runicorn storage directory. Starting/stopping training from the UI is not available.',
   'config.go_to_runs': 'Go to',
   'config.to_browse': 'to browse and inspect experiment metrics, logs, and GPU telemetry.',
+
+  // Hardcoded string fixes
+  'metrics.refresh_tooltip': 'Refresh metrics',
+  'logs.realtime': 'Real-time',
+  'error.chart': 'Chart error: {{key}}',
+  'error.assets_loading': 'Assets loading error',
+  'error.logs_loading': 'Logs loading error',
+  'experiments.no_runs_moved': 'No runs were moved to recycle bin',
+  'recycle_bin.no_runs_deleted': 'No runs were deleted',
 }
 

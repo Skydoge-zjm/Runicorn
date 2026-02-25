@@ -134,7 +134,7 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
         setAssetRefs(null)
         fetchDeletedRuns()
       } else {
-        message.warning('No runs were deleted')
+        message.warning(t('recycle_bin.no_runs_deleted'))
       }
     } catch (error) {
       logger.error('Permanent delete failed:', error)

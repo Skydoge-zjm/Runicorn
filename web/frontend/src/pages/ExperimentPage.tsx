@@ -134,7 +134,7 @@ const ExperimentPage: React.FC = () => {
             await fetchRuns(false)
             bumpPathTree()
           } else {
-            message.warning('No runs were moved to recycle bin')
+            message.warning(t('experiments.no_runs_moved'))
           }
         } catch (error) {
           logger.error('Delete failed:', error)
@@ -401,7 +401,7 @@ const ExperimentPage: React.FC = () => {
 
                 <Card bordered={false}
                   style={{ borderRadius: 8, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-                  bodyStyle={{ padding: 0, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  styles={{ body: { padding: 0, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' } }}>
                   <Table
                     className="enhanced-table"
                     components={{ header: { cell: ResizableTitle } }}

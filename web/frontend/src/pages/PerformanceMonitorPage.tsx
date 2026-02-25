@@ -38,7 +38,7 @@ interface GpuData {
 
 export default function PerformanceMonitorPage() {
   const { t } = useTranslation()
-  const { settings: value } = useSettings()
+  const { settings } = useSettings()
   const gpu = useGpuTelemetry()
 
   // Derive GPU state from global context
@@ -67,16 +67,16 @@ export default function PerformanceMonitorPage() {
     }
     
     poll()
-    timer = setInterval(poll, (value.refreshInterval ?? 2) * 1000)
+    timer = setInterval(poll, (settings.refreshInterval ?? 2) * 1000)
     
     return () => clearInterval(timer)
-  }, [value.refreshInterval])
+  }, [settings.refreshInterval])
 
   // Build tab items based on settings
   const tabItems = []
 
   // CPU Tab - check if CPU data is valid (not null and has required fields)
-  if (value.showCpuTab !== false && systemMetrics?.cpu && systemMetrics.cpu.percent !== undefined) {
+  if (settings.showCpuTab !== false && systemMetrics?.cpu && systemMetrics.cpu.percent !== undefined) {
     tabItems.push({
       key: 'cpu',
       label: (
@@ -90,7 +90,7 @@ export default function PerformanceMonitorPage() {
   }
 
   // Memory & Disk Tab
-  if (value.showMemoryDiskTab !== false && systemMetrics?.memory && systemMetrics?.disk) {
+  if (settings.showMemoryDiskTab !== false && systemMetrics?.memory && systemMetrics?.disk) {
     tabItems.push({
       key: 'memory-disk',
       label: (
@@ -104,7 +104,7 @@ export default function PerformanceMonitorPage() {
   }
 
   // GPU Metrics Tab
-  if (value.showGpuMetricsTab !== false && gpuAvailable && gpus.length > 0) {
+  if (settings.showGpuMetricsTab !== false && gpuAvailable && gpus.length > 0) {
     tabItems.push({
       key: 'gpu-metrics',
       label: (
@@ -118,7 +118,7 @@ export default function PerformanceMonitorPage() {
   }
 
   // GPU Telemetry Tab
-  if (value.showGpuTelemetryTab !== false && gpuAvailable) {
+  if (settings.showGpuTelemetryTab !== false && gpuAvailable) {
     tabItems.push({
       key: 'gpu-telemetry',
       label: (
@@ -180,7 +180,7 @@ export default function PerformanceMonitorPage() {
       )}
 
       {/* GPU Not Available Warning */}
-      {gpuAvailable === false && value.showGpuMetricsTab !== false && (
+      {gpuAvailable === false && settings.showGpuMetricsTab !== false && (
         <Alert
           type="info"
           message={t('gpu.not_available')}

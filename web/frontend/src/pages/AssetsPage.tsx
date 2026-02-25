@@ -11,7 +11,7 @@ import { getStorageStats, StorageStats } from '../api'
 const { Text } = Typography
 
 export default function AssetsPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { settings, setSettings } = useSettings()
   const { index, loading, stats, refresh } = useAssetsIndex()
@@ -153,7 +153,7 @@ export default function AssetsPage() {
           flexDirection: 'column',
           overflow: 'hidden',
         }}
-        bodyStyle={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 24px 24px' }}
+        styles={{ body: { flex: 1, minHeight: 0, overflow: 'auto', padding: '0 24px 24px' } }}
       >
         <Tabs
           items={[
@@ -320,7 +320,7 @@ export default function AssetsPage() {
                         dataIndex: 'last_used_time',
                         key: 'last_used_time',
                         width: 140,
-                        render: (v: number | undefined) => <Text type="secondary">{v ? formatRelativeTime(v) : '-'}</Text>,
+                render: (v: number | undefined) => <Text type="secondary">{v ? formatRelativeTime(v, i18n.language) : '-'}</Text>,
                       },
                       {
                         title: t('assets.repo.description'),

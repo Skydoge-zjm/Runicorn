@@ -15,7 +15,6 @@ import { useTranslation } from 'react-i18next'
 import logger from '../utils/logger'
 
 const { Text, Title } = Typography
-const { Panel } = Collapse
 
 /**
  * Refresh interval configuration based on run status.
@@ -235,7 +234,7 @@ export default function RunDetailPage() {
             maxWidth: '100%',
           }}>
       {/* Top Header Card */}
-      <Card bodyStyle={{ padding: '20px 24px' }}>
+      <Card styles={{ body: { padding: '20px 24px' } }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           <div>
             <Space align="center" style={{ marginBottom: 8 }}>
@@ -308,8 +307,10 @@ export default function RunDetailPage() {
         </Row>
 
         {/* Collapsible Details */}
-        <Collapse ghost style={{ marginTop: 16 }}>
-          <Panel header={t('run.more_details')} key="1">
+        <Collapse ghost style={{ marginTop: 16 }} items={[{
+          key: '1',
+          label: t('run.more_details'),
+          children: (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>
                 <Text type="secondary" style={{ display: 'inline-block', width: 100 }}>{t('run.descriptions.run_id')}:</Text>
@@ -324,8 +325,8 @@ export default function RunDetailPage() {
                 <Text copyable ellipsis style={{ maxWidth: 'calc(100% - 120px)' }}>{detail?.logs}</Text>
               </div>
             </div>
-          </Panel>
-        </Collapse>
+          ),
+        }]} />
       </Card>
       
 
@@ -347,7 +348,7 @@ export default function RunDetailPage() {
               { value: 'global_step', label: 'global_step' },
               { value: 'time', label: 'time' },
             ]} /></span>
-            <Tooltip title="Refresh metrics">
+            <Tooltip title={t('metrics.refresh_tooltip')}>
               <Button 
                 type="text" 
                 size="small"
@@ -373,7 +374,7 @@ export default function RunDetailPage() {
                 padding: '8px',
                 backgroundColor: token.colorBgContainer
               }}>
-                <ErrorBoundary fallback={`Chart error: ${k}`}>
+                <ErrorBoundary fallback={t('error.chart', { key: k })}>
                   <LazyChartWrapper height={chartHeight}>
                     <MetricChart 
                       runs={[{ id, metrics: stepMetrics }]}
@@ -403,7 +404,7 @@ export default function RunDetailPage() {
               </Space>
             }
           >
-            <ErrorBoundary fallback="Assets loading error">
+            <ErrorBoundary fallback={t('error.assets_loading')}>
               <RunAssets runId={id} />
             </ErrorBoundary>
           </Card>
@@ -415,13 +416,13 @@ export default function RunDetailPage() {
               <Space>
                 <DatabaseOutlined />
                 <span>{t('logs.title')}</span>
-                <Tag color="cyan">Real-time</Tag>
+                <Tag color="cyan">{t('logs.realtime')}</Tag>
               </Space>
             }
             styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } }}
             style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}
           >
-            <ErrorBoundary fallback="Logs loading error">
+            <ErrorBoundary fallback={t('error.logs_loading')}>
               <LogsViewer url={logUrl} />
             </ErrorBoundary>
           </Card>

@@ -308,5 +308,14 @@ export default {
   'config.description': '这是一个只读查看器，用于查看存储在 runicorn 存储目录下的本地运行数据。不支持从 UI 启动/停止训练。',
   'config.go_to_runs': '前往',
   'config.to_browse': '浏览和检查实验指标、日志和 GPU 遥测数据。',
+
+  // Hardcoded string fixes
+  'metrics.refresh_tooltip': '刷新指标',
+  'logs.realtime': '实时',
+  'error.chart': '图表错误：{{key}}',
+  'error.assets_loading': '资产加载出错',
+  'error.logs_loading': '日志加载出错',
+  'experiments.no_runs_moved': '没有运行被移至回收站',
+  'recycle_bin.no_runs_deleted': '没有运行被删除',
 }
 

@@ -30,7 +30,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
   const [savingRoot, setSavingRoot] = useState(false)
   const [importing, setImporting] = useState(false)
   const [previewData, setPreviewData] = useState<ImportPreviewResult | null>(null)
-  const [importMode, setImportMode] = useState<'merge' | 'isolate'>('isolate')
+  const [importMode, setImportMode] = useState<'merge' | 'isolate'>('merge')
   const [confirming, setConfirming] = useState(false)
 
   useEffect(() => {
@@ -437,7 +437,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
                   setImporting(true)
                   const preview = await previewImport(file as any)
                   setPreviewData(preview)
-                  setImportMode(preview.conflict_count > 0 ? 'isolate' : 'isolate')
+setImportMode('merge')
                 } catch (e: any) {
                   message.error(typeof e?.message === 'string' ? e.message : t('offline_import.failed'))
                 } finally {

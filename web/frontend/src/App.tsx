@@ -112,24 +112,24 @@ export default function App() {
   const surfaceBg = isDark ? settings.surfaceColorDark : settings.surfaceColor
 
   const tokenOverrides = useMemo(() => {
-    const t: any = {
+    const tok: any = {
       colorPrimary: settings.accentColor,
       colorBgContainer: isDark ? settings.surfaceColorDark : settings.surfaceColor,
     }
     if (settings.density === 'loose') {
-      t.borderRadius = 10
-      t.padding = 20
-      t.paddingLG = 28
-      t.paddingContentVertical = 16
-      t.paddingContentHorizontal = 24
-      t.marginLG = 28
-      t.fontSize = 15
-      t.fontSizeLG = 18
-      t.controlHeight = 38
-      t.controlHeightLG = 48
-      t.controlHeightSM = 30
+      tok.borderRadius = 10
+      tok.padding = 20
+      tok.paddingLG = 28
+      tok.paddingContentVertical = 16
+      tok.paddingContentHorizontal = 24
+      tok.marginLG = 28
+      tok.fontSize = 15
+      tok.fontSizeLG = 18
+      tok.controlHeight = 38
+      tok.controlHeightLG = 48
+      tok.controlHeightSM = 30
     }
-    return t
+    return tok
   }, [settings.accentColor, settings.density, isDark, settings.surfaceColor, settings.surfaceColorDark])
 
   const bgStyle = useMemo<React.CSSProperties>(() => {
@@ -215,8 +215,8 @@ export default function App() {
     ping()
     // Use user-configured refresh interval (convert to milliseconds)
     const interval = (settings.autoRefresh ? settings.refreshInterval : 5) * 1000
-    const t = setInterval(ping, interval)
-    return () => { active = false; clearInterval(t) }
+    const timer = setInterval(ping, interval)
+    return () => { active = false; clearInterval(timer) }
   }, [settings.autoRefresh, settings.refreshInterval])
 
   return (

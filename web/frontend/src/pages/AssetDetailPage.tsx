@@ -15,7 +15,7 @@ import { formatRelativeTime } from '../utils/format'
 const { Text, Title } = Typography
 
 export default function AssetDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { id = '' } = useParams()
   const location = useLocation()
@@ -209,7 +209,7 @@ export default function AssetDetailPage() {
               {repoRow.last_used_time ? (
                 <div>
                   <Text type="secondary">{t('asset_detail.fields.last_used')}: </Text>
-                  <Text>{formatRelativeTime(repoRow.last_used_time)}</Text>
+                  <Text>{formatRelativeTime(repoRow.last_used_time, i18n.language)}</Text>
                 </div>
               ) : null}
 

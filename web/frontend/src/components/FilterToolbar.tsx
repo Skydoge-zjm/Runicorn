@@ -1,4 +1,4 @@
-import { Card, Space, Input, Select, Button, Checkbox, Dropdown, Tooltip } from 'antd'
+import { Card, Space, Input, Select, Button, Checkbox, Tooltip } from 'antd'
 import {
   SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined,
   LineChartOutlined,
@@ -49,7 +49,7 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
       bordered={false}
       size="small"
       style={{ borderRadius: 8, marginBottom: 12, flexShrink: 0 }}
-      bodyStyle={{ padding: '12px 16px' }}
+      styles={{ body: { padding: '12px 16px' } }}
     >
       <Space style={{ width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <Space wrap>
