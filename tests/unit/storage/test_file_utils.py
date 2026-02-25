@@ -105,31 +105,62 @@ class TestSoftDeleteRestore:
         assert is_run_deleted(run_dir) is False
 
     def test_soft_delete_creates_marker(self, tmp_path: Path) -> None:
-        run_dir = tmp_path / "run1"
-        run_dir.mkdir()
+        run_dir = tmp_path / "runs" / "train" / "run1"
+        run_dir.mkdir(parents=True)
         # write a dummy status.json so soft_delete_run can read it
         write_json(run_dir / "status.json", {"status": "running"})
+        success, error, new_dir = soft_delete_run(
+            run_dir, storage_root=tmp_path, reason="test",
+        )
+        assert success is True
+        assert error is None
+        assert new_dir is not None
+        assert ".recycle" in new_dir.parts
+        assert is_run_deleted(new_dir) is True
 
-        assert soft_delete_run(run_dir, reason="test") is True
-        assert is_run_deleted(run_dir) is True
-
-        marker = read_json(run_dir / ".deleted")
+        marker = read_json(new_dir / ".deleted")
         assert marker["reason"] == "test"
         assert marker["original_status"] == "running"
 
-    def test_restore_run(self, tmp_path: Path) -> None:
-        run_dir = tmp_path / "run1"
-        run_dir.mkdir()
-        write_json(run_dir / "status.json", {"status": "running"})
-        soft_delete_run(run_dir)
+    def test_soft_delete_infers_original_path_from_layout(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "runs" / "cv" / "det" / "run2"
+        run_dir.mkdir(parents=True)
+        write_json(run_dir / "status.json", {"status": "finished"})
 
-        assert restore_run(run_dir) is True
-        assert is_run_deleted(run_dir) is False
+        ok, err, deleted_dir = soft_delete_run(run_dir, storage_root=tmp_path, reason="test")
+        assert ok is True
+        assert err is None
+        assert deleted_dir is not None
+
+        marker = read_json(deleted_dir / ".deleted")
+        assert marker.get("original_path") == "cv/det"
+
+        restored, restore_err, restored_dir = restore_run(deleted_dir, storage_root=tmp_path)
+        assert restored is True
+        assert restore_err is None
+        assert restored_dir == (tmp_path / "runs" / "cv" / "det" / "run2")
+
+    def test_restore_run(self, tmp_path: Path) -> None:
+        run_dir = tmp_path / "runs" / "train" / "run1"
+        run_dir.mkdir(parents=True)
+        write_json(run_dir / "status.json", {"status": "running"})
+        ok, _, deleted_dir = soft_delete_run(run_dir, storage_root=tmp_path)
+        assert ok is True
+        assert deleted_dir is not None
+        assert ".recycle" in deleted_dir.parts
+
+        restored, err, restored_dir = restore_run(deleted_dir, storage_root=tmp_path)
+        assert restored is True
+        assert err is None
+        assert restored_dir is not None
+        assert ".recycle" not in restored_dir.parts
+        assert is_run_deleted(restored_dir) is False
 
     def test_restore_non_deleted(self, tmp_path: Path) -> None:
-        run_dir = tmp_path / "run1"
-        run_dir.mkdir()
-        assert restore_run(run_dir) is False
+        run_dir = tmp_path / "runs" / "train" / "run1"
+        run_dir.mkdir(parents=True)
+        restored, _, _ = restore_run(run_dir, storage_root=tmp_path)
+        assert restored is False
 
 
 # ===========================================================================
@@ -187,7 +218,7 @@ class TestIterAllRuns:
     def test_excludes_deleted_by_default(self, tmp_path: Path) -> None:
         rd = _make_run_dir(tmp_path / "runs" / "train" / "run_d")
         write_json(rd / "status.json", {"status": "running"})
-        soft_delete_run(rd)
+        soft_delete_run(rd, storage_root=tmp_path)
 
         entries = iter_all_runs(tmp_path, include_deleted=False)
         assert len(entries) == 0
@@ -195,7 +226,7 @@ class TestIterAllRuns:
     def test_includes_deleted_when_requested(self, tmp_path: Path) -> None:
         rd = _make_run_dir(tmp_path / "runs" / "train" / "run_d")
         write_json(rd / "status.json", {"status": "running"})
-        soft_delete_run(rd)
+        soft_delete_run(rd, storage_root=tmp_path)
 
         entries = iter_all_runs(tmp_path, include_deleted=True)
         assert len(entries) == 1

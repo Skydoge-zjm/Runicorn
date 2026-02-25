@@ -249,7 +249,7 @@ export function useAssetsIndex() {
       let done = 0
       let failed = 0
 
-      await mapLimit(candidates, 6, async (r, idx) => {
+      await mapLimit(candidates, 6, async (r, _idx) => {
         if (abortRef.current.aborted) return
 
         try {

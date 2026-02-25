@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Button, Card, Space, Tag, Typography, Table, message } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -11,18 +11,19 @@ import { assetIdentityToString } from '../utils/assetIdentity'
 import AssetPreview from '../components/assets/AssetPreview'
 import { suggestAssetDownloadFilename } from '../utils/assetDownload'
 import { formatRelativeTime } from '../utils/format'
+import type { ParsedAsset } from '../utils/assetParse'
 
 const { Text, Title } = Typography
 
 export default function AssetDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { id = '' } = useParams()
   const location = useLocation()
 
   const [repoRow, setRepoRow] = useState<AssetsIndexRepoRow | null>(null)
   const [loading, setLoading] = useState(false)
-  const [previewAsset, setPreviewAsset] = useState<any | null>(null)
+  const [previewAsset, setPreviewAsset] = useState<ParsedAsset | null>(null)
 
   const identity = useMemo(() => decodeAssetIdentity(id), [id])
 
@@ -151,9 +152,9 @@ export default function AssetDetailPage() {
     return (
       <Card>
         <Space direction="vertical">
-          <Title level={4}>{t('asset_detail.title') || 'Asset Detail'}</Title>
-          <Text type="secondary">{t('asset_detail.invalid_id') || 'Invalid asset id'}</Text>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')}>{t('asset_detail.back') || 'Back'}</Button>
+          <Title level={4}>{t('asset_detail.title')}</Title>
+          <Text type="secondary">{t('asset_detail.invalid_id')}</Text>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')}>{t('asset_detail.back')}</Button>
         </Space>
       </Card>
     )
@@ -173,31 +174,31 @@ export default function AssetDetailPage() {
           <Card>
         <Space direction="vertical" style={{ width: '100%' }}>
           <Space wrap>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')}>{t('asset_detail.back') || 'Back'}</Button>
-            <Title level={4} style={{ margin: 0 }}>{t('asset_detail.title') || 'Asset Detail'}</Title>
+            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/assets')}>{t('asset_detail.back')}</Button>
+            <Title level={4} style={{ margin: 0 }}>{t('asset_detail.title')}</Title>
           </Space>
 
           {!repoRow ? (
             <Text type="secondary">
               {loading
-                ? (t('asset_detail.loading') || 'Loading...')
-                : (t('asset_detail.not_found') || 'Not found in local index. Please refresh index on Assets page.')}
+                ? (t('asset_detail.loading'))
+                : (t('asset_detail.not_found'))}
             </Text>
           ) : (
             <Space direction="vertical" style={{ width: '100%' }}>
               <Space wrap>
                 <Tag>{repoRow.kind}</Tag>
                 {repoRow.saved ? (
-                  <Tag color="green">{t('assets.tag.saved') || 'saved'}</Tag>
+                  <Tag color="green">{t('assets.tag.saved')}</Tag>
                 ) : (
-                  <Tag>{t('assets.tag.ref') || 'ref'}</Tag>
+                  <Tag>{t('assets.tag.ref')}</Tag>
                 )}
                 <Text strong>{repoRow.name}</Text>
               </Space>
 
               {Array.isArray(repoRow.paths) && repoRow.paths.length > 0 ? (
                 <div>
-                  <Text type="secondary">{t('asset_detail.fields.paths') || 'Paths'}: </Text>
+                  <Text type="secondary">{t('asset_detail.fields.paths')}: </Text>
                   <Space wrap>
                     {repoRow.paths.map((p) => (
                       <Tag key={p}>{p}</Tag>
@@ -208,44 +209,44 @@ export default function AssetDetailPage() {
 
               {repoRow.last_used_time ? (
                 <div>
-                  <Text type="secondary">{t('asset_detail.fields.last_used') || 'Last used'}: </Text>
-                  <Text>{formatRelativeTime(repoRow.last_used_time)}</Text>
+                  <Text type="secondary">{t('asset_detail.fields.last_used')}: </Text>
+                  <Text>{formatRelativeTime(repoRow.last_used_time, i18n.language)}</Text>
                 </div>
               ) : null}
 
               {repoRow.description ? (
                 <div>
-                  <Text type="secondary">{t('asset_detail.fields.description') || 'Description'}: </Text>
+                  <Text type="secondary">{t('asset_detail.fields.description')}: </Text>
                   <Text>{repoRow.description}</Text>
                 </div>
               ) : null}
 
               {repoRow.context ? (
                 <div>
-                  <Text type="secondary">{t('asset_detail.fields.context') || 'Context'}: </Text>
+                  <Text type="secondary">{t('asset_detail.fields.context')}: </Text>
                   <Tag>{repoRow.context}</Tag>
                 </div>
               ) : null}
 
               {repoRow.source_type ? (
                 <div>
-                  <Text type="secondary">{t('asset_detail.fields.source_type') || 'Source Type'}: </Text>
+                  <Text type="secondary">{t('asset_detail.fields.source_type')}: </Text>
                   <Tag>{repoRow.source_type}</Tag>
                 </div>
               ) : null}
 
               <div>
-                <Text type="secondary">{t('asset_detail.fields.source') || 'Source'}: </Text>
+                <Text type="secondary">{t('asset_detail.fields.source')}: </Text>
                 <Text code>{repoRow.source_uri || '-'}</Text>
               </div>
 
               <div>
-                <Text type="secondary">{t('asset_detail.fields.archive') || 'Archive'}: </Text>
+                <Text type="secondary">{t('asset_detail.fields.archive')}: </Text>
                 <Text code>{repoRow.archive_path || '-'}</Text>
               </div>
 
               <div>
-                <Text type="secondary">{t('asset_detail.fields.fingerprint') || 'Fingerprint'}: </Text>
+                <Text type="secondary">{t('asset_detail.fields.fingerprint')}: </Text>
                 <Text code>{repoRow.fingerprint || '-'}</Text>
               </div>
             </Space>
@@ -253,7 +254,7 @@ export default function AssetDetailPage() {
         </Space>
       </Card>
 
-      <Card title={t('asset_detail.preview') || 'Preview'}>
+      <Card title={t('asset_detail.preview')}>
         {repoRow?.kind ? (
           <AssetPreview
             runId={fromRunId || repoRow.run_ids?.[0]}
@@ -265,7 +266,7 @@ export default function AssetDetailPage() {
         )}
       </Card>
 
-      <Card title={t('asset_detail.used_by') || 'Used By Runs'}>
+      <Card title={t('asset_detail.used_by')}>
         <Table
           dataSource={runRows}
           rowKey={(r: any) => r.run_id}
@@ -283,19 +284,19 @@ export default function AssetDetailPage() {
               ),
             },
             {
-              title: t('assets.repo.actions') || 'Actions',
+              title: t('assets.repo.actions'),
               key: 'actions',
               width: 160,
               render: (_: any, r: any) => (
                 <Space>
-                  <Button size="small" onClick={() => navigate(`/runs/${r.run_id}`)}>{t('assets.actions.open_run') || 'Open Run'}</Button>
+                  <Button size="small" onClick={() => navigate(`/runs/${r.run_id}`)}>{t('assets.actions.open_run')}</Button>
                   <Button
                     size="small"
                     icon={<DownloadOutlined />}
                     disabled={!repoRow?.archive_path}
                     onClick={() => handleDownload(r.run_id)}
                   >
-                    {t('download') || 'Download'}
+                    {t('download')}
                   </Button>
                 </Space>
               ),

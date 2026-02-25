@@ -14,7 +14,7 @@ from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from starlette.staticfiles import StaticFiles
 
 from .utils.logging import setup_logging
 from .middleware.rate_limit import RateLimitMiddleware
@@ -92,6 +92,17 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
         )
         logger.info("Started background process status checker")
         
+        # Start GPU background collector
+        from .services.gpu import GpuCollector
+        from ..config import load_user_config
+        ucfg = load_user_config()
+        app.state.gpu_collector = GpuCollector(
+            enabled=bool(ucfg.get("gpu_background_collect", True)),
+            interval_sec=float(ucfg.get("gpu_interval_sec", 2)),
+            max_duration_h=float(ucfg.get("gpu_max_duration_h", 24)),
+        )
+        app.state.gpu_collector.start()
+        
         # Sync filesystem runs into SQLite (background, non-blocking)
         if app.state.storage_backend is not None:
             def _run_sync():
@@ -148,6 +159,10 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             except asyncio.CancelledError:
                 pass
             logger.info("Stopped background process status checker")
+        
+        # Stop GPU background collector
+        if hasattr(app.state, 'gpu_collector'):
+            app.state.gpu_collector.stop()
         
         # Close Remote Viewer sessions
         if hasattr(app.state, 'viewer_manager'):
@@ -223,9 +238,24 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     return app
 
 
+class SPAStaticFiles(StaticFiles):
+    """StaticFiles subclass that falls back to index.html for SPA routing."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            response = await super().get_response(path, scope)
+            if response.status_code == 404:
+                return await super().get_response("index.html", scope)
+            return response
+        except Exception:
+            return await super().get_response("index.html", scope)
+
+
 def _mount_static_frontend(app: FastAPI) -> None:
     """
     Mount static frontend files if available.
+    Uses SPAStaticFiles to support client-side routing (serves index.html
+    for any path that doesn't match a real file).
     
     Args:
         app: FastAPI application instance
@@ -238,7 +268,7 @@ def _mount_static_frontend(app: FastAPI) -> None:
         if env_dir_s:
             env_dir = Path(env_dir_s)
             if env_dir.exists():
-                app.mount("/", StaticFiles(directory=str(env_dir), html=True), name="frontend")
+                app.mount("/", SPAStaticFiles(directory=str(env_dir), html=True), name="frontend")
                 return
     except Exception as e:
         logger.debug(f"Could not mount development frontend: {e}")
@@ -247,7 +277,7 @@ def _mount_static_frontend(app: FastAPI) -> None:
         # Fallback: serve the packaged webui if present
         ui_dir = Path(__file__).parent.parent / "webui"
         if ui_dir.exists():
-            app.mount("/", StaticFiles(directory=str(ui_dir), html=True), name="frontend")
+            app.mount("/", SPAStaticFiles(directory=str(ui_dir), html=True), name="frontend")
             logger.info(f"Mounted static frontend from: {ui_dir}")
     except Exception as e:
         logger.debug(f"Static frontend not available: {e}")

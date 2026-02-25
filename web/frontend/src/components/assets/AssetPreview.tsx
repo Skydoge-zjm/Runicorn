@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react'
-import { Alert, Space, Typography } from 'antd'
+import { useMemo } from 'react'
+import { Alert, Space, Typography, theme } from 'antd'
 import { useTranslation } from 'react-i18next'
 import CodeArchivePreview from './code/CodeArchivePreview'
 import TextFilePreview from './TextFilePreview'
@@ -9,6 +9,7 @@ const { Text } = Typography
 
 export default function AssetPreview(props: { runId?: string; asset: any; archivePath?: string }) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const kind = String(props.asset?.kind || '')
 
   const configText = useMemo(() => {
@@ -24,14 +25,14 @@ export default function AssetPreview(props: { runId?: string; asset: any; archiv
 
   if (kind === 'config') {
     return (
-      <pre style={{ margin: 0, maxHeight: 520, overflow: 'auto' }}>
+      <pre style={{ margin: 0, maxHeight: 520, overflow: 'auto', background: token.colorBgLayout, color: token.colorText, padding: 12, borderRadius: 6, border: `1px solid ${token.colorBorderSecondary}` }}>
         {configText || '-'}
       </pre>
     )
   }
 
   if (!props.archivePath) {
-    return <Text type="secondary">{t('assets.preview.no_archive') || 'No archived file available.'}</Text>
+    return <Text type="secondary">{t('assets.preview.no_archive')}</Text>
   }
 
   if (kind === 'code') {
@@ -48,10 +49,10 @@ export default function AssetPreview(props: { runId?: string; asset: any; archiv
       <Alert
         type="info"
         showIcon
-        message={t('assets.preview.no_inline') || 'No inline preview'}
-        description={t('assets.preview.not_previewable') || 'This asset type is not previewable yet.'}
+        message={t('assets.preview.no_inline')}
+        description={t('assets.preview.not_previewable')}
       />
-      <Text type="secondary">{t('assets.preview.try_download') || 'Try downloading it.'}</Text>
+      <Text type="secondary">{t('assets.preview.try_download')}</Text>
     </Space>
   )
 }

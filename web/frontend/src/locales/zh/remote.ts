@@ -196,4 +196,15 @@ export default {
   'remote.config.pathNotExistsHint': '将在首次使用时自动创建该目录',
   'remote.config.fetchingConfig': '正在获取服务器配置...',
   'remote.config.fetchFailed': '获取服务器配置失败',
+
+  // 向导步骤
+  'remote.wizard.step_connect': '连接',
+  'remote.wizard.step_environment': '环境',
+  'remote.wizard.step_config': '配置',
+
+  // 向导进度
+  'remote.wizard.progress_connecting': '正在建立 SSH 连接...',
+  'remote.wizard.progress_authenticating': '正在验证身份...',
+  'remote.wizard.progress_finding_conda': '正在查找 Conda...',
+  'remote.wizard.progress_listing_envs': '正在列出环境...',
 }

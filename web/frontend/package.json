@@ -23,6 +23,8 @@
     "@codemirror/search": "^6.5.11",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.38.1",
+    "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-virtual": "^3.13.18",
     "ansi-to-html": "^0.7.2",
     "antd": "^5.19.0",
     "echarts": "^5.5.1",

@@ -1,7 +1,7 @@
 /**
  * Enhanced Table Styles
- * 
- * Adds hover glow effects and smooth transitions to tables
+ *
+ * Clean table styling with subtle hover effects
  */
 
 .enhanced-table .ant-table {
@@ -9,42 +9,21 @@
   overflow: hidden;
 }
 
-/* Table header styling */
-.enhanced-table .ant-table-thead > tr > th {
-  background: linear-gradient(180deg, #fafafa 0%, #f5f5f5 100%);
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.5px;
-  color: #595959;
-  border-bottom: 2px solid #e8e8e8;
-  padding: 16px;
-}
-
-/* Dark mode header */
-.enhanced-table.dark-mode .ant-table-thead > tr > th {
-  background: linear-gradient(180deg, #1f1f1f 0%, #141414 100%);
-  color: rgba(255, 255, 255, 0.85);
-  border-bottom: 2px solid #303030;
-}
-
 /* Table row base style */
 .enhanced-table .ant-table-tbody > tr {
   cursor: pointer;
-  transition: background 0.25s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: background 0.15s ease;
   position: relative;
 }
 
-/* Hover effect - Glow (no transform to prevent jumping) */
+/* Hover effect - subtle background change */
 .enhanced-table .ant-table-tbody > tr:hover {
-  background: linear-gradient(
-    90deg,
-    rgba(22, 119, 255, 0.03),
-    rgba(22, 119, 255, 0.08),
-    rgba(22, 119, 255, 0.03)
-  ) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(22, 119, 255, 0.15),
-    0 4px 12px rgba(22, 119, 255, 0.08);
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Dark mode hover */
+.enhanced-table.dark-mode .ant-table-tbody > tr:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
 }
 
 /* Selected row style */
@@ -88,41 +67,50 @@
   transition: all 0.2s ease;
 }
 
-.enhanced-table .ant-pagination-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+
+/* Make table fill container height so scrollbar stays at bottom */
+.enhanced-table.ant-table-wrapper,
+.enhanced-table .ant-spin-nested-loading,
+.enhanced-table .ant-spin-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.enhanced-table .ant-pagination-item-active {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  border-color: transparent;
+.enhanced-table .ant-table {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.enhanced-table .ant-pagination-item-active a {
-  color: #fff;
+.enhanced-table .ant-table-container {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-/* Smooth scrollbar */
+.enhanced-table .ant-table-content,
 .enhanced-table .ant-table-body {
-  scrollbar-width: thin;
-  scrollbar-color: #d9d9d9 transparent;
+  flex: 1;
+  min-height: 0;
+  overflow: auto !important;
 }
 
-.enhanced-table .ant-table-body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+
+/* Global focus-visible indicator for keyboard navigation */
+*:focus-visible {
+  outline: 2px solid var(--ant-color-primary, #1677ff);
+  outline-offset: 2px;
 }
 
-.enhanced-table .ant-table-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.enhanced-table .ant-table-body::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
-  border-radius: 4px;
-}
-
-.enhanced-table .ant-table-body::-webkit-scrollbar-thumb:hover {
-  background: #bfbfbf;
+/* Responsive: hide nav labels on narrow screens */
+@media (max-width: 768px) {
+  .nav-label {
+    display: none;
+  }
 }
 

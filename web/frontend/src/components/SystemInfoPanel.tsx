@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
-import { Card, Descriptions, Space, Button, Typography, Spin, message, Tag, Alert, Row, Col, Statistic, Progress, Collapse, Tooltip } from 'antd'
-import { CopyOutlined, ReloadOutlined, InfoCircleOutlined, DatabaseOutlined, FolderOutlined, FileOutlined, CloudServerOutlined } from '@ant-design/icons'
+import { useEffect, useState } from 'react'
+import { Card, Descriptions, Space, Button, Typography, Spin, message, Tag, Row, Col, Statistic, Progress, Collapse } from 'antd'
+import { CopyOutlined, ReloadOutlined, InfoCircleOutlined, DatabaseOutlined } from '@ant-design/icons'
 import { health, getConfig, getStorageStats, StorageStats } from '../api'
 import { useTranslation } from 'react-i18next'
 
@@ -186,7 +186,7 @@ Generated: ${new Date().toLocaleString()}
           title={
             <Space>
               <DatabaseOutlined />
-              <span>{t('storage.title') || 'Storage Usage'}</span>
+              <span>{t('storage.title')}</span>
             </Space>
           }
         >
@@ -194,35 +194,35 @@ Generated: ${new Date().toLocaleString()}
             {/* Total */}
             <div>
               <Title level={4} style={{ margin: 0 }}>{storageStats.total.size_human}</Title>
-              <Text type="secondary">{t('storage.total') || 'Total Storage'}</Text>
+              <Text type="secondary">{t('storage.total')}</Text>
             </div>
             
             {/* Overview Stats */}
             <Row gutter={16}>
               <Col span={6}>
                 <Statistic 
-                  title={t('storage.projects') || 'Projects'} 
+                  title={t('storage.projects')} 
                   value={storageStats.runs.projects_count}
                   valueStyle={{ fontSize: 18 }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic 
-                  title={t('storage.experiments') || 'Experiments'} 
+                  title={t('storage.experiments')} 
                   value={storageStats.runs.experiments_count}
                   valueStyle={{ fontSize: 18 }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic 
-                  title={t('storage.runs') || 'Runs'} 
+                  title={t('storage.runs')} 
                   value={storageStats.runs.runs_count}
                   valueStyle={{ fontSize: 18 }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic 
-                  title={t('storage.blobs') || 'CAS Blobs'} 
+                  title={t('storage.blobs')} 
                   value={storageStats.archive.blobs.file_count}
                   valueStyle={{ fontSize: 18 }}
                 />
@@ -232,13 +232,13 @@ Generated: ${new Date().toLocaleString()}
             {/* Storage Breakdown */}
             <div>
               <Text strong style={{ marginBottom: 8, display: 'block' }}>
-                {t('storage.breakdown') || 'Storage Breakdown'}
+                {t('storage.breakdown')}
               </Text>
               
               {/* Run Data */}
               <div style={{ marginBottom: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text>{t('storage.run_data') || 'Run Data'}</Text>
+                  <Text>{t('storage.run_data')}</Text>
                   <Text type="secondary">{storageStats.runs.size_human}</Text>
                 </div>
                 <Progress 
@@ -252,7 +252,7 @@ Generated: ${new Date().toLocaleString()}
               {/* Archive */}
               <div style={{ marginBottom: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text>{t('storage.archive') || 'Archive (CAS)'}</Text>
+                  <Text>{t('storage.archive')}</Text>
                   <Text type="secondary">{storageStats.archive.size_human}</Text>
                 </div>
                 <Progress 
@@ -266,7 +266,7 @@ Generated: ${new Date().toLocaleString()}
               {/* Index */}
               <div style={{ marginBottom: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text>{t('storage.index_db') || 'Index Database'}</Text>
+                  <Text>{t('storage.index_db')}</Text>
                   <Text type="secondary">{storageStats.index.size_human}</Text>
                 </div>
                 <Progress 
@@ -287,19 +287,19 @@ Generated: ${new Date().toLocaleString()}
                   key: 'archive',
                   label: (
                     <Space>
-                      <Text>{t('storage.archive_details') || 'Archive Details'}</Text>
+                      <Text>{t('storage.archive_details')}</Text>
                       <Text type="secondary">({storageStats.archive.size_human})</Text>
                     </Space>
                   ),
                   children: (
                     <Descriptions column={3} size="small">
-                      <Descriptions.Item label={t('storage.blobs') || 'Blobs'}>
+                      <Descriptions.Item label={t('storage.blobs')}>
                         {storageStats.archive.blobs.size_human} ({storageStats.archive.blobs.file_count})
                       </Descriptions.Item>
-                      <Descriptions.Item label={t('storage.manifests') || 'Manifests'}>
+                      <Descriptions.Item label={t('storage.manifests')}>
                         {storageStats.archive.manifests.size_human} ({storageStats.archive.manifests.file_count})
                       </Descriptions.Item>
-                      <Descriptions.Item label={t('storage.outputs') || 'Outputs'}>
+                      <Descriptions.Item label={t('storage.outputs')}>
                         {storageStats.archive.outputs.size_human} ({storageStats.archive.outputs.file_count})
                       </Descriptions.Item>
                     </Descriptions>

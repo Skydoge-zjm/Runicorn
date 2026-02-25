@@ -114,6 +114,8 @@ class SSHConnection:
         self._sftp: Optional[SFTPClient] = None
         self._lock = threading.Lock()
         self._connected = False
+        # Cache for environment detection (shared across RemoteEnvironmentDetector instances)
+        self.env_cache: Dict[str, any] = {}
         
     def connect(self) -> bool:
         """

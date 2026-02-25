@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Space, Spin, Typography } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { Alert, Button, Space, Spin, Typography, theme } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { downloadRunAssetUrl } from '../../api'
 
@@ -7,6 +7,7 @@ const { Text } = Typography
 
 export default function TextFilePreview(props: { runId?: string; archivePath: string; filename?: string }) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [text, setText] = useState<string>('')
@@ -47,7 +48,7 @@ export default function TextFilePreview(props: { runId?: string; archivePath: st
   }, [href])
 
   if (!props.runId) {
-    return <Text type="secondary">{t('assets.preview.no_run_id') || 'No run id to fetch preview.'}</Text>
+    return <Text type="secondary">{t('assets.preview.no_run_id')}</Text>
   }
 
   return (
@@ -55,7 +56,7 @@ export default function TextFilePreview(props: { runId?: string; archivePath: st
       <Space wrap>
         {href ? (
           <Button size="small" onClick={() => window.open(href, '_blank')}>
-            {t('assets.preview.open_download') || 'Open / Download'}
+            {t('assets.preview.open_download')}
           </Button>
         ) : null}
         {props.filename ? <Text type="secondary">{props.filename}</Text> : null}
@@ -66,9 +67,9 @@ export default function TextFilePreview(props: { runId?: string; archivePath: st
           <Spin />
         </div>
       ) : error ? (
-        <Alert type="error" showIcon message={t('assets.preview.failed_to_load') || 'Failed to load preview'} description={error} />
+        <Alert type="error" showIcon message={t('assets.preview.failed_to_load')} description={error} />
       ) : (
-        <pre style={{ margin: 0, maxHeight: 520, overflow: 'auto' }}>{text || '-'}</pre>
+        <pre style={{ margin: 0, maxHeight: 520, overflow: 'auto', background: token.colorBgLayout, color: token.colorText, padding: 12, borderRadius: 6, border: `1px solid ${token.colorBorderSecondary}` }}>{text || '-'}</pre>
       )}
     </Space>
   )

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Card, Row, Col, Statistic, Tabs, Table, Space, Button, Tag, Input, Select, Switch, Typography, Tooltip, Checkbox } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -11,7 +11,7 @@ import { getStorageStats, StorageStats } from '../api'
 const { Text } = Typography
 
 export default function AssetsPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { settings, setSettings } = useSettings()
   const { index, loading, stats, refresh } = useAssetsIndex()
@@ -53,7 +53,7 @@ export default function AssetsPage() {
 
   const pathOptions = useMemo(() => {
     const paths = Array.from(new Set((index?.runs || []).map((r) => String(r.path || 'default')))).sort()
-    return [{ value: 'all', label: t('assets.filters.path') || 'Path' }, ...paths.map((p) => ({ value: p, label: p }))]
+    return [{ value: 'all', label: t('assets.filters.path') }, ...paths.map((p) => ({ value: p, label: p }))]
   }, [index?.runs, t])
 
   const repoRows = useMemo(() => {
@@ -96,8 +96,8 @@ export default function AssetsPage() {
         <Row gutter={16} align="middle">
           <Col flex="auto">
             <Space direction="vertical" size={0}>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{t('assets.title') || 'Assets'}</div>
-              <Text type="secondary">{t('assets.subtitle') || ''}</Text>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>{t('assets.title')}</div>
+              <Text type="secondary">{t('assets.subtitle')}</Text>
             </Space>
           </Col>
           <Col>
@@ -107,13 +107,13 @@ export default function AssetsPage() {
                 onClick={() => { refresh(); fetchStorageStats() }} 
                 loading={loading}
               >
-                {autoRefresh ? t('runs.refreshing') : (t('assets.actions.refresh_index') || 'Refresh Index')}
+                {autoRefresh ? t('runs.refreshing') : (t('assets.actions.refresh_index'))}
               </Button>
               <Checkbox
                 checked={autoRefresh}
                 onChange={(e) => setAutoRefresh(e.target.checked)}
               >
-                {t('experiments.auto_refresh') || 'Auto-refresh'}
+                {t('experiments.auto_refresh')}
               </Checkbox>
             </Space>
           </Col>
@@ -121,21 +121,21 @@ export default function AssetsPage() {
 
         <Row gutter={16} style={{ marginTop: 16 }}>
           <Col xs={24} sm={12} md={4}>
-            <Statistic title={t('experiments.total_runs') || 'Total Runs'} value={stats.totalRuns} />
+            <Statistic title={t('experiments.total_runs')} value={stats.totalRuns} />
           </Col>
           <Col xs={24} sm={12} md={5}>
-            <Statistic title={t('assets.table.runs') || 'Runs with Assets'} value={stats.runsWithAssets} />
+            <Statistic title={t('assets.table.runs')} value={stats.runsWithAssets} />
           </Col>
           <Col xs={24} sm={12} md={5}>
-            <Statistic title={t('assets.table.assets_total') || 'Assets'} value={stats.totalAssets} />
+            <Statistic title={t('assets.table.assets_total')} value={stats.totalAssets} />
           </Col>
           <Col xs={24} sm={12} md={5}>
-            <Statistic title={t('assets.table.archived') || 'Archived'} value={stats.archivedAssets} />
+            <Statistic title={t('assets.table.archived')} value={stats.archivedAssets} />
           </Col>
           <Col xs={24} sm={12} md={5}>
-            <Tooltip title={t('storage.archive_tooltip') || 'CAS blobs + manifests + outputs'}>
+            <Tooltip title={t('storage.archive_tooltip')}>
               <Statistic 
-                title={t('storage.archive_size') || 'Archive Size'} 
+                title={t('storage.archive_size')} 
                 value={storageStats?.archive.size_human || '-'}
                 prefix={<DatabaseOutlined />}
               />
@@ -153,13 +153,13 @@ export default function AssetsPage() {
           flexDirection: 'column',
           overflow: 'hidden',
         }}
-        bodyStyle={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 24px 24px' }}
+        styles={{ body: { flex: 1, minHeight: 0, overflow: 'auto', padding: '0 24px 24px' } }}
       >
         <Tabs
           items={[
             {
               key: 'overview',
-              label: t('assets.tab.overview') || 'Overview',
+              label: t('assets.tab.overview'),
               children: (
                 <Table
                   dataSource={overviewRows}
@@ -179,36 +179,36 @@ export default function AssetsPage() {
                     rowExpandable: (r: any) => Array.isArray(r.run_ids) && r.run_ids.length > 0,
                   }}
                   columns={[
-                    { title: t('assets.table.path') || 'Path', dataIndex: 'path', key: 'path', width: 280 },
-                    { title: t('assets.table.runs') || 'Runs', dataIndex: 'runs_count', key: 'runs_count', width: 100 },
-                    { title: t('assets.table.assets_total') || 'Assets', dataIndex: 'assets_total', key: 'assets_total', width: 110 },
-                    { title: t('assets.table.archived') || 'Archived', dataIndex: 'archived_total', key: 'archived_total', width: 110 },
+                    { title: t('assets.table.path'), dataIndex: 'path', key: 'path', width: 280 },
+                    { title: t('assets.table.runs'), dataIndex: 'runs_count', key: 'runs_count', width: 100 },
+                    { title: t('assets.table.assets_total'), dataIndex: 'assets_total', key: 'assets_total', width: 110 },
+                    { title: t('assets.table.archived'), dataIndex: 'archived_total', key: 'archived_total', width: 110 },
                     {
-                      title: t('assets.table.code') || 'Code',
+                      title: t('assets.table.code'),
                       key: 'code',
                       width: 90,
                       render: (_: any, r: any) => r.by_kind?.code || 0,
                     },
                     {
-                      title: t('assets.table.config') || 'Config',
+                      title: t('assets.table.config'),
                       key: 'config',
                       width: 90,
                       render: (_: any, r: any) => r.by_kind?.config || 0,
                     },
                     {
-                      title: t('assets.table.datasets') || 'Datasets',
+                      title: t('assets.table.datasets'),
                       key: 'dataset',
                       width: 100,
                       render: (_: any, r: any) => r.by_kind?.dataset || 0,
                     },
                     {
-                      title: t('assets.table.pretrained') || 'Pretrained',
+                      title: t('assets.table.pretrained'),
                       key: 'pretrained',
                       width: 110,
                       render: (_: any, r: any) => r.by_kind?.pretrained || 0,
                     },
                     {
-                      title: t('assets.table.outputs') || 'Outputs',
+                      title: t('assets.table.outputs'),
                       key: 'output',
                       width: 100,
                       render: (_: any, r: any) => r.by_kind?.output || 0,
@@ -219,7 +219,7 @@ export default function AssetsPage() {
             },
             {
               key: 'repo',
-              label: t('assets.tab.repository') || 'Repository',
+              label: t('assets.tab.repository'),
               children: (
                 <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                   <Row gutter={12} align="middle">
@@ -229,7 +229,7 @@ export default function AssetsPage() {
                         onChange={(v) => setRepoType(v)}
                         style={{ width: '100%' }}
                         options={[
-                          { value: 'all', label: t('assets.filters.type') || 'Type' },
+                          { value: 'all', label: t('assets.filters.type') },
                           { value: 'code', label: 'code' },
                           { value: 'config', label: 'config' },
                           { value: 'dataset', label: 'dataset' },
@@ -245,18 +245,18 @@ export default function AssetsPage() {
                       <Input
                         value={repoSearch}
                         onChange={(e) => setRepoSearch(e.target.value)}
-                        placeholder={t('assets.filters.search') || 'Search'}
+                        placeholder={t('assets.filters.search')}
                       />
                     </Col>
                     <Col>
                       <Space>
-                        <span>{t('assets.filters.only_archived') || 'Archived only'}</span>
+                        <span>{t('assets.filters.only_archived')}</span>
                         <Switch checked={onlyArchived} onChange={setOnlyArchived} />
                       </Space>
                     </Col>
                     <Col>
                       <Space>
-                        <span>{t('assets.filters.only_related') || 'Only related runs'}</span>
+                        <span>{t('assets.filters.only_related')}</span>
                         <Switch checked={onlyRelated} onChange={setOnlyRelated} />
                       </Space>
                     </Col>
@@ -266,8 +266,8 @@ export default function AssetsPage() {
                         onChange={(v) => setSortMode(v)}
                         style={{ width: '100%' }}
                         options={[
-                          { value: 'recent', label: t('assets.filters.sort_recent') || 'Sort: Recent' },
-                          { value: 'name', label: t('assets.filters.sort_name') || 'Sort: Name' },
+                          { value: 'recent', label: t('assets.filters.sort_recent') },
+                          { value: 'name', label: t('assets.filters.sort_name') },
                         ]}
                       />
                     </Col>
@@ -280,14 +280,14 @@ export default function AssetsPage() {
                     pagination={{ pageSize: 20 }}
                     columns={[
                       {
-                        title: t('assets.repo.kind') || 'Type',
+                        title: t('assets.repo.kind'),
                         dataIndex: 'kind',
                         key: 'kind',
                         width: 120,
                         render: (v: string) => <Tag>{v}</Tag>,
                       },
                       {
-                        title: t('assets.repo.asset') || 'Asset',
+                        title: t('assets.repo.asset'),
                         dataIndex: 'name',
                         key: 'name',
                         width: 220,
@@ -308,56 +308,56 @@ export default function AssetsPage() {
                         ),
                       },
                       {
-                        title: t('assets.repo.saved') || 'Archived',
+                        title: t('assets.repo.saved'),
                         dataIndex: 'saved',
                         key: 'saved',
                         width: 110,
                         render: (v: boolean) =>
-                          v ? <Tag color="green">{t('assets.tag.saved') || 'saved'}</Tag> : <Tag>{t('assets.tag.ref') || 'ref'}</Tag>,
+                          v ? <Tag color="green">{t('assets.tag.saved')}</Tag> : <Tag>{t('assets.tag.ref')}</Tag>,
                       },
                       {
-                        title: t('assets.repo.last_used') || 'Last Used',
+                        title: t('assets.repo.last_used'),
                         dataIndex: 'last_used_time',
                         key: 'last_used_time',
                         width: 140,
-                        render: (v: number | undefined) => <Text type="secondary">{v ? formatRelativeTime(v) : '-'}</Text>,
+                render: (v: number | undefined) => <Text type="secondary">{v ? formatRelativeTime(v, i18n.language) : '-'}</Text>,
                       },
                       {
-                        title: t('assets.repo.description') || 'Description',
+                        title: t('assets.repo.description'),
                         dataIndex: 'description',
                         key: 'description',
                         width: 220,
-                        render: (v: string | undefined) => (v ? <Text ellipsis style={{ maxWidth: 240 }} title={v}>{v}</Text> : <span style={{ color: '#999' }}>-</span>),
+                        render: (v: string | undefined) => (v ? <Text ellipsis style={{ maxWidth: 240 }} title={v}>{v}</Text> : <Text type="secondary">-</Text>),
                       },
                       {
-                        title: t('assets.repo.context') || 'Context',
+                        title: t('assets.repo.context'),
                         dataIndex: 'context',
                         key: 'context',
                         width: 120,
-                        render: (v: string | undefined) => (v ? <Tag>{v}</Tag> : <span style={{ color: '#999' }}>-</span>),
+                        render: (v: string | undefined) => (v ? <Tag>{v}</Tag> : <Text type="secondary">-</Text>),
                       },
                       {
-                        title: t('assets.repo.source_type') || 'Source Type',
+                        title: t('assets.repo.source_type'),
                         dataIndex: 'source_type',
                         key: 'source_type',
                         width: 140,
-                        render: (v: string | undefined) => (v ? <Tag>{v}</Tag> : <span style={{ color: '#999' }}>-</span>),
+                        render: (v: string | undefined) => (v ? <Tag>{v}</Tag> : <Text type="secondary">-</Text>),
                       },
                       {
-                        title: t('assets.repo.source') || 'Source',
+                        title: t('assets.repo.source'),
                         dataIndex: 'source_uri',
                         key: 'source_uri',
-                        render: (v: string | undefined) => (v ? <Text ellipsis style={{ maxWidth: 360 }} title={v}>{v}</Text> : <span style={{ color: '#999' }}>-</span>),
+                        render: (v: string | undefined) => (v ? <Text ellipsis style={{ maxWidth: 360 }} title={v}>{v}</Text> : <Text type="secondary">-</Text>),
                       },
                       {
-                        title: t('assets.repo.archive') || 'Archive Path',
+                        title: t('assets.repo.archive'),
                         dataIndex: 'archive_path',
                         key: 'archive_path',
-                        render: (v: string | undefined) => (v ? <Text ellipsis style={{ maxWidth: 360 }} title={v}>{v}</Text> : <span style={{ color: '#999' }}>-</span>),
+                        render: (v: string | undefined) => (v ? <Text ellipsis style={{ maxWidth: 360 }} title={v}>{v}</Text> : <Text type="secondary">-</Text>),
                       },
-                      { title: t('assets.repo.runs_count') || 'Runs', dataIndex: 'runs_count', key: 'runs_count', width: 90 },
+                      { title: t('assets.repo.runs_count'), dataIndex: 'runs_count', key: 'runs_count', width: 90 },
                       {
-                        title: t('assets.repo.actions') || 'Actions',
+                        title: t('assets.repo.actions'),
                         key: 'actions',
                         width: 120,
                         render: (_: any, r: any) => (
@@ -366,7 +366,7 @@ export default function AssetsPage() {
                             icon={<EyeOutlined />}
                             onClick={() => navigate(`/assets/${r.encoded}`)}
                           >
-                            {t('assets.actions.view_asset') || 'View'}
+                            {t('assets.actions.view_asset')}
                           </Button>
                         ),
                       },

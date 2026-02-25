@@ -78,7 +78,7 @@ export function formatDuration(ms: number): string {
 /**
  * Format date to relative time (e.g., "2 hours ago")
  */
-export function formatRelativeTime(timestamp: number): string {
+export function formatRelativeTime(timestamp: number, locale?: string): string {
   if (!timestamp || timestamp === 0) return '-'
   
   // If timestamp is in seconds, convert to milliseconds
@@ -104,19 +104,21 @@ export function formatRelativeTime(timestamp: number): string {
     return formatTimestamp(timestamp)
   }
   
+  const rtf = new Intl.RelativeTimeFormat(locale || 'en', { numeric: 'auto' })
+  
   if (days > 0) {
-    return `${days} day${days > 1 ? 's' : ''} ago`
+    return rtf.format(-days, 'day')
   }
   
   if (hours > 0) {
-    return `${hours} hour${hours > 1 ? 's' : ''} ago`
+    return rtf.format(-hours, 'hour')
   }
   
   if (minutes > 0) {
-    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`
+    return rtf.format(-minutes, 'minute')
   }
   
-  return 'just now'
+  return rtf.format(0, 'second')
 }
 
 /**

@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import shutil
 import tempfile
 import zipfile
 from pathlib import Path
@@ -20,7 +22,7 @@ from starlette.background import BackgroundTask
 from ..api.runs import RunListItem
 from ...storage.file_utils import (
     iter_all_runs, 
-    read_json, 
+    read_json,
     update_status_if_process_dead,
     soft_delete_run,
     is_run_deleted,
@@ -56,27 +58,49 @@ def _build_path_tree(paths: List[str]) -> Dict[str, Any]:
     return tree
 
 
+def _scan_empty_dir_paths(runs_root: Path, prefix: str = "") -> Set[str]:
+    """Recursively discover directory paths under runs/, including empty ones."""
+    paths: Set[str] = set()
+    if not runs_root.exists():
+        return paths
+    try:
+        for item in sorted(runs_root.iterdir()):
+            if not item.is_dir() or item.name == ".recycle":
+                continue
+            current_path = f"{prefix}/{item.name}" if prefix else item.name
+            is_run = (item / "meta.json").exists() or (item / "status.json").exists()
+            if not is_run:
+                paths.add(current_path)
+                paths.update(_scan_empty_dir_paths(item, current_path))
+    except Exception:
+        pass
+    return paths
+
+
 def _get_unique_paths(storage_root, backend=None) -> Set[str]:
-    """Get all unique paths from runs. Uses SQLite when available."""
+    """Get all unique paths from runs + empty directories. Uses SQLite when available."""
+    # Paths from runs
+    run_paths: Set[str] = set()
     if backend is not None:
         try:
             result = backend.get_unique_paths()
             if result is not None:
-                return result
+                run_paths = set(result)
         except Exception:
             pass
-    
-    # File-system fallback
-    paths: Set[str] = set()
-    for entry in iter_all_runs(storage_root):
-        if entry.path:
-            paths.add(entry.path)
-        else:
-            meta = read_json(entry.dir / "meta.json")
-            path = meta.get("path") if isinstance(meta, dict) else None
-            if path:
-                paths.add(str(path))
-    return paths
+    if not run_paths:
+        for entry in iter_all_runs(storage_root):
+            if entry.path:
+                run_paths.add(entry.path)
+            else:
+                meta = read_json(entry.dir / "meta.json")
+                path = meta.get("path") if isinstance(meta, dict) else None
+                if path:
+                    run_paths.add(str(path))
+
+    # Also discover empty directories under runs/
+    dir_paths = _scan_empty_dir_paths(storage_root / "runs")
+    return run_paths | dir_paths
 
 
 def _get_path_stats(storage_root, backend=None) -> Dict[str, Dict[str, int]]:
@@ -154,6 +178,11 @@ async def list_paths(
     
     if include_stats:
         stats = _get_path_stats(storage_root, backend=backend)
+        # Also include empty directories so newly-created folders are visible
+        empty_dirs = _scan_empty_dir_paths(storage_root / "runs")
+        for d in empty_dirs:
+            if d not in stats:
+                stats[d] = {"total": 0, "running": 0, "finished": 0, "failed": 0}
         paths = sorted(set(stats.keys()))
         return {
             "paths": paths,
@@ -271,6 +300,42 @@ async def list_runs_by_path(
         )
     
     return items
+
+
+_SAFE_PATH_RE = re.compile(r'^[a-zA-Z0-9_/\-. ]+$')
+
+
+@router.post("/paths/create")
+async def create_path(request: Request, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """
+    Create an empty path (folder) in the storage tree.
+
+    Args:
+        payload: { path: string } — the path to create
+
+    Returns:
+        { ok, path }
+    """
+    storage_root = request.app.state.storage_root
+    target = str(payload.get("path", "")).strip().strip("/")
+
+    if not target:
+        raise HTTPException(status_code=400, detail="path is required")
+    if ".." in target:
+        raise HTTPException(status_code=400, detail="path must not contain '..'")
+    if not _SAFE_PATH_RE.match(target):
+        raise HTTPException(status_code=400, detail="path contains invalid characters")
+
+    dir_path = storage_root / "runs" / target
+    if dir_path.exists():
+        raise HTTPException(status_code=409, detail="Path already exists")
+
+    try:
+        dir_path.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create path: {e}")
+
+    return {"ok": True, "path": target}
 
 
 # Legacy compatibility endpoints (redirect to new path-based API)
@@ -406,31 +471,33 @@ async def soft_delete_by_path(
     payload: Dict[str, Any] = Body(...),
 ) -> Dict[str, Any]:
     """
-    Soft delete all runs under a path (move to recycle bin).
-    
-    Args:
-        payload: Dictionary containing:
-            - path: Path prefix to match
-            - exact: If true, only match exact path (default: false)
-        
-    Returns:
-        Summary of deletion results
+    Delete a path folder.
+
+    1. Soft-delete every run under the path (mark + DB).
+    2. Move each run directory to ``runs/.recycle/<run_id>/``.
+    3. Remove the original folder tree from disk.
     """
     storage_root = request.app.state.storage_root
     path = payload.get("path")
     exact = payload.get("exact", False)
-    
+
     if not path or not isinstance(path, str):
         raise HTTPException(status_code=400, detail="path is required")
-    
+
+    backend = get_backend(request)
+
     deleted_count = 0
     errors: List[str] = []
-    
-    for entry in iter_all_runs(storage_root):
+
+    # include_deleted=True keeps backward compatibility with legacy in-place
+    # deleted runs that may still exist outside .recycle.
+    for entry in iter_all_runs(storage_root, include_deleted=True):
         meta = read_json(entry.dir / "meta.json")
         run_path = entry.path or (meta.get("path") if isinstance(meta, dict) else None)
-        
-        # Check path match
+        # Already in recycle => already deleted, nothing to do.
+        if ".recycle" in entry.dir.parts:
+            continue
+
         if not run_path:
             continue
         if exact:
@@ -439,32 +506,52 @@ async def soft_delete_by_path(
         else:
             if run_path != path and not run_path.startswith(f"{path}/"):
                 continue
-        
-        # Skip already deleted
-        if is_run_deleted(entry.dir):
-            continue
-        
+
         try:
-            success = soft_delete_run(entry.dir, "path_batch_delete")
-            if success:
+            was_deleted = is_run_deleted(entry.dir)
+            success, error, new_dir = soft_delete_run(
+                entry.dir,
+                storage_root=storage_root,
+                reason="path_batch_delete",
+                original_path=run_path,
+            )
+            if not success:
+                errors.append(f"Failed to delete {entry.dir.name}: {error or 'unknown'}")
+                continue
+
+            if not was_deleted:
                 deleted_count += 1
-                # Dual-write to SQLite
-                backend = get_backend(request)
                 if backend is not None:
                     try:
-                        backend.soft_delete_experiments([entry.dir.name], reason="path_batch_delete")
+                        backend.soft_delete_experiments(
+                            [entry.dir.name], reason="path_batch_delete",
+                        )
                     except Exception:
                         pass
-            else:
-                errors.append(f"Failed to delete {entry.dir.name}")
+
+            if backend is not None and new_dir is not None:
+                try:
+                    backend.update_experiment(entry.dir.name, {
+                        "run_dir": str(new_dir),
+                        "path": run_path or "default",
+                    })
+                except Exception:
+                    pass
         except Exception as e:
             errors.append(f"Error deleting {entry.dir.name}: {e}")
-    
+
+    # Remove the now-empty folder tree from disk
+    target_dir = storage_root / "runs" / path
+    if target_dir.exists():
+        try:
+            shutil.rmtree(target_dir)
+        except Exception as e:
+            errors.append(f"Failed to remove folder: {e}")
+
     return {
         "path": path,
         "deleted_count": deleted_count,
         "errors": errors if errors else None,
-        "message": f"Moved {deleted_count} runs to recycle bin",
     }
 
 

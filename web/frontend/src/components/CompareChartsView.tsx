@@ -7,7 +7,7 @@
  * Optimization: Uses ECharts legend.selected to toggle series visibility
  * instead of re-rendering the entire chart when hiding/showing runs.
  */
-import React, { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { Row, Col, Empty, Spin, Card, Checkbox, Space, Button, Tooltip, theme } from 'antd'
 import { LineChartOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -21,6 +21,8 @@ interface CompareChartsViewProps {
   runLabels: Map<string, string>  // runId -> display label (path or alias)
   colors: string[]
   loading: boolean
+  hoveredRunId?: string | null  // Highlight a specific run across all charts
+  onHoverRun?: (runId: string | null) => void  // Callback when user hovers a series in a chart
 }
 
 // X-axis keys to exclude from comparison
@@ -33,12 +35,16 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
   runLabels,
   colors,
   loading,
+  hoveredRunId,
+  onHoverRun,
 }) => {
   const { t } = useTranslation()
   const { token } = theme.useToken()
   
   // Visible metrics state (all visible by default)
   const [visibleMetrics, setVisibleMetrics] = useState<Set<string>>(new Set())
+  // Track metrics the user has explicitly hidden (to avoid re-showing on refresh)
+  const removedByUser = useRef<Set<string>>(new Set())
 
   // Calculate common metrics (present in at least 2 runs)
   const commonMetrics = useMemo(() => {
@@ -60,9 +66,25 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
       .sort()
   }, [metricsMap])
 
-  // Initialize visible metrics when commonMetrics changes
+  // Incrementally update visible metrics when commonMetrics changes
   useEffect(() => {
-    setVisibleMetrics(new Set(commonMetrics))
+    setVisibleMetrics(prev => {
+      const next = new Set(prev)
+      // Add newly appeared metrics (unless user explicitly hid them)
+      for (const m of commonMetrics) {
+        if (!prev.has(m) && !removedByUser.current.has(m)) {
+          next.add(m)
+        }
+      }
+      // Remove metrics that no longer exist
+      for (const m of prev) {
+        if (!commonMetrics.includes(m)) {
+          next.delete(m)
+          removedByUser.current.delete(m)
+        }
+      }
+      return next
+    })
   }, [commonMetrics])
 
   // Determine best x-axis key available across runs
@@ -87,8 +109,10 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
       const next = new Set(prev)
       if (next.has(metric)) {
         next.delete(metric)
+        removedByUser.current.add(metric)
       } else {
         next.add(metric)
+        removedByUser.current.delete(metric)
       }
       return next
     })
@@ -98,8 +122,10 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
   const toggleAll = () => {
     if (visibleMetrics.size === commonMetrics.length) {
       setVisibleMetrics(new Set())
+      commonMetrics.forEach(m => removedByUser.current.add(m))
     } else {
       setVisibleMetrics(new Set(commonMetrics))
+      removedByUser.current.clear()
     }
   }
 
@@ -131,7 +157,7 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
           minHeight: 300,
         }}
       >
-        <Spin size="large" tip={t('experiments.loading_metrics') || 'Loading metrics...'} />
+        <Spin size="large" tip={t('experiments.loading_metrics')} />
       </div>
     )
   }
@@ -149,14 +175,14 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
       >
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={t('experiments.no_common_metrics') || 'No common metrics found in selected runs'}
+          description={t('experiments.no_common_metrics')}
         />
       </div>
     )
   }
 
   return (
-    <div style={{ height: '100%', overflow: 'auto', padding: '0 4px' }}>
+    <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', padding: '0 4px' }}>
       {/* Header with metric toggles */}
       <Card
         size="small"
@@ -167,14 +193,14 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <LineChartOutlined style={{ color: token.colorPrimary }} />
             <span style={{ fontWeight: 500 }}>
-              {t('experiments.common_metrics') || 'Common Metrics'}
+              {t('experiments.common_metrics')}
             </span>
           </div>
           
           {/* Toggle all button */}
           <Tooltip title={visibleMetrics.size === commonMetrics.length 
-            ? (t('experiments.hide_all') || 'Hide All') 
-            : (t('experiments.show_all') || 'Show All')}>
+            ? (t('experiments.hide_all')) 
+            : (t('experiments.show_all'))}>
             <Button
               size="small"
               type="text"
@@ -207,13 +233,13 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
       {displayedMetrics.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={t('experiments.no_metrics_selected') || 'No metrics selected'}
+          description={t('experiments.no_metrics_selected')}
           style={{ marginTop: 48 }}
         />
       ) : visibleRunCount < 2 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={t('experiments.need_two_visible') || 'Need at least 2 visible runs to compare'}
+          description={t('experiments.need_two_visible')}
           style={{ marginTop: 48 }}
         />
       ) : (
@@ -254,6 +280,8 @@ const CompareChartsView: React.FC<CompareChartsViewProps> = ({
                       showLegend={false}
                       colors={chartColors}
                       legendSelected={legendSelected}
+                      highlightRunId={hoveredRunId}
+                      onHighlightRun={onHoverRun}
                     />
                   </Card>
                 </motion.div>

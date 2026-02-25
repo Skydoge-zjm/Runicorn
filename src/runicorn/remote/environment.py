@@ -65,8 +65,11 @@ class RemoteEnvironmentDetector:
             connection: SSHConnection instance
         """
         self.connection = connection
-        self._conda_path: Optional[str] = None
-        self._conda_root: Optional[str] = None
+        # Read from connection-level cache so results persist across instances
+        cache = getattr(connection, 'env_cache', {})
+        self._conda_path: Optional[str] = cache.get('conda_path')
+        self._conda_root: Optional[str] = cache.get('conda_root')
+        self._env_list: Optional[List[PythonEnvironment]] = cache.get('env_list')
     
     def detect_all_environments(self) -> List[PythonEnvironment]:
         """
@@ -75,6 +78,11 @@ class RemoteEnvironmentDetector:
         Returns:
             List of detected Python environments
         """
+        # Return cached result if available
+        if self._env_list is not None:
+            logger.info(f"Using cached env list ({len(self._env_list)} environments)")
+            return self._env_list
+
         environments = []
         
         # 1. Find conda and its environments
@@ -88,8 +96,17 @@ class RemoteEnvironmentDetector:
                 environments.append(system_python)
         
         logger.info(f"Detected {len(environments)} Python environments")
+        # Cache the result
+        self._env_list = environments
+        self._save_to_cache('env_list', environments)
         return environments
     
+    def _save_to_cache(self, key: str, value) -> None:
+        """Persist a value into the connection-level env_cache."""
+        cache = getattr(self.connection, 'env_cache', None)
+        if cache is not None:
+            cache[key] = value
+
     def _find_conda(self) -> Optional[str]:
         """
         Find conda executable on remote server.
@@ -109,6 +126,7 @@ class RemoteEnvironmentDetector:
         stdout, _, exit_code = self.connection.exec_command("which conda")
         if exit_code == 0 and stdout.strip():
             self._conda_path = stdout.strip()
+            self._save_to_cache('conda_path', self._conda_path)
             logger.info(f"Found conda in PATH: {self._conda_path}")
             return self._conda_path
         
@@ -121,6 +139,7 @@ class RemoteEnvironmentDetector:
             
             if exit_code == 0 and stdout.strip() == "exists":
                 self._conda_path = expanded_path
+                self._save_to_cache('conda_path', self._conda_path)
                 logger.info(f"Found conda at: {self._conda_path}")
                 return self._conda_path
         
@@ -128,6 +147,7 @@ class RemoteEnvironmentDetector:
         conda_path = self._find_conda_from_shell_init()
         if conda_path:
             self._conda_path = conda_path
+            self._save_to_cache('conda_path', self._conda_path)
             logger.info(f"Found conda from shell init: {self._conda_path}")
             return self._conda_path
         
@@ -240,20 +260,19 @@ class RemoteEnvironmentDetector:
         Returns:
             Python version string or None
         """
-        # Method 1: Use conda run
+        # Method 1: Direct path to python (fast, no conda activation overhead)
+        python_path = f"{env_path}/bin/python"
         stdout, stderr, exit_code = self.connection.exec_command(
-            f"{conda_path} run -n {env_name} python --version"
+            f"{python_path} --version"
         )
         
-        # Check both stdout and stderr (Python version can be in either)
         version_output = stdout.strip() if stdout.strip() else stderr.strip()
         if exit_code == 0 and version_output:
             return version_output
         
-        # Method 2: Direct path to python
-        python_path = f"{env_path}/bin/python"
+        # Method 2: Fallback to conda run (handles broken symlinks etc.)
         stdout, stderr, exit_code = self.connection.exec_command(
-            f"{python_path} --version"
+            f"{conda_path} run -n {env_name} python --version"
         )
         
         version_output = stdout.strip() if stdout.strip() else stderr.strip()
@@ -300,6 +319,7 @@ class RemoteEnvironmentDetector:
     def get_python_command_for_env(self, env_name: str) -> Optional[str]:
         """
         Get the command to run Python in a specific environment.
+        Uses cached env list when available to avoid redundant SSH calls.
         
         Args:
             env_name: Environment name
@@ -310,7 +330,13 @@ class RemoteEnvironmentDetector:
         if env_name == 'system':
             return 'python3'
         
-        # For conda environments, find conda first
+        # Try cached env list first (populated by detect_all_environments)
+        if self._env_list:
+            for env in self._env_list:
+                if env.name == env_name and env.env_path:
+                    return f"{env.env_path}/bin/python"
+        
+        # Fallback: find conda and query env path
         conda_path = self._find_conda()
         if not conda_path:
             return None
@@ -329,3 +355,70 @@ class RemoteEnvironmentDetector:
             return f"{env_path}/bin/python"
         
         return None
+    
+    def batch_check_runicorn(self, env_paths: List[Tuple[str, str]]) -> Dict[str, Optional[str]]:
+        """
+        Check runicorn installation across multiple environments in a single SSH roundtrip.
+        
+        Constructs a shell for-loop that checks all environments at once,
+        instead of making N separate SSH calls.
+        
+        Args:
+            env_paths: List of (env_name, python_path) tuples.
+                       python_path should be the direct path to the env's python binary.
+        
+        Returns:
+            Dict mapping env_name -> runicorn version string, or None if not installed
+        """
+        if not env_paths:
+            return {}
+        
+        # Build a single shell script that checks all envs
+        # Output format: env_name<TAB>version_or_marker per line
+        # Use a unique marker for "not installed" so we can parse reliably
+        NOT_INSTALLED = '__NOT_INSTALLED__'
+        
+        # Build the for-loop command
+        # Each iteration prints: env_name\tversion
+        check_lines = []
+        for env_name, python_path in env_paths:
+            # Escape single quotes in env_name (unlikely but safe)
+            safe_name = env_name.replace("'", "'\\''")
+            check_lines.append(
+                f"echo -n '{safe_name}\t' && "
+                f"{python_path} -c 'import runicorn; print(getattr(runicorn, \"__version__\", \"unknown\"))' 2>/dev/null "
+                f"|| echo '{NOT_INSTALLED}'"
+            )
+        
+        # Join with semicolons into a single command
+        batch_cmd = " ; ".join(check_lines)
+        
+        logger.info(f"Batch checking runicorn in {len(env_paths)} environments")
+        stdout, stderr, exit_code = self.connection.exec_command(batch_cmd)
+        
+        # Parse results
+        results: Dict[str, Optional[str]] = {}
+        
+        if stdout:
+            for line in stdout.strip().split('\n'):
+                line = line.strip()
+                if not line:
+                    continue
+                if '\t' in line:
+                    name, version = line.split('\t', 1)
+                    version = version.strip()
+                    if version == NOT_INSTALLED or not version:
+                        results[name] = None
+                    else:
+                        results[name] = version
+                else:
+                    # Malformed line, skip
+                    logger.warning(f"Unexpected batch output line: {line}")
+        
+        # Fill in any missing envs (in case of partial output)
+        for env_name, _ in env_paths:
+            if env_name not in results:
+                results[env_name] = None
+        
+        logger.info(f"Batch runicorn check results: {len(results)} environments checked")
+        return results

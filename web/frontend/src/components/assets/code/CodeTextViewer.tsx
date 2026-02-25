@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Space, Tooltip, Typography } from 'antd'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button, Space, Tooltip, Typography, theme } from 'antd'
 import { MinusOutlined, PlusOutlined, SearchOutlined, CompressOutlined, ExpandOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { Compartment, EditorState } from '@codemirror/state'
@@ -75,6 +75,13 @@ function pickLanguageExtension(filename?: string) {
 
 export default function CodeTextViewer(props: { value: string; filename?: string; maxHeight?: number }) {
   const { t, i18n } = useTranslation()
+  const { token } = theme.useToken()
+  const isDark = parseInt((token.colorBgBase || '#ffffff').replace('#', '').slice(0, 2), 16) < 128
+
+  // Code area uses fixed pure black / white — not affected by surface color setting
+  const codeBg = isDark ? '#000000' : '#ffffff'
+  const codeBgSub = isDark ? '#080810' : '#f6f6f6'
+
   const parentRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
 
@@ -111,33 +118,33 @@ export default function CodeTextViewer(props: { value: string; filename?: string
       dom.className = 'cm-search'
 
       const label = document.createElement('label')
-      label.textContent = (t('assets.code_search.find') || 'Find') + ':'
+      label.textContent = (t('assets.code_search.find')) + ':'
 
       const input = document.createElement('input')
       input.className = 'cm-textfield'
       input.type = 'text'
       input.setAttribute('main-field', 'true')
-      input.placeholder = t('assets.code_search.placeholder') || ''
+      input.placeholder = t('assets.code_search.placeholder')
 
       const btnPrev = document.createElement('button')
       btnPrev.className = 'cm-button'
       btnPrev.type = 'button'
-      btnPrev.textContent = t('assets.code_search.previous') || 'Previous'
+      btnPrev.textContent = t('assets.code_search.previous')
 
       const btnNext = document.createElement('button')
       btnNext.className = 'cm-button'
       btnNext.type = 'button'
-      btnNext.textContent = t('assets.code_search.next') || 'Next'
+      btnNext.textContent = t('assets.code_search.next')
 
       const btnAll = document.createElement('button')
       btnAll.className = 'cm-button'
       btnAll.type = 'button'
-      btnAll.textContent = t('assets.code_search.all') || 'All'
+      btnAll.textContent = t('assets.code_search.all')
 
       const btnClose = document.createElement('button')
       btnClose.className = 'cm-button'
       btnClose.type = 'button'
-      btnClose.textContent = t('assets.code_search.close') || 'Close'
+      btnClose.textContent = t('assets.code_search.close')
 
       const mkCheckbox = (key: string, fallback: string) => {
         const wrap = document.createElement('label')
@@ -248,7 +255,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           height: '100%',
         },
         '.cm-editor': {
-          backgroundColor: '#ffffff',
+          backgroundColor: codeBg,
         },
         '.cm-scroller': {
           overflow: 'auto',
@@ -262,6 +269,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           position: 'relative',
           zIndex: 2,
           background: 'transparent',
+          color: token.colorText,
         },
         '.cm-selectionLayer': {
           mixBlendMode: 'normal',
@@ -269,12 +277,12 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           pointerEvents: 'none',
         },
         '.cm-selectionLayer .cm-selectionBackground': {
-          background: 'rgba(22, 119, 255, 0.35)',
+          background: isDark ? 'rgba(22, 119, 255, 0.45)' : 'rgba(22, 119, 255, 0.35)',
           opacity: 1,
           mixBlendMode: 'normal',
         },
         '&.cm-focused .cm-selectionLayer .cm-selectionBackground': {
-          background: 'rgba(22, 119, 255, 0.45)',
+          background: isDark ? 'rgba(22, 119, 255, 0.55)' : 'rgba(22, 119, 255, 0.45)',
           opacity: 1,
           mixBlendMode: 'normal',
         },
@@ -289,38 +297,38 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           backgroundColor: 'rgba(22, 119, 255, 0.28) !important',
         },
         '.cm-gutters': {
-          backgroundColor: '#fafafa',
-          borderRight: '1px solid #e5e7eb',
-          color: '#6b7280',
+          backgroundColor: codeBgSub,
+          borderRight: `1px solid ${token.colorBorderSecondary}`,
+          color: token.colorTextSecondary,
         },
         '.cm-activeLine': {
-          backgroundColor: '#f8fafc',
+          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
         },
         '.cm-activeLineGutter': {
-          backgroundColor: '#f3f4f6',
+          backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
         },
         '.cm-foldGutter .cm-gutterElement': {
           paddingLeft: '4px',
           paddingRight: '4px',
         },
         '.cm-searchMatch': {
-          backgroundColor: '#fff7d6',
-          outline: '1px solid #ffd666',
+          backgroundColor: isDark ? 'rgba(255, 214, 102, 0.25)' : '#fff7d6',
+          outline: `1px solid ${isDark ? 'rgba(255, 214, 102, 0.5)' : '#ffd666'}`,
         },
         '.cm-searchMatch.cm-searchMatch-selected': {
-          backgroundColor: '#ffe7ba',
-          outline: '1px solid #ffc069',
+          backgroundColor: isDark ? 'rgba(255, 192, 105, 0.35)' : '#ffe7ba',
+          outline: `1px solid ${isDark ? 'rgba(255, 192, 105, 0.6)' : '#ffc069'}`,
         },
 
         '.cm-panels': {
-          backgroundColor: '#fafafa',
-          color: '#111827',
+          backgroundColor: codeBgSub,
+          color: token.colorText,
         },
         '.cm-panels.cm-panels-top': {
-          borderBottom: '1px solid #e5e7eb',
+          borderBottom: `1px solid ${token.colorBorderSecondary}`,
         },
         '.cm-panels.cm-panels-bottom': {
-          borderTop: '1px solid #e5e7eb',
+          borderTop: `1px solid ${token.colorBorderSecondary}`,
         },
         '.cm-panel': {
           padding: '8px 10px',
@@ -334,50 +342,50 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           boxShadow: 'none',
         },
         '.cm-panel.cm-search label': {
-          color: '#6b7280',
+          color: token.colorTextSecondary,
         },
         '.cm-panel.cm-search .cm-textfield': {
           height: '28px',
           padding: '0 10px',
           borderRadius: '8px',
-          border: '1px solid #d9d9d9',
+          border: `1px solid ${token.colorBorder}`,
           outline: 'none',
-          background: '#ffffff',
-          color: '#111827',
+          background: codeBg,
+          color: token.colorText,
           boxShadow: 'none',
         },
         '.cm-panel.cm-search .cm-textfield:focus': {
-          borderColor: '#1677ff',
-          boxShadow: '0 0 0 2px rgba(22, 119, 255, 0.15)',
+          borderColor: token.colorPrimary,
+          boxShadow: `0 0 0 2px ${token.colorPrimaryBg}`,
         },
         '.cm-panel.cm-search .cm-button': {
           height: '28px',
           padding: '0 10px',
           borderRadius: '8px',
-          border: '1px solid #d9d9d9',
-          background: '#ffffff',
-          color: '#111827',
+          border: `1px solid ${token.colorBorder}`,
+          background: codeBgSub,
+          color: token.colorText,
           cursor: 'pointer',
         },
         '.cm-panel.cm-search .cm-button:hover': {
-          background: '#f5f5f5',
-          borderColor: '#c9cdd4',
+          background: token.colorFillTertiary,
+          borderColor: token.colorBorderSecondary,
         },
         '.cm-panel.cm-search .cm-button:active': {
-          background: '#f0f0f0',
+          background: token.colorFillSecondary,
         },
         '.cm-panel.cm-search .cm-button:focus': {
           outline: 'none',
-          boxShadow: '0 0 0 2px rgba(22, 119, 255, 0.15)',
-          borderColor: '#1677ff',
+          boxShadow: `0 0 0 2px ${token.colorPrimaryBg}`,
+          borderColor: token.colorPrimary,
         },
         '.cm-panel.cm-search input[type="checkbox"]': {
           transform: 'translateY(1px)',
         },
       },
-      { dark: false },
+      { dark: isDark },
     )
-  }, [fontSize, props.maxHeight])
+  }, [fontSize, props.maxHeight, isDark, token])
 
   const baseExtensions = useMemo(
     () => [
@@ -469,13 +477,13 @@ export default function CodeTextViewer(props: { value: string; filename?: string
           justifyContent: 'space-between',
           marginBottom: 8,
           padding: '6px 8px',
-          border: '1px solid #e5e7eb',
+          border: `1px solid ${token.colorBorderSecondary}`,
           borderRadius: 10,
-          background: '#fafafa',
+          background: codeBgSub,
         }}
       >
         <Space size={6} wrap>
-          <Tooltip title={t('assets.code_viewer.search') || 'Search (Ctrl+F)'}>
+          <Tooltip title={t('assets.code_viewer.search')}>
             <Button
               type="default"
               size="small"
@@ -486,7 +494,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
               }}
             />
           </Tooltip>
-          <Tooltip title={t('assets.code_viewer.fold_all') || 'Fold all'}>
+          <Tooltip title={t('assets.code_viewer.fold_all')}>
             <Button
               type="default"
               size="small"
@@ -497,7 +505,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
               }}
             />
           </Tooltip>
-          <Tooltip title={t('assets.code_viewer.unfold_all') || 'Unfold all'}>
+          <Tooltip title={t('assets.code_viewer.unfold_all')}>
             <Button
               type="default"
               size="small"
@@ -512,7 +520,7 @@ export default function CodeTextViewer(props: { value: string; filename?: string
 
         <Space size={6} wrap align="center">
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {t('assets.code_viewer.font_size') || 'Font size'}: {fontSize}px
+            {t('assets.code_viewer.font_size')}: {fontSize}px
           </Typography.Text>
           <Button
             type="default"
@@ -534,10 +542,10 @@ export default function CodeTextViewer(props: { value: string; filename?: string
         ref={parentRef}
         style={{
           width: '100%',
-          border: '1px solid #e5e7eb',
+          border: `1px solid ${token.colorBorderSecondary}`,
           borderRadius: 8,
           overflow: 'hidden',
-          background: '#fff',
+          background: codeBg,
         }}
       />
     </div>

@@ -4,7 +4,7 @@
  * Displays available conda environments for user selection
  */
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Card,
   List,
@@ -13,12 +13,12 @@ import {
   Space,
   Tag,
   Typography,
-  Alert,
   Empty,
   Spin,
   Row,
   Col,
-  Modal
+  Modal,
+  theme
 } from 'antd'
 import {
   CheckCircleOutlined,
@@ -29,10 +29,10 @@ import {
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { CondaEnv } from '../../types/remote'
-import { getRemoteConfig, getLocalVersion } from '../../api/remote'
+import { getRemoteConfig, getEnvConfigs, getLocalVersion } from '../../api/remote'
 import DismissibleAlert from '../DismissibleAlert'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 interface CondaEnvSelectorProps {
   envs: CondaEnv[]
@@ -60,6 +60,7 @@ export default function CondaEnvSelector({
   loading = false
 }: CondaEnvSelectorProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [selectedEnv, setSelectedEnv] = useState<string>(() => {
     if (initialEnv && envs.some(e => e.name === initialEnv)) {
       return initialEnv
@@ -123,47 +124,42 @@ export default function CondaEnvSelector({
     fetchLocalVersion()
   }, [])
   
-  // Detect versions for all environments on mount (with concurrency limit)
+  // Batch-detect runicorn versions for all environments in one call
   useEffect(() => {
     if (!localVersion) return // Wait for local version to be loaded
     
     const detectEnvironments = async () => {
-      const CONCURRENT_LIMIT = 3 // Detect 3 environments at a time
-      
-      // Process environments in batches
-      for (let i = 0; i < envs.length; i += CONCURRENT_LIMIT) {
-        const batch = envs.slice(i, i + CONCURRENT_LIMIT)
+      try {
+        // Single HTTP call → single SSH roundtrip for all envs
+        const configs = await getEnvConfigs(connectionId)
         
-        // Detect batch concurrently
-        await Promise.all(
-          batch.map(async (env) => {
-            try {
-              const config = await getRemoteConfig(connectionId, env.name)
-              const versionStatus = config.runicornVersion 
-                ? compareVersions(config.runicornVersion, localVersion)
-                : undefined
-              
-              setEnvVersions(prev => ({
-                ...prev,
-                [env.name]: {
-                  pythonVersion: config.pythonVersion,
-                  runicornVersion: config.runicornVersion,
-                  versionStatus,
-                  loading: false,
-                  error: false
-                }
-              }))
-            } catch (error) {
-              setEnvVersions(prev => ({
-                ...prev,
-                [env.name]: {
-                  loading: false,
-                  error: true
-                }
-              }))
+        const updated: Record<string, EnvVersionInfo> = {}
+        for (const env of envs) {
+          const cfg = configs[env.name]
+          if (cfg) {
+            const versionStatus = cfg.runicornVersion
+              ? compareVersions(cfg.runicornVersion, localVersion)
+              : undefined
+            updated[env.name] = {
+              pythonVersion: cfg.pythonVersion || env.pythonVersion,
+              runicornVersion: cfg.runicornVersion ?? undefined,
+              versionStatus,
+              loading: false,
+              error: false
             }
-          })
-        )
+          } else {
+            updated[env.name] = { loading: false, error: true }
+          }
+        }
+        setEnvVersions(updated)
+      } catch (error) {
+        // Fallback: mark all as error
+        const errState: Record<string, EnvVersionInfo> = {}
+        for (const env of envs) {
+          errState[env.name] = { loading: false, error: true }
+        }
+        setEnvVersions(errState)
+        console.error('Batch env config check failed:', error)
       }
     }
     
@@ -245,15 +241,15 @@ export default function CondaEnvSelector({
             <p>{t('remote.env.runicornNotInstalledMessage')}</p>
             <p style={{ marginTop: 16 }}>{t('remote.env.installInstructions')}</p>
             <pre style={{ 
-              background: '#f5f5f5', 
+              background: token.colorFillTertiary, 
               padding: '12px', 
               borderRadius: '4px',
               fontSize: '13px',
               lineHeight: '1.5'
             }}>
-              <div style={{ color: '#999' }}># {t('remote.env.activateCommand')}</div>
+              <div style={{ color: token.colorTextQuaternary }}># {t('remote.env.activateCommand')}</div>
               <div>{activateCmd}</div>
-              <div style={{ marginTop: 8, color: '#999' }}># {t('remote.env.installCommand')}</div>
+              <div style={{ marginTop: 8, color: token.colorTextQuaternary }}># {t('remote.env.installCommand')}</div>
               <div>pip install runicorn</div>
             </pre>
           </div>
@@ -274,7 +270,7 @@ export default function CondaEnvSelector({
             <p>{t('remote.env.versionTooOldMessage', { version: versionInfo.runicornVersion })}</p>
             <p style={{ marginTop: 16 }}>{t('remote.env.upgradeInstructions')}</p>
             <pre style={{ 
-              background: '#f5f5f5', 
+              background: token.colorFillTertiary, 
               padding: '12px', 
               borderRadius: '4px',
               fontSize: '13px',
@@ -297,11 +293,11 @@ export default function CondaEnvSelector({
         content: (
           <div>
             <p>{t('remote.env.versionMismatchMessage')}</p>
-            <div style={{ marginTop: 16, padding: '12px', background: '#fff7e6', borderRadius: '4px' }}>
+            <div style={{ marginTop: 16, padding: '12px', background: token.colorWarningBg, borderRadius: '4px' }}>
               <div><strong>{t('remote.env.localVersion')}:</strong> {localVersion}</div>
               <div style={{ marginTop: 4 }}><strong>{t('remote.env.remoteVersion')}:</strong> {versionInfo.runicornVersion}</div>
             </div>
-            <p style={{ marginTop: 16, color: '#faad14' }}>{t('remote.env.versionMismatchWarning')}</p>
+            <p style={{ marginTop: 16, color: token.colorWarning }}>{t('remote.env.versionMismatchWarning')}</p>
           </div>
         ),
         okText: t('remote.env.continueAnyway'),
@@ -332,7 +328,7 @@ export default function CondaEnvSelector({
     <Card
       title={
         <Space>
-          <CheckCircleOutlined style={{ color: '#52c41a' }} />
+          <CheckCircleOutlined style={{ color: token.colorSuccess }} />
           <span>{t('remote.env.title')}</span>
         </Space>
       }
@@ -367,7 +363,7 @@ export default function CondaEnvSelector({
               <List.Item
                 style={{
                   cursor: 'pointer',
-                  background: selectedEnv === env.name ? '#f0f5ff' : 'transparent',
+                  background: selectedEnv === env.name ? token.colorPrimaryBg : 'transparent',
                   padding: '6px 12px',
                   borderRadius: '4px',
                   marginBottom: '2px',

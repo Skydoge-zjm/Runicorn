@@ -6,12 +6,17 @@ Handles experiment data export in various formats.
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
+import zipfile
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
+from pydantic import BaseModel
+from starlette.background import BackgroundTask
 
 from ...storage.file_utils import find_run_dir_by_id, read_json
 from ..services.db_reader import find_run_entry_fast
@@ -120,6 +125,81 @@ async def export_report(run_id: str, request: Request, format: str = "markdown")
     except Exception as e:
         logger.error(f"Report generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class RunsExportRequest(BaseModel):
+    run_ids: List[str]
+
+
+@router.post("/runs/export")
+async def export_runs_zip(request: Request, body: RunsExportRequest) -> FileResponse:
+    """
+    Export selected runs as a zip archive.
+    
+    The zip layout mirrors the storage structure: runs/<path>/<run_id>/<files>
+    so it can be directly imported via POST /import/archive.
+    
+    Only files directly inside each run directory are included (not CAS blobs).
+    """
+    storage_root = request.app.state.storage_root
+    run_ids = body.run_ids
+    
+    if not run_ids:
+        raise HTTPException(status_code=400, detail="run_ids must not be empty")
+    
+    # Resolve run directories
+    entries = []
+    for rid in run_ids:
+        entry = find_run_dir_by_id(storage_root, rid)
+        if entry is None:
+            raise HTTPException(status_code=404, detail=f"Run not found: {rid}")
+        entries.append(entry)
+    
+    # Create temp zip
+    tmp_fd, tmp_path = tempfile.mkstemp(prefix="runicorn_export_", suffix=".zip")
+    os.close(tmp_fd)
+    tmp_zip = Path(tmp_path)
+    
+    def _cleanup() -> None:
+        try:
+            if tmp_zip.exists():
+                tmp_zip.unlink()
+        except Exception:
+            pass
+    
+    try:
+        with zipfile.ZipFile(str(tmp_zip), "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for entry in entries:
+                run_dir = entry.dir
+                run_id = run_dir.name
+                # Build archive prefix: runs/<path>/<run_id>/
+                path_prefix = entry.path or ""
+                if path_prefix:
+                    arc_prefix = f"runs/{path_prefix}/{run_id}"
+                else:
+                    arc_prefix = f"runs/{run_id}"
+                
+                for dirpath, _, filenames in os.walk(run_dir):
+                    dp = Path(dirpath)
+                    for fn in filenames:
+                        fp = dp / fn
+                        try:
+                            rel = fp.relative_to(run_dir).as_posix()
+                            zf.write(str(fp), f"{arc_prefix}/{rel}")
+                        except Exception:
+                            pass
+    except Exception as e:
+        _cleanup()
+        raise HTTPException(status_code=500, detail=f"Failed to create zip: {e}")
+    
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"runicorn_export_{len(entries)}runs_{ts}.zip"
+    return FileResponse(
+        path=str(tmp_zip),
+        filename=filename,
+        media_type="application/zip",
+        background=BackgroundTask(_cleanup),
+    )
 
 
 @router.get("/environment/{run_id}")

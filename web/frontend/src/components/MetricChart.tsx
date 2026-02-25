@@ -5,13 +5,12 @@
  * - Single run (runs.length === 1): Shows best point markers and stage separators
  * - Multi-run (runs.length > 1): Shows multiple series for comparison overlay
  */
-import React, { useEffect, useMemo, useRef, useState, memo } from 'react'
+import { useEffect, useMemo, useRef, useState, memo, useCallback } from 'react'
 import { Space, Switch, Tooltip, Slider, Select, Button, Card, Typography, Divider, theme } from 'antd'
 import { ExportOutlined } from '@ant-design/icons'
 import AutoResizeEChart from './AutoResizeEChart'
 import { useSettings } from '../contexts/SettingsContext'
 import { useTranslation } from 'react-i18next'
-import designTokens from '../styles/designTokens'
 
 const { Text } = Typography
 
@@ -42,6 +41,8 @@ export interface MetricChartProps {
   showLegend?: boolean  // Default true, set false for inline compare mode
   colors?: string[]     // Custom colors for each run
   legendSelected?: Record<string, boolean>  // Control series visibility via legend
+  highlightRunId?: string | null  // Highlight a specific run's series on hover
+  onHighlightRun?: (runId: string | null) => void  // Callback when user hovers a series in chart
 }
 
 /** EMA smoothing function */
@@ -65,7 +66,7 @@ function getBestType(key: string): 'max' | 'min' | undefined {
 }
 
 const MetricChart = memo(function MetricChart({ 
-  runs, xKey, yKey, title, height, persistKey, group, showLegend = true, colors = [], legendSelected 
+  runs, xKey, yKey, title, height, persistKey, group, showLegend = true, colors = [], legendSelected, highlightRunId, onHighlightRun 
 }: MetricChartProps) {
   const { t } = useTranslation()
   const { settings } = useSettings()
@@ -76,6 +77,37 @@ const MetricChart = memo(function MetricChart({
   const primaryRun = runs[0]
   const presentCols = primaryRun?.metrics?.columns || []
   
+  // Ref to ECharts instance for imperative highlight (avoids re-render)
+  const chartInstRef = useRef<any>(null)
+  const onChartReady = useCallback((inst: any) => { chartInstRef.current = inst }, [])
+
+  // Imperative highlight via ref — no re-render needed
+  const highlightRef = useRef(highlightRunId)
+  highlightRef.current = highlightRunId
+  useEffect(() => {
+    const inst = chartInstRef.current
+    if (!inst) return
+    inst.dispatchAction({ type: 'downplay' })
+    if (highlightRunId) {
+      inst.dispatchAction({ type: 'highlight', seriesName: highlightRunId })
+    }
+  }, [highlightRunId])
+
+  // Stable onEvents for chart mouse interaction (no new refs on re-render)
+  // NOTE: use globalout instead of mouseout; mouseout fires too often when moving across
+  // chart elements and can prematurely clear the shared hover state.
+  const chartEvents = useMemo(() => {
+    if (!onHighlightRun || isSingleRun) return undefined
+    return {
+      mouseover: (params: any) => {
+        if (params?.componentType === 'series' && params.seriesName) {
+          onHighlightRun(params.seriesName)
+        }
+      },
+      globalout: () => { onHighlightRun(null) },
+    }
+  }, [onHighlightRun, isSingleRun])
+
   // Chart controls
   const effectiveHeight = height ?? settings.defaultChartHeight
   const [useLog, setUseLog] = useState(false)
@@ -192,13 +224,39 @@ const MetricChart = memo(function MetricChart({
           lineStyle: { color: seriesColor },
           itemStyle: { color: seriesColor },
         }),
+        // Multi-run: configure emphasis/blur for hover highlight
+        ...(!isSingleRun && {
+          emphasis: {
+            lineStyle: { width: 3 },
+            focus: 'series',
+          },
+          blur: {
+            lineStyle: { opacity: 0.8, width: 1 },
+            itemStyle: { opacity: 0.8 },
+          },
+        }),
       }
       
       // Single run extras: best point marker and stage separators
       if (isSingleRun && runIndex === 0) {
         const bp = getBestType(yKey)
         if (bp) {
-          s.markPoint = { data: [{ type: bp, name: bp === 'max' ? 'Best (max)' : 'Best (min)' }], symbolSize: 60 }
+          s.markPoint = {
+            symbol: 'pin',
+            symbolSize: 40,
+            label: {
+              show: true,
+              position: 'inside',
+              formatter: (p: any) => {
+                const v = p.value
+                if (v == null) return ''
+                return String(parseFloat(Number(v).toPrecision(4)))
+              },
+              fontSize: 11,
+              fontWeight: 600,
+            },
+            data: [{ type: bp, name: bp === 'max' ? 'Best' : 'Best' }],
+          }
         }
         
         // Stage separators
@@ -253,8 +311,8 @@ const MetricChart = memo(function MetricChart({
     const legendConfig = showLegend 
       ? { 
           data: legendData, 
-          top: designTokens.spacing.xl, 
-          type: runs.length > 3 ? 'scroll' : 'plain', 
+          top: 32, 
+          type: runs.length > 3 ? 'scroll' : 'plain',
           padding: [5, 10],
           ...(legendSelected && { selected: legendSelected }),
         }
@@ -265,14 +323,59 @@ const MetricChart = memo(function MetricChart({
         }
     
     return {
-      title: { text: title, left: 'center', top: designTokens.spacing.xs,
-        textStyle: { fontSize: designTokens.typography.fontSize.md, fontWeight: designTokens.typography.fontWeight.semibold }
+      textStyle: { color: token.colorText },
+      title: { text: title, left: 'center', top: 8,
+        textStyle: { fontSize: 16, fontWeight: 600, color: token.colorText }
       },
-      tooltip: { trigger: 'axis', axisPointer: { type: 'cross', label: { show: true } } },
+      tooltip: {
+        trigger: 'axis',
+        confine: true,
+        axisPointer: { type: 'cross', label: { show: true } },
+        backgroundColor: token.colorBgElevated,
+        borderColor: token.colorBorder,
+        textStyle: { color: token.colorText },
+        // Multi-run compare: show label instead of run ID (unless user opted to show ID)
+        // Always provide explicit formatter so echarts merge mode replaces correctly
+        ...(!isSingleRun && {
+          formatter: (params: any) => {
+            if (!Array.isArray(params) || params.length === 0) return ''
+            const idToLabel: Record<string, string> = {}
+            if (!settings.compareTooltipShowId) {
+              for (const r of runs) { idToLabel[r.id] = r.label || r.id }
+            }
+            const header = params[0].axisValueLabel ?? params[0].axisValue ?? ''
+            const lines = params.map((p: any) => {
+              const marker = p.marker || ''
+              const name = settings.compareTooltipShowId ? p.seriesName : (idToLabel[p.seriesName] || p.seriesName)
+              const val = Array.isArray(p.value) ? p.value[1] : p.value
+              return `${marker} ${name}&nbsp;&nbsp;<b>${val}</b>`
+            })
+            return `<b>${header}</b><br/>` + lines.join('<br/>')
+          },
+        }),
+      },
       legend: legendConfig,
       ...(colors.length > 0 && { color: colors }),
-      xAxis: isSingleRun ? { type: 'category', data: xAxisData } : { type: 'value', name: xKey },
-      yAxis: { type: useLog ? 'log' : 'value', scale: dynamicScale, min: dynamicScale ? 'dataMin' : 0 },
+      xAxis: isSingleRun
+        ? { type: 'category', data: xAxisData, axisLabel: { color: token.colorTextSecondary }, axisLine: { lineStyle: { color: token.colorBorder } } }
+        : { type: 'value', name: xKey, axisLabel: { color: token.colorTextSecondary }, axisLine: { lineStyle: { color: token.colorBorder } } },
+      yAxis: {
+        type: useLog ? 'log' : 'value',
+        scale: dynamicScale,
+        min: dynamicScale ? 'dataMin' : 0,
+        axisLabel: {
+          color: token.colorTextSecondary,
+          formatter: (v: number) => {
+            if (v === 0) return '0'
+            const abs = Math.abs(v)
+            if (abs >= 1e6) return parseFloat((v / 1e6).toPrecision(4)) + 'M'
+            if (abs >= 1e4) return parseFloat((v / 1e3).toPrecision(4)) + 'k'
+            return String(parseFloat(v.toPrecision(4)))
+          },
+        },
+        axisLine: { lineStyle: { color: token.colorBorder } },
+        splitLine: { lineStyle: { color: token.colorBorderSecondary } },
+      },
       grid: { left: 50, right: 30, top: gridTop, bottom: 80, show: settings.showGridLines },
       dataZoom: [{ type: 'inside', throttle: 50 }, { type: 'slider', height: 18, bottom: 40 }],
       toolbox: { feature: { restore: {}, saveAsImage: {} }, right: 10 },
@@ -280,7 +383,7 @@ const MetricChart = memo(function MetricChart({
       animation: settings.enableChartAnimations,
       animationDuration: settings.enableChartAnimations ? 1000 : 0,
     }
-  }, [runs, xKey, xAxisKey, yKey, title, useLog, dynamicScale, smoothing, presentCols, isSingleRun, primaryRun, settings, token.colorBorder, showLegend, colors, legendSelected])
+  }, [runs, xKey, xAxisKey, yKey, title, useLog, dynamicScale, smoothing, presentCols, isSingleRun, primaryRun, settings, token.colorText, token.colorTextSecondary, token.colorBorder, token.colorBorderSecondary, token.colorBgElevated, showLegend, colors, legendSelected])
 
   const exportCsv = () => {
     try {
@@ -321,8 +424,8 @@ const MetricChart = memo(function MetricChart({
     <div>
       <Card 
         size="small"
-        style={{ marginBottom: designTokens.spacing.md, borderRadius: designTokens.borderRadius.md }}
-        styles={{ body: { padding: `${designTokens.spacing.sm}px ${designTokens.spacing.md}px` } }}
+        style={{ marginBottom: 16, borderRadius: 8 }}
+        styles={{ body: { padding: '12px 16px' } }}
       >
         <Space wrap size="small" style={{ width: '100%' }}>
           <Tooltip title={t('chart.log_y_tooltip')}>
@@ -333,7 +436,7 @@ const MetricChart = memo(function MetricChart({
           </Tooltip>
           <Divider type="vertical" style={{ margin: '0 4px' }} />
           <Space size="small" style={{ minWidth: 140, maxWidth: 200 }}>
-            <Text type="secondary" style={{ fontSize: designTokens.typography.fontSize.xs, whiteSpace: 'nowrap' }}>{t('chart.smooth')}:</Text>
+            <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{t('chart.smooth')}:</Text>
             <Slider min={0} max={0.95} step={0.05} value={smoothing} onChange={(v) => setSmoothing(Array.isArray(v) ? v[0] : v)} style={{ width: 90 }} tooltip={{ formatter: (v) => v ? `${(v * 100).toFixed(0)}%` : t('chart.off') }} />
           </Space>
           {isSingleRun && (
@@ -347,7 +450,12 @@ const MetricChart = memo(function MetricChart({
         </Space>
       </Card>
       <div style={{ height: effectiveHeight as any, width: '100%' }}>
-        <AutoResizeEChart option={option as any} group={group} />
+        <AutoResizeEChart
+          option={option as any}
+          group={group}
+          onChartReady={onChartReady}
+          {...(chartEvents && { onEvents: chartEvents })}
+        />
       </div>
     </div>
   )
@@ -408,7 +516,8 @@ const MetricChart = memo(function MetricChart({
     prevProps.height === nextProps.height &&
     prevProps.persistKey === nextProps.persistKey &&
     prevProps.group === nextProps.group &&
-    prevProps.showLegend === nextProps.showLegend
+    prevProps.showLegend === nextProps.showLegend &&
+    prevProps.highlightRunId === nextProps.highlightRunId
   )
 })
 

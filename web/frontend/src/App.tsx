@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Layout, Menu, Tag, Button, ConfigProvider, theme, Select } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { Layout, Tag, Button, ConfigProvider, theme, Select } from 'antd'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
-import { Routes, Route, Link, useLocation } from 'react-router-dom'
+import { Routes, Route, NavLink } from 'react-router-dom'
 import { SettingOutlined, ExperimentOutlined, CloudServerOutlined, DashboardOutlined, AppstoreOutlined } from '@ant-design/icons'
 import RunDetailPage from './pages/RunDetailPage'
 import ExperimentPage from './pages/ExperimentPage'
@@ -12,22 +13,32 @@ import RemoteViewerPage from './pages/RemoteViewerPage'
 import PerformanceMonitorPage from './pages/PerformanceMonitorPage'
 import { PageTransition } from './components/animations/PageTransition'
 import { health, getConfig } from './api'
-import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
+import SettingsDrawer from './components/SettingsDrawer'
+import type { UiSettings } from './components/settings/themePresets'
 import { SettingsProvider } from './contexts/SettingsContext'
+import { GpuTelemetryProvider } from './contexts/GpuTelemetryContext'
 import { useTranslation } from 'react-i18next'
 
-const { Header, Content, Footer } = Layout
+const { Content } = Layout
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5000,
+      refetchOnWindowFocus: true,
+      retry: 1,
+    },
+  },
+})
+
+const navItems = [
+  { key: 'experiments', path: '/', icon: <ExperimentOutlined />, labelKey: 'menu.experiments' },
+  { key: 'assets', path: '/assets', icon: <AppstoreOutlined />, labelKey: 'menu.assets' },
+  { key: 'performance', path: '/performance', icon: <DashboardOutlined />, labelKey: 'menu.performance' },
+  { key: 'remote', path: '/remote', icon: <CloudServerOutlined />, labelKey: 'menu.remote' },
+]
 
 export default function App() {
-  const location = useLocation()
-  const getSelectedKey = () => {
-    if (location.pathname.startsWith('/performance')) return 'performance'
-    if (location.pathname.startsWith('/remote')) return 'remote'
-    if (location.pathname.startsWith('/assets')) return 'assets'
-    if (location.pathname.startsWith('/runs/')) return 'experiments'  // Detail page also under experiments
-    return 'experiments'  // Default to experiments
-  }
-  const selected = [getSelectedKey()]
   const { t, i18n} = useTranslation()
   // UI Settings with persistence
   const defaultSettings: UiSettings = {
@@ -37,11 +48,14 @@ export default function App() {
     density: 'default',
     
     // Layout & Visual Effects
-    glass: true,
-    backgroundType: 'gradient',
+    glass: false,
+    backgroundType: 'color',
     backgroundImageUrl: '',
     backgroundGradient: 'linear-gradient(135deg, #30cfd0 0%, #330867 100%)',
-    backgroundColor: '#0b1220',
+    backgroundColor: '#F0F2F5',
+    backgroundColorDark: '#0d0d12',
+    surfaceColor: '#ffffff',
+    surfaceColorDark: '#1e1e2e',
     backgroundOpacity: 0.9,
     backgroundBlur: 8,
     
@@ -56,6 +70,7 @@ export default function App() {
     showGridLines: true,
     enableChartAnimations: true,
     maxDataPoints: 1000,
+    compareTooltipShowId: false,
     
     // Performance Monitor Tab Settings
     showCpuTab: true,
@@ -84,20 +99,39 @@ export default function App() {
   }, [])
 
   const isDark = settings.themeMode === 'dark' || (settings.themeMode === 'auto' && systemDark)
+
+  // Sync body background with theme so opacity=0 backgrounds still look correct
+  useEffect(() => {
+    document.documentElement.style.background = isDark ? '#141414' : '#ffffff'
+  }, [isDark])
   const algorithms = useMemo(() => {
     const arr: any[] = [isDark ? theme.darkAlgorithm : theme.defaultAlgorithm]
     if (settings.density === 'compact') arr.push(theme.compactAlgorithm)
     return arr
   }, [isDark, settings.density])
 
+  const surfaceBg = isDark ? settings.surfaceColorDark : settings.surfaceColor
+
   const tokenOverrides = useMemo(() => {
-    const t: any = { colorPrimary: settings.accentColor }
-    if (settings.density === 'loose') {
-      t.borderRadius = 10
-      t.padding = 16
+    const tok: any = {
+      colorPrimary: settings.accentColor,
+      colorBgContainer: isDark ? settings.surfaceColorDark : settings.surfaceColor,
     }
-    return t
-  }, [settings.accentColor, settings.density])
+    if (settings.density === 'loose') {
+      tok.borderRadius = 10
+      tok.padding = 20
+      tok.paddingLG = 28
+      tok.paddingContentVertical = 16
+      tok.paddingContentHorizontal = 24
+      tok.marginLG = 28
+      tok.fontSize = 15
+      tok.fontSizeLG = 18
+      tok.controlHeight = 38
+      tok.controlHeightLG = 48
+      tok.controlHeightSM = 30
+    }
+    return tok
+  }, [settings.accentColor, settings.density, isDark, settings.surfaceColor, settings.surfaceColorDark])
 
   const bgStyle = useMemo<React.CSSProperties>(() => {
     const s: React.CSSProperties = {
@@ -105,18 +139,18 @@ export default function App() {
       opacity: settings.backgroundOpacity,
       transition: 'background 0.3s ease',
     }
-    if (settings.backgroundType === 'image' && settings.backgroundImageUrl) {
-      s.backgroundImage = `url(${settings.backgroundImageUrl})`
+    if (settings.backgroundType === 'image' && settings.backgroundImageUrl && /^(https?:\/\/|data:image\/)/.test(settings.backgroundImageUrl)) {
+      s.backgroundImage = `url(${CSS.escape(settings.backgroundImageUrl)})`
       s.backgroundSize = 'cover'
       s.backgroundRepeat = 'no-repeat'
       s.backgroundPosition = 'center center'
     } else if (settings.backgroundType === 'gradient') {
       s.backgroundImage = settings.backgroundGradient
     } else {
-      s.background = settings.backgroundColor
+      s.background = isDark ? settings.backgroundColorDark : settings.backgroundColor
     }
     return s
-  }, [settings.backgroundType, settings.backgroundImageUrl, settings.backgroundGradient, settings.backgroundColor, settings.backgroundOpacity])
+  }, [settings.backgroundType, settings.backgroundImageUrl, settings.backgroundGradient, settings.backgroundColor, settings.backgroundOpacity, isDark])
 
   const wrapperStyle = useMemo<React.CSSProperties>(() => {
     const baseStyle: React.CSSProperties = {
@@ -136,7 +170,7 @@ export default function App() {
     }
     return { 
       ...baseStyle,
-      background: isDark ? '#111a2c' : '#fff' 
+      background: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.35)',
     }
   }, [settings.glass, settings.backgroundBlur, settings.animationsEnabled, isDark])
 
@@ -155,7 +189,7 @@ export default function App() {
   }, [])
 
   const [apiStatus, setApiStatus] = useState<'ok' | 'down' | 'loading'>('loading')
-  const [failureCount, setFailureCount] = useState(0)
+  const [, setFailureCount] = useState(0)
   
   useEffect(() => {
     let active = true
@@ -182,11 +216,12 @@ export default function App() {
     ping()
     // Use user-configured refresh interval (convert to milliseconds)
     const interval = (settings.autoRefresh ? settings.refreshInterval : 5) * 1000
-    const t = setInterval(ping, interval)
-    return () => { active = false; clearInterval(t) }
+    const timer = setInterval(ping, interval)
+    return () => { active = false; clearInterval(timer) }
   }, [settings.autoRefresh, settings.refreshInterval])
 
   return (
+    <QueryClientProvider client={queryClient}>
     <ConfigProvider
       locale={i18n.language?.startsWith('zh') ? zhCN : enUS}
       theme={{
@@ -198,6 +233,7 @@ export default function App() {
       }}
     >
       <SettingsProvider value={{ settings, setSettings }}>
+      <GpuTelemetryProvider>
         <div style={bgStyle} />
         <Layout style={{ 
           height: '100vh',
@@ -209,20 +245,55 @@ export default function App() {
           display: 'flex',
           flexDirection: 'column',
         }}>
-          <Header style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-            <div style={{ color: '#fff', fontWeight: 700, marginRight: 24 }}>{t('app.title')}</div>
-            <Menu
-              theme="dark"
-              mode="horizontal"
-              selectedKeys={selected}
-              items={[
-                { key: 'experiments', icon: <ExperimentOutlined />, label: <Link to="/">{t('menu.experiments')}</Link> },
-                { key: 'assets', icon: <AppstoreOutlined />, label: <Link to="/assets">{t('menu.assets')}</Link> },
-                { key: 'performance', icon: <DashboardOutlined />, label: <Link to="/performance">{t('menu.performance')}</Link> },
-                { key: 'remote', icon: <CloudServerOutlined />, label: <Link to="/remote">{t('menu.remote')}</Link> },
-              ]}
-              style={{ flex: 1, minWidth: 0 }}
-            />
+          <header style={{
+            display: 'flex',
+            alignItems: 'center',
+            height: 56,
+            borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
+            background: surfaceBg,
+            padding: '0 20px',
+            flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 24, flexShrink: 0 }}>
+              <img
+                src="/logo.jpg"
+                alt="Runicorn"
+                style={{ height: 32, width: 32, borderRadius: 6, objectFit: 'cover' }}
+              />
+              <span style={{ fontWeight: 700, fontSize: 18, color: isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.88)', letterSpacing: -0.3 }}>
+                {t('app.title')}
+              </span>
+            </div>
+            <div style={{
+              width: 1,
+              height: 24,
+              background: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)',
+              marginRight: 20,
+              flexShrink: 0,
+            }} />
+            <nav style={{ display: 'flex', gap: 20, flex: 1 }}>
+              {navItems.map(item => (
+                <NavLink
+                  key={item.key}
+                  to={item.path}
+                  end={item.path === '/'}
+                  style={({ isActive }) => ({
+                    color: isActive ? settings.accentColor : (isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)'),
+                    borderBottom: isActive ? `2px solid ${settings.accentColor}` : '2px solid transparent',
+                    padding: '16px 0',
+                    textDecoration: 'none',
+                    fontSize: 14,
+                    fontWeight: isActive ? 600 : 400,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    transition: 'color 0.2s, border-color 0.2s',
+                  })}
+                >
+                  {item.icon} <span className="nav-label">{t(item.labelKey)}</span>
+                </NavLink>
+              ))}
+            </nav>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               {apiStatus === 'ok' && <Tag color="green">{t('tag.api_ok')}</Tag>}
               {apiStatus === 'loading' && <Tag color="processing">{t('tag.api_loading')}</Tag>}
@@ -234,9 +305,14 @@ export default function App() {
                 style={{ width: 88 }}
                 options={[{ value: 'en', label: 'EN' }, { value: 'zh', label: '中文' }]}
               />
-              <Button type="link" icon={<SettingOutlined style={{ color: '#fff' }} />} onClick={() => setSettingsOpen(true)} />
+              <Button
+                type="text"
+                icon={<SettingOutlined style={{ color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)' }} />}
+                onClick={() => setSettingsOpen(true)}
+                aria-label="Open settings"
+              />
             </div>
-          </Header>
+          </header>
           <Content style={{ 
             flex: 1,
             padding: '16px 24px',
@@ -268,7 +344,9 @@ export default function App() {
           </Content>
         </Layout>
         <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} value={settings} onChange={setSettings} />
+      </GpuTelemetryProvider>
       </SettingsProvider>
     </ConfigProvider>
+    </QueryClientProvider>
   )
 }

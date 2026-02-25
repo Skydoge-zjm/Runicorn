@@ -1,4 +1,3 @@
-import React from 'react'
 import { Resizable, ResizeCallbackData } from 'react-resizable'
 
 interface ResizableTitleProps {

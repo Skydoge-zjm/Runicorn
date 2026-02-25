@@ -20,8 +20,8 @@ import { ApiError } from '../types/remote'
 const API_BASE = '/api/remote'
 
 async function parseResponsePayload(response: Response): Promise<unknown> {
-  const contentType = response.headers.get('content-type') || ''
-  if (contentType.includes('application/json')) {
+  const contentType = response.headers.get('content-type')
+  if (contentType?.includes('application/json')) {
     try {
       return await response.json()
     } catch {
@@ -268,6 +268,21 @@ export async function listCondaEnvs(connectionId: string): Promise<any> {
   await ensureOk(response, 'Failed to list conda environments')
 
   return response.json()
+}
+
+/**
+ * Batch-check runicorn installation for all environments in one call.
+ * Returns a map of env_name -> { pythonVersion, runicornVersion }.
+ */
+export async function getEnvConfigs(connectionId: string): Promise<Record<string, { pythonVersion?: string; runicornVersion?: string | null }>> {
+  const response = await fetch(
+    `${API_BASE}/env-configs?connection_id=${encodeURIComponent(connectionId)}`
+  )
+
+  await ensureOk(response, 'Failed to get environment configurations')
+
+  const data = await response.json()
+  return data.configs || {}
 }
 
 /**

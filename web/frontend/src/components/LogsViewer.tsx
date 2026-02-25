@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { Button, Input, Space, Switch, Tag, Tooltip, message } from 'antd'
+import { Button, Input, Space, Switch, Tag, Tooltip, message, theme } from 'antd'
+import { DownOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import AnsiToHtml from 'ansi-to-html'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 // Constants
 const MAX_LINES = 5000
 const RECONNECT_BASE_MS = 500
 const RECONNECT_MAX_MS = 10000
+const SCROLL_BOTTOM_THRESHOLD = 50
 
 /**
  * Escape HTML special characters to prevent XSS attacks.
@@ -25,10 +28,10 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// ANSI converter instance with terminal-like colors
-const ansiConverter = new AnsiToHtml({
+// Dark theme ANSI converter
+const darkConverter = new AnsiToHtml({
   fg: '#e6e9ef',
-  bg: '#0b1020',
+  bg: '#000000',
   newline: false,
   escapeXML: true,
   colors: {
@@ -40,6 +43,24 @@ const ansiConverter = new AnsiToHtml({
     5: '#b294bb',   // magenta
     6: '#8abeb7',   // cyan
     7: '#c5c8c6',   // white
+  },
+})
+
+// Light theme ANSI converter
+const lightConverter = new AnsiToHtml({
+  fg: '#374151',
+  bg: '#ffffff',
+  newline: false,
+  escapeXML: true,
+  colors: {
+    0: '#374151',   // black
+    1: '#DC2626',   // red
+    2: '#16A34A',   // green
+    3: '#CA8A04',   // yellow
+    4: '#2563EB',   // blue
+    5: '#9333EA',   // magenta
+    6: '#0891B2',   // cyan
+    7: '#6B7280',   // white
   },
 })
 
@@ -67,6 +88,9 @@ interface LogsViewerProps {
 
 export default function LogsViewer({ url }: LogsViewerProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
+  const isDark = parseInt((token.colorBgBase || '#ffffff').replace('#', '').slice(0, 2), 16) < 128
+  const ansiConverter = isDark ? darkConverter : lightConverter
   
   const [allLines, setAllLines] = useState<string[]>([])
   const [autoScroll, setAutoScroll] = useState(true)
@@ -118,13 +142,24 @@ export default function LogsViewer({ url }: LogsViewerProps) {
         setAllLines([])
       }
       
-      ws.onmessage = (ev) => {
-        if (!mountedRef.current) return
-        const text = String(ev.data)
+      // Batch incoming messages via rAF to reduce GC pressure from high-frequency updates
+      const pendingLines: string[] = []
+      let rafId: number | null = null
+      const flushPending = () => {
+        rafId = null
+        if (pendingLines.length === 0) return
+        const batch = pendingLines.splice(0)
         setAllLines((prev) => {
-          const next = [...prev, text]
+          const next = prev.concat(batch)
           return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next
         })
+      }
+      ws.onmessage = (ev) => {
+        if (!mountedRef.current) return
+        pendingLines.push(String(ev.data))
+        if (rafId === null) {
+          rafId = requestAnimationFrame(flushPending)
+        }
       }
       
       const scheduleReconnect = () => {
@@ -154,67 +189,68 @@ export default function LogsViewer({ url }: LogsViewerProps) {
     }
   }, [url])
 
-  // Auto-scroll effect
-  useEffect(() => {
-    if (autoScroll && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight
-    }
-  }, [allLines, autoScroll])
-
   // Filter and search lines
   const displayLines = useMemo(() => {
     let lines = allLines
-    
     if (filterTqdm) {
       lines = lines.filter(line => !isTqdmLine(line))
     }
-    
     if (searchKeyword) {
       const keyword = searchKeyword.toLowerCase()
       lines = lines.filter(line => line.toLowerCase().includes(keyword))
     }
-    
     return lines
   }, [allLines, filterTqdm, searchKeyword])
 
-  // Render line with ANSI colors and search highlight
-  const renderLine = useCallback((line: string, index: number) => {
-    let html: string
-    try {
-      html = ansiConverter.toHtml(line)
-    } catch {
-      // Fallback to escaped plain text if ANSI conversion fails
-      html = escapeHtml(line)
+  // Cache ANSI HTML conversions to avoid re-parsing on scroll
+  const htmlLines = useMemo(() => {
+    return displayLines.map(line => {
+      try {
+        return ansiConverter.toHtml(line)
+      } catch {
+        return escapeHtml(line)
+      }
+    })
+  }, [displayLines, ansiConverter])
+
+  // Virtual scroll
+  const virtualizer = useVirtualizer({
+    count: displayLines.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => 20,
+    overscan: 30,
+  })
+
+  // Smart auto-scroll: disable when user scrolls away from bottom
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_BOTTOM_THRESHOLD
+    if (!atBottom && autoScroll) {
+      setAutoScroll(false)
     }
-    
-    // Highlight search keyword (with proper HTML escaping to prevent XSS)
-    if (searchKeyword) {
-      const regex = new RegExp(`(${escapeRegex(searchKeyword)})`, 'gi')
-      html = html.replace(regex, '<mark style="background:#f0c674;color:#1d1f21">$1</mark>')
+  }, [autoScroll])
+
+  // Auto-scroll when new lines arrive
+  useEffect(() => {
+    if (autoScroll && displayLines.length > 0) {
+      virtualizer.scrollToIndex(displayLines.length - 1, { align: 'end' })
     }
-    
-    return (
-      <div 
-        key={index} 
-        className="log-line"
-        style={{ display: 'flex', minHeight: 20 }}
-      >
-        <span style={{ 
-          color: '#6c7a89', 
-          minWidth: 50, 
-          textAlign: 'right', 
-          paddingRight: 12,
-          userSelect: 'none',
-          flexShrink: 0,
-        }}>
-          {index + 1}
-        </span>
-        <span 
-          style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
-          dangerouslySetInnerHTML={{ __html: html }} 
-        />
-      </div>
-    )
+  }, [displayLines.length, autoScroll, virtualizer])
+
+  // Resume auto-scroll and jump to bottom
+  const resumeAutoScroll = useCallback(() => {
+    setAutoScroll(true)
+    if (displayLines.length > 0) {
+      virtualizer.scrollToIndex(displayLines.length - 1, { align: 'end' })
+    }
+  }, [virtualizer, displayLines.length])
+
+  // Highlight search keyword in pre-converted HTML
+  const highlightHtml = useCallback((html: string) => {
+    if (!searchKeyword) return html
+    const regex = new RegExp(`(${escapeRegex(searchKeyword)})`, 'gi')
+    return html.replace(regex, '<mark style="background:#f0c674;color:#1d1f21">$1</mark>')
   }, [searchKeyword])
 
   const copyAll = useCallback(async () => {
@@ -242,8 +278,8 @@ export default function LogsViewer({ url }: LogsViewerProps) {
   }, [connected, nextRetryMs, t])
 
   return (
-    <div>
-      <Space style={{ marginBottom: 8 }} wrap>
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <Space style={{ marginBottom: 8, flexShrink: 0, padding: '8px 12px 0' }} wrap>
         {statusTag}
         <Tooltip title={t('logs.tooltip.autoscroll')}>
           <span>{t('logs.autoscroll')} <Switch checked={autoScroll} onChange={setAutoScroll} style={{ marginLeft: 6 }} /></span>
@@ -262,21 +298,72 @@ export default function LogsViewer({ url }: LogsViewerProps) {
         <Button size="small" onClick={clearLogs}>{t('logs.clear')}</Button>
         <Button size="small" onClick={copyAll}>{t('logs.copy')}</Button>
       </Space>
-      <div 
-        ref={containerRef} 
-        style={{ 
-          height: 320, 
-          overflow: 'auto', 
-          background: '#0b1020', 
-          color: '#e6e9ef', 
-          padding: 12, 
-          borderRadius: 8, 
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', 
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        style={{
+          flex: 1,
+          minHeight: 200,
+          overflow: 'auto',
+          background: isDark ? '#000000' : '#ffffff',
+          color: isDark ? '#e6e9ef' : '#374151',
+          padding: '12px 0',
+          borderRadius: 8,
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
           fontSize: 12,
         }}
       >
-        {displayLines.map((line, index) => renderLine(line, index))}
+        <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
+          {virtualizer.getVirtualItems().map(virtualRow => (
+            <div
+              key={virtualRow.key}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${virtualRow.start}px)`,
+                display: 'flex',
+                padding: '0 12px',
+                minHeight: 20,
+              }}
+            >
+              <span style={{
+                color: isDark ? '#6c7a89' : '#9CA3AF',
+                minWidth: 50,
+                textAlign: 'right',
+                paddingRight: 12,
+                userSelect: 'none',
+                flexShrink: 0,
+              }}>
+                {virtualRow.index + 1}
+              </span>
+              <span
+                style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}
+                dangerouslySetInnerHTML={{ __html: highlightHtml(htmlLines[virtualRow.index]) }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
+      {!autoScroll && displayLines.length > 0 && (
+        <Button
+          size="small"
+          icon={<DownOutlined />}
+          onClick={resumeAutoScroll}
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            right: 24,
+            zIndex: 10,
+            opacity: 0.9,
+          }}
+        >
+          {t('logs.resume_autoscroll')}
+        </Button>
+      )}
     </div>
   )
 }

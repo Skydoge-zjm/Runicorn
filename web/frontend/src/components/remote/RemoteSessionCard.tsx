@@ -4,23 +4,21 @@
  * Displays information about an active Remote Viewer session
  */
 
-import React from 'react'
 import {
   Card,
   Space,
   Button,
   Descriptions,
   Alert,
-  Badge,
   Typography,
-  Modal
+  Modal,
+  theme
 } from 'antd'
 import {
   LinkOutlined,
   StopOutlined,
   DisconnectOutlined,
-  CloudServerOutlined,
-  ReloadOutlined
+  CloudServerOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
@@ -39,14 +37,6 @@ interface RemoteSessionCardProps {
   onDisconnect?: (session: RemoteSession) => Promise<void>
 }
 
-const statusColorMap: Record<string, 'success' | 'processing' | 'default' | 'error'> = {
-  running: 'success',
-  connecting: 'processing',
-  stopping: 'processing',
-  stopped: 'default',
-  error: 'error'
-}
-
 const statusMessageMap: Record<string, string> = {
   connecting: 'Establishing connection...',
   running: 'Remote Viewer is running and accessible',
@@ -62,6 +52,7 @@ export default function RemoteSessionCard({
   onDisconnect
 }: RemoteSessionCardProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
 
   const handleOpen = () => {
     const url = `http://localhost:${session.localPort}`
@@ -172,7 +163,7 @@ export default function RemoteSessionCard({
       />
 
       {/* Session Details */}
-      <div style={{ marginTop: 16, color: '#888', fontSize: '12px' }}>
+      <div style={{ marginTop: 16, fontSize: 12 }}>
         <Text type="secondary">Session ID: {session.sessionId}</Text>
       </div>
     </Card>

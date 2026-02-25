@@ -5,22 +5,22 @@
  * Monitors: CPU, Memory, Disk, GPU
  */
 
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, Space, Alert, Typography, Tag, Tooltip, Tabs, Empty } from 'antd'
 import { 
   ThunderboltOutlined, 
   DashboardOutlined,
   DatabaseOutlined,
-  HddOutlined,
   FireOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { getGpuTelemetry, getSystemMonitor } from '../api'
+import { getSystemMonitor } from '../api'
 import GpuMetricsCard from '../components/GpuMetricsCard'
 import GpuTelemetry from '../components/GpuTelemetry'
 import CpuDetailCard from '../components/CpuDetailCard'
 import MemoryDiskCard from '../components/MemoryDiskCard'
 import { useSettings } from '../contexts/SettingsContext'
+import { useGpuTelemetry } from '../contexts/GpuTelemetryContext'
 
 const { Title, Text } = Typography
 
@@ -36,45 +36,29 @@ interface GpuData {
   temp_c?: number
 }
 
+/** Shape of the /system/monitor API response. */
+interface SystemMetrics {
+  available: boolean
+  platform?: { system: string; release: string }
+  cpu?: { percent: number; [key: string]: any }
+  memory?: Record<string, any>
+  disk?: Record<string, any>
+}
+
 export default function PerformanceMonitorPage() {
   const { t } = useTranslation()
-  const { settings: value } = useSettings()
-  
-  const [gpus, setGpus] = useState<GpuData[]>([])
-  const [gpuAvailable, setGpuAvailable] = useState<boolean | null>(null)
-  const [gpuReason, setGpuReason] = useState<string>('')
-  const [gpuLoading, setGpuLoading] = useState(true)
-  
-  const [systemMetrics, setSystemMetrics] = useState<any>(null)
-  const [systemLoading, setSystemLoading] = useState(true)
+  const { settings } = useSettings()
+  const gpu = useGpuTelemetry()
 
-  // Poll GPU data
-  useEffect(() => {
-    let timer: any
-    const poll = async () => {
-      try {
-        const res = await getGpuTelemetry()
-        if (!res?.available) {
-          setGpuAvailable(false)
-          setGpuReason(res?.reason || t('gpu.not_available'))
-          setGpuLoading(false)
-          return
-        }
-        setGpuAvailable(true)
-        setGpus(res.gpus || [])
-        setGpuLoading(false)
-      } catch (e: any) {
-        setGpuAvailable(false)
-        setGpuReason(e?.message || t('gpu.not_available'))
-        setGpuLoading(false)
-      }
-    }
-    
-    poll()
-    timer = setInterval(poll, 2000)
-    
-    return () => clearInterval(timer)
-  }, [t])
+  // Derive GPU state from global context
+  const gpuAvailable = gpu.available
+  const gpuReason = gpu.reason
+  const lastSample = gpu.samples[gpu.samples.length - 1]
+  const gpus: GpuData[] = lastSample?.gpus || []
+  const gpuLoading = gpu.available === null
+
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null)
+  const [systemLoading, setSystemLoading] = useState(true)
 
   // Poll system metrics
   useEffect(() => {
@@ -92,21 +76,21 @@ export default function PerformanceMonitorPage() {
     }
     
     poll()
-    timer = setInterval(poll, 2000)
+    timer = setInterval(poll, (settings.refreshInterval ?? 2) * 1000)
     
     return () => clearInterval(timer)
-  }, [])
+  }, [settings.refreshInterval])
 
   // Build tab items based on settings
   const tabItems = []
 
   // CPU Tab - check if CPU data is valid (not null and has required fields)
-  if (value.showCpuTab !== false && systemMetrics?.cpu && systemMetrics.cpu.percent !== undefined) {
+  if (settings.showCpuTab !== false && systemMetrics?.cpu && systemMetrics.cpu.percent !== undefined) {
     tabItems.push({
       key: 'cpu',
       label: (
         <span>
-          <ThunderboltOutlined />
+          <ThunderboltOutlined style={{ marginRight: 6 }} />
           {t('performance.tab_cpu', 'CPU')}
         </span>
       ),
@@ -115,12 +99,12 @@ export default function PerformanceMonitorPage() {
   }
 
   // Memory & Disk Tab
-  if (value.showMemoryDiskTab !== false && systemMetrics?.memory && systemMetrics?.disk) {
+  if (settings.showMemoryDiskTab !== false && systemMetrics?.memory && systemMetrics?.disk) {
     tabItems.push({
       key: 'memory-disk',
       label: (
         <span>
-          <DatabaseOutlined />
+          <DatabaseOutlined style={{ marginRight: 6 }} />
           {t('performance.tab_memory_disk', 'Memory & Disk')}
         </span>
       ),
@@ -129,12 +113,12 @@ export default function PerformanceMonitorPage() {
   }
 
   // GPU Metrics Tab
-  if (value.showGpuMetricsTab !== false && gpuAvailable && gpus.length > 0) {
+  if (settings.showGpuMetricsTab !== false && gpuAvailable && gpus.length > 0) {
     tabItems.push({
       key: 'gpu-metrics',
       label: (
         <span>
-          <FireOutlined />
+          <FireOutlined style={{ marginRight: 6 }} />
           {t('performance.tab_gpu_metrics', 'GPU Metrics')}
         </span>
       ),
@@ -143,20 +127,16 @@ export default function PerformanceMonitorPage() {
   }
 
   // GPU Telemetry Tab
-  if (value.showGpuTelemetryTab !== false && gpuAvailable) {
+  if (settings.showGpuTelemetryTab !== false && gpuAvailable) {
     tabItems.push({
       key: 'gpu-telemetry',
       label: (
         <span>
-          <ThunderboltOutlined />
+          <ThunderboltOutlined style={{ marginRight: 6 }} />
           {t('performance.tab_gpu_telemetry', 'GPU Telemetry')}
         </span>
       ),
-      children: (
-        <Card>
-          <GpuTelemetry />
-        </Card>
-      )
+      children: <GpuTelemetry />
     })
   }
 
@@ -173,7 +153,7 @@ export default function PerformanceMonitorPage() {
         <Space direction="vertical" size="small" style={{ width: '100%' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Space>
-              <Title level={3} style={{ margin: 0 }}>
+              <Title level={4} style={{ margin: 0 }}>
                 <DashboardOutlined /> {t('performance.title')}
               </Title>
               <Tooltip title={t('performance.polling_hint', 'Auto-polling every 2 seconds')}>
@@ -199,7 +179,6 @@ export default function PerformanceMonitorPage() {
           items={tabItems}
           defaultActiveKey="cpu"
           size="large"
-          destroyInactiveTabPane
         />
       ) : (
         <Card>
@@ -210,7 +189,7 @@ export default function PerformanceMonitorPage() {
       )}
 
       {/* GPU Not Available Warning */}
-      {gpuAvailable === false && value.showGpuMetricsTab !== false && (
+      {gpuAvailable === false && settings.showGpuMetricsTab !== false && (
         <Alert
           type="info"
           message={t('gpu.not_available')}

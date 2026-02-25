@@ -9,9 +9,9 @@
  * - Eye icon to toggle run visibility in charts
  * - Auto-refresh indicator when running experiments exist
  */
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import { Button, Tag, Tooltip, theme } from 'antd'
-import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, QuestionCircleOutlined, EyeOutlined, EyeInvisibleOutlined, PlusOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, QuestionCircleOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -20,6 +20,7 @@ export interface CompareRunInfo {
   runId: string
   path: string
   alias: string | null
+  tags: string[]
   status: string
 }
 
@@ -28,7 +29,8 @@ interface CompareRunsPanelProps {
   colors: string[]
   visibleRunIds: Set<string>
   onToggleRunVisibility: (runId: string) => void
-  onAddRuns: () => void
+  onHoverRun?: (runId: string | null) => void
+  hoveredRunId?: string | null
   onBack: () => void
   style?: React.CSSProperties
 }
@@ -38,7 +40,8 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
   colors,
   visibleRunIds,
   onToggleRunVisibility,
-  onAddRuns,
+  onHoverRun,
+  hoveredRunId,
   onBack,
   style,
 }) => {
@@ -75,7 +78,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
         height: '100%',
         minHeight: 0,
         borderRight: `1px solid ${token.colorBorderSecondary}`,
-        background: token.colorBgLayout,
+        background: token.colorBgContainer,
       }}
     >
       {/* Header */}
@@ -93,26 +96,16 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
           onClick={onBack}
           style={{ marginBottom: 8, padding: '4px 8px' }}
         >
-          {t('experiments.back_to_list') || 'Back to List'}
+          {t('experiments.back_to_list')}
         </Button>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: token.colorText }}>
-            {t('experiments.comparing_runs', { count: runs.length }) || `Comparing ${runs.length} runs`}
+            {t('experiments.comparing_runs', { count: runs.length })}
           </div>
-          <Tooltip title={t('experiments.add_runs') || 'Add more runs'}>
-            <Button
-              type="text"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={onAddRuns}
-              style={{ color: token.colorPrimary }}
-            />
-          </Tooltip>
         </div>
         {/* Visible count */}
         <div style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2 }}>
-          {t('experiments.visible_runs', { count: visibleCount, total: runs.length }) || 
-            `${visibleCount}/${runs.length} visible`}
+          {t('experiments.visible_runs', { count: visibleCount, total: runs.length })}
         </div>
         {/* Auto-refresh indicator */}
         {hasRunning && (
@@ -125,7 +118,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
             gap: 4,
           }}>
             <SyncOutlined spin style={{ fontSize: 10 }} />
-            {t('experiments.auto_refreshing') || 'Auto-refreshing'}
+            {t('experiments.auto_refreshing')}
           </div>
         )}
       </div>
@@ -141,6 +134,8 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
       >
         {runs.map((run, index) => {
           const isVisible = visibleRunIds.has(run.runId)
+          const isHovered = hoveredRunId === run.runId
+          const runColor = colors[index] || token.colorTextDisabled
           return (
             <motion.div
               key={run.runId}
@@ -152,13 +147,15 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                 marginBottom: 8,
                 background: token.colorBgContainer,
                 borderRadius: 8,
-                border: `1px solid ${token.colorBorderSecondary}`,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                border: isHovered ? `2px solid ${runColor}` : `1px solid ${token.colorBorderSecondary}`,
+                boxShadow: isHovered ? `0 0 8px ${runColor}40` : '0 1px 2px rgba(0,0,0,0.03)',
                 opacity: isVisible ? 1 : 0.5,
                 cursor: 'pointer',
-                transition: 'all 0.2s',
+                transition: 'all 0.15s',
               }}
               onClick={() => navigate(`/runs/${run.runId}`)}
+              onMouseEnter={() => onHoverRun?.(run.runId)}
+              onMouseLeave={() => onHoverRun?.(null)}
               whileHover={{ scale: 1.01, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
             >
               {/* Color dot + Run ID + Eye toggle */}
@@ -189,8 +186,8 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                 {getStatusIcon(run.status)}
                 {/* Eye toggle */}
                 <Tooltip title={isVisible 
-                  ? (t('experiments.hide_run') || 'Hide from charts') 
-                  : (t('experiments.show_run') || 'Show in charts')}>
+                  ? (t('experiments.hide_run')) 
+                  : (t('experiments.show_run'))}>
                   <span
                     onClick={(e) => {
                       e.stopPropagation()
@@ -209,7 +206,7 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
               </div>
 
               {/* Path */}
-              <Tooltip title={`${t('experiments.click_to_view') || 'Click to view details'}: ${run.path}`}>
+              <Tooltip title={`${t('experiments.click_to_view')}: ${run.path}`}>
                 <div
                   style={{
                     fontSize: 12,
@@ -224,11 +221,20 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
                 </div>
               </Tooltip>
 
-              {/* Alias */}
-              {run.alias && (
-                <Tag color="purple" style={{ fontSize: 11, marginTop: 2 }}>
-                  {run.alias}
-                </Tag>
+              {/* Alias & Tags */}
+              {(run.alias || (run.tags && run.tags.length > 0)) && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                  {run.alias && (
+                    <Tag color="purple" style={{ fontSize: 11, margin: 0 }}>
+                      {run.alias}
+                    </Tag>
+                  )}
+                  {run.tags?.map(tag => (
+                    <Tag key={tag} style={{ fontSize: 11, margin: 0 }}>
+                      {tag}
+                    </Tag>
+                  ))}
+                </div>
               )}
             </motion.div>
           )
