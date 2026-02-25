@@ -36,6 +36,15 @@ interface GpuData {
   temp_c?: number
 }
 
+/** Shape of the /system/monitor API response. */
+interface SystemMetrics {
+  available: boolean
+  platform?: { system: string; release: string }
+  cpu?: { percent: number; [key: string]: any }
+  memory?: Record<string, any>
+  disk?: Record<string, any>
+}
+
 export default function PerformanceMonitorPage() {
   const { t } = useTranslation()
   const { settings } = useSettings()
@@ -48,7 +57,7 @@ export default function PerformanceMonitorPage() {
   const gpus: GpuData[] = lastSample?.gpus || []
   const gpuLoading = gpu.available === null
 
-  const [systemMetrics, setSystemMetrics] = useState<any>(null)
+  const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null)
   const [systemLoading, setSystemLoading] = useState(true)
 
   // Poll system metrics

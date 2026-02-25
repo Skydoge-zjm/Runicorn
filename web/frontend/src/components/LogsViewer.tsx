@@ -142,13 +142,24 @@ export default function LogsViewer({ url }: LogsViewerProps) {
         setAllLines([])
       }
       
-      ws.onmessage = (ev) => {
-        if (!mountedRef.current) return
-        const text = String(ev.data)
+      // Batch incoming messages via rAF to reduce GC pressure from high-frequency updates
+      const pendingLines: string[] = []
+      let rafId: number | null = null
+      const flushPending = () => {
+        rafId = null
+        if (pendingLines.length === 0) return
+        const batch = pendingLines.splice(0)
         setAllLines((prev) => {
-          const next = [...prev, text]
+          const next = prev.concat(batch)
           return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next
         })
+      }
+      ws.onmessage = (ev) => {
+        if (!mountedRef.current) return
+        pendingLines.push(String(ev.data))
+        if (rafId === null) {
+          rafId = requestAnimationFrame(flushPending)
+        }
       }
       
       const scheduleReconnect = () => {

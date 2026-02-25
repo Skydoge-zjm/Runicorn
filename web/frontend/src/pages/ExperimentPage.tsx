@@ -349,7 +349,7 @@ const ExperimentPage: React.FC = () => {
                 runs={compareRunInfos} colors={ECHARTS_COLORS}
                 visibleRunIds={visibleRunIds} onToggleRunVisibility={toggleRunVisibility}
                 onHoverRun={setHoveredRunId} hoveredRunId={hoveredRunId}
-                onAddRuns={handleAddRuns} onBack={handleExitCompare}
+                onBack={handleExitCompare}
                 style={{ height: '100%', minHeight: 0 }}
               />
             </motion.div>

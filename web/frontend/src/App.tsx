@@ -13,7 +13,8 @@ import RemoteViewerPage from './pages/RemoteViewerPage'
 import PerformanceMonitorPage from './pages/PerformanceMonitorPage'
 import { PageTransition } from './components/animations/PageTransition'
 import { health, getConfig } from './api'
-import SettingsDrawer, { UiSettings } from './components/SettingsDrawer'
+import SettingsDrawer from './components/SettingsDrawer'
+import type { UiSettings } from './components/settings/themePresets'
 import { SettingsProvider } from './contexts/SettingsContext'
 import { GpuTelemetryProvider } from './contexts/GpuTelemetryContext'
 import { useTranslation } from 'react-i18next'
@@ -138,8 +139,8 @@ export default function App() {
       opacity: settings.backgroundOpacity,
       transition: 'background 0.3s ease',
     }
-    if (settings.backgroundType === 'image' && settings.backgroundImageUrl) {
-      s.backgroundImage = `url(${settings.backgroundImageUrl})`
+    if (settings.backgroundType === 'image' && settings.backgroundImageUrl && /^(https?:\/\/|data:image\/)/.test(settings.backgroundImageUrl)) {
+      s.backgroundImage = `url(${CSS.escape(settings.backgroundImageUrl)})`
       s.backgroundSize = 'cover'
       s.backgroundRepeat = 'no-repeat'
       s.backgroundPosition = 'center center'

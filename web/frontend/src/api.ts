@@ -1,22 +1,25 @@
 const BASE_URL: string = (import.meta as any).env?.VITE_API_BASE || '/api'
 const url = (p: string) => `${BASE_URL}${p}`
 
-export async function listRuns() {
-  const res = await fetch(url('/runs'))
+/** Unified fetch wrapper: handles error extraction and JSON parsing. */
+async function apiFetch<T = any>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url(path), init)
   if (!res.ok) throw new Error(await res.text())
   return res.json()
+}
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' } as const
+
+export async function listRuns() {
+  return apiFetch('/runs')
 }
 
 export async function getRunDetail(id: string) {
-  const res = await fetch(url(`/runs/${id}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`/runs/${id}`)
 }
 
 export async function getRunAssets(id: string) {
-  const res = await fetch(url(`/runs/${id}/assets`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`/runs/${id}/assets`)
 }
 
 export function downloadRunAssetUrl(runId: string, absolutePath: string, filename?: string) {
@@ -27,22 +30,16 @@ export function downloadRunAssetUrl(runId: string, absolutePath: string, filenam
 
 export async function getMetrics(id: string, downsample?: number) {
   const params = downsample ? `?downsample=${downsample}` : ''
-  const res = await fetch(url(`/runs/${id}/metrics${params}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`/runs/${id}/metrics${params}`)
 }
 
 export async function getStepMetrics(id: string, downsample?: number) {
   const params = downsample ? `?downsample=${downsample}` : ''
-  const res = await fetch(url(`/runs/${id}/metrics_step${params}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`/runs/${id}/metrics_step${params}`)
 }
 
 export async function getProgress(id: string) {
-  const res = await fetch(url(`/runs/${id}/progress`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`/runs/${id}/progress`)
 }
 
 export async function health() {
@@ -65,15 +62,11 @@ export async function health() {
 }
 
 export async function getGpuTelemetry() {
-  const res = await fetch(url('/gpu/telemetry'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/gpu/telemetry')
 }
 
 export async function getGpuTelemetryHistory() {
-  const res = await fetch(url('/gpu/telemetry/history'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ available: boolean; enabled: boolean; samples: any[] }>
+  return apiFetch<{ available: boolean; enabled: boolean; samples: any[] }>('/gpu/telemetry/history')
 }
 
 export interface GpuCollectorConfig {
@@ -83,61 +76,41 @@ export interface GpuCollectorConfig {
 }
 
 export async function getGpuTelemetryConfig() {
-  const res = await fetch(url('/gpu/telemetry/config'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<GpuCollectorConfig>
+  return apiFetch<GpuCollectorConfig>('/gpu/telemetry/config')
 }
 
 export async function setGpuTelemetryConfig(patch: Partial<GpuCollectorConfig>) {
-  const res = await fetch(url('/gpu/telemetry/config'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(patch),
+  return apiFetch<{ ok: boolean } & GpuCollectorConfig>('/gpu/telemetry/config', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(patch),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean } & GpuCollectorConfig>
 }
 
 export async function getSystemMonitor() {
-  const res = await fetch(url('/system/monitor'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/system/monitor')
 }
 
 // ----- New hierarchy helpers -----
 export async function listProjects() {
-  const res = await fetch(url('/projects'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ projects: string[] }>
+  return apiFetch<{ projects: string[] }>('/projects')
 }
 
 export async function listNames(project: string) {
-  const res = await fetch(url(`/projects/${encodeURIComponent(project)}/names`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ names: string[] }>
+  return apiFetch<{ names: string[] }>(`/projects/${encodeURIComponent(project)}/names`)
 }
 
 export async function listRunsByName(project: string, name: string) {
-  const res = await fetch(url(`/projects/${encodeURIComponent(project)}/names/${encodeURIComponent(name)}/runs`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`/projects/${encodeURIComponent(project)}/names/${encodeURIComponent(name)}/runs`)
 }
 
 // ----- Config helpers -----
 export async function getConfig() {
-  const res = await fetch(url('/config'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ user_root_dir: string; storage: string }>
+  return apiFetch<{ user_root_dir: string; storage: string }>('/config')
 }
 
 export async function setUserRootDir(path: string) {
-  const res = await fetch(url('/config/user_root_dir'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path })
+  return apiFetch<{ ok: boolean; user_root_dir: string; storage: string }>('/config/user_root_dir', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ path }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; user_root_dir: string; storage: string }>
 }
 
 // SSH connection config APIs
@@ -167,33 +140,23 @@ interface SaveSSHConnectionPayload {
 }
 
 export async function getSavedSSHConnections() {
-  const res = await fetch(url('/config/ssh_connections'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ connections: SavedSSHConnection[] }>
+  return apiFetch<{ connections: SavedSSHConnection[] }>('/config/ssh_connections')
 }
 
 export async function saveSSHConnection(connection: SaveSSHConnectionPayload) {
-  const res = await fetch(url('/config/ssh_connections'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(connection),
+  return apiFetch<{ ok: boolean; message: string }>('/config/ssh_connections', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(connection),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; message: string }>
 }
 
 export async function deleteSSHConnection(key: string) {
-  const res = await fetch(url(`/config/ssh_connections/${encodeURIComponent(key)}`), {
+  return apiFetch<{ ok: boolean; message: string }>(`/config/ssh_connections/${encodeURIComponent(key)}`, {
     method: 'DELETE',
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; message: string }>
 }
 
 export async function getSSHConnectionDetails(key: string) {
-  const res = await fetch(url(`/config/ssh_connections/${encodeURIComponent(key)}/details`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; connection: any }>  
+  return apiFetch<{ ok: boolean; connection: any }>(`/config/ssh_connections/${encodeURIComponent(key)}/details`)
 }
 
 export async function exportRunsZip(runIds: string[]) {
@@ -231,12 +194,7 @@ export interface ImportPreviewResult {
 export async function previewImport(file: File): Promise<ImportPreviewResult> {
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch(url('/import/preview'), {
-    method: 'POST',
-    body: fd,
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/import/preview', { method: 'POST', body: fd })
 }
 
 export interface ImportArchiveResult {
@@ -255,12 +213,7 @@ export async function confirmImport(previewToken: string, mode: 'merge' | 'isola
   const fd = new FormData()
   fd.append('preview_token', previewToken)
   fd.append('mode', mode)
-  const res = await fetch(url('/import/archive'), {
-    method: 'POST',
-    body: fd,
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/import/archive', { method: 'POST', body: fd })
 }
 
 /** Legacy: direct import without preview (backwards compat) */
@@ -268,216 +221,116 @@ export async function importArchive(file: File) {
   const fd = new FormData()
   fd.append('file', file)
   fd.append('mode', 'merge')
-  const res = await fetch(url('/import/archive'), {
-    method: 'POST',
-    body: fd
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<ImportArchiveResult>
+  return apiFetch<ImportArchiveResult>('/import/archive', { method: 'POST', body: fd })
 }
 
 // ----- Unified SSH helpers -----
 export async function unifiedConnect(payload: {
-  host: string
-  port?: number
-  username: string
-  password?: string
-  private_key?: string
-  private_key_path?: string
-  passphrase?: string
-  use_agent?: boolean
+  host: string; port?: number; username: string; password?: string;
+  private_key?: string; private_key_path?: string; passphrase?: string; use_agent?: boolean;
 }) {
-  const res = await fetch(url('/unified/connect'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/unified/connect', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload) })
 }
 
 export async function unifiedDisconnect() {
-  const res = await fetch(url('/unified/disconnect'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({})
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/unified/disconnect', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({}) })
 }
 
 export async function unifiedStatus() {
-  const res = await fetch(url('/unified/status'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/unified/status')
 }
 
 export async function unifiedConfigureMode(payload: {
-  mode: 'smart' | 'mirror'
-  remote_root?: string
-  auto_sync?: boolean
-  sync_interval_seconds?: number
-  mirror_interval?: number
+  mode: 'smart' | 'mirror'; remote_root?: string; auto_sync?: boolean;
+  sync_interval_seconds?: number; mirror_interval?: number;
 }) {
-  const res = await fetch(url('/unified/configure_mode'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/unified/configure_mode', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload) })
 }
 
 export async function unifiedDeactivateMode(mode: 'smart' | 'mirror') {
-  const res = await fetch(url('/unified/deactivate_mode'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode })
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/unified/deactivate_mode', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ mode }) })
 }
 
 export async function unifiedListdir(path?: string) {
   const q = new URLSearchParams({ path: path || '' })
-  const res = await fetch(url(`/unified/listdir?${q.toString()}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ 
-    items: Array<{ 
-      name: string; 
-      path: string; 
-      type: 'dir'|'file'|'unknown'; 
-      size: number; 
-      mtime: number 
-    }>; 
-    current_path: string;
-    ok: boolean 
-  }>
+  return apiFetch<{
+    items: Array<{ name: string; path: string; type: 'dir'|'file'|'unknown'; size: number; mtime: number }>;
+    current_path: string; ok: boolean;
+  }>(`/unified/listdir?${q.toString()}`)
 }
 
 // ----- SSH live sync helpers -----
 export async function sshConnect(payload: {
-  host: string
-  port?: number
-  username: string
-  password?: string
-  pkey?: string
-  pkey_path?: string
-  passphrase?: string
-  use_agent?: boolean
+  host: string; port?: number; username: string; password?: string;
+  pkey?: string; pkey_path?: string; passphrase?: string; use_agent?: boolean;
 }) {
-  const res = await fetch(url('/ssh/connect'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+  return apiFetch<{ ok: boolean; session_id: string }>('/ssh/connect', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; session_id: string }>
 }
 
 export async function sshSessions() {
-  const res = await fetch(url('/ssh/sessions'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ sessions: Array<{ id: string; host: string; port: number; username: string }> }>
+  return apiFetch<{ sessions: Array<{ id: string; host: string; port: number; username: string }> }>('/ssh/sessions')
 }
 
 export async function sshClose(session_id: string) {
-  const res = await fetch(url('/ssh/close'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session_id })
+  return apiFetch<{ ok: boolean }>('/ssh/close', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ session_id }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean }>
 }
 
 export async function sshListdir(session_id: string, path?: string) {
   const q = new URLSearchParams({ session_id, path: path || '' })
-  const res = await fetch(url(`/ssh/listdir?${q.toString()}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ items: Array<{ name: string; path: string; type: 'dir'|'file'; size: number; mtime: number }> }>
+  return apiFetch<{ items: Array<{ name: string; path: string; type: 'dir'|'file'; size: number; mtime: number }> }>(`/ssh/listdir?${q.toString()}`)
 }
 
 export async function sshMirrorStart(payload: { session_id: string; remote_root: string; interval?: number }) {
-  const res = await fetch(url('/ssh/mirror/start'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+  return apiFetch<{ ok: boolean; task: any }>('/ssh/mirror/start', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; task: any }>
 }
 
 export async function sshMirrorStop(task_id: string) {
-  const res = await fetch(url('/ssh/mirror/stop'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task_id })
+  return apiFetch<{ ok: boolean }>('/ssh/mirror/stop', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ task_id }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean }>
 }
 
 export async function sshMirrorList() {
-  const res = await fetch(url('/ssh/mirror/list'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ mirrors: any[]; storage: string }>
+  return apiFetch<{ mirrors: any[]; storage: string }>('/ssh/mirror/list')
 }
 
 // ----- Status management -----
 export async function checkAllStatus() {
-  const res = await fetch(url('/status/check'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
+  return apiFetch<{ checked: number; updated: number; message: string }>('/status/check', {
+    method: 'POST', headers: JSON_HEADERS,
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ checked: number; updated: number; message: string }>
 }
 
 // ----- Soft delete / Recycle bin -----
 export async function softDeleteRuns(runIds: string[]) {
-  const res = await fetch(url('/runs/soft-delete'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ run_ids: runIds })
+  return apiFetch<{ deleted_count: number; results: Record<string, any>; message: string }>('/runs/soft-delete', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ run_ids: runIds }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ deleted_count: number; results: Record<string, any>; message: string }>
 }
 
 export async function listDeletedRuns() {
-  const res = await fetch(url('/recycle-bin'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ deleted_runs: Array<{
-    id: string
-    path: string
-    alias: string | null
-    created_time: number
-    deleted_at: number
-    delete_reason: string
-    original_status: string
-    run_dir: string
-  }> }>
+  return apiFetch<{ deleted_runs: Array<{
+    id: string; path: string; alias: string | null; created_time: number;
+    deleted_at: number; delete_reason: string; original_status: string; run_dir: string;
+  }> }>('/recycle-bin')
 }
 
 export async function restoreRuns(runIds: string[]) {
-  const res = await fetch(url('/recycle-bin/restore'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ run_ids: runIds })
+  return apiFetch<{ restored_count: number; results: Record<string, any>; message: string }>('/recycle-bin/restore', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ run_ids: runIds }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ restored_count: number; results: Record<string, any>; message: string }>
 }
 
 export async function emptyRecycleBin() {
-  const res = await fetch(url('/recycle-bin/empty'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ confirm: true })
+  return apiFetch<{ permanently_deleted: number; message: string }>('/recycle-bin/empty', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ confirm: true }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ permanently_deleted: number; message: string }>
 }
 
 // ----- Permanent delete with asset cleanup -----
@@ -524,34 +377,20 @@ export interface PermanentDeleteResult {
 }
 
 export async function getRunAssetRefs(runId: string): Promise<RunAssetRefs> {
-  const res = await fetch(url(`/runs/${runId}/assets/refs`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`/runs/${runId}/assets/refs`)
 }
 
 export async function permanentDeleteRun(runId: string, dryRun: boolean = false): Promise<PermanentDeleteResult> {
-  const res = await fetch(url(`/runs/${runId}/permanent?dry_run=${dryRun}`), {
-    method: 'DELETE',
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`/runs/${runId}/permanent?dry_run=${dryRun}`, { method: 'DELETE' })
 }
 
-export async function permanentDeleteRunsBatch(runIds: string[], dryRun: boolean = false): Promise<{
-  deleted_count: number
-  total_runs: number
-  total_blobs_deleted: number
-  total_bytes_freed: number
-  dry_run: boolean
-  results: Record<string, PermanentDeleteResult>
-}> {
-  const res = await fetch(url('/runs/permanent-delete'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ run_ids: runIds, dry_run: dryRun })
+export async function permanentDeleteRunsBatch(runIds: string[], dryRun: boolean = false) {
+  return apiFetch<{
+    deleted_count: number; total_runs: number; total_blobs_deleted: number;
+    total_bytes_freed: number; dry_run: boolean; results: Record<string, PermanentDeleteResult>;
+  }>('/runs/permanent-delete', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ run_ids: runIds, dry_run: dryRun }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 // ----- Storage stats -----
@@ -599,91 +438,65 @@ export interface StorageStats {
 }
 
 export async function getStorageStats(): Promise<StorageStats> {
-  const res = await fetch(url('/storage/stats'))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch('/storage/stats')
 }
 
 // ----- Run update helpers -----
-export async function updateRunAlias(runId: string, alias: string | null): Promise<{ ok: boolean; alias: string | null }> {
-  const res = await fetch(url(`/runs/${runId}`), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ alias })
+export async function updateRunAlias(runId: string, alias: string | null) {
+  return apiFetch<{ ok: boolean; alias: string | null }>(`/runs/${runId}`, {
+    method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ alias }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
-export async function updateRunTags(runId: string, tags: string[]): Promise<{ ok: boolean; tags: string[] }> {
-  const res = await fetch(url(`/runs/${runId}`), {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tags })
+export async function updateRunTags(runId: string, tags: string[]) {
+  return apiFetch<{ ok: boolean; tags: string[] }>(`/runs/${runId}`, {
+    method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ tags }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
 }
 
 // ----- Move runs -----
 export async function moveRuns(runIds: string[], targetPath: string) {
-  const res = await fetch(url('/runs/move'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ run_ids: runIds, target_path: targetPath }),
+  return apiFetch<{
+    ok: boolean; moved_count: number; failed_count: number;
+    moved: Array<{ run_id: string; old_path: string; new_path: string }>;
+    failed: Array<{ run_id: string; error: string }>;
+  }>('/runs/move', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ run_ids: runIds, target_path: targetPath }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{
-    ok: boolean
-    moved_count: number
-    failed_count: number
-    moved: Array<{ run_id: string; old_path: string; new_path: string }>
-    failed: Array<{ run_id: string; error: string }>
-  }>
 }
 
 // ----- Path helpers -----
 export async function softDeleteByPath(path: string) {
-  const res = await fetch(url('/paths/soft-delete'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
+  return apiFetch<{ deleted_count: number }>('/paths/soft-delete', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ path }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ deleted_count: number }>
 }
 
 export async function createPath(path: string) {
-  const res = await fetch(url('/paths/create'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
+  return apiFetch<{ ok: boolean; path: string }>('/paths/create', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ path }),
   })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json() as Promise<{ ok: boolean; path: string }>
 }
 
 export async function listPaths(includeStats = true) {
   const qs = includeStats ? '?include_stats=true' : ''
-  const res = await fetch(url(`/paths${qs}`))
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  return apiFetch(`/paths${qs}`)
 }
 
 // ----- Column width config -----
 export async function getColumnWidths(tableKey: string, sizeKey: string) {
-  const res = await fetch(url(`/config/column-widths?table=${tableKey}&size=${sizeKey}`))
-  if (!res.ok) return null
-  return res.json()
+  try {
+    return await apiFetch(`/config/column-widths?table=${tableKey}&size=${sizeKey}`)
+  } catch {
+    return null
+  }
 }
 
 export async function saveColumnWidths(payload: {
   table: string; size: string; widths: Record<string, number>;
   window_width: number; window_height: number;
 }) {
-  await fetch(url('/config/column-widths'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  await apiFetch('/config/column-widths', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload),
   })
 }

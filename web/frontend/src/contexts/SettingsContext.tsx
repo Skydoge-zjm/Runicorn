@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { UiSettings } from '../components/SettingsDrawer'
+import type { UiSettings } from '../components/settings/themePresets'
 
 interface SettingsContextType {
   settings: UiSettings

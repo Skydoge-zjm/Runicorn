@@ -18,7 +18,7 @@ export default function RunAssets({ runId }: RunAssetsProps) {
   const navigate = useNavigate()
   const { Text } = Typography
   const [loading, setLoading] = useState(false)
-  const [data, setData] = useState<any>(null)
+  const [data, setData] = useState<{ assets?: Record<string, any>; [key: string]: any } | null>(null)
 
   useEffect(() => {
     loadAssets()

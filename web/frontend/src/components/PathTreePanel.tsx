@@ -386,22 +386,21 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
     // Filter by search text
     if (searchText) {
       const filterTree = (nodes: DataNode[]): DataNode[] => {
-        return nodes.filter(node => {
+        return nodes.flatMap(node => {
           const key = String(node.key).toLowerCase()
           const matches = key.includes(searchText.toLowerCase())
           
           if (node.children) {
             const filteredChildren = filterTree(node.children)
             if (filteredChildren.length > 0) {
-              node.children = filteredChildren
-              return true
+              return [{ ...node, children: filteredChildren }]
             }
           }
           
-          return matches
+          return matches ? [node] : []
         })
       }
-      return filterTree([...nodes])
+      return filterTree(nodes)
     }
     
     return nodes

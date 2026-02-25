@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Space, Alert, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge, Row, Col, Typography, Statistic, Divider, Collapse, Tabs, theme } from 'antd'
 import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, LineChartOutlined, MinusOutlined, ReloadOutlined, RocketOutlined, ClockCircleOutlined, CalendarOutlined, FolderOpenOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined } from '@ant-design/icons'
@@ -15,6 +15,21 @@ import { useTranslation } from 'react-i18next'
 import logger from '../utils/logger'
 
 const { Text, Title } = Typography
+
+/** Shape of the run detail response from the API. */
+interface RunDetail {
+  run_id: string
+  path: string
+  alias: string | null
+  status: string
+  start_time?: number
+  duration?: number
+  pid?: number
+  run_dir?: string
+  logs?: string
+  assets_count?: number
+  summary?: Record<string, any>
+}
 
 /**
  * Refresh interval configuration based on run status.
@@ -41,7 +56,7 @@ export default function RunDetailPage() {
   const { settings } = useSettings()
   const { token } = theme.useToken()
   const navigate = useNavigate()
-  const [detail, setDetail] = useState<any>(null)
+  const [detail, setDetail] = useState<RunDetail | null>(null)
   const [stepMetrics, setStepMetrics] = useState<{ columns: string[]; rows: any[]; total?: number; sampled?: number }>({ columns: [], rows: [] })
   const [detailLoading, setDetailLoading] = useState(false)
   const [metricsLoading, setMetricsLoading] = useState(false)
@@ -67,7 +82,7 @@ export default function RunDetailPage() {
   }, [])
 
 
-  const loadDetail = async (showLoading = true) => {
+  const loadDetail = useCallback(async (showLoading = true) => {
     if (showLoading) setDetailLoading(true)
     try {
       const result = await getRunDetail(id)
@@ -79,9 +94,9 @@ export default function RunDetailPage() {
     } finally {
       if (showLoading) setDetailLoading(false)
     }
-  }
+  }, [id, t])
 
-  const loadStepMetrics = async (showLoading = true) => {
+  const loadStepMetrics = useCallback(async (showLoading = true) => {
     if (showLoading) setMetricsLoading(true)
     try {
       // Pass maxDataPoints setting as downsample parameter to backend
@@ -108,7 +123,7 @@ export default function RunDetailPage() {
     } finally {
       if (showLoading) setMetricsLoading(false)
     }
-  }
+  }, [id, settings.maxDataPoints, t])
 
   // Compute refresh interval based on run status
   const refreshInterval = useMemo(() => {

@@ -31,7 +31,6 @@ interface CompareRunsPanelProps {
   onToggleRunVisibility: (runId: string) => void
   onHoverRun?: (runId: string | null) => void
   hoveredRunId?: string | null
-  onAddRuns: () => void
   onBack: () => void
   style?: React.CSSProperties
 }
@@ -43,7 +42,6 @@ const CompareRunsPanel: React.FC<CompareRunsPanelProps> = ({
   onToggleRunVisibility,
   onHoverRun,
   hoveredRunId,
-  onAddRuns: _onAddRuns,
   onBack,
   style,
 }) => {

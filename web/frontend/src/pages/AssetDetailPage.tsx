@@ -11,6 +11,7 @@ import { assetIdentityToString } from '../utils/assetIdentity'
 import AssetPreview from '../components/assets/AssetPreview'
 import { suggestAssetDownloadFilename } from '../utils/assetDownload'
 import { formatRelativeTime } from '../utils/format'
+import type { ParsedAsset } from '../utils/assetParse'
 
 const { Text, Title } = Typography
 
@@ -22,7 +23,7 @@ export default function AssetDetailPage() {
 
   const [repoRow, setRepoRow] = useState<AssetsIndexRepoRow | null>(null)
   const [loading, setLoading] = useState(false)
-  const [previewAsset, setPreviewAsset] = useState<any | null>(null)
+  const [previewAsset, setPreviewAsset] = useState<ParsedAsset | null>(null)
 
   const identity = useMemo(() => decodeAssetIdentity(id), [id])
 
