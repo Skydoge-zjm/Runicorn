@@ -176,6 +176,8 @@ export default {
   'remote.env.versionMismatchWarning': 'It is recommended to keep versions consistent for the best experience, but you can still continue.',
   'remote.env.continueAnyway': 'Continue Anyway',
   'remote.env.noEnvs': 'No Python environments detected',
+  'remote.env.confirmButton': 'Confirm and Start Viewer',
+  'remote.env.cancelButton': 'Cancel',
   'remote.env.fetching': 'Detecting conda environments...',
   'remote.env.detectingEnvironments': 'Detecting Python environments, please wait...',
   
