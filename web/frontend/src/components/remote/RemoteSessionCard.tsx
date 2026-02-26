@@ -25,6 +25,7 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import type { RemoteSession } from '../../types/remote'
 import ServerStatusLight from '../fancy/ServerStatusLight'
+import { openInTauriWindow } from '../../utils/tauri'
 
 dayjs.extend(relativeTime)
 
@@ -56,7 +57,9 @@ export default function RemoteSessionCard({
 
   const handleOpen = () => {
     const url = `http://localhost:${session.localPort}`
-    window.open(url, '_blank')
+    const label = `remote-${session.sessionId}`
+    const title = `Runicorn Remote — ${session.host}`
+    openInTauriWindow(url, label, title)
     onOpen?.(session)
   }
 
@@ -128,10 +131,12 @@ export default function RemoteSessionCard({
     >
       <Descriptions column={2} size="small">
         <Descriptions.Item label={t('remote.session.localAccess')}>
-          <a 
-            href={`http://localhost:${session.localPort}`} 
-            target="_blank" 
-            rel="noopener noreferrer"
+          <a
+            href={`http://localhost:${session.localPort}`}
+            onClick={(e) => {
+              e.preventDefault()
+              handleOpen()
+            }}
           >
             http://localhost:{session.localPort}
           </a>

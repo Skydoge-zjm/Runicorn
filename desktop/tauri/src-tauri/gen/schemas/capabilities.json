@@ -1,1 +1,1 @@
-{"main-capability":{"identifier":"main-capability","description":"Capabilities for the main window to spawn the backend sidecar.","local":true,"windows":["main"],"permissions":["shell:allow-spawn","shell:allow-kill","shell:allow-stdin-write"]}}
+{"main-capability":{"identifier":"main-capability","description":"Capabilities for the main window: sidecar management and remote viewer windows.","local":true,"windows":["main","remote-*"],"permissions":["shell:allow-spawn","shell:allow-kill","shell:allow-stdin-write","shell:allow-open","core:window:default","core:webview:default"]}}
