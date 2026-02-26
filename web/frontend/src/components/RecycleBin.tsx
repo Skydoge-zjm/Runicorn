@@ -50,7 +50,8 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
     } finally {
       setLoading(false)
     }
-  }, [open, t])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   useEffect(() => {
     if (open) {

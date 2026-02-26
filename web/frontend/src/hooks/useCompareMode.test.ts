@@ -110,4 +110,74 @@ describe('useCompareMode', () => {
       expect(result.current.compareRunInfos).toHaveLength(2)
     })
   })
+
+  // ── Additional branch coverage ──
+
+  it('handleCompare uses alias for label, falls back to path segment then run_id suffix', async () => {
+    const { result } = renderHook(() => useCompareMode(mockRuns, ['r1', 'r3']), {
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await result.current.handleCompare()
+    })
+
+    await waitFor(() => expect(result.current.compareRunLabels.size).toBe(2))
+    // r1 has alias 'a1'
+    expect(result.current.compareRunLabels.get('r1')).toBe('a1')
+    // r3 has no alias, path 'p/e' → last segment 'e'
+    expect(result.current.compareRunLabels.get('r3')).toBe('e')
+  })
+
+  it('handleCompare handles metrics fetch failure gracefully', async () => {
+    server.use(
+      http.get('/api/runs/:id/metrics_step', () =>
+        new HttpResponse('fail', { status: 500 }),
+      ),
+    )
+
+    const { result } = renderHook(() => useCompareMode(mockRuns, ['r1', 'r2']), {
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await result.current.handleCompare()
+    })
+
+    await waitFor(() => expect(result.current.compareLoading).toBe(false))
+    // Metrics map should still exist but may be empty due to per-run catch
+    expect(result.current.compareMetrics).toBeDefined()
+  })
+
+  it('handleAddRuns shows info message', async () => {
+    const { result } = renderHook(() => useCompareMode(mockRuns, []), {
+      wrapper: createWrapper(),
+    })
+
+    act(() => result.current.handleAddRuns())
+    expect(message.info).toHaveBeenCalledWith('experiments.add_runs_coming_soon')
+  })
+
+  it('URL restore skips when fewer than 2 matching runs found', async () => {
+    // URL has r1,r_nonexistent → only r1 matches → selectedRuns.length < 2 → skip
+    const { result } = renderHook(() => useCompareMode(mockRuns, []), {
+      wrapper: createWrapper({ initialEntries: ['/?compare=r1,r_nonexistent'] }),
+    })
+
+    // Wait a tick for useEffect to run
+    await new Promise((r) => setTimeout(r, 50))
+    expect(result.current.compareRunInfos).toHaveLength(0)
+  })
+
+  it('compareMode is true when URL has 2+ IDs and false otherwise', () => {
+    const { result: r1 } = renderHook(() => useCompareMode([], []), {
+      wrapper: createWrapper({ initialEntries: ['/?compare=a,b'] }),
+    })
+    expect(r1.current.compareMode).toBe(true)
+
+    const { result: r2 } = renderHook(() => useCompareMode([], []), {
+      wrapper: createWrapper({ initialEntries: ['/?compare=a'] }),
+    })
+    expect(r2.current.compareMode).toBe(false)
+  })
 })

@@ -145,4 +145,127 @@ describe('parseRunAssetsPayload', () => {
     const result = parseRunAssetsPayload(payload)
     expect(result[0].name).toBe('dataset_0')
   })
+
+  // ── Additional branch coverage ──
+
+  it('returns [] when assets value is non-object (string)', () => {
+    expect(parseRunAssetsPayload({ assets: 'bad' })).toEqual([])
+  })
+
+  it('handles code snapshot as non-object (skipped)', () => {
+    const payload = { assets: { code: { snapshot: false } } }
+    expect(parseRunAssetsPayload(payload)).toEqual([])
+  })
+
+  it('handles config as non-object (number)', () => {
+    const payload = { assets: { config: 42 } }
+    expect(parseRunAssetsPayload(payload)).toEqual([])
+  })
+
+  it('handles fingerprint as undefined', () => {
+    const payload = {
+      assets: {
+        datasets: [{ name: 'ds', fingerprint: undefined }],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    expect(result[0].fingerprint).toBeUndefined()
+  })
+
+  it('handles fingerprint as boolean (unsupported type returns undefined)', () => {
+    const payload = {
+      assets: {
+        datasets: [{ name: 'ds', fingerprint: true }],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    expect(result[0].fingerprint).toBeUndefined()
+  })
+
+  it('stableStringify handles nested objects with arrays', () => {
+    const payload = {
+      assets: {
+        datasets: [{ name: 'ds', fingerprint: { list: [3, 1], nested: { z: 1, a: 2 } } }],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    // keys sorted: list before nested; nested keys sorted: a before z
+    expect(result[0].fingerprint).toBe('{"list":[3,1],"nested":{"a":2,"z":1}}')
+  })
+
+  it('handles dataset with description=null and context=null', () => {
+    const payload = {
+      assets: {
+        datasets: [{ name: 'ds', description: null, context: null }],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    expect(result[0].description).toBeUndefined()
+    expect(result[0].context).toBeUndefined()
+  })
+
+  it('handles dataset with explicit description and context', () => {
+    const payload = {
+      assets: {
+        datasets: [{ name: 'ds', description: 'desc text', context: 'train' }],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    expect(result[0].description).toBe('desc text')
+    expect(result[0].context).toBe('train')
+  })
+
+  it('handles pretrained with no path_or_uri', () => {
+    const payload = {
+      assets: {
+        pretrained: [{ name: 'pt' }],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    expect(result[0].source_uri).toBeUndefined()
+  })
+
+  it('handles pretrained with null description and source_type', () => {
+    const payload = {
+      assets: {
+        pretrained: [{ name: 'pt', description: null, source_type: null }],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    expect(result[0].description).toBeUndefined()
+    expect(result[0].source_type).toBeUndefined()
+  })
+
+  it('uses default naming for pretrained and outputs', () => {
+    const payload = {
+      assets: {
+        pretrained: [{}],
+        outputs: [{}],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    expect(result[0].name).toBe('pretrained_0')
+    expect(result[1].name).toBe('output_0')
+  })
+
+  it('outputs use key field as fallback name', () => {
+    const payload = {
+      assets: {
+        outputs: [{ key: 'checkpoint_best' }],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    expect(result[0].name).toBe('checkpoint_best')
+  })
+
+  it('non-array datasets/pretrained/outputs treated as empty', () => {
+    const payload = {
+      assets: {
+        datasets: 'not-array',
+        pretrained: 123,
+        outputs: null,
+      },
+    }
+    expect(parseRunAssetsPayload(payload)).toEqual([])
+  })
 })
