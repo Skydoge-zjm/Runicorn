@@ -13,7 +13,7 @@
  * - Smooth animations
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { Tree, Spin, Empty, Input, Tooltip, Dropdown, Modal, message, theme } from 'antd'
+import { Tree, Spin, Empty, Input, Tooltip, Dropdown, App, Modal, message, theme } from 'antd'
 import { FolderOutlined, FolderFilled, FolderOpenFilled, FolderAddOutlined, SearchOutlined, ReloadOutlined, DeleteOutlined, ExportOutlined, AppstoreOutlined, LoadingOutlined, PlusOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -278,6 +278,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
 }) => {
   const { t } = useTranslation()
   const { token } = theme.useToken()
+  const { modal } = App.useApp()
   const [loading, setLoading] = useState(false)
   const [treeData, setTreeData] = useState<PathTreeData | null>(null)
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([])
@@ -463,7 +464,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
       danger: true,
       onClick: () => {
         if (contextMenuPath && onBatchDelete) {
-          Modal.confirm({
+          modal.confirm({
             title: t('experiments.delete_path_confirm_title'),
             content: t('experiments.delete_path_confirm', { path: contextMenuPath }),
             okText: t('experiments.delete'),

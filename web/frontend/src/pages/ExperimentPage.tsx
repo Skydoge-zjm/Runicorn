@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Table, Button, Card, Space, Input, Tag, message, Modal, Tooltip, Empty, Badge, theme } from 'antd'
+import { Table, Button, Card, Space, Input, Tag, message, Tooltip, Empty, Badge, theme, App } from 'antd'
 import { EyeOutlined, DeleteOutlined, CopyOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -42,6 +42,7 @@ const ExperimentPage: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { token } = theme.useToken()
+  const { modal } = App.useApp()
 
   // Hooks
   const {
@@ -110,7 +111,7 @@ const ExperimentPage: React.FC = () => {
       message.warning(t('experiments.select_one_delete'))
       return
     }
-    Modal.confirm({
+    modal.confirm({
       title: t('experiments.move_to_bin_title'),
       content: (
         <div>
@@ -144,7 +145,7 @@ const ExperimentPage: React.FC = () => {
         }
       },
     })
-  }, [selectedRowKeys, t, deleteLoading, fetchRuns, token])
+  }, [selectedRowKeys, t, deleteLoading, fetchRuns, token, modal])
 
   // Export handler
   const handleExportZip = useCallback(async () => {

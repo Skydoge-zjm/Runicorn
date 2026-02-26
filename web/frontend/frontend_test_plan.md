@@ -367,103 +367,64 @@ steps:
 **断言**: 优先用具体断言（`toEqual`, `toContain`）而非 `toBeTruthy`。组件测试优先用 `getByRole` / `getByText` 而非 `getByTestId`
 **Mock 最小化**: 只 mock 必要的外部依赖，不 mock 被测模块内部函数
 **不测实现细节**: Hook 测试验证返回值和副作用，不验证内部 state 变化。组件测试验证用户可见行为，不验证 DOM 结构
-## 11. 实施进度
-> 最后更新: 2026-02-26
+## 11. 实施进度与当前状态
+> 最后更新: 2026-02-26 — 阶段三完成
 
-| Step | 内容 | 状态 | 测试文件 | 备注 |
-|------|------|------|----------|------|
-| 1 | 基础设施搭建 | ✅ 完成 | `vitest.config.ts`, `src/__tests__/setup.ts`, `src/__mocks__/` | 依赖已安装，空测试可运行 |
-| 2 | utils 纯函数测试 | ✅ 完成 | `format.test.ts`, `assetIdentity.test.ts`, `assetParse.test.ts`, `assetDownload.test.ts`, `themePresets.test.ts` | 5 个文件 |
-| 3 | API 层测试 | ✅ 完成 | `api/__tests__/api.test.ts`, `preferences.test.ts`, `remote.test.ts` | 3 个文件，使用 msw 拦截 |
-| 4 | Hook 测试 | ✅ 完成 | `useExperimentFilters.test.ts`, `useInlineEditing.test.ts`, `useCompareMode.test.ts`, `useExperimentData.test.ts`, `useColumnWidths.test.ts`, `useAssetsIndex.test.ts` | 6 个文件 |
-| 5 | 组件测试 | ✅ 完成 | `FilterToolbar.test.tsx`, `StatsBar.test.tsx`, `StatusTag.test.tsx`, `ErrorBoundary.test.tsx`, `DismissibleAlert.test.tsx`, `RecycleBin.test.tsx` | 6 个文件 |
-| 6 | 集成测试 + i18n | ✅ 完成 | `src/__tests__/i18n.test.ts`, `src/__tests__/ExperimentPage.test.tsx` | i18n 完整性 + ExperimentPage 集成 |
-| 7 | 覆盖率审查 | ✅ 完成 | — | 详见下方覆盖率分析 |
+### 测试规模
+| 指标 | 阶段一 | 阶段二 | 阶段三（当前） |
+|------|--------|--------|----------------|
+| 测试文件 | 20 | 23 | **26** |
+| 测试用例 | 252 | 377 | **423** |
+| 运行耗时 | ~50s | ~60s | **~85s** |
+| 分支 | `test/frontend-tests` | 同左 | 同左 |
 
-### 测试运行结果
-- **测试文件**: 23 个全部通过
-- **测试用例**: 377 个全部通过
-- **运行耗时**: ~60s
+### 测试文件清单（26 个）
+**基础设施** (2):
+- `src/__tests__/setup.ts` — 全局 mock（matchMedia, ResizeObserver, IntersectionObserver, localStorage, URL, WebSocket）
+- `src/__mocks__/handlers.ts` + `server.ts` — msw 服务器和默认 API handlers
 
-### 修复记录
-1. 英文 locale 缺少 `remote.env.cancelButton` 和 `remote.env.confirmButton`，已补齐于 `src/locales/en/remote.ts`
-2. **源码 Bug 修复 — RecycleBin.tsx 无限重渲染**：`useCallback(..., [open, t])` 中 `t`（来自 `useTranslation()`）为不稳定引用，与 `useEffect(..., [open, fetchDeletedRuns])` 形成无限循环。修复：移除 `t` 依赖，改为 `[open]`，添加 eslint-disable 注释。
+**utils 纯函数** (6):
+- `format.test.ts` (38), `assetIdentity.test.ts` (13), `assetParse.test.ts` (27), `assetDownload.test.ts` (27), `themePresets.test.ts` (65), `logger.test.ts` (12)
 
-### 覆盖率分析（阶段二完成后）
+**API 层** (3):
+- `api/__tests__/api.test.ts` (65), `preferences.test.ts` (6), `remote.test.ts` (32)
 
-**utils/** — 目标：行 ≥95%，分支 ≥90%
-| 文件 | 行覆盖率 | 分支覆盖率 | 状态 | 阶段一→二变化 |
-|------|----------|------------|------|---------------|
-| format.ts | 100% | 95.16% | ✅ | — |
-| assetIdentity.ts | 100% | 96.29% | ✅ | — |
-| assetParse.ts | 100% | 98.14% | ✅ | 行 97.82→100%, 分支 85.18→98.14% |
-| assetDownload.ts | 100% | 92% | ✅ | — |
-| logger.ts | 50% | 16.66% | ⚠️ | 行 37.5→50%（新增测试，但 import.meta.env.DEV 为模块级常量难以分支切换） |
-| **目录合计** | **97.48%** | **90.55%** | **行 ✅ / 分支 ✅** | 行 96.22→97.48%, 分支 86.11→90.55% |
+**Hooks** (6):
+- `useExperimentFilters.test.ts` (22), `useExperimentData.test.ts` (11), `useCompareMode.test.ts` (11), `useInlineEditing.test.ts` (7), `useColumnWidths.test.ts` (4), `useAssetsIndex.test.ts` (6)
 
-✅ utils/ 分支覆盖率从 86.11% 提升至 90.55%，达成 ≥90% 目标。
+**组件** (6):
+- `FilterToolbar.test.tsx` (6), `StatsBar.test.tsx` (3), `StatusTag.test.tsx` (4), `ErrorBoundary.test.tsx` (3), `DismissibleAlert.test.tsx` (3), `RecycleBin.test.tsx` (5)
 
-**hooks/** — 目标：行 ≥80%
-| 文件 | 行覆盖率 | 状态 | 阶段一→二变化 |
-|------|----------|------|---------------|
-| useExperimentFilters.ts | 100% | ✅ | 72→100%（+handleResizeStart, localStorage 分支） |
-| useExperimentData.ts | 93.47% | ✅ | 69.56→93.47%（+error paths, export, mapRuns 边界） |
-| useAssetsIndex.ts | 90.67% | ✅ | — |
-| useInlineEditing.ts | 87.27% | ✅ | — |
-| useColumnWidths.ts | 83.33% | ✅ | — |
-| useCompareMode.ts | 74.48% | ⚠️ | 72.44→74.48%（+handleAddRuns, URL restore 边界） |
-| useRemoteSessions.ts | 0% | — 计划外 | — |
-| useSavedConnections.ts | 0% | — 计划外 | — |
-| **目录合计** | **64.05%** | **⚠️** | 59.12→64.05% |
+**集成测试** (3):
+- `ExperimentPage.test.tsx` (3), `RunDetailPage.test.tsx` (15), `AssetsPage.test.tsx` (14)
 
-计划范围内 6 个 hook 均值 ~88.2%，达成 ≥80% 目标 ✅。目录聚合仍受 2 个未测 hook 拉低。
+**其他** (2):
+- `i18n.test.ts` (4), `AddTagModal.test.tsx` (17)
 
-**API 层** — 目标：行 ≥70%
-| 文件 | 行覆盖率 | 状态 | 阶段一→二变化 |
-|------|----------|------|---------------|
-| api.ts | 100% | ✅ | 48→100%（+52 个 endpoint 测试） |
-| preferences.ts | 73.33% | ✅ | — |
-| remote.ts | 97.67% | ✅ | 34.88→97.67%（+26 个测试覆盖全部 API 函数） |
-| **src/ api.ts** | **100%** | **✅** | |
-| **src/api/ 合计** | **94.05%** | **✅** | 40.59→94.05% |
+### 覆盖率达标情况
+| 区域 | 目标 | 实际 | 状态 |
+|------|------|------|------|
+| utils/ 行覆盖率 | ≥95% | 97.48% | ✅ |
+| utils/ 分支覆盖率 | ≥90% | 90.55% | ✅ |
+| hooks/（计划范围 6 文件均值） | ≥80% | ~88.2% | ✅ |
+| API 层 api.ts | ≥70% | 100% | ✅ |
+| API 层 api/ 目录 | ≥70% | 94.05% | ✅ |
+| 页面集成测试 | P0 完成 | ExperimentPage + RunDetailPage + AssetsPage | ✅ |
+| 业务组件测试 | P1 部分完成 | AddTagModal ✅, DismissedAlertsManager ⏳ | ✅/⏳ |
 
-✅ API 层大幅超过 ≥70% 目标。
+### 阶段三新增（+46 用例，+3 文件）
+| 文件 | 用例数 | 内容 |
+|------|--------|------|
+| `RunDetailPage.test.tsx` | 15 | 加载详情、状态渲染(running/finished/failed)、Tabs 切换、指标图表渲染、空指标、统计信息、子组件挂载(LogsViewer/RunAssets)、骨架屏、API 错误容错 |
+| `AssetsPage.test.tsx` | 14 | 页面标题/统计、Overview 表格、Repo 表格（tab 切换）、过滤控件、saved/ref 标签、空 index 容错、存储统计 API、刷新按钮 |
+| `AddTagModal.test.tsx` | 17 | Modal 开关、输入验证、确认提交(trim)、Enter/Escape 键盘、推荐/历史标签过滤、点击标签直接提交、上限10个历史标签、重新打开清空输入 |
 
-**组件层**（计划范围：FilterToolbar, StatsBar, StatusTag, ErrorBoundary, RecycleBin）
-| 文件 | 行覆盖率 | 状态 |
-|------|----------|------|
-| FilterToolbar.tsx | 100% | ✅ |
-| StatsBar.tsx | 100% | ✅ |
-| DismissibleAlert.tsx | 93.54% | ✅ 额外 |
-| StatusTag.tsx | 88.88% | ✅ |
-| ErrorBoundary.tsx | 83.33% | ✅ |
-| RecycleBin.tsx | 33.33% | ⚠️ 复杂组件，仅覆盖核心路径 |
+### 已发现并修复的源码问题
+1. **RecycleBin.tsx 无限重渲染**（阶段一）：`useCallback` 依赖 `t`（不稳定引用）导致与 `useEffect` 形成无限循环。已移除 `t` 依赖。
+2. **handlers.ts StorageStats 不完整**（阶段三）：`/api/storage/stats` mock 缺少 `archive` 字段，导致 AssetsPage 在测试中 crash。已补全完整结构。
+3. **英文 locale 缺失 key**（阶段一）：`remote.env.cancelButton` 和 `remote.env.confirmButton` 缺失，已补齐。
 
-**全局** — 目标：行 ≥40%
-- **实际**: 25.14%（阶段一 21.23% → 阶段二 25.14%，+3.91pp）
-- 差距原因：大量页面组件（App.tsx、6 个 Page 文件、~30 个未测组件）行覆盖率为 0%，按文件数占比约 70%。
-
-### 覆盖率总结
-
-**阶段二改进效果**：
-| 区域 | 阶段一 Lines | 阶段二 Lines | 阶段一 Branches | 阶段二 Branches |
-|------|------------|------------|----------------|----------------|
-| utils/ | 96.22% | 97.48% | 86.11% | **90.55% ✅** |
-| hooks/（目录） | 59.12% | 64.05% | 44.11% | 46.17% |
-| hooks/（计划内 6 文件） | ~79.2% | **~88.2% ✅** | — | — |
-| api.ts | 48% | **100% ✅** | 36% | 88% |
-| api/remote.ts | 34.88% | **97.67% ✅** | 31.11% | 91.11% |
-| 全局 | 21.23% | 25.14% | 14.64% | 16.67% |
-
-阶段二新增 125 个测试用例（252→377），新增 1 个测试文件（`logger.test.ts`）。主要改进：
-- utils/ 分支覆盖率达标（86.11% → 90.55%）
-- API 层从 ~40% 提升至 94-100%
-- hooks 计划范围内文件均值从 ~79% 提升至 ~88%
-- 全局覆盖率受限于 ~30 个 0% 覆盖的组件/页面文件，需在后续迭代中逐步覆盖
-
-### 后续迭代方向
-1. 为 useRemoteSessions / useSavedConnections 补充测试以提升 hooks 目录聚合
-2. 逐步覆盖更多组件（LoadingSkeleton、AddTagModal、LogsViewer 等轻量组件优先）
-3. 为核心页面（RunDetailPage、AssetsPage）补充集成测试
-4. 引入 Playwright E2E 覆盖核心用户流程
-5. 全局行覆盖率目标调整为 ≥35%（阶段三）→ ≥60%（阶段四）
+### 剩余可做工作（优先级从高到低）
+1. **P1** DismissedAlertsManager 组件测试（小范围，~5 个用例）
+2. **P2** useRemoteSessions / useSavedConnections hooks 测试（等 Remote 功能迭代时顺带）
+3. **不推荐** 追求全局覆盖率数字、Playwright E2E（见 §11 后续迭代方向详细分析）

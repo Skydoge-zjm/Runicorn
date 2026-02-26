@@ -144,7 +144,19 @@ export const handlers = [
 
   // ── Storage ──
   http.get(`${BASE}/storage/stats`, () =>
-    HttpResponse.json({ storage_root: '', total: { size_bytes: 0, size_human: '0 B' } }),
+    HttpResponse.json({
+      storage_root: '',
+      total: { size_bytes: 0, size_human: '0 B' },
+      archive: {
+        size_bytes: 0,
+        size_human: '0 B',
+        blobs: { size_bytes: 0, size_human: '0 B', file_count: 0 },
+        manifests: { size_bytes: 0, size_human: '0 B', file_count: 0, by_category: {} },
+        outputs: { size_bytes: 0, size_human: '0 B', file_count: 0 },
+      },
+      runs: { size_bytes: 0, size_human: '0 B', projects_count: 0, experiments_count: 0, runs_count: 0 },
+      index: { size_bytes: 0, size_human: '0 B' },
+    }),
   ),
 
   // ── Remote ──
