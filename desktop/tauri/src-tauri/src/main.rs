@@ -10,8 +10,9 @@ use std::{
 };
 
 use tauri::{AppHandle, Manager, WindowEvent, WebviewUrl, WebviewWindowBuilder};
-use tauri_plugin_shell::{ShellExt};
+use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandChild as ShellChild;
+use tauri_plugin_opener::OpenerExt;
 
 fn is_port_available(port: u16) -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -154,6 +155,36 @@ fn get_backend_url(state: tauri::State<'_, AppState>) -> String {
         .unwrap_or_else(|| "http://127.0.0.1:8000".into())
 }
 
+#[tauri::command]
+async fn open_in_browser(app: AppHandle, url: String) -> Result<(), String> {
+    app.opener().open_url(&url, None::<&str>).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn open_remote_window(app: AppHandle, url: String, label: String, title: String) -> Result<(), String> {
+    // If a window with this label already exists, focus it
+    if let Some(existing) = app.get_webview_window(&label) {
+        existing.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    let parsed_url = url.parse().map_err(|e| format!("invalid URL '{url}': {e}"))?;
+
+    WebviewWindowBuilder::new(
+        &app,
+        &label,
+        WebviewUrl::External(parsed_url),
+    )
+    .title(&title)
+    .inner_size(1280.0, 860.0)
+    .resizable(true)
+    .center()
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 enum BackendChild {
     Sidecar(ShellChild),
     Python(Child),
@@ -181,7 +212,7 @@ fn kill_child(state: &tauri::State<'_, AppState>) {
 fn start(app: AppHandle) {
     let port = pick_port();
     // First attempt: sidecar (preferred for end users)
-    let mut child = spawn_backend(port, &app).expect("failed to spawn backend (sidecar/python)");
+    let child = spawn_backend(port, &app).expect("failed to spawn backend (sidecar/python)");
 
     let state: tauri::State<AppState> = app.state();
     *state.child.lock().unwrap() = Some(child);
@@ -207,6 +238,7 @@ fn start(app: AppHandle) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState { child: Mutex::new(None), backend_url: Mutex::new(None) })
         .setup(|app| {
             // spawn backend in a background thread to avoid blocking
@@ -221,7 +253,7 @@ fn main() {
                 kill_child(&state);
             }
         })
-        .invoke_handler(tauri::generate_handler![get_backend_url])
+        .invoke_handler(tauri::generate_handler![get_backend_url, open_remote_window, open_in_browser])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

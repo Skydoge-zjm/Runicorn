@@ -21,6 +21,7 @@ import StatusTag from '../components/StatusTag'
 import StatsBar from '../components/StatsBar'
 import FilterToolbar from '../components/FilterToolbar'
 import logger from '../utils/logger'
+import { openExternal } from '../utils/tauri'
 import type { ColumnsType } from 'antd/es/table'
 import type { SorterResult } from 'antd/es/table/interface'
 import '../styles/resizable-table.css'
@@ -437,7 +438,7 @@ const ExperimentPage: React.FC = () => {
                       emptyText: (
                         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
                           description={t('experiments.no_runs_desc')}>
-                          <Button type="primary" onClick={() => window.open('https://github.com/runicorn/runicorn#quick-start', '_blank')}>
+                          <Button type="primary" onClick={() => openExternal('https://skydoge-zjm.github.io/Runicorn/getting-started/quickstart/')}>
                             {t('experiments.view_quickstart')}
                           </Button>
                         </Empty>
