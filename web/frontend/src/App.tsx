@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Layout, Tag, Button, ConfigProvider, theme, Select } from 'antd'
+import { Layout, Tag, Button, ConfigProvider, theme, Select, App as AntApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
@@ -232,6 +232,7 @@ export default function App() {
         },
       }}
     >
+      <AntApp>
       <SettingsProvider value={{ settings, setSettings }}>
       <GpuTelemetryProvider>
         <div style={bgStyle} />
@@ -346,6 +347,7 @@ export default function App() {
         <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} value={settings} onChange={setSettings} />
       </GpuTelemetryProvider>
       </SettingsProvider>
+      </AntApp>
     </ConfigProvider>
     </QueryClientProvider>
   )
