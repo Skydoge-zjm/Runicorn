@@ -213,13 +213,37 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
         pid = exp.pid
         path = exp.path
         alias = exp.alias
+        start_time = exp.started_at
+        ended_at = exp.ended_at
+        duration = exp.duration_seconds
     else:
         meta = read_json(run_dir / "meta.json")
-        status_data = read_json(run_dir / "status.json")
-        status_val = str((status_data.get("status") if isinstance(status_data, dict) else "finished") or "finished")
+        status_val = "finished"
         pid = (meta.get("pid") if isinstance(meta, dict) else None)
         path = (meta.get("path") if isinstance(meta, dict) else None) or entry.project
         alias = (meta.get("alias") if isinstance(meta, dict) else None)
+        start_time = None
+        ended_at = None
+        duration = None
+
+    # Always fall back to status.json for time fields when missing from SQLite
+    if start_time is None or ended_at is None:
+        status_data = read_json(run_dir / "status.json")
+        if isinstance(status_data, dict):
+            if exp is None:
+                status_val = str(status_data.get("status") or "finished")
+            if start_time is None:
+                start_time = status_data.get("started_at")
+            if ended_at is None:
+                ended_at = status_data.get("ended_at")
+
+    # Compute duration if not already set
+    if duration is None and start_time is not None:
+        if ended_at is not None:
+            duration = ended_at - start_time
+        elif status_val == "running":
+            import time
+            duration = time.time() - start_time
 
     # Assets still read from files (complex nested structure)
     assets: Any = {}
@@ -240,6 +264,8 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
         "run_dir": str(run_dir),
         "path": path,
         "alias": alias,
+        "start_time": start_time,
+        "duration": duration,
         "logs": str(run_dir / "logs.txt"),
         "metrics": str(run_dir / "events.jsonl"),
         "metrics_step": str(run_dir / "events.jsonl"),
