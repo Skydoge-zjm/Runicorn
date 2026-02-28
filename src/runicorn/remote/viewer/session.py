@@ -6,12 +6,20 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from ..connection import SSHConnection
 
 logger = logging.getLogger(__name__)
+
+
+# Explicit session status values.
+STATUS_RUNNING = "running"
+STATUS_RECONNECTING = "reconnecting"
+STATUS_DEGRADED = "degraded"
+STATUS_DISCONNECTED = "disconnected"
+STATUS_STOPPED = "stopped"
 
 
 @dataclass
@@ -28,9 +36,18 @@ class RemoteViewerSession:
     local_port: int
     remote_root: str
     remote_pid: Optional[int] = None
+    python_cmd: str = "python3"
     started_at: float = 0.0
     tunnel_thread: Optional[threading.Thread] = None
     _stop_event: threading.Event = None
+
+    # Explicit status managed by health monitor / tunnel reconnect logic.
+    status: str = STATUS_RUNNING
+
+    # Health monitoring bookkeeping.
+    health_check_failed_count: int = 0
+    last_health_check: float = 0.0
+    _restart_count: int = 0
     
     def __post_init__(self):
         if self.started_at == 0.0:
@@ -41,11 +58,18 @@ class RemoteViewerSession:
     @property
     def is_active(self) -> bool:
         """Check if session is still active."""
+        if self._stop_event.is_set():
+            return False
+        if self.status in (STATUS_STOPPED, STATUS_DISCONNECTED):
+            return False
+        # Still "active" during reconnecting / degraded so that cleanup
+        # does not remove sessions that may recover.
+        if self.status in (STATUS_RECONNECTING, STATUS_DEGRADED):
+            return True
         return (
             self.connection.is_connected 
             and self.tunnel_thread is not None
             and self.tunnel_thread.is_alive()
-            and not self._stop_event.is_set()
         )
     
     @property
@@ -55,18 +79,11 @@ class RemoteViewerSession:
     
     def stop(self) -> None:
         """Signal session to stop."""
+        self.status = STATUS_STOPPED
         self._stop_event.set()
     
     def to_dict(self) -> dict:
         """Convert session to dict for API response (frontend-compatible format)."""
-        # Determine status based on session state
-        if not self.is_active:
-            status = "stopped"
-        elif self.tunnel_thread and self.tunnel_thread.is_alive():
-            status = "running"
-        else:
-            status = "connecting"
-        
         return {
             # Frontend expects camelCase
             "sessionId": self.session_id,
@@ -77,7 +94,7 @@ class RemoteViewerSession:
             "remotePort": self.remote_port,
             "remoteRoot": self.remote_root,
             "remotePid": self.remote_pid,
-            "status": status,
+            "status": self.status,
             "startedAt": int(self.started_at * 1000),  # Convert to milliseconds for JS
             "uptimeSeconds": self.uptime_seconds,
             "isActive": self.is_active,

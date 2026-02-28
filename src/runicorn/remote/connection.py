@@ -14,6 +14,22 @@ from typing import Optional, Dict, Tuple
 import paramiko
 from paramiko import SSHClient, SFTPClient
 
+# ---------------------------------------------------------------------------
+# Paramiko banner masking (P0-5 mitigation)
+# ---------------------------------------------------------------------------
+# Paramiko's default SSH banner is "SSH-2.0-paramiko_x.x.x".  Many campus /
+# institutional IDS/IPS systems flag this as an automated attack tool and
+# block the connection.  We change the client identifier to resemble a
+# standard OpenSSH client so that traffic passes through without issue.
+#
+# This is a class-level attribute set *before* any Transport is created, so
+# it takes effect globally for all Paramiko connections.
+# ---------------------------------------------------------------------------
+try:
+    paramiko.Transport._CLIENT_ID = "OpenSSH_9.9"  # banner → SSH-2.0-OpenSSH_9.9
+except Exception:  # pragma: no cover – defensive
+    pass
+
 from ..config import get_known_hosts_file_path
 from .host_key import (
     HostKeyChangedError,

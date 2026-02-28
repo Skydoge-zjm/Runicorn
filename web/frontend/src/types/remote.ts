@@ -12,7 +12,7 @@ export type AuthMethod = 'password' | 'key'
 /**
  * Remote Viewer session status
  */
-export type SessionStatus = 'connecting' | 'running' | 'stopping' | 'stopped' | 'error'
+export type SessionStatus = 'connecting' | 'running' | 'reconnecting' | 'degraded' | 'disconnected' | 'stopping' | 'stopped' | 'error'
 
 /**
  * SSH session status

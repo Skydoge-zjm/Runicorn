@@ -8,12 +8,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
+import time as _time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.staticfiles import StaticFiles
 
 from .utils.logging import setup_logging
@@ -76,6 +79,21 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     # Add rate limiting middleware
     app.add_middleware(RateLimitMiddleware)
     
+    # Idle shutdown support (remote-mode).
+    # When RUNICORN_IDLE_TIMEOUT is set, the viewer will exit after the
+    # specified number of seconds with no incoming HTTP requests.
+    _idle_timeout = int(os.environ.get("RUNICORN_IDLE_TIMEOUT", "0"))
+    app.state.idle_timeout = _idle_timeout
+    app.state.last_request_time = _time.time()
+    
+    if _idle_timeout > 0:
+        class _IdleTrackingMiddleware(BaseHTTPMiddleware):
+            async def dispatch(self, request: Request, call_next):
+                app.state.last_request_time = _time.time()
+                return await call_next(request)
+        
+        app.add_middleware(_IdleTrackingMiddleware)
+    
     # Shutdown signal for WebSocket handlers
     app.state.shutdown_event = asyncio.Event()
     
@@ -114,6 +132,53 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
             import threading
             _sync_thread = threading.Thread(target=_run_sync, daemon=True)
             _sync_thread.start()
+        
+        # Start idle shutdown checker (remote-mode only).
+        if app.state.idle_timeout > 0:
+            async def _idle_shutdown_check():
+                timeout = app.state.idle_timeout
+                logger.info(f"Idle shutdown enabled: timeout={timeout}s")
+                while True:
+                    try:
+                        await asyncio.sleep(60)
+                        elapsed = _time.time() - app.state.last_request_time
+                        if elapsed >= timeout:
+                            logger.warning(
+                                f"No requests for {elapsed:.0f}s (timeout={timeout}s). "
+                                "Shutting down remote-mode viewer."
+                            )
+                            # os._exit bypasses atexit / finally, which is
+                            # appropriate for a nohup-launched remote viewer.
+                            os._exit(0)
+                    except asyncio.CancelledError:
+                        break
+                    except Exception as e:
+                        logger.error(f"Idle shutdown check error: {e}")
+                        await asyncio.sleep(30)
+            
+            asyncio.create_task(_idle_shutdown_check())
+            logger.info("Started idle shutdown checker")
+        
+        # Start periodic dead session cleanup.
+        # (viewer_manager is created lazily on the first remote viewer
+        # request, so we always start this task and check inside the loop.)
+        async def _periodic_session_cleanup():
+            while True:
+                try:
+                    await asyncio.sleep(60)
+                    mgr = getattr(app.state, 'viewer_manager', None)
+                    if mgr is not None:
+                        cleaned = mgr.cleanup_dead_sessions()
+                        if cleaned > 0:
+                            logger.info(f"Periodic cleanup: removed {cleaned} dead session(s)")
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Session cleanup error: {e}")
+                    await asyncio.sleep(30)
+        
+        asyncio.create_task(_periodic_session_cleanup())
+        logger.info("Started periodic session cleanup task")
         
         # Install a SIGINT wrapper so that shutdown_event is set BEFORE
         # uvicorn starts waiting for connections to close.  This lets

@@ -41,6 +41,9 @@ interface RemoteSessionCardProps {
 const statusMessageMap: Record<string, string> = {
   connecting: 'Establishing connection...',
   running: 'Remote Viewer is running and accessible',
+  reconnecting: 'SSH tunnel lost — reconnecting...',
+  degraded: 'Remote process may have crashed — monitoring',
+  disconnected: 'Connection lost — reconnect failed',
   stopping: 'Stopping Remote Viewer...',
   stopped: 'Remote Viewer has been stopped',
   error: 'An error occurred'
@@ -95,7 +98,8 @@ export default function RemoteSessionCard({
           <ServerStatusLight 
             status={
               session.status === 'running' ? 'online' : 
-              session.status === 'connecting' || session.status === 'stopping' ? 'connecting' : 
+              session.status === 'connecting' || session.status === 'stopping' || session.status === 'reconnecting' ? 'connecting' : 
+              session.status === 'degraded' ? 'connecting' :
               'offline'
             } 
             label={t(`remote.status.${session.status}`)}
@@ -161,7 +165,12 @@ export default function RemoteSessionCard({
 
       {/* Status Alert */}
       <Alert
-        type={session.status === 'running' ? 'success' : session.status === 'error' ? 'error' : 'info'}
+        type={
+          session.status === 'running' ? 'success' : 
+          session.status === 'error' || session.status === 'disconnected' ? 'error' : 
+          session.status === 'degraded' || session.status === 'reconnecting' ? 'warning' :
+          'info'
+        }
         message={statusMessageMap[session.status] || session.status}
         description={session.error}
         showIcon
