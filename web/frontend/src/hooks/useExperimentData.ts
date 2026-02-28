@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { message } from 'antd'
+import { App } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSettings } from '../contexts/SettingsContext'
 import { listRuns, softDeleteByPath as apiSoftDeleteByPath } from '../api'
@@ -50,6 +50,7 @@ function mapRuns(data: any): RunData[] {
 
 export function useExperimentData(_locationKey: string) {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const { settings, setSettings } = useSettings()
   const queryClient = useQueryClient()
   const autoRefresh = settings.autoRefresh

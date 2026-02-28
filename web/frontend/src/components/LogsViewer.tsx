@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { Button, Input, Space, Switch, Tag, Tooltip, message, theme } from 'antd'
+import { Button, Input, Space, Switch, Tag, Tooltip, App, theme } from 'antd'
 import { DownOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import AnsiToHtml from 'ansi-to-html'
@@ -89,6 +89,7 @@ interface LogsViewerProps {
 export default function LogsViewer({ url }: LogsViewerProps) {
   const { t } = useTranslation()
   const { token } = theme.useToken()
+  const { message } = App.useApp()
   const isDark = parseInt((token.colorBgBase || '#ffffff').replace('#', '').slice(0, 2), 16) < 128
   const ansiConverter = isDark ? darkConverter : lightConverter
   

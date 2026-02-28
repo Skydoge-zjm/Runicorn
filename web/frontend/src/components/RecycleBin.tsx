@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Modal, Table, Button, Space, Tag, message, Tooltip, Alert, Typography, Popconfirm, Descriptions, Spin, theme } from 'antd'
+import { Modal, Table, Button, Space, Tag, App, Tooltip, Alert, Typography, Popconfirm, Descriptions, Spin, theme } from 'antd'
 import { DeleteOutlined, UndoOutlined, ClearOutlined, InfoCircleOutlined, ExclamationCircleOutlined, FileOutlined } from '@ant-design/icons'
 import { listDeletedRuns, restoreRuns, permanentDeleteRunsBatch, getRunAssetRefs, type RunAssetRefs } from '../api'
 import { useTranslation } from 'react-i18next'
@@ -25,6 +25,7 @@ interface RecycleBinProps {
 export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps) {
   const { t } = useTranslation()
   const { token } = theme.useToken()
+  const { message } = App.useApp()
   const [deletedRuns, setDeletedRuns] = useState<DeletedRun[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])

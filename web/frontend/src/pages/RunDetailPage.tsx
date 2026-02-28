@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Card, Space, Alert, Tag, Switch, Select, Button, Spin, message, Tooltip, Badge, Row, Col, Typography, Statistic, Divider, Collapse, Tabs, theme } from 'antd'
+import { Card, Space, Alert, Tag, Switch, Select, Button, Spin, App, Tooltip, Badge, Row, Col, Typography, Statistic, Divider, Collapse, Tabs, theme } from 'antd'
 import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, LineChartOutlined, MinusOutlined, ReloadOutlined, RocketOutlined, ClockCircleOutlined, CalendarOutlined, FolderOpenOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined } from '@ant-design/icons'
 import { getRunDetail, getStepMetrics } from '../api'
 import LogsViewer from '../components/LogsViewer'
@@ -55,6 +55,7 @@ export default function RunDetailPage() {
   const { t } = useTranslation()
   const { settings } = useSettings()
   const { token } = theme.useToken()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const [detail, setDetail] = useState<RunDetail | null>(null)
   const [stepMetrics, setStepMetrics] = useState<{ columns: string[]; rows: any[]; total?: number; sampled?: number }>({ columns: [], rows: [] })

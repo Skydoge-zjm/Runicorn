@@ -11,7 +11,7 @@ import {
   Descriptions,
   Alert,
   Typography,
-  Modal,
+  App,
   theme
 } from 'antd'
 import {
@@ -54,6 +54,7 @@ export default function RemoteSessionCard({
 }: RemoteSessionCardProps) {
   const { t } = useTranslation()
   const { token } = theme.useToken()
+  const { modal } = App.useApp()
 
   const handleOpen = () => {
     const url = `http://localhost:${session.localPort}`
@@ -74,7 +75,7 @@ export default function RemoteSessionCard({
   }
 
   const handleDisconnect = () => {
-    Modal.confirm({
+    modal.confirm({
       title: t('remote.message.confirmDisconnect'),
       content: `${session.host}:${session.remotePort}`,
       onOk: async () => {

@@ -13,7 +13,7 @@ import {
   Col,
   Alert,
   Empty,
-  message,
+  App,
   Spin,
   Modal,
   Input,
@@ -79,6 +79,7 @@ const { Title, Paragraph, Text } = Typography
 export default function RemoteViewerPage() {
   const { t } = useTranslation()
   const { token } = theme.useToken()
+  const { message } = App.useApp()
   const [connecting, setConnecting] = useState(false)
   const [fetchingEnvs, setFetchingEnvs] = useState(false)
   const [fetchingConfig, setFetchingConfig] = useState(false)
