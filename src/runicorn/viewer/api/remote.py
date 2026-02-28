@@ -461,6 +461,9 @@ async def stop_remote_viewer(
     """
     Stop Remote Viewer session.
     
+    Automatically disconnects the SSH connection when the last session
+    using it is stopped.
+    
     Args:
         session_id: Session ID to stop
         
@@ -474,15 +477,36 @@ async def stop_remote_viewer(
         )
     
     manager: RemoteViewerManager = request.app.state.viewer_manager
-    success = manager.stop_remote_viewer(session_id)
     
-    if success:
-        return {"ok": True, "message": f"Session {session_id} stopped"}
-    else:
+    # Capture connection info before stopping so we can auto-disconnect.
+    session = manager.get_session(session_id)
+    if not session:
         raise HTTPException(
             status_code=404,
             detail=f"Session not found: {session_id}"
         )
+    conn = session.connection
+    
+    success = manager.stop_remote_viewer(session_id)
+    if not success:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to stop session: {session_id}"
+        )
+    
+    # Auto-disconnect SSH when no remaining sessions use this connection.
+    remaining = manager.list_sessions()
+    still_used = any(s.connection is conn for s in remaining)
+    if not still_used:
+        pool = getattr(request.app.state, 'connection_pool', None)
+        if pool is not None:
+            pool.remove(conn.config.host, conn.config.port, conn.config.username)
+            logger.info(
+                f"Auto-disconnected SSH {conn.config.get_key()} "
+                f"(no remaining sessions)"
+            )
+    
+    return {"ok": True, "message": f"Session {session_id} stopped"}
 
 
 @router.get("/remote/viewer/sessions")

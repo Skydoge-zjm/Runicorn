@@ -11,13 +11,10 @@ import {
   Descriptions,
   Alert,
   Typography,
-  App,
-  theme
 } from 'antd'
 import {
   LinkOutlined,
   StopOutlined,
-  DisconnectOutlined,
   CloudServerOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -35,7 +32,6 @@ interface RemoteSessionCardProps {
   session: RemoteSession
   onOpen?: (session: RemoteSession) => void
   onStop?: (session: RemoteSession) => Promise<void>
-  onDisconnect?: (session: RemoteSession) => Promise<void>
 }
 
 
@@ -43,11 +39,8 @@ export default function RemoteSessionCard({
   session,
   onOpen,
   onStop,
-  onDisconnect
 }: RemoteSessionCardProps) {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
-  const { modal } = App.useApp()
 
   const handleOpen = () => {
     const url = `http://localhost:${session.localPort}`
@@ -65,18 +58,6 @@ export default function RemoteSessionCard({
         // Error handling is done in parent component
       }
     }
-  }
-
-  const handleDisconnect = () => {
-    modal.confirm({
-      title: t('remote.message.confirmDisconnect'),
-      content: `${session.host}:${session.remotePort}`,
-      onOk: async () => {
-        if (onDisconnect) {
-          await onDisconnect(session)
-        }
-      }
-    })
   }
 
   return (
@@ -107,18 +88,12 @@ export default function RemoteSessionCard({
             {t('remote.session.open')}
           </Button>
           <Button
+            danger
             icon={<StopOutlined />}
             onClick={handleStop}
             disabled={session.status !== 'running'}
           >
             {t('remote.session.stop')}
-          </Button>
-          <Button
-            danger
-            icon={<DisconnectOutlined />}
-            onClick={handleDisconnect}
-          >
-            {t('remote.session.disconnect')}
           </Button>
         </Space>
       }

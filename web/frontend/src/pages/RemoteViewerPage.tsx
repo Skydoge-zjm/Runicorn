@@ -570,21 +570,6 @@ export default function RemoteViewerPage() {
     }
   }
 
-  /**
-   * Handle disconnect
-   */
-  const handleDisconnect = async (session: any) => {
-    try {
-      await stopRemoteViewer(session.sessionId)
-      await disconnectRemote(session.host, session.sshPort || 22, session.username || 'user')
-      await refetchSessions()
-      
-      message.success(t('remote.message.disconnected'))
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : t('remote.message.disconnectFailed'))
-      throw error
-    }
-  }
 
   /**
    * Handle password dialog submit
@@ -929,7 +914,6 @@ export default function RemoteViewerPage() {
                   key={session.sessionId}
                   session={session}
                   onStop={handleStopSession}
-                  onDisconnect={handleDisconnect}
                 />
               ))
             )}
