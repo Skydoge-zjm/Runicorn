@@ -38,16 +38,6 @@ interface RemoteSessionCardProps {
   onDisconnect?: (session: RemoteSession) => Promise<void>
 }
 
-const statusMessageMap: Record<string, string> = {
-  connecting: 'Establishing connection...',
-  running: 'Remote Viewer is running and accessible',
-  reconnecting: 'SSH tunnel lost — reconnecting...',
-  degraded: 'Remote process may have crashed — monitoring',
-  disconnected: 'Connection lost — reconnect failed',
-  stopping: 'Stopping Remote Viewer...',
-  stopped: 'Remote Viewer has been stopped',
-  error: 'An error occurred'
-}
 
 export default function RemoteSessionCard({
   session,
@@ -171,7 +161,7 @@ export default function RemoteSessionCard({
           session.status === 'degraded' || session.status === 'reconnecting' ? 'warning' :
           'info'
         }
-        message={statusMessageMap[session.status] || session.status}
+        message={t(`remote.statusMessage.${session.status}`)}
         description={session.error}
         showIcon
         style={{ marginTop: 16 }}
