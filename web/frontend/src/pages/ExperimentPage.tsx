@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Table, Button, Card, Space, Input, Tag, Tooltip, Empty, Badge, theme, App } from 'antd'
+import { Table, Button, Card, Space, Input, Tag, Tooltip, Empty, Badge, theme, App, Alert } from 'antd'
 import { EyeOutlined, DeleteOutlined, CopyOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -69,12 +69,20 @@ const ExperimentPage: React.FC = () => {
   const bumpPathTree = useCallback(() => setPathTreeRefresh(n => n + 1), [])
 
   const {
-    compareMode,
+    compareMode, compareIdsFromUrl, needsMoreRuns,
+    validRunIds, missingRunIds,
     compareRunInfos, compareMetrics, compareRunLabels,
     compareLoading, visibleRunIds,
     handleCompare, handleExitCompare,
     toggleRunVisibility, handleAddRuns,
   } = useCompareMode(runs, selectedRowKeys)
+
+  // Sync selectedRowKeys when navigating with single compare ID (e.g. from "Compare with others" button)
+  useEffect(() => {
+    if (compareIdsFromUrl.length === 1) {
+      setSelectedRowKeys([compareIdsFromUrl[0]])
+    }
+  }, [compareIdsFromUrl])
 
   const [hoveredRunId, setHoveredRunId] = useState<string | null>(null)
 
@@ -378,15 +386,50 @@ const ExperimentPage: React.FC = () => {
 
           {/* Right: Filters + Table OR Compare Charts */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-            {compareMode ? (
-              <CompareChartsView
-                runIds={compareRunInfos.map(r => r.runId)} visibleRunIds={visibleRunIds}
-                metricsMap={compareMetrics} runLabels={compareRunLabels}
-                colors={ECHARTS_COLORS} loading={compareLoading}
-                hoveredRunId={hoveredRunId} onHoverRun={setHoveredRunId}
-              />
+            {compareMode && !needsMoreRuns && validRunIds.length >= 2 ? (
+              <>
+                {missingRunIds.length > 0 && (
+                  <Alert
+                    type="warning"
+                    message={t('experiments.compare_missing_runs', { ids: missingRunIds.join(', ') })}
+                    style={{ marginBottom: 12 }}
+                  />
+                )}
+                <CompareChartsView
+                  runIds={compareRunInfos.map(r => r.runId)} visibleRunIds={visibleRunIds}
+                  metricsMap={compareMetrics} runLabels={compareRunLabels}
+                  colors={ECHARTS_COLORS} loading={compareLoading}
+                  hoveredRunId={hoveredRunId} onHoverRun={setHoveredRunId}
+                />
+              </>
             ) : (
               <>
+                {compareMode && missingRunIds.length > 0 && (
+                  <Alert
+                    type="warning"
+                    message={t('experiments.compare_missing_runs', { ids: missingRunIds.join(', ') })}
+                    style={{ marginBottom: 12 }}
+                    action={
+                      <Button size="small" onClick={handleExitCompare}>
+                        {t('experiments.cancel')}
+                      </Button>
+                    }
+                  />
+                )}
+                {needsMoreRuns && (
+                  <Alert
+                    type="info"
+                    message={validRunIds.length === 0
+                      ? t('experiments.compare_not_enough_runs')
+                      : t('experiments.select_more_to_compare')}
+                    style={{ marginBottom: 12 }}
+                    action={
+                      <Button size="small" onClick={handleExitCompare}>
+                        {t('experiments.cancel')}
+                      </Button>
+                    }
+                  />
+                )}
                 <FilterToolbar
                   searchText={searchText} onSearchChange={setSearchText}
                   projectFilter={projectFilter} onProjectFilterChange={setProjectFilter}

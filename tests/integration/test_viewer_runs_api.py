@@ -50,10 +50,30 @@ class TestGetRunDetail:
         data = resp.json()
         assert data["id"] == RUN_A
         assert "status" in data
+        # BUG-37: summary field present (from summary.json)
+        assert "summary" in data
+        assert isinstance(data["summary"], dict)
 
     def test_get_nonexistent_run(self, viewer_client: TestClient) -> None:
         resp = viewer_client.get("/api/runs/20250101_000000_ffffff")
         assert resp.status_code == 404
+
+    def test_get_run_detail_includes_summary(
+        self, viewer_client: TestClient, populated_viewer_storage, viewer_storage_root
+    ) -> None:
+        """BUG-37: run.summary() data is returned in get_run_detail."""
+        import json
+        run_dir = viewer_storage_root / "runs" / "cv" / "yolo" / RUN_A
+        summary_path = run_dir / "summary.json"
+        summary_path.write_text(
+            json.dumps({"final_loss": 0.01, "best_metric_name": "acc", "best_metric_value": 0.95}),
+            encoding="utf-8",
+        )
+        resp = viewer_client.get(f"/api/runs/{RUN_A}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["summary"]["final_loss"] == 0.01
+        assert data["summary"]["best_metric_name"] == "acc"
 
 
 class TestSoftDeleteAndRestore:
@@ -165,3 +185,46 @@ class TestGetRunAssets:
     ) -> None:
         resp = viewer_client.get("/api/runs/20250101_000000_ffffff/assets")
         assert resp.status_code == 404
+
+
+class TestGetRunImages:
+
+    def test_get_run_images_empty(
+        self, viewer_client: TestClient, populated_viewer_storage
+    ) -> None:
+        """BUG-34: /runs/{id}/images returns empty list when no image events."""
+        resp = viewer_client.get(f"/api/runs/{RUN_A}/images")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["run_id"] == RUN_A
+        assert data["images"] == []
+
+    def test_get_run_images_not_found(self, viewer_client: TestClient) -> None:
+        resp = viewer_client.get("/api/runs/20250101_000000_ffffff/images")
+        assert resp.status_code == 404
+
+    def test_get_run_images_with_events(
+        self, viewer_client: TestClient, populated_viewer_storage, viewer_storage_root
+    ) -> None:
+        """BUG-34: /runs/{id}/images returns image events from events.jsonl."""
+        import json
+        run_dir = viewer_storage_root / "runs" / "cv" / "yolo" / RUN_A
+        media_dir = run_dir / "media"
+        media_dir.mkdir(exist_ok=True)
+        (media_dir / "123456_pred.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
+        events_path = run_dir / "events.jsonl"
+        existing = events_path.read_text(encoding="utf-8").strip()
+        new_line = json.dumps({
+            "ts": 1704067200.0,
+            "type": "image",
+            "data": {"key": "prediction", "path": "media/123456_pred.png", "step": 10},
+        })
+        events_path.write_text((existing + "\n" + new_line + "\n") if existing else new_line + "\n")
+        resp = viewer_client.get(f"/api/runs/{RUN_A}/images")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["images"]) == 1
+        img = data["images"][0]
+        assert img["key"] == "prediction"
+        assert img["step"] == 10
+        assert "123456_pred.png" in img["path"]

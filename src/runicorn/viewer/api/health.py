@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Request, HTTPException
 from ...storage.file_utils import iter_all_runs, read_json, update_status_if_process_dead
+from ...sdk import _normalize_status
 from ..utils.incremental_cache import get_incremental_metrics_cache
 from ..services.db_reader import get_backend
 
@@ -69,7 +70,7 @@ async def check_all_status(request: Request) -> Dict[str, Any]:
             from pathlib import Path
             running_exps = backend.get_running_experiments()
             for exp in running_exps:
-                run_dir = Path(exp.run_dir) if exp.run_dir else None
+                run_dir = Path(exp["run_dir"]) if exp.get("run_dir") else None
                 if run_dir and run_dir.exists():
                     checked_count += 1
                     update_status_if_process_dead(run_dir)
@@ -78,7 +79,7 @@ async def check_all_status(request: Request) -> Dict[str, Any]:
                     if new_status_val != "running":
                         updated_count += 1
                         try:
-                            backend.update_experiment(exp.experiment_id, {"status": new_status_val})
+                            backend.update_experiment(exp["id"], {"status": _normalize_status(new_status_val)})
                         except Exception:
                             pass
             return {

@@ -67,29 +67,38 @@ async def set_user_root(request: Request, payload: Dict[str, Any] = Body(...)) -
         # Expand environment variables on all platforms (Windows: %VAR%, POSIX: $VAR)
         in_path = os.path.expandvars(in_path)
         
-        # Set the user root directory
+        # Set the user root directory (persists to config file; raises on save failure)
         resolved_path = set_user_root_dir(in_path)
         
+    except PermissionError as e:
+        logger.error(f"Failed to set user root directory (permission): {e}")
+        raise HTTPException(
+            status_code=403,
+            detail=f"Permission denied: {e}"
+        )
+    except OSError as e:
+        logger.error(f"Failed to set user root directory (filesystem): {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid path or filesystem error: {e}"
+        )
     except Exception as e:
         logger.error(f"Failed to set user root directory: {e}")
         raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid path or permission error: {e}"
+            status_code=500,
+            detail=f"Config saved to memory but failed to persist to disk: {e}"
         )
 
     try:
-        # Recompute storage root to apply immediately using the path we just set
-        # Passing it explicitly avoids racing on config read and prevents CWD fallback
+        # Recompute storage root and reinitialize backend + background tasks
         new_storage_root = get_storage_root(str(resolved_path))
-        
-        # Update app state with new storage root
-        request.app.state.storage_root = new_storage_root
-        
+        from .. import reinitialize_storage
+        await reinitialize_storage(request.app, new_storage_root)
     except Exception as e:
-        logger.error(f"Failed to reinitialize storage root: {e}")
+        logger.error(f"Failed to reinitialize storage: {e}")
         raise HTTPException(
-            status_code=500, 
-            detail=f"Failed to reinitialize storage root: {e}"
+            status_code=500,
+            detail=f"Failed to reinitialize storage: {e}"
         )
 
     return {

@@ -22,7 +22,8 @@ Example:
     >>> # Remote viewer
     >>> c.remote.connect(host="localhost", username="user")
     >>> session = c.remote.start_viewer(
-    ...     connection_id="localhost",
+    ...     host="localhost",
+    ...     username="user",
     ...     remote_root="/data"
     ... )
     >>> print(f"Access viewer at: {session['local_url']}")
@@ -37,6 +38,7 @@ from .exceptions import (
     BadRequestError,
     ServerError,
     AuthenticationError,
+    HostKeyConfirmationRequiredError,
 )
 from .models import (
     RunInfo,
@@ -59,6 +61,7 @@ __all__ = [
     "BadRequestError",
     "ServerError",
     "AuthenticationError",
+    "HostKeyConfirmationRequiredError",
     # Models
     "RunInfo",
     "Experiment",

@@ -69,12 +69,29 @@ def _parse_ignore_lines(lines: List[str]) -> List[IgnoreRule]:
     return out
 
 
-def load_ignore_matcher(
+# Default patterns used when .rnignore does not exist (read-only, no file creation).
+DEFAULT_RNIGNORE_PATTERNS = [
+    ".git/",
+    ".venv/",
+    "__pycache__/",
+    "*.pyc",
+    ".idea/",
+    "node_modules/",
+]
+
+
+def get_ignore_rules(
     root: Path,
     rnignore_name: str = ".rnignore",
     gitignore_name: str = ".gitignore",
     extra_excludes: Optional[List[str]] = None,
-) -> IgnoreMatcher:
+) -> List[IgnoreRule]:
+    """
+    Return ignore rules without any side effects (never creates files).
+
+    If .rnignore exists, read it. Otherwise use DEFAULT_RNIGNORE_PATTERNS in memory.
+    Always merges with .gitignore if present.
+    """
     rules: List[IgnoreRule] = []
 
     gitignore = root / gitignore_name
@@ -84,9 +101,41 @@ def load_ignore_matcher(
     rnignore = root / rnignore_name
     if rnignore.exists():
         rules.extend(_parse_ignore_lines(rnignore.read_text(encoding="utf-8", errors="ignore").splitlines()))
+    else:
+        rules.extend(_parse_ignore_lines(DEFAULT_RNIGNORE_PATTERNS))
 
     if extra_excludes:
         rules.extend(_parse_ignore_lines(list(extra_excludes)))
+
+    return rules
+
+
+def load_ignore_matcher(
+    root: Path,
+    rnignore_name: str = ".rnignore",
+    gitignore_name: str = ".gitignore",
+    extra_excludes: Optional[List[str]] = None,
+    use_default_rnignore_if_missing: bool = False,
+) -> IgnoreMatcher:
+    """
+    Build an IgnoreMatcher from ignore files. Never creates files.
+
+    When use_default_rnignore_if_missing is True (or when using get_ignore_rules),
+    missing .rnignore uses in-memory defaults. Prefer get_ignore_rules for explicit
+    read-only behavior.
+    """
+    if use_default_rnignore_if_missing:
+        rules = get_ignore_rules(root, rnignore_name, gitignore_name, extra_excludes)
+    else:
+        rules = []
+        gitignore = root / gitignore_name
+        if gitignore.exists():
+            rules.extend(_parse_ignore_lines(gitignore.read_text(encoding="utf-8", errors="ignore").splitlines()))
+        rnignore = root / rnignore_name
+        if rnignore.exists():
+            rules.extend(_parse_ignore_lines(rnignore.read_text(encoding="utf-8", errors="ignore").splitlines()))
+        if extra_excludes:
+            rules.extend(_parse_ignore_lines(list(extra_excludes)))
 
     return IgnoreMatcher(rules)
 
@@ -96,15 +145,6 @@ def ensure_rnignore(root: Path, rnignore_name: str = ".rnignore") -> Path:
     if path.exists():
         return path
 
-    content = "\n".join(
-        [
-            ".git/",
-            ".venv/",
-            "__pycache__/",
-            "*.pyc",
-            ".idea/",
-            "node_modules/",
-        ]
-    )
+    content = "\n".join(DEFAULT_RNIGNORE_PATTERNS)
     path.write_text(content + "\n", encoding="utf-8")
     return path

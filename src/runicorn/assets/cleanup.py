@@ -69,6 +69,7 @@ def delete_run_completely(
         "outputs_deleted": 0,
         "bytes_freed": 0,
         "errors": [],
+        "partial_failures": [],
     }
     
     storage_root = Path(storage_root)
@@ -99,12 +100,18 @@ def delete_run_completely(
             except Exception as e2:
                 result["errors"].append(f"Failed to delete run directory: {e2}")
             # Also try to delete rolling outputs
-            deleted, freed = _delete_rolling_outputs(run_id, outputs_root, dry_run=False)
+            deleted, freed, out_errs = _delete_rolling_outputs(
+                run_id, outputs_root, dry_run=False
+            )
             result["outputs_deleted"] += deleted
             result["bytes_freed"] += freed
-            result["success"] = True
+            if out_errs:
+                result["errors"].extend(out_errs)
+            # Only set success when ALL operations succeeded (no errors)
+            result["success"] = len(result["errors"]) == 0
         return result
     
+    partial_failures: List[str] = []
     try:
         # Get orphaned assets info from database
         db_result = backend.delete_run_with_orphan_assets(run_id) if not dry_run else _preview_orphaned_assets(backend, run_id)
@@ -115,23 +122,55 @@ def delete_run_completely(
         result["orphaned_assets"] = [_asset_summary(a) for a in orphaned_assets]
         result["kept_assets"] = [_asset_summary(a) for a in kept_assets]
         
-        # Delete blob files for orphaned assets
+        # Fingerprints still referenced by kept assets - do not delete their blobs/manifests
+        kept_fingerprints: set = {a.get("fingerprint") for a in kept_assets if a.get("fingerprint")}
+        
+        # BUG-28: Also check orphaned assets - other runs may have different asset_ids
+        # but same fingerprint (shared manifest/blobs). When not dry_run, run was deleted
+        # so exclude_run_id not needed. When dry_run, run still exists so exclude it.
+        for a in orphaned_assets:
+            fp = a.get("fingerprint")
+            if not fp:
+                continue
+            try:
+                cnt = backend.count_runs_referencing_fingerprint(
+                    fp, exclude_run_id=run_id if dry_run else None
+                )
+                if cnt > 0:
+                    kept_fingerprints.add(fp)
+            except Exception:
+                kept_fingerprints.add(fp)  # Conservative: assume shared if check fails
+        
+        # Delete blob files for orphaned assets (skip if fingerprint shared)
         for asset in orphaned_assets:
-            deleted_blobs, freed_bytes = _delete_asset_blobs(
+            if asset.get("fingerprint") in kept_fingerprints:
+                continue
+            deleted_blobs, freed_bytes, blob_errors = _delete_asset_blobs(
                 asset, blob_root, manifest_root, dry_run
             )
             result["blobs_deleted"] += deleted_blobs
             result["bytes_freed"] += freed_bytes
+            if blob_errors:
+                partial_failures.extend(blob_errors)
         
-        # Delete manifest files for orphaned assets
+        # Delete manifest files for orphaned assets (skip if fingerprint shared)
         for asset in orphaned_assets:
-            if _delete_asset_manifest(asset, manifest_root, dry_run):
+            if asset.get("fingerprint") in kept_fingerprints:
+                continue
+            ok, manifest_err = _delete_asset_manifest(asset, manifest_root, dry_run)
+            if ok:
                 result["manifests_deleted"] += 1
+            elif manifest_err:
+                partial_failures.append(manifest_err)
         
         # Delete rolling outputs for this run
-        deleted_outputs, freed_outputs = _delete_rolling_outputs(run_id, outputs_root, dry_run)
+        deleted_outputs, freed_outputs, output_errors = _delete_rolling_outputs(
+            run_id, outputs_root, dry_run
+        )
         result["outputs_deleted"] += deleted_outputs
         result["bytes_freed"] += freed_outputs
+        if output_errors:
+            partial_failures.extend(output_errors)
         
         # Delete run directory
         if not dry_run:
@@ -140,6 +179,7 @@ def delete_run_completely(
                 result["run_dir_deleted"] = True
             except Exception as e:
                 result["errors"].append(f"Failed to delete run directory: {e}")
+                partial_failures.append(f"run_dir: {e}")
             
             # Clean up empty parent directories
             _cleanup_empty_dirs(run_dir.parent, storage_root)
@@ -149,7 +189,12 @@ def delete_run_completely(
         else:
             result["run_dir_deleted"] = True  # Would be deleted
         
-        result["success"] = True
+        # BUG-05: Only set success=True when ALL operations succeeded
+        if partial_failures:
+            result["errors"].extend(partial_failures)
+            result["partial_failures"] = partial_failures
+        if not result["errors"]:
+            result["success"] = True
         
     except Exception as e:
         result["errors"].append(f"Deletion failed: {e}")
@@ -164,7 +209,9 @@ def delete_run_completely(
     return result
 
 
-def _delete_rolling_outputs(run_id: str, outputs_root: Path, dry_run: bool) -> tuple[int, int]:
+def _delete_rolling_outputs(
+    run_id: str, outputs_root: Path, dry_run: bool
+) -> tuple[int, int, List[str]]:
     """
     Delete rolling outputs directory for a run.
     
@@ -176,10 +223,11 @@ def _delete_rolling_outputs(run_id: str, outputs_root: Path, dry_run: bool) -> t
         dry_run: If True, only count without deleting.
     
     Returns:
-        Tuple of (files_deleted, bytes_freed)
+        Tuple of (files_deleted, bytes_freed, errors)
     """
     deleted_count = 0
     freed_bytes = 0
+    errors: List[str] = []
     
     # Check rolling outputs directory
     rolling_dir = outputs_root / "rolling" / run_id
@@ -199,9 +247,11 @@ def _delete_rolling_outputs(run_id: str, outputs_root: Path, dry_run: bool) -> t
                 shutil.rmtree(rolling_dir)
                 logger.info(f"Deleted rolling outputs for run {run_id}: {deleted_count} files, {freed_bytes} bytes")
         except Exception as e:
+            err_msg = f"rolling_outputs: {e}"
+            errors.append(err_msg)
             logger.warning(f"Failed to delete rolling outputs for {run_id}: {e}")
     
-    return deleted_count, freed_bytes
+    return deleted_count, freed_bytes, errors
 
 
 def _cleanup_empty_dirs(start_dir: Path, stop_at: Path) -> int:
@@ -291,27 +341,47 @@ def _delete_asset_blobs(
     blob_root: Path,
     manifest_root: Path,
     dry_run: bool,
-) -> tuple[int, int]:
+) -> tuple[int, int, List[str]]:
     """
     Delete blob files for an asset.
     
     For manifest-based assets (directories), reads the manifest to find all blobs.
     For single-file assets, deletes the blob directly.
+    BUG-29: Also handles single-file assets with stat fingerprint - use archive_path
+    when it points to archive/blobs/ regardless of fingerprint format.
     
     Returns:
-        Tuple of (blobs_deleted, bytes_freed)
+        Tuple of (blobs_deleted, bytes_freed, errors)
     """
     deleted_count = 0
     freed_bytes = 0
+    errors: List[str] = []
     
     archive_uri = asset.get("archive_uri")
     fingerprint = asset.get("fingerprint")
     asset_type = asset.get("asset_type")
     
     if not archive_uri:
-        return 0, 0
+        return 0, 0, []
     
     archive_path = Path(archive_uri)
+    
+    def _try_delete_blob(blob_path: Path, ident: str) -> bool:
+        nonlocal deleted_count, freed_bytes
+        if not blob_path.exists():
+            return True
+        try:
+            size = blob_path.stat().st_size
+            if not dry_run:
+                blob_path.unlink()
+            deleted_count += 1
+            freed_bytes += size
+            return True
+        except Exception as e:
+            err = f"blob {ident}: {e}"
+            errors.append(err)
+            logger.warning(f"Failed to delete blob {ident}: {e}")
+            return False
     
     # Check if this is a manifest-based asset
     if archive_path.suffix == ".json" and "manifests" in str(archive_path):
@@ -327,43 +397,48 @@ def _delete_asset_blobs(
                         continue
                     
                     blob_path = get_blob_path(sha256, blob_root)
-                    if blob_path.exists():
-                        try:
-                            size = blob_path.stat().st_size
-                            if not dry_run:
-                                blob_path.unlink()
-                            deleted_count += 1
-                            freed_bytes += size
-                        except Exception as e:
-                            logger.warning(f"Failed to delete blob {sha256}: {e}")
+                    _try_delete_blob(blob_path, sha256)
         except Exception as e:
+            err = f"manifest {archive_path}: {e}"
+            errors.append(err)
             logger.warning(f"Failed to read manifest {archive_path}: {e}")
     
-    elif fingerprint and len(fingerprint) == 64:
-        # Single file asset - fingerprint is the SHA256
+    elif fingerprint and len(fingerprint) == 64 and all(
+        c in "0123456789abcdef" for c in fingerprint.lower()
+    ):
+        # Single file asset - fingerprint is 64-char SHA256 hex
         blob_path = get_blob_path(fingerprint, blob_root)
-        if blob_path.exists():
-            try:
-                size = blob_path.stat().st_size
-                if not dry_run:
-                    blob_path.unlink()
-                deleted_count += 1
-                freed_bytes += size
-            except Exception as e:
-                logger.warning(f"Failed to delete blob {fingerprint}: {e}")
+        _try_delete_blob(blob_path, fingerprint)
     
-    return deleted_count, freed_bytes
+    else:
+        # BUG-29: Single-file with stat fingerprint or other format - use archive_path
+        # when it points directly to a blob under archive/blobs/
+        try:
+            resolved = archive_path.resolve()
+            blob_root_resolved = blob_root.resolve()
+            if str(resolved).startswith(str(blob_root_resolved)) and archive_path.exists():
+                _try_delete_blob(archive_path, str(archive_path))
+        except Exception as e:
+            err = f"archive_path {archive_uri}: {e}"
+            errors.append(err)
+            logger.warning(f"Failed to delete blob via archive_path {archive_uri}: {e}")
+    
+    return deleted_count, freed_bytes, errors
 
 
 def _delete_asset_manifest(
     asset: Dict[str, Any],
     manifest_root: Path,
     dry_run: bool,
-) -> bool:
-    """Delete the manifest file for an asset if it exists."""
+) -> tuple[bool, Optional[str]]:
+    """Delete the manifest file for an asset if it exists.
+    
+    Returns:
+        Tuple of (success, error_message or None)
+    """
     archive_uri = asset.get("archive_uri")
     if not archive_uri:
-        return False
+        return False, None
     
     archive_path = Path(archive_uri)
     
@@ -373,11 +448,13 @@ def _delete_asset_manifest(
             try:
                 if not dry_run:
                     archive_path.unlink()
-                return True
+                return True, None
             except Exception as e:
+                err = f"manifest {archive_path}: {e}"
                 logger.warning(f"Failed to delete manifest {archive_path}: {e}")
+                return False, err
     
-    return False
+    return False, None
 
 
 def cleanup_orphaned_blobs(storage_root: Path, dry_run: bool = False) -> Dict[str, Any]:

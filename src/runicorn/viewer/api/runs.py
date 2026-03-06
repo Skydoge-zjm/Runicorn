@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
+from ...sdk import _normalize_status
 from ...storage.file_utils import (
     iter_all_runs, 
     find_run_dir_by_id, 
@@ -102,10 +103,10 @@ async def list_runs(request: Request) -> List[RunListItem]:
                         status_data = read_json(run_dir / "status.json")
                         new_status = str((status_data.get("status") if isinstance(status_data, dict) else "running") or "running")
                         if new_status != "running":
-                            r["status"] = new_status
+                            r["status"] = _normalize_status(new_status)
                             # Also update SQLite
                             try:
-                                backend.update_experiment(r["id"], {"status": new_status})
+                                backend.update_experiment(r["id"], {"status": r["status"]})
                             except Exception:
                                 pass
                 items.append(RunListItem(**r))
@@ -256,6 +257,17 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
         except Exception:
             assets = {}
             assets_count = 0
+
+    # BUG-37: Include summary from summary.json (run.summary() data)
+    summary: Any = {}
+    summary_path = run_dir / "summary.json"
+    if summary_path.exists():
+        try:
+            summary = read_json(summary_path)
+            if not isinstance(summary, dict):
+                summary = {}
+        except Exception:
+            summary = {}
     
     return {
         "id": run_id,
@@ -271,6 +283,7 @@ async def get_run_detail(run_id: str, request: Request) -> Dict[str, Any]:
         "metrics_step": str(run_dir / "events.jsonl"),
         "assets": assets,
         "assets_count": assets_count,
+        "summary": summary,
     }
 
 
@@ -453,6 +466,63 @@ async def move_runs(request: Request, payload: MoveRunsPayload) -> Dict[str, Any
     }
 
 
+def _read_image_events_from_events_jsonl(run_dir: Path) -> List[Dict[str, Any]]:
+    """
+    Scan events.jsonl for type="image" events and return image metadata.
+    
+    Returns list of dicts with step, key, path (absolute path for download API).
+    """
+    import json
+    images: List[Dict[str, Any]] = []
+    events_path = run_dir / "events.jsonl"
+    if not events_path.exists():
+        return images
+    try:
+        with open(events_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    evt = json.loads(line)
+                    if not isinstance(evt, dict) or evt.get("type") != "image":
+                        continue
+                    data = evt.get("data")
+                    if not isinstance(data, dict):
+                        continue
+                    rel_path = data.get("path")
+                    if not rel_path or not isinstance(rel_path, str):
+                        continue
+                    abs_path = run_dir / rel_path
+                    if not abs_path.exists():
+                        continue
+                    images.append({
+                        "step": data.get("step"),
+                        "key": data.get("key") or "image",
+                        "path": str(abs_path),
+                    })
+                except (json.JSONDecodeError, TypeError):
+                    continue
+    except Exception as e:
+        logger.debug(f"Failed to read image events from {events_path}: {e}")
+    return images
+
+
+@router.get("/runs/{run_id}/images")
+async def get_run_images(run_id: str, request: Request) -> Dict[str, Any]:
+    """
+    Get image events logged via run.log_image() for a run.
+    
+    Reads events.jsonl for type="image" events and returns metadata.
+    Image files are served via /runs/{run_id}/assets/download?path=<absolute_path>.
+    """
+    entry = find_run_entry_fast(request, run_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Run not found")
+    images = _read_image_events_from_events_jsonl(entry.dir)
+    return {"run_id": run_id, "images": images}
+
+
 @router.get("/runs/{run_id}/assets")
 async def get_run_assets(run_id: str, request: Request) -> Dict[str, Any]:
     entry = find_run_entry_fast(request, run_id)
@@ -480,9 +550,13 @@ async def download_run_asset(
     if not entry:
         raise HTTPException(status_code=404, detail="Run not found")
 
+    run_dir = entry.dir
     target = Path(path)
     if not is_within_directory(storage_root, target):
         raise HTTPException(status_code=403, detail="Unsafe path")
+    # Ensure the requested path belongs to this run (prevents downloading other runs' files or runicorn.db)
+    if not is_within_directory(run_dir, target):
+        raise HTTPException(status_code=403, detail="Path does not belong to this run")
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -931,8 +1005,17 @@ async def permanent_delete_run(
         dry_run=dry_run,
     )
     
-    if not result["success"] and result["errors"]:
-        raise HTTPException(status_code=500, detail=result["errors"][0])
+    # BUG-05: Return error details when success is False (including partial failures)
+    if not result["success"]:
+        detail = result["errors"][0] if result["errors"] else "Deletion partially failed"
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": detail,
+                "errors": result.get("errors", []),
+                "partial_failures": result.get("partial_failures", []),
+            },
+        )
     
     return result
 

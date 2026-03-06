@@ -91,7 +91,7 @@ export default function RemoteSessionCard({
             danger
             icon={<StopOutlined />}
             onClick={handleStop}
-            disabled={session.status !== 'running'}
+            disabled={session.status === 'stopped'}
           >
             {t('remote.session.stop')}
           </Button>

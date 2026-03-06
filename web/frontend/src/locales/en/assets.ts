@@ -59,6 +59,7 @@ export default {
   'asset_detail.invalid_id': 'Invalid asset id',
 
   'asset_detail.fields.projects': 'Projects',
+  'asset_detail.fields.paths': 'Paths',
   'asset_detail.fields.last_used': 'Last used',
   'asset_detail.fields.description': 'Description',
   'asset_detail.fields.context': 'Context',

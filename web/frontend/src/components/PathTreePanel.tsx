@@ -620,17 +620,12 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
         <div
           className={`all-runs-item${selectedPath === null ? ' all-runs-selected' : ''}`}
           onClick={() => onSelectPath(null)}
-          onDragOver={handleDragOver('default')}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop('default')}
           style={{
             padding: '6px 12px',
             cursor: 'pointer',
             borderRadius: 4,
             margin: '0 4px 4px',
-            background: dropTargetPath === 'default'
-              ? token.colorPrimaryBgHover
-              : selectedPath === null ? token.colorPrimaryBg : 'transparent',
+            background: selectedPath === null ? token.colorPrimaryBg : 'transparent',
             color: selectedPath === null ? token.colorPrimary : token.colorText,
             fontWeight: selectedPath === null ? 600 : 400,
             fontSize: 13,
@@ -639,7 +634,7 @@ const PathTreePanel: React.FC<PathTreePanelProps> = ({
             gap: 6,
             position: 'relative',
             borderLeft: selectedPath === null ? `3px solid ${token.colorPrimary}` : '3px solid transparent',
-            outline: dropTargetPath === 'default' ? `2px dashed ${token.colorPrimary}` : 'none',
+            outline: 'none',
             transition: 'all 0.15s ease',
           }}
         >

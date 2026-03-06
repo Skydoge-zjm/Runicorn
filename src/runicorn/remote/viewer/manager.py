@@ -146,10 +146,11 @@ class RemoteViewerManager:
             
             # Step 7: Create SSH tunnel
             logger.info(f"[{session_id}] Creating SSH tunnel...")
+            ssh_host = connection.config.host
             session = RemoteViewerSession(
                 session_id=session_id,
                 connection=connection,
-                remote_host="127.0.0.1",
+                remote_host=ssh_host,
                 remote_port=remote_port,
                 local_port=local_port,
                 remote_root=remote_root,

@@ -65,7 +65,13 @@ export function parseRunAssetsPayload(payload: any): ParsedAsset[] {
 
   const cfg = a?.config
   if (cfg && typeof cfg === 'object' && Object.keys(cfg).length > 0) {
-    const identity = buildAssetIdentity({ kind: 'config', name: 'config' })
+    const cfgFingerprint = pickFingerprint(cfg?.fingerprint)
+    const identity = buildAssetIdentity({
+      kind: 'config',
+      name: 'config',
+      fingerprint: cfgFingerprint,
+      source_uri: cfgFingerprint ? undefined : stableStringify(cfg),
+    })
     out.push({
       kind: 'config',
       name: 'config',

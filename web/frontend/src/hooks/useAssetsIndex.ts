@@ -52,9 +52,15 @@ export type AssetsIndex = {
 }
 
 const STORAGE_KEY = 'assets_index_v3'
+const CACHE_TTL_SEC = 60 // 60 seconds - avoid indefinitely stale cache
 
 function nowSec(): number {
   return Math.floor(Date.now() / 1000)
+}
+
+function isCacheStale(index: AssetsIndex | null): boolean {
+  if (!index?.generated_at) return true
+  return nowSec() - index.generated_at > CACHE_TTL_SEC
 }
 
 function safeParseJson(s: string | null): any {
@@ -299,20 +305,17 @@ export function useAssetsIndex() {
     return { totalRuns, runsWithAssets, totalAssets, archivedAssets }
   }, [index])
 
+  // Refresh on mount (page enter): when cache empty or stale (>60s), refresh in background.
+  // TTL prevents indefinitely trusting old cache; page enter triggers refresh when stale.
   useEffect(() => {
     if (!didAutoRefreshRef.current) {
-      const runsLen = index?.runs?.length || 0
-      const repoLen = index?.repo?.length || 0
-      const shouldAutoRefresh =
-        (!index && !loading) ||
-        (!loading && Boolean(index) && (runsLen === 0 || (runsLen > 0 && repoLen === 0)))
-
-      if (shouldAutoRefresh) {
-        didAutoRefreshRef.current = true
+      didAutoRefreshRef.current = true
+      const cached = index ?? loadAssetsIndexFromCache()
+      if (!cached || isCacheStale(cached)) {
         refresh()
       }
     }
-  }, [index, loading, refresh])
+  }, [refresh, index])
 
   useEffect(() => {
     return () => {

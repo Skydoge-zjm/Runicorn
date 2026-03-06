@@ -21,6 +21,9 @@ export default {
   'experiments.delete_failed': 'Failed to delete runs',
   'experiments.export_started': 'Exporting runs...',
   'experiments.select_multiple': 'Please select at least 2 runs to compare',
+  'experiments.select_more_to_compare': 'Select one more run to start comparison',
+  'experiments.compare_missing_runs': 'Some runs in this comparison link no longer exist: {{ids}}',
+  'experiments.compare_not_enough_runs': 'Not enough runs for comparison',
   'experiments.compare_hint': 'Use the comparison feature in the run detail page',
   'experiments.select_one': 'Please select at least one run to export',
   
@@ -138,6 +141,13 @@ export default {
   'run.refreshed': 'Refreshed',
   'run.compare_with': 'Compare with...',
   'run.tabs.overview': 'Overview',
+  'run.tabs.images': 'Images',
+  'run.images.title': 'Images',
+  'run.images.none': 'No images logged.',
+  'run.images.step': 'Step',
+  'run.images.key': 'Key',
+  'run.summary.title': 'Summary',
+  'run.summary.none': 'No summary data.',
   
   'metrics.title': 'Metrics',
   'metrics.more_columns': 'More Columns',

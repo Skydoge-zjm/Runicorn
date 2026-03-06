@@ -5,7 +5,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .ignore import ensure_rnignore, load_ignore_matcher
+from .ignore import load_ignore_matcher
 
 
 def snapshot_workspace(
@@ -21,9 +21,13 @@ def snapshot_workspace(
     root = Path(root).resolve()
     out_zip = Path(out_zip).resolve()
 
-    ensure_rnignore(root, rnignore_name=ignore_file)
-
-    matcher = load_ignore_matcher(root, rnignore_name=ignore_file, extra_excludes=extra_excludes)
+    # Read-only: use default patterns in-memory when .rnignore doesn't exist (no file creation).
+    matcher = load_ignore_matcher(
+        root,
+        rnignore_name=ignore_file,
+        extra_excludes=extra_excludes,
+        use_default_rnignore_if_missing=True,
+    )
 
     files: List[Tuple[Path, str]] = []
     total_bytes = 0

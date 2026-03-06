@@ -128,3 +128,32 @@ class TestLogText:
             assert len(lines) == 2
         finally:
             run.finish()
+
+    def test_log_text_multiline_timestamps_each_line(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
+        """log_text prepends timestamp to each line of multiline text."""
+        run = _make_run(storage_root, monkeypatch, run_id="text_multiline_001")
+        try:
+            run.log_text("line1\nline2\nline3")
+            content = run._logs_txt_path.read_text(encoding="utf-8")
+            lines = content.strip().splitlines()
+            assert len(lines) == 3
+            # All lines should have timestamp prefix (HH:MM:SS | )
+            for line in lines:
+                assert " | " in line
+                assert line.split(" | ", 1)[1] in ("line1", "line2", "line3")
+        finally:
+            run.finish()
+
+    def test_log_text_preserves_blank_lines(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
+        """log_text preserves blank lines in multiline text."""
+        run = _make_run(storage_root, monkeypatch, run_id="text_blank_001")
+        try:
+            run.log_text("a\n\nb")
+            content = run._logs_txt_path.read_text(encoding="utf-8")
+            lines = content.strip().splitlines()
+            assert len(lines) == 3
+            assert " | a" in lines[0]
+            assert lines[1] == ""
+            assert " | b" in lines[2]
+        finally:
+            run.finish()

@@ -8,6 +8,7 @@ fall back to the legacy file-system scan.
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
 from pathlib import Path
@@ -27,6 +28,176 @@ if TYPE_CHECKING:
     from ...storage.backends import SQLiteStorageBackend
 
 logger = logging.getLogger(__name__)
+
+
+def _pick_fingerprint(fp: Any) -> Optional[str]:
+    """Convert fingerprint from assets.json (str, number, or dict) to string."""
+    if fp is None:
+        return None
+    if isinstance(fp, str):
+        return fp
+    if isinstance(fp, (int, float)):
+        return str(fp)
+    if isinstance(fp, dict):
+        return json.dumps(fp, ensure_ascii=False, sort_keys=True)
+    return None
+
+
+def _sync_assets_from_json(
+    run_id: str,
+    run_dir: Path,
+    backend: "SQLiteStorageBackend",
+    created_at: float,
+) -> int:
+    """
+    Sync assets from assets.json into SQLite (assets + run_assets).
+    Only runs when the run has no existing run_assets (file-only/imported runs).
+    Returns the number of assets synced.
+    """
+    try:
+        existing = backend.get_assets_for_run(run_id)
+        if existing:
+            return 0  # Already has assets from SDK; skip to avoid duplicates
+    except Exception:
+        return 0
+
+    assets_path = run_dir / "assets.json"
+    if not assets_path.exists():
+        return 0
+
+    assets = read_json(assets_path)
+    if not isinstance(assets, dict):
+        return 0
+
+    count = 0
+
+    # code.snapshot
+    code = assets.get("code")
+    if isinstance(code, dict):
+        snap = code.get("snapshot")
+        if isinstance(snap, dict):
+            fp = _pick_fingerprint(snap.get("fingerprint"))
+            try:
+                backend.record_asset_for_run(
+                    run_id=run_id,
+                    role="code",
+                    asset_type="code_snapshot",
+                    name="code_snapshot.zip",
+                    source_uri=snap.get("workspace_root"),
+                    archive_uri=snap.get("archive_path"),
+                    is_archived=bool(snap.get("saved")),
+                    fingerprint_kind=snap.get("fingerprint_kind"),
+                    fingerprint=fp,
+                    created_at=float(snap.get("created_at") or created_at),
+                    metadata={"format": snap.get("format", "zip")},
+                )
+                count += 1
+            except Exception as exc:
+                logger.debug("Failed to sync code snapshot for %s: %s", run_id, exc)
+
+    # config
+    cfg = assets.get("config")
+    if isinstance(cfg, dict) and len(cfg) > 0:
+        fp = _pick_fingerprint(cfg.get("fingerprint"))
+        if not fp:
+            fp = json.dumps(cfg, ensure_ascii=False, sort_keys=True)
+        try:
+            backend.record_asset_for_run(
+                run_id=run_id,
+                role="config",
+                asset_type="config",
+                name=None,
+                source_uri=None,
+                archive_uri=None,
+                is_archived=False,
+                fingerprint_kind=cfg.get("fingerprint_kind"),
+                fingerprint=fp,
+                created_at=created_at,
+                metadata=cfg,
+            )
+            count += 1
+        except Exception as exc:
+            logger.debug("Failed to sync config for %s: %s", run_id, exc)
+
+    # datasets
+    datasets = assets.get("datasets")
+    if isinstance(datasets, list):
+        for i, d in enumerate(datasets):
+            if not isinstance(d, dict):
+                continue
+            name = d.get("name") or f"dataset_{i}"
+            fp = _pick_fingerprint(d.get("fingerprint"))
+            try:
+                backend.record_asset_for_run(
+                    run_id=run_id,
+                    role="dataset",
+                    asset_type="dataset",
+                    name=str(name),
+                    source_uri=d.get("uri"),
+                    archive_uri=d.get("archive_path"),
+                    is_archived=bool(d.get("saved")),
+                    fingerprint_kind=d.get("fingerprint_kind"),
+                    fingerprint=fp,
+                    created_at=created_at,
+                    metadata={"context": d.get("context"), "description": d.get("description")},
+                )
+                count += 1
+            except Exception as exc:
+                logger.debug("Failed to sync dataset %s for %s: %s", name, run_id, exc)
+
+    # pretrained
+    pretrained = assets.get("pretrained")
+    if isinstance(pretrained, list):
+        for i, p in enumerate(pretrained):
+            if not isinstance(p, dict):
+                continue
+            name = p.get("name") or f"pretrained_{i}"
+            path_or_uri = p.get("path_or_uri")
+            source_uri = str(path_or_uri) if path_or_uri is not None else None
+            try:
+                backend.record_asset_for_run(
+                    run_id=run_id,
+                    role="pretrained",
+                    asset_type="pretrained",
+                    name=str(name),
+                    source_uri=source_uri,
+                    archive_uri=p.get("archive_path"),
+                    is_archived=bool(p.get("saved")),
+                    fingerprint_kind=p.get("fingerprint_kind"),
+                    fingerprint=_pick_fingerprint(p.get("fingerprint")),
+                    created_at=created_at,
+                    metadata={"source_type": p.get("source_type"), "description": p.get("description")},
+                )
+                count += 1
+            except Exception as exc:
+                logger.debug("Failed to sync pretrained %s for %s: %s", name, run_id, exc)
+
+    # outputs
+    outputs = assets.get("outputs")
+    if isinstance(outputs, list):
+        for i, e in enumerate(outputs):
+            if not isinstance(e, dict):
+                continue
+            name = e.get("name") or e.get("key") or f"output_{i}"
+            try:
+                backend.record_asset_for_run(
+                    run_id=run_id,
+                    role="output",
+                    asset_type="output",
+                    name=str(name),
+                    source_uri=e.get("path"),
+                    archive_uri=e.get("archive_path"),
+                    is_archived=True,
+                    fingerprint_kind=e.get("fingerprint_kind"),
+                    fingerprint=_pick_fingerprint(e.get("fingerprint")),
+                    created_at=created_at,
+                    metadata={"key": e.get("key"), "kind": e.get("kind")},
+                )
+                count += 1
+            except Exception as exc:
+                logger.debug("Failed to sync output %s for %s: %s", name, run_id, exc)
+
+    return count
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +383,22 @@ def sync_filesystem_to_db(
                     backend.set_tags(run_id, [str(t) for t in tags if t])
                 except Exception:
                     pass
+
+        # Sync assets from assets.json → assets + run_assets (for file-only/imported runs)
+        created_at = meta.get("created_at") if isinstance(meta, dict) else None
+        if not isinstance(created_at, (int, float)):
+            try:
+                created_at = entry.dir.stat().st_mtime
+            except Exception:
+                created_at = time.time()
+        try:
+            synced = _sync_assets_from_json(
+                run_id, entry.dir, backend, float(created_at)
+            )
+            if synced:
+                logger.debug("Synced %d assets for run %s from assets.json", synced, run_id)
+        except Exception as exc:
+            logger.debug("Failed to sync assets for %s: %s", run_id, exc)
 
     if inserted:
         logger.info("Synced %d filesystem runs into SQLite", inserted)

@@ -251,12 +251,21 @@ export default function RecycleBin({ open, onClose, onRestore }: RecycleBinProps
                 setRestoreLoading(true)
                 try {
                   const result = await restoreRuns([record.id])
+                  const conflictIds = Object.entries(result.results || {})
+                    .filter(([, r]: [string, any]) => r.error === 'conflict')
+                    .map(([id]: [string, any]) => id)
                   if (result.restored_count > 0) {
                     message.success(t('recycle_bin.restore_success', { count: 1 }))
                     fetchDeletedRuns()
                     onRestore?.()
                   }
+                  if (conflictIds.length > 0) {
+                    message.warning(t('recycle_bin.restore_conflict', { count: conflictIds.length }))
+                  } else if (result.restored_count === 0) {
+                    message.warning(t('recycle_bin.restore_failed'))
+                  }
                 } catch (error) {
+                  logger.error('Single restore failed:', error)
                   message.error(t('recycle_bin.restore_failed'))
                 } finally {
                   setRestoreLoading(false)

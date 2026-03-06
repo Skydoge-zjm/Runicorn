@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -42,6 +43,31 @@ class TestLogConfig:
             assets = json.loads(run._assets_path.read_text(encoding="utf-8"))
             assert assets["config"]["args"]["lr"] == 0.001
             assert assets["config"]["args"]["epochs"] == 10
+        finally:
+            run.finish()
+
+    def test_log_config_with_non_json_types(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        """log_config handles Path, Enum, datetime, numpy scalars without crashing."""
+        from enum import Enum
+
+        class Optimizer(Enum):
+            SGD = "sgd"
+            ADAM = "adam"
+
+        run = _make_run(storage_root, monkeypatch, run_id="cfg_nonjson_001")
+        try:
+            run.log_config(
+                extra={
+                    "data_dir": tmp_path / "data",
+                    "optimizer": Optimizer.ADAM,
+                    "started_at": datetime(2025, 3, 6, 12, 0, 0),
+                },
+            )
+            assets = json.loads(run._assets_path.read_text(encoding="utf-8"))
+            cfg = assets["config"]["extra"]
+            assert cfg["data_dir"] == str(tmp_path / "data")
+            assert cfg["optimizer"] == "adam"
+            assert cfg["started_at"] == "2025-03-06T12:00:00"
         finally:
             run.finish()
 

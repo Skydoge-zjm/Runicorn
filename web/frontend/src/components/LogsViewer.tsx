@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next'
 import AnsiToHtml from 'ansi-to-html'
 import { useVirtualizer } from '@tanstack/react-virtual'
 
-// Constants
-const MAX_LINES = 5000
+// Constants (match backend limit)
+const MAX_LINES = 10000
 const RECONNECT_BASE_MS = 500
 const RECONNECT_MAX_MS = 10000
 const SCROLL_BOTTOM_THRESHOLD = 50
@@ -146,13 +146,18 @@ export default function LogsViewer({ url }: LogsViewerProps) {
       // Batch incoming messages via rAF to reduce GC pressure from high-frequency updates
       const pendingLines: string[] = []
       let rafId: number | null = null
+      const TRUNCATION_INFO = `[... earlier lines truncated, showing last ${MAX_LINES} lines ...]`
       const flushPending = () => {
         rafId = null
         if (pendingLines.length === 0) return
         const batch = pendingLines.splice(0)
         setAllLines((prev) => {
-          const next = prev.concat(batch)
-          return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next
+          const raw = prev[0] === TRUNCATION_INFO ? prev.slice(1) : prev
+          const next = raw.concat(batch)
+          if (next.length > MAX_LINES) {
+            return [TRUNCATION_INFO, ...next.slice(-MAX_LINES)]
+          }
+          return next
         })
       }
       ws.onmessage = (ev) => {

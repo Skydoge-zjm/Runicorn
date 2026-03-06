@@ -265,6 +265,22 @@ class TestRunFinish:
         status = json.loads(run._status_path.read_text(encoding="utf-8"))
         assert status["status"] == "failed"
 
+    def test_run_finish_normalizes_status_aliases(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
+        """finish(status='completed') normalizes to 'finished' for SQLite compatibility."""
+        run = _make_run(storage_root, monkeypatch, run_id="test_completed_001")
+        run.finish(status="completed")
+        status = json.loads(run._status_path.read_text(encoding="utf-8"))
+        assert status["status"] == "finished"
+        # SQLite should also have normalized value (backend closed after finish, re-open to check)
+        from runicorn.storage.backends import SQLiteStorageBackend
+        backend = SQLiteStorageBackend(storage_root)
+        try:
+            exp = backend.get_experiment("test_completed_001")
+            assert exp is not None
+            assert exp.status == "finished"
+        finally:
+            backend.close()
+
     def test_run_double_finish_idempotent(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
         """Calling finish() twice does not raise.
 

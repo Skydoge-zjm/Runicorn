@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, App, Upload, Card, Switch, InputNumber, Alert, Modal, Tag, Select, theme } from 'antd'
 import { WarningOutlined } from '@ant-design/icons'
 import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, InfoCircleOutlined, ThunderboltOutlined, EyeOutlined, ExportOutlined, BellOutlined, DashboardOutlined } from '@ant-design/icons'
@@ -23,6 +24,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
   const { t } = useTranslation()
   const { token } = theme.useToken()
   const { message } = App.useApp()
+  const queryClient = useQueryClient()
   const set = (patch: Partial<UiSettings>) => onChange({ ...value, ...patch })
   const [appearanceSub, setAppearanceSub] = useState<'theme' | 'visibility' | 'alerts'>('theme')
   // ----- Data directory
@@ -472,6 +474,8 @@ setImportMode('merge')
                     { count: added, skipped },
                   ))
                   setPreviewData(null)
+                  // Refresh runs list and assets index so main page shows new data
+                  queryClient.invalidateQueries({ queryKey: ['runs'] })
                 } catch (e: any) {
                   message.error(typeof e?.message === 'string' ? e.message : t('offline_import.failed'))
                 } finally {

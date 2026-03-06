@@ -22,19 +22,21 @@ def load_user_config() -> Dict[str, Any]:
 
 
 def save_user_config(update: Dict[str, Any]) -> None:
+    """
+    Save configuration updates to disk.
+
+    Does NOT catch write errors; OSError/IOError from mkdir or write_text
+    propagate so callers can return proper error responses to the user.
+    """
     path = get_config_file_path()
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        cur = load_user_config()
-        for key, value in (update or {}).items():
-            if value is None:
-                cur.pop(key, None)
-            else:
-                cur[key] = value
-        path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        # Silent failure to avoid breaking training loops; user can retry via CLI
-        pass
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cur = load_user_config()
+    for key, value in (update or {}).items():
+        if value is None:
+            cur.pop(key, None)
+        else:
+            cur[key] = value
+    path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def set_user_root_dir(path_like: str) -> Path:

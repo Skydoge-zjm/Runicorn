@@ -39,6 +39,13 @@ describe('buildAssetIdentity', () => {
     const id = buildAssetIdentity({ kind: 'dataset', fingerprint: '  ', archive_path: '/a' })
     expect(id.idType).toBe('archive_path')
   })
+
+  it('handles object source_uri (e.g. dataset with repo/split dict)', () => {
+    const uri = { repo: 'my/repo', split: 'train' }
+    const id = buildAssetIdentity({ kind: 'dataset', source_uri: uri, name: 'ds1' })
+    expect(id.idType).toBe('source_uri')
+    expect(id.idValue).toBe(JSON.stringify(uri))
+  })
 })
 
 // ── assetIdentityToString ──

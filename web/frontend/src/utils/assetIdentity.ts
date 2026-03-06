@@ -45,11 +45,17 @@ export function decodeAssetIdentity(encoded: string): AssetIdentity | null {
   }
 }
 
+function toUriString(v: unknown): string {
+  if (v === null || v === undefined) return ''
+  if (typeof v === 'object') return JSON.stringify(v)
+  return String(v)
+}
+
 export function buildAssetIdentity(input: {
   kind: AssetIdentity['kind']
   fingerprint?: string | null
   archive_path?: string | null
-  source_uri?: string | null
+  source_uri?: string | object | null
   name?: string | null
 }): AssetIdentity {
   const kind = input.kind
@@ -59,8 +65,8 @@ export function buildAssetIdentity(input: {
   const ap = (input.archive_path ?? '').trim()
   if (ap) return { kind, idType: 'archive_path', idValue: ap }
 
-  const su = (input.source_uri ?? '').trim()
-  if (su) return { kind, idType: 'source_uri', idValue: su }
+  const uriStr = toUriString(input.source_uri).trim()
+  if (uriStr) return { kind, idType: 'source_uri', idValue: uriStr }
 
   const n = (input.name ?? '').trim()
   return { kind, idType: 'name', idValue: n || '-' }

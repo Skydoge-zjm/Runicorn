@@ -1,4 +1,4 @@
-﻿"""
+"""
 Storage Backend Implementations
 
 Provides different storage backend implementations including file-based,
@@ -927,6 +927,54 @@ class SQLiteStorageBackend(StorageBackend):
                 (asset_id,),
             ).fetchone()
             return int(row["cnt"]) if row else 0
+        finally:
+            self.pool.return_connection(conn)
+
+    def count_runs_referencing_fingerprint(
+        self, fingerprint: str, exclude_run_id: Optional[str] = None
+    ) -> int:
+        """
+        BUG-28: Count how many runs have assets with this fingerprint.
+        Used to avoid deleting shared manifests/blobs when one run is removed.
+        When exclude_run_id is set (e.g. dry_run), exclude that run from the count.
+        """
+        if not fingerprint:
+            return 0
+        conn = self.pool.get_connection()
+        try:
+            if exclude_run_id:
+                row = conn.execute(
+                    """
+                    SELECT COUNT(DISTINCT ra.run_id) AS cnt
+                    FROM run_assets ra
+                    JOIN assets a ON ra.asset_id = a.asset_id
+                    WHERE a.fingerprint = ? AND ra.run_id != ?
+                    """,
+                    (fingerprint, exclude_run_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT COUNT(DISTINCT ra.run_id) AS cnt
+                    FROM run_assets ra
+                    JOIN assets a ON ra.asset_id = a.asset_id
+                    WHERE a.fingerprint = ?
+                    """,
+                    (fingerprint,),
+                ).fetchone()
+            return int(row["cnt"]) if row else 0
+        finally:
+            self.pool.return_connection(conn)
+
+    def unlink_run_asset(self, run_id: str, asset_id: str) -> None:
+        """Remove the link between a run and an asset (BUG-30: rolling outputs)."""
+        conn = self.pool.get_connection()
+        try:
+            conn.execute(
+                "DELETE FROM run_assets WHERE run_id = ? AND asset_id = ?",
+                (run_id, asset_id),
+            )
+            conn.commit()
         finally:
             self.pool.return_connection(conn)
 
