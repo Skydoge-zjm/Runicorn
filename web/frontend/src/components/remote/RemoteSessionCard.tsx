@@ -11,13 +11,10 @@ import {
   Descriptions,
   Alert,
   Typography,
-  Modal,
-  theme
 } from 'antd'
 import {
   LinkOutlined,
   StopOutlined,
-  DisconnectOutlined,
   CloudServerOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -35,25 +32,15 @@ interface RemoteSessionCardProps {
   session: RemoteSession
   onOpen?: (session: RemoteSession) => void
   onStop?: (session: RemoteSession) => Promise<void>
-  onDisconnect?: (session: RemoteSession) => Promise<void>
 }
 
-const statusMessageMap: Record<string, string> = {
-  connecting: 'Establishing connection...',
-  running: 'Remote Viewer is running and accessible',
-  stopping: 'Stopping Remote Viewer...',
-  stopped: 'Remote Viewer has been stopped',
-  error: 'An error occurred'
-}
 
 export default function RemoteSessionCard({
   session,
   onOpen,
   onStop,
-  onDisconnect
 }: RemoteSessionCardProps) {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
 
   const handleOpen = () => {
     const url = `http://localhost:${session.localPort}`
@@ -73,18 +60,6 @@ export default function RemoteSessionCard({
     }
   }
 
-  const handleDisconnect = () => {
-    Modal.confirm({
-      title: t('remote.message.confirmDisconnect'),
-      content: `${session.host}:${session.remotePort}`,
-      onOk: async () => {
-        if (onDisconnect) {
-          await onDisconnect(session)
-        }
-      }
-    })
-  }
-
   return (
     <Card
       title={
@@ -94,7 +69,8 @@ export default function RemoteSessionCard({
           <ServerStatusLight 
             status={
               session.status === 'running' ? 'online' : 
-              session.status === 'connecting' || session.status === 'stopping' ? 'connecting' : 
+              session.status === 'connecting' || session.status === 'stopping' || session.status === 'reconnecting' ? 'connecting' : 
+              session.status === 'degraded' ? 'connecting' :
               'offline'
             } 
             label={t(`remote.status.${session.status}`)}
@@ -112,18 +88,12 @@ export default function RemoteSessionCard({
             {t('remote.session.open')}
           </Button>
           <Button
+            danger
             icon={<StopOutlined />}
             onClick={handleStop}
             disabled={session.status !== 'running'}
           >
             {t('remote.session.stop')}
-          </Button>
-          <Button
-            danger
-            icon={<DisconnectOutlined />}
-            onClick={handleDisconnect}
-          >
-            {t('remote.session.disconnect')}
           </Button>
         </Space>
       }
@@ -160,8 +130,13 @@ export default function RemoteSessionCard({
 
       {/* Status Alert */}
       <Alert
-        type={session.status === 'running' ? 'success' : session.status === 'error' ? 'error' : 'info'}
-        message={statusMessageMap[session.status] || session.status}
+        type={
+          session.status === 'running' ? 'success' : 
+          session.status === 'error' || session.status === 'disconnected' ? 'error' : 
+          session.status === 'degraded' || session.status === 'reconnecting' ? 'warning' :
+          'info'
+        }
+        message={t(`remote.statusMessage.${session.status}`)}
         description={session.error}
         showIcon
         style={{ marginTop: 16 }}

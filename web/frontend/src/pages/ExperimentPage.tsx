@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Table, Button, Card, Space, Input, Tag, message, Tooltip, Empty, Badge, theme, App } from 'antd'
+import { Table, Button, Card, Space, Input, Tag, Tooltip, Empty, Badge, theme, App } from 'antd'
 import { EyeOutlined, DeleteOutlined, CopyOutlined, PlusOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -43,7 +43,7 @@ const ExperimentPage: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const { token } = theme.useToken()
-  const { modal } = App.useApp()
+  const { modal, message } = App.useApp()
 
   // Hooks
   const {

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { message } from 'antd'
+import { App } from 'antd'
 import { updateRunAlias, updateRunTags } from '../api'
 import type { RunData } from './useExperimentData'
 import logger from '../utils/logger'
@@ -10,6 +10,7 @@ export function useInlineEditing(
   setRuns: React.Dispatch<React.SetStateAction<RunData[]>>
 ) {
   const { t } = useTranslation()
+  const { message } = App.useApp()
 
   // Alias editing
   const [editingRunId, setEditingRunId] = useState<string | null>(null)

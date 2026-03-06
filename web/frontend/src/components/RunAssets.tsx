@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Card, Collapse, Empty, Spin, message, Space, Tag, Typography, Button } from 'antd'
+import { Card, Collapse, Empty, Spin, App, Space, Tag, Typography, Button } from 'antd'
 import { DatabaseOutlined, SettingOutlined, CodeOutlined, RocketOutlined, DownloadOutlined, EyeOutlined, CopyOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { downloadRunAssetUrl, getRunAssets } from '../api'
@@ -15,6 +15,7 @@ interface RunAssetsProps {
 
 export default function RunAssets({ runId }: RunAssetsProps) {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const { Text } = Typography
   const [loading, setLoading] = useState(false)

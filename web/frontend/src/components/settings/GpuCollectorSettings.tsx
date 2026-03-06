@@ -6,13 +6,14 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Space, Typography, Switch, InputNumber, message, theme } from 'antd'
+import { Space, Typography, Switch, InputNumber, App, theme } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { getGpuTelemetryConfig, setGpuTelemetryConfig, type GpuCollectorConfig } from '../../api'
 
 export default function GpuCollectorSettings() {
   const { t } = useTranslation()
   const { token } = theme.useToken()
+  const { message } = App.useApp()
   const [cfg, setCfg] = useState<GpuCollectorConfig | null>(null)
   const [saving, setSaving] = useState(false)
 

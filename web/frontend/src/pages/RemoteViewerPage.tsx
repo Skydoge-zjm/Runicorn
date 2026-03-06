@@ -13,7 +13,7 @@ import {
   Col,
   Alert,
   Empty,
-  message,
+  App,
   Spin,
   Modal,
   Input,
@@ -79,6 +79,7 @@ const { Title, Paragraph, Text } = Typography
 export default function RemoteViewerPage() {
   const { t } = useTranslation()
   const { token } = theme.useToken()
+  const { message } = App.useApp()
   const [connecting, setConnecting] = useState(false)
   const [fetchingEnvs, setFetchingEnvs] = useState(false)
   const [fetchingConfig, setFetchingConfig] = useState(false)
@@ -569,21 +570,6 @@ export default function RemoteViewerPage() {
     }
   }
 
-  /**
-   * Handle disconnect
-   */
-  const handleDisconnect = async (session: any) => {
-    try {
-      await stopRemoteViewer(session.sessionId)
-      await disconnectRemote(session.host, session.sshPort || 22, session.username || 'user')
-      await refetchSessions()
-      
-      message.success(t('remote.message.disconnected'))
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : t('remote.message.disconnectFailed'))
-      throw error
-    }
-  }
 
   /**
    * Handle password dialog submit
@@ -928,7 +914,6 @@ export default function RemoteViewerPage() {
                   key={session.sessionId}
                   session={session}
                   onStop={handleStopSession}
-                  onDisconnect={handleDisconnect}
                 />
               ))
             )}

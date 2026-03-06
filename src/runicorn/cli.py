@@ -27,6 +27,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_viewer.add_argument("--port", type=int, default=23300, help="Port to bind (default: 23300)")
     p_viewer.add_argument("--reload", action="store_true", help="Enable auto-reload (dev only)")
     p_viewer.add_argument("--remote-mode", action="store_true", help="Remote mode: bind only to 127.0.0.1 and enable auto-shutdown")
+    p_viewer.add_argument("--idle-timeout", type=int, default=1800, help="Idle timeout in seconds for remote-mode auto-shutdown (default: 1800)")
     p_viewer.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Logging level (default: INFO)")
 
     p_cfg = sub.add_parser("config", help="Manage Runicorn user configuration")
@@ -89,16 +90,23 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.cmd == "viewer":
         # Handle remote mode
+        idle_timeout = 0  # 0 means disabled
         if args.remote_mode:
             # Remote mode: force 127.0.0.1, disable reload, set log level
             host = "127.0.0.1"
             log_level = args.log_level.lower()
+            idle_timeout = args.idle_timeout
             print(f"[Remote Mode] Starting viewer on {host}:{args.port}", flush=True)
             print(f"[Remote Mode] Log level: {log_level}", flush=True)
             print(f"[Remote Mode] Storage: {args.storage or 'default'}", flush=True)
+            print(f"[Remote Mode] Idle timeout: {idle_timeout}s", flush=True)
         else:
             host = args.host
             log_level = "info"
+        
+        # Pass idle_timeout via env so create_app can pick it up.
+        if idle_timeout > 0:
+            os.environ["RUNICORN_IDLE_TIMEOUT"] = str(idle_timeout)
         
         # uvicorn can serve factory via --factory style; do it programmatically here
         app = lambda: create_app(storage=args.storage)  # noqa: E731

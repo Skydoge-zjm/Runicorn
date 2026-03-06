@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { message } from 'antd'
+import { App } from 'antd'
 import { getRunAssets, listRuns } from '../api'
 import { ParsedAsset, parseRunAssetsPayload } from '../utils/assetParse'
 import { AssetIdentity, assetIdentityToString, encodeAssetIdentity } from '../utils/assetIdentity'
@@ -226,6 +226,7 @@ export function loadAssetsIndexFromCache(): AssetsIndex | null {
 }
 
 export function useAssetsIndex() {
+  const { message } = App.useApp()
   const [index, setIndex] = useState<AssetsIndex | null>(() => loadAssetsIndexFromCache())
   const [loading, setLoading] = useState(false)
   const [progress, setProgress] = useState<{ total: number; done: number }>({ total: 0, done: 0 })

@@ -55,10 +55,20 @@ export default {
   // 状态
   'remote.status.connecting': '正在连接...',
   'remote.status.running': '运行中',
+  'remote.status.reconnecting': '正在重连...',
+  'remote.status.degraded': '异常',
   'remote.status.stopping': '正在停止...',
   'remote.status.stopped': '已停止',
   'remote.status.error': '错误',
   'remote.status.disconnected': '已断开',
+  'remote.statusMessage.connecting': '正在建立连接...',
+  'remote.statusMessage.running': 'Remote Viewer 运行中，可正常访问',
+  'remote.statusMessage.reconnecting': 'SSH 隧道断开，正在重连...',
+  'remote.statusMessage.degraded': '远程进程可能已崩溃，监控中',
+  'remote.statusMessage.disconnected': '连接已断开，重连失败',
+  'remote.statusMessage.stopping': '正在停止 Remote Viewer...',
+  'remote.statusMessage.stopped': 'Remote Viewer 已停止',
+  'remote.statusMessage.error': '发生错误',
   
   // 保存的连接
   'remote.saved.title': '已保存的连接',

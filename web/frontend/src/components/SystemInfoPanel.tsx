@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Descriptions, Space, Button, Typography, Spin, message, Tag, Row, Col, Statistic, Progress, Collapse } from 'antd'
+import { Card, Descriptions, Space, Button, Typography, Spin, App, Tag, Row, Col, Statistic, Progress, Collapse } from 'antd'
 import { CopyOutlined, ReloadOutlined, InfoCircleOutlined, DatabaseOutlined } from '@ant-design/icons'
 import { health, getConfig, getStorageStats, StorageStats } from '../api'
 import { useTranslation } from 'react-i18next'
@@ -8,6 +8,7 @@ const { Text, Title } = Typography
 
 export default function SystemInfoPanel() {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [loading, setLoading] = useState(true)
   const [systemInfo, setSystemInfo] = useState<any>(null)
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null)

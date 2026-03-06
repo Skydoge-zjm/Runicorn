@@ -154,12 +154,22 @@ def sync_filesystem_to_db(
 
             run_path = (meta.get("path") if isinstance(meta, dict) else None) or entry.path or "default"
 
+            # Extract time fields from status.json
+            started_at = (status_data.get("started_at") if isinstance(status_data, dict) else None)
+            ended_at = (status_data.get("ended_at") if isinstance(status_data, dict) else None)
+            duration_seconds = None
+            if isinstance(started_at, (int, float)) and isinstance(ended_at, (int, float)):
+                duration_seconds = ended_at - started_at
+
             exp = ExperimentRecord(
                 id=run_id,
                 path=run_path,
                 alias=(meta.get("alias") if isinstance(meta, dict) else None),
                 created_at=float(created_at),
                 updated_at=float(created_at),
+                started_at=started_at if isinstance(started_at, (int, float)) else None,
+                ended_at=ended_at if isinstance(ended_at, (int, float)) else None,
+                duration_seconds=duration_seconds,
                 status=str(status_val),
                 pid=(meta.get("pid") if isinstance(meta, dict) else None),
                 python_version=(meta.get("python_version") if isinstance(meta, dict) else None),

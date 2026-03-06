@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Card, List, Button, Empty, message, Tooltip } from 'antd'
+import { Card, List, Button, Empty, App, Tooltip } from 'antd'
 import { ReloadOutlined, EyeOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { getDismissedAlerts, undismissAlert, clearDismissedAlerts } from '../api/preferences'
@@ -32,6 +32,7 @@ const ALERT_NAMES: Record<string, { zh: string, en: string }> = {
 
 export default function DismissedAlertsManager() {
   const { t, i18n } = useTranslation()
+  const { message } = App.useApp()
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
 

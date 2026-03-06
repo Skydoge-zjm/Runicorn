@@ -14,10 +14,25 @@ from typing import Optional, Dict
 from ..connection import SSHConnection
 from ..host_key import HostKeyConfirmationRequiredError
 from ..ssh_backend import SshBackend, AutoBackend
-from .session import RemoteViewerSession
+from .session import (
+    RemoteViewerSession,
+    STATUS_RUNNING,
+    STATUS_RECONNECTING,
+    STATUS_DEGRADED,
+    STATUS_DISCONNECTED,
+    STATUS_STOPPED,
+)
 from .tunnel import find_available_port
 
 logger = logging.getLogger(__name__)
+
+# Tunnel reconnect parameters.
+_TUNNEL_MAX_RETRIES = 10
+_TUNNEL_MAX_BACKOFF_S = 60
+
+# Health monitor parameters.
+_HEALTH_CHECK_INTERVAL_S = 30
+_MAX_PROCESS_RESTART_ATTEMPTS = 3
 
 
 class RemoteViewerManager:
@@ -28,6 +43,8 @@ class RemoteViewerManager:
     - Starting remote viewer process
     - Creating SSH tunnel
     - Session lifecycle management
+    - Health monitoring (process + tunnel)
+    - Automatic tunnel reconnection
     """
     
     def __init__(self, backend: Optional[SshBackend] = None):
@@ -36,6 +53,10 @@ class RemoteViewerManager:
         # Prefer OpenSSH for port forwarding when possible.
         # Fallback logic is handled inside AutoBackend.
         self._backend = backend or AutoBackend()
+        
+        # Health monitor thread — started lazily on first session.
+        self._health_thread: Optional[threading.Thread] = None
+        self._health_stop = threading.Event()
     
     def start_remote_viewer(
         self,
@@ -133,9 +154,12 @@ class RemoteViewerManager:
                 local_port=local_port,
                 remote_root=remote_root,
                 remote_pid=remote_pid,
+                python_cmd=python_cmd,
             )
             
-            # Start tunnel in separate thread
+            # Start tunnel in separate thread (with auto-reconnect).
+            # The first tunnel is created synchronously so that early failures
+            # (host key, bind errors) can be reported back to the API caller.
             tunnel = self._backend.create_tunnel(
                 connection=connection,
                 local_port=local_port,
@@ -148,19 +172,117 @@ class RemoteViewerManager:
             # re-raise them in the main thread, so that API layer can return HTTP 409.
             tunnel_error: Dict[str, BaseException] = {}
 
-            def _tunnel_runner() -> None:
-                try:
-                    tunnel.start()
-                except BaseException as e:
-                    tunnel_error["error"] = e
-                    # Ensure stop signal is set so that the session can be cleaned up.
+            def _tunnel_runner_with_reconnect() -> None:
+                """Run the tunnel with automatic reconnection on failure."""
+                current_tunnel = tunnel
+                retry_count = 0
+                first_run = True
+
+                while not session._stop_event.is_set():
+                    _tunnel_up_ts = time.time()
                     try:
-                        session._stop_event.set()
-                    except Exception:
-                        pass
+                        current_tunnel.start()  # Blocks until disconnect/error.
+                    except BaseException as e:
+                        if first_run:
+                            # First attempt: propagate error to start_remote_viewer.
+                            tunnel_error["error"] = e
+                            return
+                        if isinstance(e, HostKeyConfirmationRequiredError):
+                            # Never retry host key problems.
+                            logger.warning(
+                                f"[{session_id}] Tunnel host key error, not retrying"
+                            )
+                            session.status = STATUS_DISCONNECTED
+                            return
+                        logger.warning(
+                            f"[{session_id}] Tunnel error: {e}"
+                        )
+
+                    first_run = False
+
+                    # If the (re)connected tunnel stayed up for a meaningful
+                    # period, reset the retry budget so that transient
+                    # failures later in the session also get full retries.
+                    _tunnel_duration = time.time() - _tunnel_up_ts
+                    if retry_count > 0 and _tunnel_duration > _TUNNEL_MAX_BACKOFF_S:
+                        logger.debug(
+                            f"[{session_id}] Tunnel was up for "
+                            f"{_tunnel_duration:.0f}s, resetting retry counter"
+                        )
+                        retry_count = 0
+
+                    if session._stop_event.is_set():
+                        break
+
+                    # --- Reconnect loop ---
+                    if retry_count >= _TUNNEL_MAX_RETRIES:
+                        logger.error(
+                            f"[{session_id}] Tunnel reconnect failed after "
+                            f"{_TUNNEL_MAX_RETRIES} attempts"
+                        )
+                        session.status = STATUS_DISCONNECTED
+                        return
+
+                    session.status = STATUS_RECONNECTING
+                    backoff = min(2 ** retry_count, _TUNNEL_MAX_BACKOFF_S)
+                    logger.info(
+                        f"[{session_id}] Tunnel lost, reconnecting in {backoff}s "
+                        f"(attempt {retry_count + 1}/{_TUNNEL_MAX_RETRIES})"
+                    )
+
+                    # Wait with interruptible sleep.
+                    if session._stop_event.wait(timeout=backoff):
+                        break
+
+                    # If the underlying SSH connection is dead, try to
+                    # re-establish it before rebuilding the tunnel.
+                    if not connection.is_connected:
+                        try:
+                            logger.info(
+                                f"[{session_id}] SSH connection lost, reconnecting..."
+                            )
+                            connection.connect()
+                        except Exception as conn_err:
+                            logger.warning(
+                                f"[{session_id}] SSH reconnect failed: {conn_err}"
+                            )
+                            retry_count += 1
+                            continue
+
+                    # Rebuild the tunnel instance (the old one's resources
+                    # are released when start() returns).
+                    try:
+                        # Check if a stop was requested while we were
+                        # reconnecting (closes a race with stop()).
+                        if session.status in (STATUS_STOPPED, STATUS_DISCONNECTED):
+                            break
+                        # Reset the stop event for the new tunnel.
+                        session._stop_event = threading.Event()
+                        current_tunnel = self._backend.create_tunnel(
+                            connection=connection,
+                            local_port=local_port,
+                            remote_host="127.0.0.1",
+                            remote_port=remote_port,
+                            stop_event=session._stop_event,
+                        )
+                    except Exception as create_err:
+                        logger.warning(
+                            f"[{session_id}] Failed to create new tunnel: {create_err}"
+                        )
+                        retry_count += 1
+                        continue
+
+                    logger.info(
+                        f"[{session_id}] New tunnel created, starting..."
+                    )
+                    retry_count += 1
+
+                # Thread exiting normally (stop event set).
+                if session.status not in (STATUS_STOPPED, STATUS_DISCONNECTED):
+                    session.status = STATUS_STOPPED
 
             tunnel_thread = threading.Thread(
-                target=_tunnel_runner,
+                target=_tunnel_runner_with_reconnect,
                 daemon=True,
                 name=f"tunnel-{session_id}",
             )
@@ -197,6 +319,9 @@ class RemoteViewerManager:
             # Register session
             with self._lock:
                 self._sessions[session_id] = session
+            
+            # Ensure the health monitor is running.
+            self._ensure_health_monitor()
             
             return session
             
@@ -410,3 +535,115 @@ for port in range({start_port}, {end_port}):
             connection.exec_command(f"rm -f /tmp/runicorn_viewer_{session_id}.log")
         except Exception as e:
             logger.debug(f"Cleanup warning: {e}")
+    
+    # ------------------------------------------------------------------
+    # Health monitor
+    # ------------------------------------------------------------------
+
+    def _ensure_health_monitor(self) -> None:
+        """Start the health monitor thread if not already running."""
+        if self._health_thread is not None and self._health_thread.is_alive():
+            return
+        self._health_stop.clear()
+        self._health_thread = threading.Thread(
+            target=self._health_monitor_loop,
+            daemon=True,
+            name="session-health-monitor",
+        )
+        self._health_thread.start()
+        logger.info("Session health monitor started")
+
+    def _health_monitor_loop(self) -> None:
+        """Periodically check all sessions for process / tunnel health."""
+        while not self._health_stop.is_set():
+            if self._health_stop.wait(timeout=_HEALTH_CHECK_INTERVAL_S):
+                break
+
+            with self._lock:
+                sessions = list(self._sessions.values())
+
+            if not sessions:
+                # No sessions left, stop the monitor to save resources.
+                logger.info("No active sessions — health monitor exiting")
+                return
+
+            for session in sessions:
+                if session._stop_event.is_set():
+                    continue
+                if session.status in (STATUS_STOPPED, STATUS_DISCONNECTED):
+                    continue
+
+                try:
+                    self._check_session_health(session)
+                except Exception as e:
+                    logger.debug(
+                        f"[{session.session_id}] Health check exception: {e}"
+                    )
+
+    def _check_session_health(self, session: RemoteViewerSession) -> None:
+        """Check a single session's remote process and tunnel health."""
+        sid = session.session_id
+        session.last_health_check = time.time()
+
+        # 1. Check remote process via `kill -0 <pid>`.
+        process_alive = True
+        if session.remote_pid and session.connection.is_connected:
+            try:
+                _, _, exit_code = session.connection.exec_command(
+                    f"kill -0 {session.remote_pid}", timeout=10
+                )
+                process_alive = exit_code == 0
+            except Exception:
+                # SSH itself might be broken; the tunnel reconnect logic
+                # will handle that case.
+                process_alive = False
+
+        if not process_alive:
+            session.health_check_failed_count += 1
+            logger.warning(
+                f"[{sid}] Remote process (PID {session.remote_pid}) not alive "
+                f"(fail count: {session.health_check_failed_count})"
+            )
+
+            if session._restart_count < _MAX_PROCESS_RESTART_ATTEMPTS:
+                # Try to restart the remote viewer process.
+                try:
+                    new_pid = self._start_remote_viewer_process(
+                        session.connection,
+                        session.python_cmd,
+                        session.remote_root,
+                        session.remote_port,
+                        sid,
+                    )
+                    session.remote_pid = new_pid
+                    session._restart_count += 1
+                    session.health_check_failed_count = 0
+                    session.status = STATUS_RUNNING
+                    logger.info(
+                        f"[{sid}] Remote process restarted (new PID: {new_pid}, "
+                        f"attempt {session._restart_count}/{_MAX_PROCESS_RESTART_ATTEMPTS})"
+                    )
+                    return
+                except Exception as restart_err:
+                    logger.warning(
+                        f"[{sid}] Failed to restart remote process: {restart_err}"
+                    )
+
+            # Cannot restart — mark degraded.
+            if session.status == STATUS_RUNNING:
+                session.status = STATUS_DEGRADED
+                logger.warning(f"[{sid}] Session marked as degraded")
+            return
+
+        # Process is alive — reset failure counter.
+        if session.health_check_failed_count > 0:
+            session.health_check_failed_count = 0
+
+        # 2. Tunnel health is handled by the reconnect logic inside
+        #    _tunnel_runner_with_reconnect.  If the tunnel thread itself
+        #    has died (all retries exhausted), the status is already
+        #    DISCONNECTED.  If it's reconnecting, leave it alone.
+        if session.status == STATUS_DEGRADED and session.connection.is_connected:
+            # Process confirmed alive over SSH — recover from degraded.
+            session.status = STATUS_RUNNING
+            logger.info(f"[{sid}] Session recovered to running")

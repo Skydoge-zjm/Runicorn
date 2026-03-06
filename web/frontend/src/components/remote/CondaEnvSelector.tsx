@@ -17,7 +17,7 @@ import {
   Spin,
   Row,
   Col,
-  Modal,
+  App,
   theme
 } from 'antd'
 import {
@@ -61,6 +61,7 @@ export default function CondaEnvSelector({
 }: CondaEnvSelectorProps) {
   const { t } = useTranslation()
   const { token } = theme.useToken()
+  const { modal } = App.useApp()
   const [selectedEnv, setSelectedEnv] = useState<string>(() => {
     if (initialEnv && envs.some(e => e.name === initialEnv)) {
       return initialEnv
@@ -172,7 +173,7 @@ export default function CondaEnvSelector({
     // If environment is still loading or not yet detected, wait for detection
     if (!versionInfo || versionInfo.loading) {
       // Show loading modal
-      const loadingModal = Modal.info({
+      const loadingModal = modal.info({
         title: t('remote.env.detecting'),
         content: (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
@@ -219,7 +220,7 @@ export default function CondaEnvSelector({
     
     // Now check the detection result
     if (!versionInfo || versionInfo.error) {
-      Modal.error({
+      modal.error({
         title: t('remote.env.detectFailed'),
         content: t('remote.env.detectFailedMessage'),
         okText: t('remote.form.cancel')
@@ -233,7 +234,7 @@ export default function CondaEnvSelector({
         ? '# System Python, no activation needed'
         : `conda activate ${selectedEnv}`
       
-      Modal.warning({
+      modal.warning({
         title: t('remote.env.runicornNotInstalledTitle'),
         width: 600,
         content: (
@@ -262,7 +263,7 @@ export default function CondaEnvSelector({
     // Check version compatibility
     if (versionInfo.versionStatus === 'too_old') {
       // Version < 0.5.0, no remote viewer support
-      Modal.error({
+      modal.error({
         title: t('remote.env.versionTooOldTitle'),
         width: 600,
         content: (
@@ -287,7 +288,7 @@ export default function CondaEnvSelector({
     
     if (versionInfo.versionStatus === 'mismatch') {
       // Version mismatch, show warning but allow continue
-      Modal.warning({
+      modal.warning({
         title: t('remote.env.versionMismatchTitle'),
         width: 600,
         content: (

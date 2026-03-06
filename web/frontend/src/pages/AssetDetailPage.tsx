@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { Button, Card, Space, Tag, Typography, Table, message } from 'antd'
+import { Button, Card, Space, Tag, Typography, Table, App } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons'
 import { decodeAssetIdentity } from '../utils/assetIdentity'
@@ -17,6 +17,7 @@ const { Text, Title } = Typography
 
 export default function AssetDetailPage() {
   const { t, i18n } = useTranslation()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const { id = '' } = useParams()
   const location = useLocation()

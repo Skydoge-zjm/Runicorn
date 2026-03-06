@@ -55,10 +55,20 @@ export default {
   // Status
   'remote.status.connecting': 'Connecting...',
   'remote.status.running': 'Running',
+  'remote.status.reconnecting': 'Reconnecting...',
+  'remote.status.degraded': 'Degraded',
   'remote.status.stopping': 'Stopping...',
   'remote.status.stopped': 'Stopped',
   'remote.status.error': 'Error',
   'remote.status.disconnected': 'Disconnected',
+  'remote.statusMessage.connecting': 'Establishing connection...',
+  'remote.statusMessage.running': 'Remote Viewer is running and accessible',
+  'remote.statusMessage.reconnecting': 'SSH tunnel lost — reconnecting...',
+  'remote.statusMessage.degraded': 'Remote process may have crashed — monitoring',
+  'remote.statusMessage.disconnected': 'Connection lost — reconnect failed',
+  'remote.statusMessage.stopping': 'Stopping Remote Viewer...',
+  'remote.statusMessage.stopped': 'Remote Viewer has been stopped',
+  'remote.statusMessage.error': 'An error occurred',
   
   // Saved connections
   'remote.saved.title': 'Saved Connections',

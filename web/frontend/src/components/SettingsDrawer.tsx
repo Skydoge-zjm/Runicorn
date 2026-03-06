@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, message, Upload, Card, Switch, InputNumber, Alert, Modal, Tag, Select, theme } from 'antd'
+import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, App, Upload, Card, Switch, InputNumber, Alert, Modal, Tag, Select, theme } from 'antd'
 import { WarningOutlined } from '@ant-design/icons'
 import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, InfoCircleOutlined, ThunderboltOutlined, EyeOutlined, ExportOutlined, BellOutlined, DashboardOutlined } from '@ant-design/icons'
 import { getConfig, setUserRootDir as apiSetUserRootDir, previewImport, confirmImport } from '../api'
@@ -22,6 +22,7 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
 }) {
   const { t } = useTranslation()
   const { token } = theme.useToken()
+  const { message } = App.useApp()
   const set = (patch: Partial<UiSettings>) => onChange({ ...value, ...patch })
   const [appearanceSub, setAppearanceSub] = useState<'theme' | 'visibility' | 'alerts'>('theme')
   // ----- Data directory

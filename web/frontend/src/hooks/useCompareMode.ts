@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { message } from 'antd'
+import { App } from 'antd'
 import { useSettings } from '../contexts/SettingsContext'
 import { getStepMetrics, getRunDetail } from '../api'
 import type { CompareRunInfo } from '../components/CompareRunsPanel'
@@ -11,6 +11,7 @@ import logger from '../utils/logger'
 
 export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const { settings } = useSettings()
   const [searchParams, setSearchParams] = useSearchParams()
 
