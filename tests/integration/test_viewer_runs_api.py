@@ -1,6 +1,7 @@
 """Integration tests for /api/runs/* endpoints."""
 from __future__ import annotations
 
+import json
 from typing import List
 
 from fastapi.testclient import TestClient
@@ -185,6 +186,75 @@ class TestGetRunAssets:
     ) -> None:
         resp = viewer_client.get("/api/runs/20250101_000000_ffffff/assets")
         assert resp.status_code == 404
+
+
+class TestDownloadRunAssets:
+
+    def test_downloads_archived_asset_linked_to_run(
+        self,
+        viewer_client: TestClient,
+        populated_viewer_storage,
+        viewer_storage_root,
+        viewer_backend,
+    ) -> None:
+        run_dir = viewer_storage_root / "runs" / "cv" / "yolo" / RUN_A
+        archive_path = viewer_storage_root / "archive" / "outputs" / "linked.txt"
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        archive_path.write_text("linked archive", encoding="utf-8")
+
+        (run_dir / "assets.json").write_text(
+            json.dumps(
+                {
+                    "outputs": [
+                        {
+                            "key": "outputs/linked.txt",
+                            "name": "linked.txt",
+                            "kind": "file",
+                            "saved": True,
+                            "archive_path": str(archive_path),
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        viewer_backend.record_asset_for_run(
+            run_id=RUN_A,
+            role="output",
+            asset_type="output",
+            name="linked.txt",
+            source_uri="./outputs/linked.txt",
+            archive_uri=str(archive_path),
+            is_archived=True,
+            fingerprint_kind="stat",
+            fingerprint="1:1",
+            metadata={"key": "outputs/linked.txt", "kind": "file", "mode": "rolling"},
+        )
+
+        resp = viewer_client.get(
+            f"/api/runs/{RUN_A}/assets/download",
+            params={"path": str(archive_path)},
+        )
+
+        assert resp.status_code == 200
+        assert resp.content == b"linked archive"
+
+    def test_rejects_unrelated_file_under_storage_root(
+        self,
+        viewer_client: TestClient,
+        populated_viewer_storage,
+        viewer_storage_root,
+    ) -> None:
+        unrelated = viewer_storage_root / "runicorn.db"
+        assert unrelated.exists()
+
+        resp = viewer_client.get(
+            f"/api/runs/{RUN_A}/assets/download",
+            params={"path": str(unrelated)},
+        )
+
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Path does not belong to this run"
 
 
 class TestGetRunImages:

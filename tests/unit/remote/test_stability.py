@@ -254,7 +254,7 @@ class TestTunnelReconnect:
         assert removed == 0
         assert "test-01" in mgr._sessions
 
-    def test_cleanup_removes_disconnected_sessions(self):
+    def test_cleanup_preserves_disconnected_sessions(self):
         from runicorn.remote.viewer.manager import RemoteViewerManager
         mgr = RemoteViewerManager()
         s = _make_session()
@@ -262,8 +262,35 @@ class TestTunnelReconnect:
         mgr._sessions["test-01"] = s
 
         removed = mgr.cleanup_dead_sessions()
+        assert removed == 0
+        assert "test-01" in mgr._sessions
+
+    def test_cleanup_removes_dead_running_sessions(self):
+        from runicorn.remote.viewer.manager import RemoteViewerManager
+        mgr = RemoteViewerManager()
+        s = _make_session()
+        s.tunnel_thread.is_alive.return_value = False
+        mgr._sessions["test-01"] = s
+
+        removed = mgr.cleanup_dead_sessions()
         assert removed == 1
         assert "test-01" not in mgr._sessions
+
+    def test_health_monitor_exits_when_only_disconnected_sessions(self):
+        from runicorn.remote.viewer.manager import RemoteViewerManager
+
+        manager = RemoteViewerManager()
+        s = _make_session()
+        s.status = STATUS_DISCONNECTED
+        manager._sessions["test-01"] = s
+        manager._health_stop = MagicMock()
+        manager._health_stop.is_set.return_value = False
+        manager._health_stop.wait.return_value = False
+        manager._check_session_health = MagicMock()
+
+        manager._health_monitor_loop()
+
+        manager._check_session_health.assert_not_called()
 
 
 # ===================================================================

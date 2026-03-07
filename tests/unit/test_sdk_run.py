@@ -293,6 +293,15 @@ class TestRunFinish:
         run.finish()
         run.finish()  # should not raise or deadlock
 
+    def test_finish_sets_outputs_watch_stop_event(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
+        run = _make_run(storage_root, monkeypatch, run_id="test_finish_outputs_stop_001")
+
+        assert run._outputs_watch_stop.is_set() is False
+
+        run.finish()
+
+        assert run._outputs_watch_stop.is_set() is True
+
 
 class TestRunContextManager:
     def test_run_context_manager_success(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):

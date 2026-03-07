@@ -461,7 +461,11 @@ class Run:
             mode=mode,
             log_snapshot_interval_sec=log_snapshot_interval_sec,
             state_gc_after_sec=state_gc_after_sec,
+            should_stop=lambda: self._finished or self._outputs_watch_stop.is_set(),
         )
+
+        if self._finished or self._outputs_watch_stop.is_set():
+            return res
 
         # BUG-30: When rolling output is updated (same key, new version), unlink old
         # asset before linking the new one to avoid stale SQLite relations
@@ -1071,6 +1075,7 @@ class Run:
 
         # Block further writes immediately (BUG-36) - before any cleanup
         self._finished = True
+        self._outputs_watch_stop.set()
 
         # Stop console capture before finishing
         if self._console_capture is not None:

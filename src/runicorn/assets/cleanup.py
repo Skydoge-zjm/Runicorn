@@ -414,10 +414,13 @@ def _delete_asset_blobs(
         # BUG-29: Single-file with stat fingerprint or other format - use archive_path
         # when it points directly to a blob under archive/blobs/
         try:
-            resolved = archive_path.resolve()
-            blob_root_resolved = blob_root.resolve()
-            if str(resolved).startswith(str(blob_root_resolved)) and archive_path.exists():
+            if archive_path.exists() and archive_path.is_file():
+                resolved = archive_path.resolve()
+                blob_root_resolved = blob_root.resolve()
+                resolved.relative_to(blob_root_resolved)
                 _try_delete_blob(archive_path, str(archive_path))
+        except ValueError:
+            pass
         except Exception as e:
             err = f"archive_path {archive_uri}: {e}"
             errors.append(err)

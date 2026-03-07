@@ -1091,7 +1091,6 @@ async def get_remote_status(request: Request) -> Dict[str, Any]:
     viewer_sessions = []
     if hasattr(request.app.state, 'viewer_manager'):
         manager: RemoteViewerManager = request.app.state.viewer_manager
-        manager.cleanup_dead_sessions()
         sessions = manager.list_sessions()
         viewer_sessions = [s.to_dict() for s in sessions]
     

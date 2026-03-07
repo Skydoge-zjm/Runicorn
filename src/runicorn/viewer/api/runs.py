@@ -76,6 +76,78 @@ def _count_assets_from_assets_json(assets: Any) -> int:
     return int(n)
 
 
+def _iter_archive_paths(node: Any):
+    """Yield archive_path values from assets.json-like structures."""
+    if isinstance(node, dict):
+        archive_path = node.get("archive_path")
+        if isinstance(archive_path, str) and archive_path.strip():
+            yield Path(archive_path)
+        for value in node.values():
+            yield from _iter_archive_paths(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _iter_archive_paths(item)
+
+
+def _get_allowed_download_roots(run_id: str, request: Request, run_dir: Path) -> List[Path]:
+    """Collect run-owned download roots: run_dir + linked archived asset paths."""
+    allowed: List[Path] = [run_dir]
+    seen: set[str] = {str(run_dir)}
+
+    def _add(candidate: Any) -> None:
+        if not isinstance(candidate, Path):
+            return
+        key = str(candidate)
+        if key in seen:
+            return
+        seen.add(key)
+        allowed.append(candidate)
+
+    backend = get_backend(request)
+    if backend is not None:
+        try:
+            for asset in backend.get_assets_for_run(run_id):
+                archive_uri = asset.get("archive_uri")
+                if isinstance(archive_uri, str) and archive_uri.strip():
+                    _add(Path(archive_uri))
+        except Exception:
+            pass
+
+    assets_path = run_dir / "assets.json"
+    if assets_path.exists():
+        assets = read_json(assets_path)
+        for archive_path in _iter_archive_paths(assets):
+            _add(archive_path)
+
+    return allowed
+
+
+def _path_is_allowed_for_run(target: Path, allowed_roots: List[Path]) -> bool:
+    """Allow files inside run_dir and exact/descendant matches of linked asset paths."""
+    try:
+        target_resolved = target.resolve()
+    except Exception:
+        return False
+
+    for root in allowed_roots:
+        try:
+            root_resolved = root.resolve()
+        except Exception:
+            continue
+
+        if target_resolved == root_resolved:
+            return True
+
+        try:
+            if root.is_dir():
+                target_resolved.relative_to(root_resolved)
+                return True
+        except Exception:
+            continue
+
+    return False
+
+
 @router.get("/runs", response_model=List[RunListItem])
 async def list_runs(request: Request) -> List[RunListItem]:
     """
@@ -554,9 +626,11 @@ async def download_run_asset(
     target = Path(path)
     if not is_within_directory(storage_root, target):
         raise HTTPException(status_code=403, detail="Unsafe path")
-    # Ensure the requested path belongs to this run (prevents downloading other runs' files or runicorn.db)
-    if not is_within_directory(run_dir, target):
+
+    allowed_roots = _get_allowed_download_roots(run_id, request, run_dir)
+    if not _path_is_allowed_for_run(target, allowed_roots):
         raise HTTPException(status_code=403, detail="Path does not belong to this run")
+
     if not target.exists():
         raise HTTPException(status_code=404, detail="File not found")
 

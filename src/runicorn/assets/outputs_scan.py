@@ -5,7 +5,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from filelock import FileLock
 
@@ -122,6 +122,15 @@ def _is_log_like(path: Path) -> bool:
     return False
 
 
+def _should_stop_requested(should_stop: Optional[Callable[[], bool]]) -> bool:
+    if should_stop is None:
+        return False
+    try:
+        return bool(should_stop())
+    except Exception:
+        return False
+
+
 def _upsert_output_entry(outputs: List[Dict[str, Any]], key: str, new_entry: Dict[str, Any], mode: str) -> None:
     idx = None
     for i, it in enumerate(outputs):
@@ -157,6 +166,7 @@ def scan_outputs_once(
     mode: str = "rolling",
     log_snapshot_interval_sec: float = 60.0,
     state_gc_after_sec: float = 7 * 24 * 3600,
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> Dict[str, Any]:
     all_pats = patterns or _default_patterns()
     file_pats, dir_pats = _split_patterns(all_pats)
@@ -171,16 +181,37 @@ def scan_outputs_once(
         archived_n = 0
         archived_entries: List[Dict[str, Any]] = []
 
+        def _current_result() -> Dict[str, Any]:
+            return {
+                "run_id": run_id,
+                "scanned": scanned,
+                "archived": archived_n,
+                "changed": changed,
+                "archived_entries": archived_entries,
+            }
+
+        def _finish() -> Dict[str, Any]:
+            _save_state(state_path, state_lock, state)
+            return _current_result()
+
         for od in output_dirs:
+            if _should_stop_requested(should_stop):
+                return _finish()
             odir = Path(od).expanduser().resolve()
             if not odir.exists():
                 continue
 
             for dirpath, dirnames, filenames in os.walk(odir):
+                if _should_stop_requested(should_stop):
+                    return _finish()
+
                 dp = Path(dirpath)
 
                 rel_dir = dp.relative_to(odir).as_posix() if dp != odir else ""
                 for d in list(dirnames):
+                    if _should_stop_requested(should_stop):
+                        return _finish()
+
                     rel = f"{rel_dir}/{d}" if rel_dir else d
                     if dir_pats and _match_any(rel + "/", dir_pats):
                         scanned += 1
@@ -217,6 +248,9 @@ def scan_outputs_once(
                             continue
 
                         try:
+                            if _should_stop_requested(should_stop):
+                                return _finish()
+
                             if mode == "rolling":
                                 archived = archive_dir_overwrite(
                                     dir_path,
@@ -231,6 +265,9 @@ def scan_outputs_once(
                             it["last_error"] = str(e)
                             items[key] = it
                             continue
+
+                        if _should_stop_requested(should_stop):
+                            return _finish()
 
                         fp = archived.get("fingerprint")
                         if fp and it.get("last_archived_fingerprint") == fp:
@@ -265,6 +302,9 @@ def scan_outputs_once(
                             _upsert_output_entry(outputs, key, entry, mode)
                             return a
 
+                        if _should_stop_requested(should_stop):
+                            return _finish()
+
                         update_assets_atomic(assets_path, assets_lock, _upd)
 
                         archived_entries.append(entry)
@@ -272,6 +312,9 @@ def scan_outputs_once(
                         changed += 1
 
                 for fn in filenames:
+                    if _should_stop_requested(should_stop):
+                        return _finish()
+
                     src = dp / fn
                     try:
                         st = src.stat()
@@ -298,6 +341,9 @@ def scan_outputs_once(
                             items[key] = it
                             continue
                         try:
+                            if _should_stop_requested(should_stop):
+                                return _finish()
+
                             archived = archive_file_overwrite_stat(
                                 src,
                                 storage_root / "archive",
@@ -309,6 +355,9 @@ def scan_outputs_once(
                             it["last_error"] = str(e)
                             items[key] = it
                             continue
+
+                        if _should_stop_requested(should_stop):
+                            return _finish()
 
                         fp = archived.get("fingerprint")
                         if fp and it.get("last_archived_fingerprint") == fp:
@@ -346,6 +395,9 @@ def scan_outputs_once(
                             _upsert_output_entry(outputs, key, entry, "rolling")
                             return a
 
+                        if _should_stop_requested(should_stop):
+                            return _finish()
+
                         update_assets_atomic(assets_path, assets_lock, _upd)
 
                         archived_entries.append(entry)
@@ -377,6 +429,9 @@ def scan_outputs_once(
                         continue
 
                     try:
+                        if _should_stop_requested(should_stop):
+                            return _finish()
+
                         if mode == "rolling":
                             archived = archive_file_overwrite(
                                 src,
@@ -391,6 +446,9 @@ def scan_outputs_once(
                         it["last_error"] = str(e)
                         items[key] = it
                         continue
+
+                    if _should_stop_requested(should_stop):
+                        return _finish()
 
                     fp = archived.get("fingerprint")
                     if fp and it.get("last_archived_fingerprint") == fp:
@@ -426,6 +484,9 @@ def scan_outputs_once(
                         _upsert_output_entry(outputs, key, entry, mode)
                         return a
 
+                    if _should_stop_requested(should_stop):
+                        return _finish()
+
                     update_assets_atomic(assets_path, assets_lock, _upd)
 
                     archived_entries.append(entry)
@@ -441,12 +502,4 @@ def scan_outputs_once(
                 except Exception:
                     pass
 
-        _save_state(state_path, state_lock, state)
-
-        return {
-            "run_id": run_id,
-            "scanned": scanned,
-            "archived": archived_n,
-            "changed": changed,
-            "archived_entries": archived_entries,
-        }
+        return _finish()

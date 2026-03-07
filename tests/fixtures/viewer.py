@@ -159,6 +159,18 @@ def viewer_app(
         "runicorn.viewer.periodic_status_check",
         _noop_status_check,
     )
+    monkeypatch.setattr(
+        "runicorn.viewer.services.db_reader.sync_filesystem_to_db",
+        lambda *a, **kw: 0,
+    )
+    monkeypatch.setattr(
+        "runicorn.viewer.services.gpu.GpuCollector.start",
+        lambda self: None,
+    )
+    monkeypatch.setattr(
+        "runicorn.viewer.services.gpu.GpuCollector.stop",
+        lambda self: None,
+    )
 
     # Disable rate limiter so tests aren't throttled
     class _AlwaysAllowLimiter:
