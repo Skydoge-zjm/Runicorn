@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -42,6 +44,31 @@ class TestLogConfig:
             assets = json.loads(run._assets_path.read_text(encoding="utf-8"))
             assert assets["config"]["args"]["lr"] == 0.001
             assert assets["config"]["args"]["epochs"] == 10
+        finally:
+            run.finish()
+
+    def test_log_config_with_non_json_types(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+        """log_config handles Path, Enum, datetime, numpy scalars without crashing."""
+        from enum import Enum
+
+        class Optimizer(Enum):
+            SGD = "sgd"
+            ADAM = "adam"
+
+        run = _make_run(storage_root, monkeypatch, run_id="cfg_nonjson_001")
+        try:
+            run.log_config(
+                extra={
+                    "data_dir": tmp_path / "data",
+                    "optimizer": Optimizer.ADAM,
+                    "started_at": datetime(2025, 3, 6, 12, 0, 0),
+                },
+            )
+            assets = json.loads(run._assets_path.read_text(encoding="utf-8"))
+            cfg = assets["config"]["extra"]
+            assert cfg["data_dir"] == str(tmp_path / "data")
+            assert cfg["optimizer"] == "adam"
+            assert cfg["started_at"] == "2025-03-06T12:00:00"
         finally:
             run.finish()
 
@@ -99,6 +126,56 @@ class TestScanOutputsOnce:
             )
             assert isinstance(result, dict)
             assert result["scanned"] >= 1
+        finally:
+            run.finish()
+
+    def test_scan_outputs_once_skips_sqlite_links_when_finished_during_scan(
+        self,
+        storage_root: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        run = _make_run(storage_root, monkeypatch, run_id="scan_skip_sqlite_001")
+        try:
+            assert run.storage_backend is not None
+
+            def _fake_scan_outputs_once(**kwargs):
+                run._finished = True
+                run._outputs_watch_stop.set()
+                return {
+                    "run_id": run.id,
+                    "scanned": 1,
+                    "archived": 1,
+                    "changed": 1,
+                    "archived_entries": [
+                        {
+                            "key": "outputs/model.pth",
+                            "name": "model.pth",
+                            "kind": "file",
+                            "path": "./outputs/model.pth",
+                            "archive_path": str(storage_root / "archive" / "outputs" / "model.pth"),
+                            "fingerprint_kind": "sha256",
+                            "fingerprint": "abc",
+                            "mode": "rolling",
+                            "archived_at": 1,
+                        }
+                    ],
+                }
+
+            monkeypatch.setattr("runicorn.sdk.scan_outputs_once", _fake_scan_outputs_once)
+            run.storage_backend.get_assets_for_run = MagicMock(return_value=[])
+            run.storage_backend.unlink_run_asset = MagicMock()
+            run.storage_backend.record_asset_for_run = MagicMock()
+
+            result = run.scan_outputs_once(
+                output_dirs=[str(storage_root / "outputs")],
+                patterns=["*.pth"],
+                stable_required=1,
+                min_age_sec=0,
+            )
+
+            assert result["archived"] == 1
+            run.storage_backend.unlink_run_asset.assert_not_called()
+            run.storage_backend.record_asset_for_run.assert_not_called()
         finally:
             run.finish()
 

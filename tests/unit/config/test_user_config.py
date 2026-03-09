@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -69,6 +70,13 @@ class TestSaveUserConfig:
         result = load_user_config()
 
         assert result == {"a": 1}
+
+    def test_save_propagates_write_errors(self, mock_config_root: Path) -> None:
+        """Write failures (e.g. readonly dir) must propagate, not be swallowed."""
+        save_user_config({"a": 1})  # ensure file exists
+        with patch.object(Path, "write_text", side_effect=OSError(13, "Permission denied")):
+            with pytest.raises(OSError):
+                save_user_config({"b": 2})
 
 
 class TestUserRootDir:

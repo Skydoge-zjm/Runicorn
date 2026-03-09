@@ -140,16 +140,18 @@ export default function RunDetailPage() {
     
     loadDetail()
     loadStepMetrics()
+    loadImages()
     
     // Dynamic interval based on run status
     const intervalId = setInterval(() => {
       // Silent refresh without loading indicators
       loadDetail(false)
       loadStepMetrics(false)
+      loadImages()
     }, refreshInterval)
     
     return () => clearInterval(intervalId)
-  }, [id, refreshInterval, settings.maxDataPoints])
+  }, [id, refreshInterval, settings.maxDataPoints, loadDetail, loadStepMetrics, loadImages])
 
 
   useEffect(() => {
@@ -222,6 +224,7 @@ export default function RunDetailPage() {
 
   const tabItems = [
     { key: 'overview', label: t('run.tabs.overview') },
+    ...(images.length > 0 ? [{ key: 'images', label: t('run.tabs.images') }] : []),
     { key: 'logs', label: t('logs.title') },
     { key: 'assets', label: t('run.assets.title') },
   ]
@@ -343,6 +346,21 @@ export default function RunDetailPage() {
             </div>
           ),
         }]} />
+
+        {/* BUG-37: Summary section (run.summary() data) */}
+        {detail?.summary && typeof detail.summary === 'object' && Object.keys(detail.summary).length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <Title level={5} style={{ marginBottom: 8 }}>{t('run.summary.title')}</Title>
+            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '8px 24px', alignItems: 'baseline' }}>
+              {Object.entries(detail.summary).map(([k, v]) => (
+                <div key={k} style={{ display: 'contents' }}>
+                  <Text type="secondary" style={{ whiteSpace: 'nowrap' }}>{k}:</Text>
+                  <Text>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</Text>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
       
 
@@ -409,6 +427,53 @@ export default function RunDetailPage() {
         )}
       </Card>
           </Space>
+        </div>
+
+        <div style={{ display: activeTab === 'images' ? 'block' : 'none' }}>
+          <Card
+            title={
+              <Space>
+                <PictureOutlined />
+                {t('run.images.title')}
+              </Space>
+            }
+          >
+            {images.length === 0 ? (
+              <Alert type="info" showIcon message={t('run.images.none')} />
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
+                {images.map((img, idx) => (
+                  <a
+                    key={idx}
+                    href={downloadRunAssetUrl(id, img.path)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <div style={{
+                      border: `1px solid ${token.colorBorderSecondary}`,
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      padding: 8,
+                      backgroundColor: token.colorBgContainer,
+                    }}>
+                      <img
+                        src={downloadRunAssetUrl(id, img.path)}
+                        alt={img.key}
+                        style={{ width: '100%', height: 140, objectFit: 'contain', display: 'block' }}
+                      />
+                      <div style={{ marginTop: 8, fontSize: 12 }}>
+                        <Text type="secondary">{t('run.images.key')}: {img.key}</Text>
+                        {img.step != null && (
+                          <div><Text type="secondary">{t('run.images.step')}: {img.step}</Text></div>
+                        )}
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
 
         <div style={{ display: activeTab === 'assets' ? 'block' : 'none' }}>

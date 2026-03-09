@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time as time_module
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,7 +22,7 @@ import aiofiles
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
-from ...storage.file_utils import find_run_dir_by_id
+from ...storage.file_utils import find_run_dir_by_id, read_json
 from ..utils.incremental_cache import get_incremental_metrics_cache
 from .storage_utils import get_storage_root
 from ..services.db_reader import find_run_entry_fast
@@ -349,10 +350,25 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
         return
     
     log_file = entry.dir / "logs.txt"
-    
-    # If log file doesn't exist, wait for it to be created
-    import asyncio
+
+    def _is_run_finished() -> bool:
+        """Check if run is finished via status.json (or SQLite)."""
+        status_data = read_json(entry.dir / "status.json")
+        status = str(status_data.get("status", "running") or "running")
+        return status != "running"
+
+    # If log file doesn't exist, handle based on run status
     if not log_file.exists():
+        # BUG-38: Finished run with no logs -> send message and close cleanly (no reconnect loop)
+        if _is_run_finished():
+            try:
+                await websocket.send_text("[info] No logs available for this run")
+                await websocket.close(code=1000)  # Normal closure
+            except (WebSocketDisconnect, Exception):
+                pass
+            return
+
+        # Run still running: wait for logs with timeout
         try:
             await websocket.send_text("[info] No logs available yet. Waiting for logs to be created...")
         except WebSocketDisconnect:
@@ -360,24 +376,44 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
             return
         except Exception:
             return
-        
-        # Keep checking for log file
+
+        wait_interval = 5  # seconds between checks
+        wait_timeout = 30  # seconds total
+        waited = 0.0
+
         try:
             while not log_file.exists():
                 if shutdown_event and shutdown_event.is_set():
                     return
-                # Event-aware sleep: wake immediately on shutdown
+                # Event-aware sleep
                 if shutdown_event:
                     try:
-                        await asyncio.wait_for(shutdown_event.wait(), timeout=2)
-                        return  # shutdown signalled
+                        await asyncio.wait_for(shutdown_event.wait(), timeout=min(2, wait_interval))
+                        return
                     except asyncio.TimeoutError:
                         pass
                 else:
-                    await asyncio.sleep(2)
-                # Send periodic keep-alive to prevent timeout
+                    await asyncio.sleep(wait_interval)
+
+                waited += wait_interval
+                if waited >= wait_timeout:
+                    await websocket.send_text("[info] No logs yet. Run may not produce logs.")
+                    await websocket.close(code=1000)
+                    return
+
+                # Keep-alive: ping() may not exist on all WebSocket implementations
                 if not log_file.exists():
-                    await websocket.ping()
+                    ping_fn = getattr(websocket, "ping", None)
+                    if callable(ping_fn):
+                        try:
+                            await ping_fn()
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            await websocket.send_text("")
+                        except Exception:
+                            pass
         except WebSocketDisconnect:
             logger.debug(f"WebSocket disconnected while waiting for logs for run {run_id}")
             return
@@ -385,7 +421,7 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
             return
         except Exception:
             return
-        
+
         # Log file now exists, send notification
         try:
             await websocket.send_text("[info] Logs are now available, streaming...")
@@ -397,20 +433,25 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
     try:
         # Stream the log file content without loading all into memory
         async with aiofiles.open(log_file, mode="r", encoding="utf-8", errors="ignore") as f:
-            # Send existing content line by line (streaming)
-            sent_lines = 0
+            # BUG-15: Load LAST max_initial_lines (not first) using deque for memory efficiency
             max_initial_lines = 10000  # Limit initial lines to prevent abuse
-            
+            lines_buffer = deque(maxlen=max_initial_lines)
+            total_lines = 0
+
             async for line in f:
-                if sent_lines >= max_initial_lines:
-                    await websocket.send_text(f"[info] Showing last {max_initial_lines} lines. Full log file: {log_file.name}")
-                    break
-                
-                line = line.rstrip("\n")
-                if line.strip():  # Skip empty lines
+                total_lines += 1
+                lines_buffer.append(line.rstrip("\n"))
+
+            # Send the last N lines (skip empty when displaying)
+            for line in lines_buffer:
+                if line.strip():
                     await websocket.send_text(line)
-                    sent_lines += 1
-            
+
+            if total_lines > max_initial_lines:
+                await websocket.send_text(
+                    f"[info] Showing last {max_initial_lines} lines. Full log file: {log_file.name}"
+                )
+
             # Tail for new content with dynamic polling and timeout
             start_time = time_module.time()
             last_activity = time_module.time()

@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
 import platform
+import shutil
 import socket
 import sys
 import threading
 import time
 import uuid
 from dataclasses import dataclass, asdict
+from datetime import date, datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -158,6 +162,66 @@ def _path_to_fs_path(path: str) -> str:
     return path.replace("/", os.sep)
 
 
+# Valid SQLite statuses (schema.sql CHECK constraint)
+_VALID_STATUSES = frozenset({"running", "finished", "failed", "interrupted"})
+
+# Map common aliases to valid status values
+_STATUS_ALIASES = {
+    "completed": "finished",
+    "success": "finished",
+    "error": "failed",
+    "crashed": "failed",
+    "killed": "interrupted",
+    "cancelled": "interrupted",
+    "aborted": "interrupted",
+}
+
+
+def _normalize_status(status: str) -> str:
+    """
+    Normalize status to a valid SQLite schema value.
+    
+    Maps common aliases to valid values. Unknown statuses default to 'finished'
+    since the user explicitly called finish().
+    
+    Valid values: 'running', 'finished', 'failed', 'interrupted'
+    """
+    s = (status or "").strip().lower()
+    if s in _VALID_STATUSES:
+        return s
+    return _STATUS_ALIASES.get(s, "finished")
+
+
+def _make_json_safe(obj: Any) -> Any:
+    """
+    Recursively convert non-JSON-serializable types to JSON-safe equivalents.
+    Used by log_config() to handle Path, Enum, datetime, numpy, etc.
+    """
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, Path):
+        return str(obj)
+    if isinstance(obj, Enum):
+        return obj.value
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, (set, frozenset)):
+        return [_make_json_safe(x) for x in obj]
+    if isinstance(obj, (list, tuple)):
+        return [_make_json_safe(x) for x in obj]
+    if isinstance(obj, dict):
+        return {str(k): _make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", errors="replace")
+    if HAS_NUMPY and hasattr(np, "integer") and isinstance(obj, np.integer):
+        return int(obj)
+    if HAS_NUMPY and hasattr(np, "floating") and isinstance(obj, np.floating):
+        return float(obj)
+    if HAS_NUMPY and hasattr(np, "ndarray") and isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return str(obj)
+
+
 @dataclass
 class RunMeta:
     id: str
@@ -229,6 +293,7 @@ class Run:
         self.workspace_root = get_workspace_root(workspace_root)
         self._outputs_watch_thread: Optional[threading.Thread] = None
         self._outputs_watch_stop = threading.Event()
+        self._finished = False
 
         # Global step counter for metrics logging
         # Starts from 0; first auto step will be 1
@@ -279,51 +344,62 @@ class Run:
         if snapshot_code:
             if snapshot_format != "zip":
                 raise ValueError("snapshot_format currently only supports 'zip'")
-            ws_root = self.workspace_root
-            zip_path = self.run_dir / "code_snapshot.zip"
-            snap = snapshot_workspace(ws_root, zip_path, force_snapshot=force_snapshot)
-            archived = archive_file(zip_path, self.storage_root / "archive", category="code")
+            try:
+                ws_root = self.workspace_root
+                zip_path = self.run_dir / "code_snapshot.zip"
+                snap = snapshot_workspace(ws_root, zip_path, force_snapshot=force_snapshot)
+                archived = archive_file(zip_path, self.storage_root / "archive", category="code")
 
-            def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
-                a["code"] = {
-                    "snapshot": {
-                        "saved": True,
-                        "workspace_root": snap.get("workspace_root"),
-                        "format": "zip",
-                        "created_at": int(_now_ts()),
-                        "archive_path": archived.get("archive_path"),
-                        "fingerprint_kind": archived.get("fingerprint_kind"),
-                        "fingerprint": archived.get("fingerprint"),
-                    }
-                }
-                return a
-
-            update_assets_atomic(self._assets_path, self._assets_lock, _upd)
-
-            if self.storage_backend:
-                try:
-                    self.storage_backend.record_asset_for_run(
-                        run_id=self.id,
-                        role="code",
-                        asset_type="code_snapshot",
-                        name="code_snapshot.zip",
-                        source_uri=str(self.workspace_root),
-                        archive_uri=archived.get("archive_path"),
-                        is_archived=True,
-                        fingerprint_kind=archived.get("fingerprint_kind"),
-                        fingerprint=archived.get("fingerprint"),
-                        created_at=float(meta.created_at),
-                        metadata={
+                def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
+                    a["code"] = {
+                        "snapshot": {
+                            "saved": True,
+                            "workspace_root": snap.get("workspace_root"),
                             "format": "zip",
-                            "workspace_root": str(self.workspace_root),
-                        },
-                    )
+                            "created_at": int(_now_ts()),
+                            "archive_path": archived.get("archive_path"),
+                            "fingerprint_kind": archived.get("fingerprint_kind"),
+                            "fingerprint": archived.get("fingerprint"),
+                        }
+                    }
+                    return a
+
+                update_assets_atomic(self._assets_path, self._assets_lock, _upd)
+
+                if self.storage_backend:
+                    try:
+                        self.storage_backend.record_asset_for_run(
+                            run_id=self.id,
+                            role="code",
+                            asset_type="code_snapshot",
+                            name="code_snapshot.zip",
+                            source_uri=str(self.workspace_root),
+                            archive_uri=archived.get("archive_path"),
+                            is_archived=True,
+                            fingerprint_kind=archived.get("fingerprint_kind"),
+                            fingerprint=archived.get("fingerprint"),
+                            created_at=float(meta.created_at),
+                            metadata={
+                                "format": "zip",
+                                "workspace_root": str(self.workspace_root),
+                            },
+                        )
+                    except Exception:
+                        pass
+            except Exception as snapshot_err:
+                # Best-effort cleanup of the ghost run (BUG-41)
+                try:
+                    if self.run_dir.exists():
+                        shutil.rmtree(self.run_dir, ignore_errors=True)
+                    if self.storage_backend and hasattr(self.storage_backend, "delete_run_with_orphan_assets"):
+                        self.storage_backend.delete_run_with_orphan_assets(self.id)
                 except Exception:
                     pass
+                raise snapshot_err
 
         if capture_env and HAS_ENV_CAPTURE:
             try:
-                env_capture = EnvironmentCapture()
+                env_capture = EnvironmentCapture(working_dir=self.workspace_root)
                 env_info = env_capture.capture_all()
                 env_info.save(self.run_dir / "environment.json")
                 logger.info(f"Environment captured for run {self.id}")
@@ -366,6 +442,9 @@ class Run:
         log_snapshot_interval_sec: float = 60.0,
         state_gc_after_sec: float = 7 * 24 * 3600,
     ) -> Dict[str, Any]:
+        if self._finished:
+            logger.warning("scan_outputs_once called after finish(); ignoring")
+            return {}
         res = scan_outputs_once(
             run_id=self.id,
             run_dir=self.run_dir,
@@ -382,11 +461,35 @@ class Run:
             mode=mode,
             log_snapshot_interval_sec=log_snapshot_interval_sec,
             state_gc_after_sec=state_gc_after_sec,
+            should_stop=lambda: self._finished or self._outputs_watch_stop.is_set(),
         )
 
+        if self._finished or self._outputs_watch_stop.is_set():
+            return res
+
+        # BUG-30: When rolling output is updated (same key, new version), unlink old
+        # asset before linking the new one to avoid stale SQLite relations
         if self.storage_backend:
             try:
                 for e in res.get("archived_entries") or []:
+                    key = e.get("key")
+                    if key and hasattr(
+                        self.storage_backend, "unlink_run_asset"
+                    ):
+                        assets = self.storage_backend.get_assets_for_run(self.id)
+                        for a in assets:
+                            if a.get("role") != "output":
+                                continue
+                            meta = a.get("metadata_json")
+                            if isinstance(meta, str):
+                                meta = json.loads(meta) if meta else {}
+                            elif meta is None:
+                                meta = {}
+                            if meta.get("key") == key:
+                                self.storage_backend.unlink_run_asset(
+                                    self.id, a["asset_id"]
+                                )
+                                break
                     self.storage_backend.record_asset_for_run(
                         run_id=self.id,
                         role="output",
@@ -497,6 +600,9 @@ class Run:
             metric_name: Name of the metric to track (e.g., "accuracy", "loss")
             mode: Optimization direction, either "max" or "min"
         """
+        if self._finished:
+            logger.warning("set_primary_metric called after finish(); ignoring")
+            return
         if mode not in ["max", "min"]:
             raise ValueError(f"Mode must be 'max' or 'min', got '{mode}'")
         
@@ -519,6 +625,9 @@ class Run:
         - Always records 'global_step' and 'time' into the event data.
         - If 'stage' is provided (or present in data), records it for UI separators.
         """
+        if self._finished:
+            logger.warning("Run already finished, ignoring %s call", "log")
+            return
         ts = _now_ts()
         payload: Dict[str, Any] = {}
         if data:
@@ -592,11 +701,23 @@ class Run:
                 logger.debug(f"Monitoring check failed: {e}")
 
     def log_text(self, text: str) -> None:
+        if self._finished:
+            logger.warning("Run already finished, ignoring %s call", "log_text")
+            return
         # Write to logs.txt to support Live Logs viewer
-        line = f"{time.strftime('%H:%M:%S')} | {text}\n"
+        # Prepend timestamp to each non-empty line; preserve empty lines (BUG-44)
+        timestamp = time.strftime("%H:%M:%S")
+        lines = text.split("\n")
+        prefixed_lines = []
+        for line in lines:
+            if line.strip():
+                prefixed_lines.append(f"{timestamp} | {line}")
+            else:
+                prefixed_lines.append("")
+        formatted_text = "\n".join(prefixed_lines) + "\n"
         with self._logs_lock:
             with open(self._logs_txt_path, "a", encoding="utf-8", errors="ignore") as f:
-                f.write(line)
+                f.write(formatted_text)
 
     def get_logging_handler(
         self,
@@ -635,6 +756,9 @@ class Run:
 
         Returns the relative path of the saved image.
         """
+        if self._finished:
+            logger.warning("Run already finished, ignoring %s call", "log_image")
+            return ""
         rel_name = f"{int(_now_ts()*1000)}_{uuid.uuid4().hex[:6]}_{key}.{format.lower()}"
         path = self.media_dir / rel_name
 
@@ -677,14 +801,18 @@ class Run:
         extra: Optional[Dict[str, Any]] = None,
         config_files: Optional[List[Union[str, Path]]] = None,
     ) -> None:
+        if self._finished:
+            logger.warning("Run already finished, ignoring %s call", "log_config")
+            return
         cfg_holder: Dict[str, Any] = {}
 
         def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
             cfg: Dict[str, Any] = dict((a.get("config") or {}))
             if args is not None:
-                cfg["args"] = args if isinstance(args, dict) else vars(args)
+                raw_args = args if isinstance(args, dict) else vars(args)
+                cfg["args"] = _make_json_safe(raw_args)
             if extra is not None:
-                cfg["extra"] = extra
+                cfg["extra"] = _make_json_safe(extra)
             if config_files is not None:
                 cfg["config_files"] = [str(Path(p)) for p in config_files]
             a["config"] = cfg
@@ -724,6 +852,9 @@ class Run:
         max_archive_bytes: int = 5 * 1024 * 1024 * 1024,
         max_archive_files: int = 2_000_000,
     ) -> None:
+        if self._finished:
+            logger.warning("log_dataset called after finish(); ignoring")
+            return
         uri: Any = root_or_uri
         fp: Optional[Dict[str, Any]] = None
         archived: Optional[Dict[str, Any]] = None
@@ -805,6 +936,9 @@ class Run:
         max_archive_bytes: int = 5 * 1024 * 1024 * 1024,
         max_archive_files: int = 2_000_000,
     ) -> None:
+        if self._finished:
+            logger.warning("log_pretrained called after finish(); ignoring")
+            return
         archived: Optional[Dict[str, Any]] = None
 
         if save and path_or_uri is None:
@@ -863,8 +997,8 @@ class Run:
             except Exception:
                 pass
 
-    def summary(self, update: Dict[str, Any]) -> None:
-        # Update traditional summary.json file (always for compatibility)
+    def _apply_summary_update(self, update: Dict[str, Any]) -> None:
+        """Internal: apply summary update without _finished check (used by finish())."""
         with self._summary_lock:
             cur: Dict[str, Any] = {}
             if self._summary_path.exists():
@@ -875,11 +1009,9 @@ class Run:
                     cur = {}
             cur.update(update or {})
             self._summary_path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
-        
-        # Also update modern storage if available
+
         if self.storage_backend:
             try:
-                # Map summary fields to experiment record fields
                 storage_updates = {}
                 if "best_metric_value" in update:
                     storage_updates["best_metric_value"] = update["best_metric_value"]
@@ -889,12 +1021,16 @@ class Run:
                     storage_updates["best_metric_step"] = update["best_metric_step"]
                 if "best_metric_mode" in update:
                     storage_updates["best_metric_mode"] = update["best_metric_mode"]
-                
                 if storage_updates:
                     self.storage_backend.update_experiment(self.id, storage_updates)
-                        
             except Exception as e:
                 logger.debug(f"Failed to update summary in modern storage: {e}")
+
+    def summary(self, update: Dict[str, Any]) -> None:
+        if self._finished:
+            logger.warning("Run already finished, ignoring %s call", "summary")
+            return
+        self._apply_summary_update(update)
 
     def _update_best_metric(self, payload: Dict[str, Any]) -> None:
         """Update the best metric value if primary metric is configured."""
@@ -934,6 +1070,13 @@ class Run:
     
     def finish(self, status: str = "finished") -> None:
         """Mark the run as finished and ensure all data is written."""
+        # Normalize status to valid SQLite values (avoids file/SQLite state tear)
+        status = _normalize_status(status)
+
+        # Block further writes immediately (BUG-36) - before any cleanup
+        self._finished = True
+        self._outputs_watch_stop.set()
+
         # Stop console capture before finishing
         if self._console_capture is not None:
             try:
@@ -942,10 +1085,10 @@ class Run:
             except Exception as e:
                 logger.debug(f"Failed to stop console capture: {e}")
             self._console_capture = None
-        
+
         self.stop_outputs_watch()
 
-        # Save best metric to summary before finishing
+        # Save best metric to summary (use internal method since _finished is already True)
         if self._best_metric_value is not None:
             best_metric_summary = {
                 "best_metric_value": self._best_metric_value,
@@ -953,8 +1096,8 @@ class Run:
                 "best_metric_step": self._best_metric_step,
                 "best_metric_mode": self._primary_metric_mode
             }
-            self.summary(best_metric_summary)
-        
+            self._apply_summary_update(best_metric_summary)
+
         # Update status file (always for compatibility)
         with self._status_lock:
             cur: Dict[str, Any] = {}
@@ -1015,6 +1158,12 @@ class Run:
         # Small delay to ensure file system catches up
         import time
         time.sleep(0.1)
+
+        # Clear _active_run so get_active_run() does not return a finished run (BUG-36)
+        global _active_run
+        with _active_run_lock:
+            if _active_run is self:
+                _active_run = None
 
     # ---------------- context manager -----------------
     def __enter__(self) -> "Run":

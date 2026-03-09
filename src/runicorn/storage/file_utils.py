@@ -53,7 +53,7 @@ def get_storage_root(storage: Optional[str] = None) -> Path:
     Returns:
         Path to storage root directory
     """
-    from ..sdk import _default_storage_dir
+    from ..sdk import _default_storage_dir, _normalize_status
     root = _default_storage_dir(storage)
     root.mkdir(parents=True, exist_ok=True)
     (root / "runs").mkdir(parents=True, exist_ok=True)
@@ -489,7 +489,7 @@ async def periodic_status_check(root: Path, backend=None) -> None:
                     running_exps = backend.get_running_experiments()
                     for exp in running_exps:
                         try:
-                            run_dir = Path(exp.run_dir) if exp.run_dir else None
+                            run_dir = Path(exp["run_dir"]) if exp.get("run_dir") else None
                             if run_dir and run_dir.exists():
                                 update_status_if_process_dead(run_dir)
                                 # Check if status changed and dual-write
@@ -497,11 +497,11 @@ async def periodic_status_check(root: Path, backend=None) -> None:
                                 new_val = str((new_status.get("status") if isinstance(new_status, dict) else "running") or "running")
                                 if new_val != "running":
                                     try:
-                                        backend.update_experiment(exp.experiment_id, {"status": new_val})
+                                        backend.update_experiment(exp["id"], {"status": _normalize_status(new_val)})
                                     except Exception:
                                         pass
                         except Exception as entry_error:
-                            logger.debug(f"Error checking status for {exp.experiment_id}: {entry_error}")
+                            logger.debug(f"Error checking status for {exp['id']}: {entry_error}")
                 except Exception:
                     pass  # fall through; next cycle will retry
             else:

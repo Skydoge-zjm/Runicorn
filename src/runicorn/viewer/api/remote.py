@@ -6,6 +6,7 @@ Provides unified remote access via SSH for Remote Viewer mode.
 from __future__ import annotations
 
 import logging
+import shlex
 from typing import Any, Dict, Optional, List
 
 from fastapi import APIRouter, HTTPException, Request, Body
@@ -514,16 +515,17 @@ async def list_remote_viewer_sessions(request: Request) -> Dict[str, Any]:
     """
     List all active Remote Viewer sessions.
     
+    Returns sessions including error/disconnected ones so users can see and
+    manually stop them. Dead session cleanup is not done here to avoid
+    hiding error sessions before the user can inspect them.
+    
     Returns:
-        List of active Remote Viewer sessions
+        List of Remote Viewer sessions (including non-active)
     """
     if not hasattr(request.app.state, 'viewer_manager'):
         return {"sessions": []}
     
     manager: RemoteViewerManager = request.app.state.viewer_manager
-    
-    # Cleanup dead sessions
-    manager.cleanup_dead_sessions()
     
     sessions = manager.list_sessions()
     
@@ -776,19 +778,14 @@ async def get_remote_config(
         # Use environment detector to get Python command
         detector = RemoteEnvironmentDetector(connection)
         
-        if conda_env and conda_env != "system":
-            # Get the Python command for this environment
-            cmd_prefix = detector.get_python_command_for_env(conda_env)
-            
-            if not cmd_prefix:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Environment '{conda_env}' not found. Please check the environment name."
-                )
-            
-            logger.info(f"Using Python command for {conda_env}: {cmd_prefix}")
-        else:
-            cmd_prefix = "python3"
+        # Get Python command (system uses detected python3/python, conda uses env path)
+        cmd_prefix = detector.get_python_command_for_env(conda_env or "system")
+        if not cmd_prefix:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Environment '{conda_env}' not found. Please check the environment name."
+            )
+        logger.info(f"Using Python command for {conda_env or 'system'}: {cmd_prefix}")
         
         # Get Python version
         stdout, stderr, exit_code = connection.exec_command(f"{cmd_prefix} --version")
@@ -881,13 +878,15 @@ async def get_remote_config(
         stdout, stderr, _ = connection.exec_command(f"echo {default_root}")
         absolute_root = stdout.strip()
         
-        # Check if path exists
-        stdout, stderr, _ = connection.exec_command(f"test -d '{absolute_root}' && echo 'exists' || echo 'not_exists'")
+        # Check if path exists (use shlex.quote for safe shell handling)
+        stdout, stderr, _ = connection.exec_command(
+            f"test -d {shlex.quote(absolute_root)} && echo 'exists' || echo 'not_exists'"
+        )
         path_exists = stdout.strip() == "exists"
         
-        # Get available ports
+        # Get available ports (use same Python as config)
         stdout, stderr, port_exit = connection.exec_command(
-            "python3 -c 'import socket; s=socket.socket(); s.bind((\"\", 0)); print(s.getsockname()[1]); s.close()'"
+            f"{cmd_prefix} -c 'import socket; s=socket.socket(); s.bind((\"\", 0)); print(s.getsockname()[1]); s.close()'"
         )
         suggested_port = int(stdout.strip()) if port_exit == 0 and stdout.strip().isdigit() else 23300
         
@@ -1045,14 +1044,17 @@ async def check_remote_path_exists(
         )
     
     try:
-        # Check if path exists using test command
-        stdout, stderr, exit_code = connection.exec_command(f"test -e '{path}' && echo 'exists' || echo 'not_exists'")
+        # Check if path exists using test command (use shlex.quote for safe shell handling)
+        safe_path = shlex.quote(path)
+        stdout, stderr, exit_code = connection.exec_command(
+            f"test -e {safe_path} && echo 'exists' || echo 'not_exists'"
+        )
         exists = stdout.strip() == "exists"
         
         # Check if it's a directory
         is_dir = False
         if exists:
-            stdout2, _, _ = connection.exec_command(f"test -d '{path}' && echo 'yes' || echo 'no'")
+            stdout2, _, _ = connection.exec_command(f"test -d {safe_path} && echo 'yes' || echo 'no'")
             is_dir = stdout2.strip() == "yes"
         
         return {
@@ -1089,7 +1091,6 @@ async def get_remote_status(request: Request) -> Dict[str, Any]:
     viewer_sessions = []
     if hasattr(request.app.state, 'viewer_manager'):
         manager: RemoteViewerManager = request.app.state.viewer_manager
-        manager.cleanup_dead_sessions()
         sessions = manager.list_sessions()
         viewer_sessions = [s.to_dict() for s in sessions]
     

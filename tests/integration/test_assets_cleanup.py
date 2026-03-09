@@ -81,3 +81,56 @@ class TestDeleteRunCompletely:
 
         assert result["success"] is False
         assert len(result["errors"]) >= 1
+
+
+class TestDeleteAssetBlobs:
+
+    def test_deletes_stat_fingerprint_blob_under_blob_root(self, tmp_path: Path) -> None:
+        from runicorn.assets.cleanup import _delete_asset_blobs
+
+        blob_root = tmp_path / "archive" / "blobs"
+        manifest_root = tmp_path / "archive" / "manifests"
+        blob_path = blob_root / "ab" / "cd" / "sample.bin"
+        blob_path.parent.mkdir(parents=True, exist_ok=True)
+        blob_path.write_bytes(b"blob-data")
+
+        deleted, freed, errors = _delete_asset_blobs(
+            {
+                "archive_uri": str(blob_path),
+                "fingerprint": "stat:123:456",
+                "asset_type": "output",
+            },
+            blob_root,
+            manifest_root,
+            dry_run=False,
+        )
+
+        assert deleted == 1
+        assert freed == len(b"blob-data")
+        assert errors == []
+        assert not blob_path.exists()
+
+    def test_does_not_delete_sibling_of_blob_root(self, tmp_path: Path) -> None:
+        from runicorn.assets.cleanup import _delete_asset_blobs
+
+        blob_root = tmp_path / "archive" / "blobs"
+        manifest_root = tmp_path / "archive" / "manifests"
+        sibling_path = tmp_path / "archive" / "blobs_extra" / "ab" / "cd" / "sample.bin"
+        sibling_path.parent.mkdir(parents=True, exist_ok=True)
+        sibling_path.write_bytes(b"blob-data")
+
+        deleted, freed, errors = _delete_asset_blobs(
+            {
+                "archive_uri": str(sibling_path),
+                "fingerprint": "stat:123:456",
+                "asset_type": "output",
+            },
+            blob_root,
+            manifest_root,
+            dry_run=False,
+        )
+
+        assert deleted == 0
+        assert freed == 0
+        assert errors == []
+        assert sibling_path.exists()

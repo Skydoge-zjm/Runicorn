@@ -48,6 +48,21 @@ describe('parseRunAssetsPayload', () => {
     expect(result[0].kind).toBe('config')
     expect(result[0].name).toBe('config')
     expect(result[0].saved).toBe(false)
+    expect(result[0].identity.idType).not.toBe('name')
+    expect(result[0].identity.idValue).not.toBe('config')
+  })
+
+  it('parses dataset with object uri (repo/split dict)', () => {
+    const payload = {
+      assets: {
+        datasets: [{ name: 'ds1', uri: { repo: 'my/repo', split: 'train' } }],
+      },
+    }
+    const result = parseRunAssetsPayload(payload)
+    expect(result).toHaveLength(1)
+    expect(result[0].kind).toBe('dataset')
+    expect(result[0].identity.idType).toBe('source_uri')
+    expect(result[0].identity.idValue).toBe('{"repo":"my/repo","split":"train"}')
   })
 
   it('skips empty config object', () => {

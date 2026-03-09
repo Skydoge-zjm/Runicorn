@@ -355,7 +355,7 @@ class ConsoleCapture:
         with cls._class_lock:
             captures = list(cls._active_captures)
         
-        for capture in captures:
+        for capture in reversed(captures):
             try:
                 capture.stop()
             except Exception:

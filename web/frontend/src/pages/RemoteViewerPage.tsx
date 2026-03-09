@@ -339,7 +339,7 @@ export default function RemoteViewerPage() {
   }
   
   /**
-   * Step 3: Save profile after config confirmation
+   * Step 3: Save profile after config confirmation, then connect and start Viewer
    */
   const handleSaveProfile = async (profileName: string, remoteRoot: string, localPort?: number, remotePort?: number) => {
     if (!sshConnection || !sshConnection.remoteConfig) return
@@ -348,22 +348,19 @@ export default function RemoteViewerPage() {
     setStarting(true)
     try {
       const finalName = profileName?.trim() || `${sshConnection.selectedEnv || 'system'} - ${remoteRoot}`
+      const profileData = {
+        name: finalName,
+        condaEnv: sshConnection.selectedEnv,
+        remoteRoot,
+        localPort,
+        remotePort
+      }
+      let savedProfileId: string
       if (wizardEditProfileId) {
-        await updateProfile(wizardEditProfileId, {
-          name: finalName,
-          condaEnv: sshConnection.selectedEnv,
-          remoteRoot,
-          localPort,
-          remotePort
-        })
+        await updateProfile(wizardEditProfileId, profileData)
+        savedProfileId = wizardEditProfileId
       } else {
-        await addProfile(wizardServerId, {
-          name: finalName,
-          condaEnv: sshConnection.selectedEnv,
-          remoteRoot,
-          localPort,
-          remotePort
-        })
+        savedProfileId = await addProfile(wizardServerId, profileData)
       }
 
       // Disconnect SSH after saving config
@@ -372,11 +369,27 @@ export default function RemoteViewerPage() {
 
       message.success(t('remote.message.configSaved'))
       
+      const serverIdToStart = wizardServerId
       setSSHConnection(null)
       setWizardOpen(false)
       setWizardServerId(null)
       setWizardEditProfileId(null)
       serverForm.resetFields()
+
+      // Fulfill wizard promise: connect and start Viewer for the saved profile
+      const server = servers.find(s => s.id === serverIdToStart)
+      const profile = wizardEditProfileId
+        ? { ...wizardProfile, ...profileData } as SavedConnectionProfile
+        : { ...profileData, id: savedProfileId, serverId: serverIdToStart } as SavedConnectionProfile
+      if (server && profile.condaEnv && profile.remoteRoot) {
+        if (server.authMethod === 'password' && !server.password) {
+          setPasswordDialogServer(server)
+          setPasswordDialogProfile(profile as SavedConnectionProfile)
+          setPasswordDialogVisible(true)
+        } else {
+          await executeQuickStart(server, profile as SavedConnectionProfile, server.password)
+        }
+      }
       
     } catch (error) {
       message.error(error instanceof Error ? error.message : t('remote.message.saveFailed'))

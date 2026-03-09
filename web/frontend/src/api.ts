@@ -22,6 +22,16 @@ export async function getRunAssets(id: string) {
   return apiFetch(`/runs/${id}/assets`)
 }
 
+export interface RunImage {
+  step: number | null
+  key: string
+  path: string
+}
+
+export async function getRunImages(id: string): Promise<{ run_id: string; images: RunImage[] }> {
+  return apiFetch(`/runs/${id}/images`)
+}
+
 export function downloadRunAssetUrl(runId: string, absolutePath: string, filename?: string) {
   const qs = new URLSearchParams({ path: absolutePath })
   if (filename) qs.set('filename', filename)

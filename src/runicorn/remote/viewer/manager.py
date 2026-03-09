@@ -146,10 +146,11 @@ class RemoteViewerManager:
             
             # Step 7: Create SSH tunnel
             logger.info(f"[{session_id}] Creating SSH tunnel...")
+            ssh_host = connection.config.host
             session = RemoteViewerSession(
                 session_id=session_id,
                 connection=connection,
-                remote_host="127.0.0.1",
+                remote_host=ssh_host,
                 remote_port=remote_port,
                 local_port=local_port,
                 remote_root=remote_root,
@@ -383,13 +384,16 @@ class RemoteViewerManager:
         with self._lock:
             return list(self._sessions.values())
     
-    def cleanup_dead_sessions(self) -> int:
+    def cleanup_dead_sessions(self, *, keep_disconnected: bool = True) -> int:
         """Remove inactive sessions. Returns count of removed sessions."""
         count = 0
         with self._lock:
             dead_sessions = [
                 sid for sid, session in self._sessions.items()
                 if not session.is_active
+                and not (
+                    keep_disconnected and session.status == STATUS_DISCONNECTED
+                )
             ]
             for sid in dead_sessions:
                 # Stop the session before removing it to avoid leaking tunnel threads
@@ -562,17 +566,18 @@ for port in range({start_port}, {end_port}):
             with self._lock:
                 sessions = list(self._sessions.values())
 
-            if not sessions:
-                # No sessions left, stop the monitor to save resources.
-                logger.info("No active sessions — health monitor exiting")
+            monitored_sessions = [
+                session for session in sessions
+                if not session._stop_event.is_set()
+                and session.status not in (STATUS_STOPPED, STATUS_DISCONNECTED)
+            ]
+
+            if not monitored_sessions:
+                # No sessions left that still need health monitoring.
+                logger.info("No monitorable sessions - health monitor exiting")
                 return
 
-            for session in sessions:
-                if session._stop_event.is_set():
-                    continue
-                if session.status in (STATUS_STOPPED, STATUS_DISCONNECTED):
-                    continue
-
+            for session in monitored_sessions:
                 try:
                     self._check_session_health(session)
                 except Exception as e:

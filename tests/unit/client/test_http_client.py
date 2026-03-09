@@ -11,6 +11,7 @@ import pytest
 from runicorn.client.exceptions import (
     BadRequestError,
     ConnectionError as APIConnectionError,
+    HostKeyConfirmationRequiredError,
     NotFoundError,
     ServerError,
 )
@@ -205,6 +206,24 @@ class TestApiErrorHandling:
         mock_session.request.return_value = _mock_response(500, text="internal error")
         with pytest.raises(ServerError):
             client.get("/api/runs")
+
+    def test_409_host_key_confirmation_raises_special_exception(self, client, mock_session):
+        detail = {
+            "code": "HOST_KEY_CONFIRMATION_REQUIRED",
+            "message": "Host key verification failed",
+            "host_key": {
+                "host": "newhost.example.com",
+                "port": 22,
+                "key_type": "ssh-ed25519",
+                "public_key": "ssh-ed25519 AAAAC3...",
+                "fingerprint_sha256": "abc123",
+            },
+        }
+        mock_session.request.return_value = _mock_response(409, {"detail": detail})
+        with pytest.raises(HostKeyConfirmationRequiredError) as exc_info:
+            client.post("/api/remote/connect", json={"host": "newhost.example.com"})
+        assert exc_info.value.host_key["host"] == "newhost.example.com"
+        assert exc_info.value.host_key["fingerprint_sha256"] == "abc123"
 
     def test_connection_error_wrapped(self, client, mock_session):
         import requests

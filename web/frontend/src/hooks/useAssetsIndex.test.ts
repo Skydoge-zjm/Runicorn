@@ -87,7 +87,7 @@ describe('useAssetsIndex', () => {
   it('stats correctly computes totals', async () => {
     const cached = {
       version: 3,
-      generated_at: 1700000000,
+      generated_at: Math.floor(Date.now() / 1000) - 30, // Fresh cache (< 60s TTL) to avoid auto-refresh
       runs: [{ run_id: 'r1', path: 'p', alias: null }],
       run_assets: { r1: [{ kind: 'dataset', name: 'ds', saved: true, identity: { kind: 'dataset', idType: 'name', idValue: 'ds' } }] },
       experiments: [],
@@ -98,7 +98,7 @@ describe('useAssetsIndex', () => {
     }
     localStorage.setItem('assets_index_v3', JSON.stringify(cached))
 
-    // Prevent auto-refresh by pre-filling data
+    // Prevent auto-refresh: cache is fresh, so no refresh triggered
     server.use(
       http.get('/api/runs', () => HttpResponse.json([])),
     )

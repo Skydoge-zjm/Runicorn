@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, Optional
@@ -52,6 +53,15 @@ class NoOpRun:
         self.path = path or "default"
         self.alias = alias
         self.id = "disabled"
+
+    def __enter__(self) -> "NoOpRun":
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        pass
+
+    def get_logging_handler(self) -> logging.Handler:
+        return logging.NullHandler()
 
     def set_primary_metric(self, metric_name: str, mode: str = "max") -> None:
         return None

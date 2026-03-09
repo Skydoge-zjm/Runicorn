@@ -59,6 +59,7 @@ export default {
   'asset_detail.invalid_id': '无效的资产 id',
 
   'asset_detail.fields.projects': '项目',
+  'asset_detail.fields.paths': '路径',
   'asset_detail.fields.last_used': '最近使用',
   'asset_detail.fields.description': '描述',
   'asset_detail.fields.context': '上下文',

@@ -67,6 +67,17 @@ class TestLoadIgnoreMatcher:
         assert m.is_ignored("cache.tmp", is_dir=False) is True
         assert m.is_ignored("main.py", is_dir=False) is False
 
+    def test_use_default_rnignore_if_missing_no_file_created(self, tmp_path: Path):
+        """When .rnignore does not exist, use_default_rnignore_if_missing uses defaults in-memory without creating file."""
+        rnignore_path = tmp_path / ".rnignore"
+        assert not rnignore_path.exists()
+        m = load_ignore_matcher(tmp_path, use_default_rnignore_if_missing=True)
+        assert not rnignore_path.exists()
+        assert m.is_ignored("__pycache__", is_dir=True) is True
+        assert m.is_ignored(".git", is_dir=True) is True
+        assert m.is_ignored("foo.pyc", is_dir=False) is True
+        assert m.is_ignored("main.py", is_dir=False) is False
+
 
 class TestEnsureRnignore:
     """ensure_rnignore creates default .rnignore if missing."""

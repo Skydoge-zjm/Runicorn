@@ -158,26 +158,28 @@ describe('useCompareMode', () => {
     expect(message.info).toHaveBeenCalledWith('experiments.add_runs_coming_soon')
   })
 
-  it('URL restore skips when fewer than 2 matching runs found', async () => {
-    // URL has r1,r_nonexistent → only r1 matches → selectedRuns.length < 2 → skip
+  it('URL restore populates when 1+ matching runs found', async () => {
+    // URL has r1,r_nonexistent → only r1 matches → we populate with 1 run (needsMoreRuns=false: 2 IDs in URL)
     const { result } = renderHook(() => useCompareMode(mockRuns, []), {
       wrapper: createWrapper({ initialEntries: ['/?compare=r1,r_nonexistent'] }),
     })
 
-    // Wait a tick for useEffect to run
-    await new Promise((r) => setTimeout(r, 50))
-    expect(result.current.compareRunInfos).toHaveLength(0)
+    await waitFor(() => {
+      expect(result.current.compareRunInfos).toHaveLength(1)
+    })
   })
 
-  it('compareMode is true when URL has 2+ IDs and false otherwise', () => {
+  it('compareMode is true when URL has 1+ IDs and needsMoreRuns when exactly 1', () => {
     const { result: r1 } = renderHook(() => useCompareMode([], []), {
       wrapper: createWrapper({ initialEntries: ['/?compare=a,b'] }),
     })
     expect(r1.current.compareMode).toBe(true)
+    expect(r1.current.needsMoreRuns).toBe(false)
 
     const { result: r2 } = renderHook(() => useCompareMode([], []), {
       wrapper: createWrapper({ initialEntries: ['/?compare=a'] }),
     })
-    expect(r2.current.compareMode).toBe(false)
+    expect(r2.current.compareMode).toBe(true)
+    expect(r2.current.needsMoreRuns).toBe(true)
   })
 })

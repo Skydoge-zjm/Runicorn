@@ -265,6 +265,22 @@ class TestRunFinish:
         status = json.loads(run._status_path.read_text(encoding="utf-8"))
         assert status["status"] == "failed"
 
+    def test_run_finish_normalizes_status_aliases(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
+        """finish(status='completed') normalizes to 'finished' for SQLite compatibility."""
+        run = _make_run(storage_root, monkeypatch, run_id="test_completed_001")
+        run.finish(status="completed")
+        status = json.loads(run._status_path.read_text(encoding="utf-8"))
+        assert status["status"] == "finished"
+        # SQLite should also have normalized value (backend closed after finish, re-open to check)
+        from runicorn.storage.backends import SQLiteStorageBackend
+        backend = SQLiteStorageBackend(storage_root)
+        try:
+            exp = backend.get_experiment("test_completed_001")
+            assert exp is not None
+            assert exp.status == "finished"
+        finally:
+            backend.close()
+
     def test_run_double_finish_idempotent(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
         """Calling finish() twice does not raise.
 
@@ -276,6 +292,15 @@ class TestRunFinish:
         assert run.storage_backend is not None, "Should test with modern storage enabled"
         run.finish()
         run.finish()  # should not raise or deadlock
+
+    def test_finish_sets_outputs_watch_stop_event(self, storage_root: Path, monkeypatch: pytest.MonkeyPatch):
+        run = _make_run(storage_root, monkeypatch, run_id="test_finish_outputs_stop_001")
+
+        assert run._outputs_watch_stop.is_set() is False
+
+        run.finish()
+
+        assert run._outputs_watch_stop.is_set() is True
 
 
 class TestRunContextManager:

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Storage Migration Tools
 
 Provides tools for migrating between different storage backends,
@@ -575,10 +575,20 @@ def ensure_modern_storage(root_dir: Path) -> StorageBackend:
         status = migrate_storage_system(root_dir)
         if status.status == "completed":
             logger.info("Migration to SQLite storage completed")
-        else:
-            logger.warning(f"Migration failed: {status.errors}")
-        # Always return SQLite backend (it has been initialized by migration)
-        return SQLiteStorageBackend(root_dir)
+            return SQLiteStorageBackend(root_dir)
+        # Migration failed: do not silently return incomplete backend
+        logger.error(
+            "Storage migration failed (status=%s, errors=%s). "
+            "Check disk space, permissions, and run logs for details.",
+            status.status,
+            status.errors,
+        )
+        raise RuntimeError(
+            f"Storage migration failed: {status.status}. "
+            f"Errors: {status.errors}. "
+            "Please check disk space and permissions, then retry. "
+            "If the problem persists, inspect the backup created in the storage root parent directory."
+        )
     
     elif storage_type in ("sqlite_only", "hybrid"):
         logger.info("Using SQLite storage backend")

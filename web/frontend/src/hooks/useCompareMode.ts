@@ -18,7 +18,8 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
   const compareIdsFromUrl = useMemo(() =>
     searchParams.get('compare')?.split(',').filter(Boolean) || []
   , [searchParams])
-  const compareMode = compareIdsFromUrl.length >= 2
+  const compareMode = compareIdsFromUrl.length >= 1
+  const needsMoreRuns = compareIdsFromUrl.length === 1
 
   const [compareRunInfos, setCompareRunInfos] = useState<CompareRunInfo[]>([])
   const [compareMetrics, setCompareMetrics] = useState<Map<string, MetricsData>>(new Map())
@@ -26,11 +27,12 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
   const [compareLoading, setCompareLoading] = useState(false)
   const [visibleRunIds, setVisibleRunIds] = useState<Set<string>>(new Set())
 
-  // Restore compare state from URL
+  // Restore compare state from URL (single ID: show banner; 2+ IDs: full compare)
+  // Only use validRunIds - missing runs are shown via missingRunIds banner
   useEffect(() => {
-    if (compareIdsFromUrl.length >= 2 && compareRunInfos.length === 0 && runs.length > 0) {
-      const selectedRuns = runs.filter(r => compareIdsFromUrl.includes(r.run_id))
-      if (selectedRuns.length < 2) return
+    if (compareIdsFromUrl.length >= 1 && runs.length > 0) {
+      const selectedRuns = runs.filter(r => validRunIds.includes(r.run_id))
+      if (selectedRuns.length === 0) return
       const runInfos: CompareRunInfo[] = selectedRuns.map(r => ({
         runId: r.run_id, path: r.path, alias: r.alias, tags: r.tags || [], status: r.status,
       }))
@@ -40,10 +42,10 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
       })
       setCompareRunInfos(runInfos)
       setCompareRunLabels(labels)
-      setVisibleRunIds(new Set(compareIdsFromUrl))
+      setVisibleRunIds(new Set(validRunIds))
       setCompareLoading(true)
       Promise.all(
-        compareIdsFromUrl.map(async (runId) => {
+        validRunIds.map(async (runId) => {
           try { return [runId, await getStepMetrics(runId)] as const }
           catch { return null }
         })
@@ -53,7 +55,7 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
         setCompareMetrics(metricsMap)
       }).finally(() => setCompareLoading(false))
     }
-  }, [compareIdsFromUrl, runs])
+  }, [compareIdsFromUrl, runs, validRunIds])
 
   const handleCompare = useCallback(async () => {
     if (selectedRowKeys.length < 2) {
@@ -164,7 +166,8 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
   }, [compareMode, hasRunningCompareRun, compareLoading, compareRunInfos, compareMetrics, settings.refreshInterval])
 
   return {
-    compareMode, compareIdsFromUrl,
+    compareMode, compareIdsFromUrl, needsMoreRuns,
+    validRunIds, missingRunIds,
     compareRunInfos, compareMetrics, compareRunLabels,
     compareLoading, visibleRunIds,
     handleCompare, handleExitCompare,

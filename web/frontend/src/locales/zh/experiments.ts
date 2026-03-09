@@ -21,6 +21,9 @@ export default {
   'experiments.delete_failed': '删除失败',
   'experiments.export_started': '正在导出运行数据...',
   'experiments.select_multiple': '请至少选择2个运行进行对比',
+  'experiments.select_more_to_compare': '再选择一个运行即可开始对比',
+  'experiments.compare_missing_runs': '此对比链接中的部分运行已不存在：{{ids}}',
+  'experiments.compare_not_enough_runs': '运行数量不足，无法进行对比',
   'experiments.compare_hint': '请使用运行详情页面的对比功能',
   'experiments.select_one': '请至少选择一个运行进行导出',
   
@@ -138,6 +141,13 @@ export default {
   'run.refreshed': '已刷新',
   'run.compare_with': '与其他对比...',
   'run.tabs.overview': '概览',
+  'run.tabs.images': '图片',
+  'run.images.title': '图片',
+  'run.images.none': '暂无记录的图片。',
+  'run.images.step': '步数',
+  'run.images.key': '标签',
+  'run.summary.title': '摘要',
+  'run.summary.none': '暂无摘要数据。',
 
   'metrics.title': '指标',
   'metrics.more_columns': '多列布局',

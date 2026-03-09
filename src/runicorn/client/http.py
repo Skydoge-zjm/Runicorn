@@ -17,6 +17,7 @@ from .exceptions import (
     NotFoundError,
     BadRequestError,
     ServerError,
+    HostKeyConfirmationRequiredError,
 )
 
 if TYPE_CHECKING:
@@ -129,6 +130,15 @@ class RunicornClient:
                 raise NotFoundError(f"Resource not found: {endpoint}")
             elif resp.status_code == 400:
                 raise BadRequestError(f"Bad request: {resp.text}")
+            elif resp.status_code == 409:
+                try:
+                    data = resp.json()
+                    detail = data.get("detail", data)
+                    if isinstance(detail, dict) and detail.get("code") == "HOST_KEY_CONFIRMATION_REQUIRED":
+                        raise HostKeyConfirmationRequiredError(detail)
+                except ValueError:
+                    pass
+                raise APIConnectionError(f"Conflict: {resp.text}")
             elif resp.status_code >= 500:
                 raise ServerError(f"Server error: {resp.text}")
             

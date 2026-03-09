@@ -8,6 +8,7 @@ import time
 import zipfile
 from typing import List
 
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -26,6 +27,20 @@ def _make_run_zip(run_id: str, path: str = "test/import") -> bytes:
             f"{prefix}/status.json",
             json.dumps({"status": "finished"}),
         )
+    return buf.getvalue()
+
+
+def _make_export_format_zip(run_id: str, path: str = "test/import") -> bytes:
+    """Create zip in export format: <run_id>/... (no runs/ prefix, matches projects.export_by_path)."""
+    buf = io.BytesIO()
+    now = time.time()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("index.json", json.dumps({"path": path, "total_runs": 1, "runs": []}))
+        zf.writestr(
+            f"{run_id}/meta.json",
+            json.dumps({"id": run_id, "path": path, "created_at": now}),
+        )
+        zf.writestr(f"{run_id}/status.json", json.dumps({"status": "finished"}))
     return buf.getvalue()
 
 
@@ -51,6 +66,26 @@ class TestImportArchive:
         """Missing file field → 422 or 503."""
         resp = viewer_client.post("/api/import/archive")
         assert resp.status_code in (422, 503)
+
+    def test_import_export_format_zip(
+        self, viewer_client: TestClient, viewer_storage_root
+    ) -> None:
+        """Import zip in export format (<run_id>/...) maps to runs/<run_id>/... (BUG-06)."""
+        run_id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        data = _make_export_format_zip(run_id, path="exported/path")
+        resp = viewer_client.post(
+            "/api/import/archive",
+            files={"file": ("export.zip", data, "application/zip")},
+        )
+        if resp.status_code != 200:
+            pytest.skip("import endpoint unavailable (python-multipart)")
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["imported_files"] >= 2  # meta.json + status.json
+        # Verify run landed under runs/
+        run_dir = viewer_storage_root / "runs" / run_id
+        assert (run_dir / "meta.json").exists()
+        assert (run_dir / "status.json").exists()
 
 
 class TestImportTriggersSync:

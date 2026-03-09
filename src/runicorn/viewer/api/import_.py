@@ -6,6 +6,7 @@ Handles import of experiment archives (zip/tar.gz) into the storage system.
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 import tarfile
 import tempfile
@@ -46,9 +47,47 @@ def _normalize_archive_name(name: str) -> str:
     return norm.lstrip("/")
 
 
+_UUID_LIKE_RE = re.compile(
+    r"^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$"
+)
+
+
+def _looks_like_run_id(segment: str) -> bool:
+    """Check if a path segment looks like a run ID (UUID or similar)."""
+    if not segment or len(segment) < 8:
+        return False
+    if _UUID_LIKE_RE.match(segment):
+        return True
+    return bool(re.match(r"^[a-fA-F0-9\-]{20,}$", segment))
+
+
 def _default_path_mapper(name: str) -> Optional[str]:
+    """
+    Map archive entry paths to storage layout.
+
+    Export ZIP writes runs as <run_id>/... (no runs/ prefix).
+    Standard layout expects runs/<path>/<run_id>/ or runs/<run_id>/.
+    This mapper detects export format and prepends runs/ when missing.
+    """
     norm = _normalize_archive_name(name)
-    return norm or None
+    if not norm:
+        return None
+    if norm.startswith("runs/"):
+        return norm
+    if "/runs/" in norm:
+        rel = norm.split("/runs/", 1)[1]
+        return f"runs/{rel}"
+    parts = norm.split("/", 1)
+    if len(parts) == 2:
+        first, rest = parts
+        if first.lower() in ("index.json",):
+            return norm
+        if _looks_like_run_id(first):
+            return f"runs/{norm}"
+    elif len(parts) == 1 and parts[0].lower() != "index.json":
+        if _looks_like_run_id(parts[0]):
+            return f"runs/{norm}"
+    return norm
 
 
 def _build_isolate_mapper(import_ts: str) -> Callable[[str], Optional[str]]:

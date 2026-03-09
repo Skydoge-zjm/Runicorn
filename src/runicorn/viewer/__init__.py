@@ -44,6 +44,76 @@ from .. import __version__
 logger = logging.getLogger(__name__)
 
 
+async def reinitialize_storage(app: FastAPI, new_root: Path) -> None:
+    """
+    Reinitialize storage when user switches root directory.
+    Closes the old backend, creates a new one, and restarts background tasks.
+
+    Args:
+        app: FastAPI application instance
+        new_root: New storage root directory path
+    """
+    import threading
+
+    # Cancel and wait for the status check task
+    old_task = getattr(app.state, "status_check_task", None)
+    if old_task is not None and not old_task.done():
+        old_task.cancel()
+        try:
+            await asyncio.wait_for(old_task, timeout=5.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
+        logger.info("Stopped background process status checker for storage switch")
+
+    # Wait for sync thread to finish before closing backend (avoids closing SQLite while sync writes)
+    sync_thread = getattr(app.state, "sync_thread", None)
+    if sync_thread is not None and sync_thread.is_alive():
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: sync_thread.join(timeout=5))
+        if sync_thread.is_alive():
+            logger.warning("Sync thread did not finish within timeout before storage switch")
+        app.state.sync_thread = None
+
+    # Close old storage backend
+    old_backend = getattr(app.state, "storage_backend", None)
+    if old_backend is not None:
+        try:
+            old_backend.close()
+            logger.info("Closed SQLite storage backend for storage switch")
+        except Exception as e:
+            logger.warning(f"Failed to close old storage backend: {e}")
+
+    # Create new backend and update app state
+    try:
+        from ..storage.backends import SQLiteStorageBackend
+        app.state.storage_backend = SQLiteStorageBackend(new_root)
+        app.state.storage_root = new_root
+        logger.info("SQLite storage backend reinitialized for new root: %s", new_root)
+    except Exception as e:
+        app.state.storage_backend = None
+        app.state.storage_root = new_root
+        logger.warning("SQLite storage backend unavailable for new root, using file-only mode: %s", e)
+
+    # Restart status check task with new root and backend
+    new_task = asyncio.create_task(
+        periodic_status_check(new_root, backend=app.state.storage_backend)
+    )
+    app.state.status_check_task = new_task
+    logger.info("Restarted background process status checker for new storage root")
+
+    # Sync filesystem runs into SQLite for the new backend (non-blocking)
+    if app.state.storage_backend is not None:
+        def _run_sync():
+            try:
+                from .services.db_reader import sync_filesystem_to_db
+                sync_filesystem_to_db(new_root, app.state.storage_backend)
+            except Exception as e:
+                logger.warning("Filesystem-to-SQLite sync failed for new root: %s", e)
+        new_sync_thread = threading.Thread(target=_run_sync, daemon=True)
+        new_sync_thread.start()
+        app.state.sync_thread = new_sync_thread
+
+
 def create_app(storage: Optional[str] = None) -> FastAPI:
     """
     Create and configure the FastAPI application.
@@ -99,15 +169,15 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     
     # Background task for status checking
     _status_check_task = None
-    _sync_thread = None
-    
+
     @app.on_event("startup")
     async def startup_event():
         """Initialize background tasks on app startup."""
-        nonlocal _status_check_task, _sync_thread
+        nonlocal _status_check_task
         _status_check_task = asyncio.create_task(
             periodic_status_check(root, backend=app.state.storage_backend)
         )
+        app.state.status_check_task = _status_check_task
         logger.info("Started background process status checker")
         
         # Start GPU background collector
@@ -130,8 +200,9 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
                 except Exception as e:
                     logger.warning(f"Filesystem-to-SQLite sync failed: {e}")
             import threading
-            _sync_thread = threading.Thread(target=_run_sync, daemon=True)
-            _sync_thread.start()
+            sync_thread = threading.Thread(target=_run_sync, daemon=True)
+            sync_thread.start()
+            app.state.sync_thread = sync_thread
         
         # Start idle shutdown checker (remote-mode only).
         if app.state.idle_timeout > 0:
@@ -209,11 +280,12 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
         
         # Wait for sync thread to finish before closing the backend,
         # so we don't close SQLite while sync is still writing.
-        if _sync_thread is not None and _sync_thread.is_alive():
+        sync_thread = getattr(app.state, "sync_thread", None)
+        if sync_thread is not None and sync_thread.is_alive():
             await asyncio.get_event_loop().run_in_executor(
-                None, lambda: _sync_thread.join(timeout=5)
+                None, lambda: sync_thread.join(timeout=5)
             )
-            if _sync_thread.is_alive():
+            if sync_thread.is_alive():
                 logger.warning("Sync thread did not finish within timeout")
         
         # Stop background status checker

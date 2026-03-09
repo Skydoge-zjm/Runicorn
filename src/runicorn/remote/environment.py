@@ -320,14 +320,25 @@ class RemoteEnvironmentDetector:
         """
         Get the command to run Python in a specific environment.
         Uses cached env list when available to avoid redundant SSH calls.
+        For 'system', returns the actually detected command (python3 or python).
         
         Args:
             env_name: Environment name
             
         Returns:
-            Command string to run Python, or None if not found
+            Command string (or path) to run Python, or None if not found
         """
         if env_name == 'system':
+            # Use cached system env if available (from detect_all_environments)
+            if self._env_list:
+                for env in self._env_list:
+                    if env.name == 'system':
+                        return env.python_path
+            # Run detection; _detect_system_python tries python3 first, then python
+            system_env = self._detect_system_python()
+            if system_env:
+                return system_env.python_path
+            # Fallback when detection fails (e.g. no SSH)
             return 'python3'
         
         # Try cached env list first (populated by detect_all_environments)

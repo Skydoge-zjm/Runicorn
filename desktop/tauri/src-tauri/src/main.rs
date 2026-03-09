@@ -10,6 +10,7 @@ use std::{
 };
 
 use tauri::{AppHandle, Manager, WindowEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::CommandChild as ShellChild;
 use tauri_plugin_opener::OpenerExt;
@@ -217,14 +218,27 @@ fn start(app: AppHandle) {
     let state: tauri::State<AppState> = app.state();
     *state.child.lock().unwrap() = Some(child);
 
-    if !wait_ready(port, 30) {
+    let mut backend_ready = wait_ready(port, 30);
+    if !backend_ready {
         // Fallback: kill current child and try python-based backend
         kill_child(&state);
         if let Some(py_child) = spawn_python_backend(port) {
             *state.child.lock().unwrap() = Some(py_child);
-            let _ = wait_ready(port, 30);
+            backend_ready = wait_ready(port, 30);
         }
     }
+
+    if !backend_ready {
+        let _ = app.run_on_main_thread(move || {
+            app.dialog()
+                .message("Failed to start backend. Please check your Python installation.")
+                .title("Runicorn - Startup Error")
+                .blocking_show();
+            std::process::exit(1);
+        });
+        return;
+    }
+
     let url = format!("http://127.0.0.1:{}/", port);
     *state.backend_url.lock().unwrap() = Some(url.clone());
 
@@ -239,6 +253,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState { child: Mutex::new(None), backend_url: Mutex::new(None) })
         .setup(|app| {
             // spawn backend in a background thread to avoid blocking
@@ -248,9 +263,12 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { .. } = event {
-                let app = window.app_handle();
-                let state: tauri::State<AppState> = app.state();
-                kill_child(&state);
+                // Only kill backend when the MAIN window is closed, not sub-windows (e.g. remote-*)
+                if window.label() == "main" {
+                    let app = window.app_handle();
+                    let state: tauri::State<AppState> = app.state();
+                    kill_child(&state);
+                }
             }
         })
         .invoke_handler(tauri::generate_handler![get_backend_url, open_remote_window, open_in_browser])
