@@ -31,14 +31,6 @@ Important pages inside the site:
 - `docs/user-guide/docs/reference/api-surface.md`
 - `docs/user-guide/docs/reference/documentation-system.md`
 
-Two of those pages are generated from source code by:
-
-```text
-scripts/sync_docs_reference.py
-```
-
-This reduces drift between the docs and the actual CLI/API surface.
-
 ## Non-Authoritative Work Areas
 
 The following locations are not part of the maintained product documentation:
@@ -54,12 +46,7 @@ They may contain planning notes, scratch work, or historical development artifac
 When the code changes in a user-facing way:
 
 1. Update the relevant guide pages.
-2. Regenerate source-driven reference pages:
-
-```bash
-conda run -n runicorn_dev python scripts/sync_docs_reference.py
-```
-
+2. Update any affected reference pages, including the CLI reference if command help changed.
 3. Build the site strictly:
 
 ```bash
@@ -73,5 +60,3 @@ GitHub Pages deployment is handled by:
 ```text
 .github/workflows/deploy-docs.yml
 ```
-
-That workflow now regenerates the source-driven reference pages before building the MkDocs site.
