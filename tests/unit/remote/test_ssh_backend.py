@@ -8,7 +8,12 @@ import pytest
 
 from runicorn.remote.connection import SSHConfig, SSHConnectionPool
 from runicorn.remote.host_key import HostKeyConfirmationRequiredError, HostKeyProblem
-from runicorn.remote.ssh_backend import AutoBackend, OpenSSHBackend, OpenSSHCommandConnection
+from runicorn.remote.ssh_backend import (
+    AutoBackend,
+    OpenSSHBackend,
+    OpenSSHCommandConnection,
+    OpenSSHFallbackError,
+)
 
 
 # === Helpers ===
@@ -97,7 +102,7 @@ _TUNNEL_KWARGS = dict(
 class TestAutoBackendFallback:
     def test_falls_back_to_asyncssh(self):
         ab = AutoBackend()
-        ab._openssh = _Backend(exc=RuntimeError("no openssh"))
+        ab._openssh = _Backend(exc=OpenSSHFallbackError("no openssh"))
         ab._asyncssh = _Backend(tunnel="async")
         ab._paramiko = _Backend(tunnel="paramiko")
 
@@ -108,7 +113,7 @@ class TestAutoBackendFallback:
 
     def test_falls_back_to_paramiko(self):
         ab = AutoBackend()
-        ab._openssh = _Backend(exc=RuntimeError("no"))
+        ab._openssh = _Backend(exc=OpenSSHFallbackError("no"))
         ab._asyncssh = _Backend(exc=RuntimeError("no"))
         ab._paramiko = _Backend(tunnel="paramiko")
 
@@ -133,7 +138,7 @@ class TestAutoBackendFallback:
         connection.get_paramiko_fallback_connection = lambda: paramiko_connection
         tunnel_kwargs = dict(_TUNNEL_KWARGS, connection=connection)
 
-        ab._openssh = _Backend(exc=RuntimeError("no openssh"))
+        ab._openssh = _Backend(exc=OpenSSHFallbackError("no openssh"))
         ab._asyncssh = _Backend(exc=RuntimeError("no asyncssh"))
         ab._paramiko = _Backend(tunnel="paramiko")
 
@@ -157,12 +162,22 @@ class TestAutoBackendConnect:
         cfg = SSHConfig(host="example.com", username="u")
         paramiko_conn = object()
         ab = AutoBackend()
-        ab._openssh = _ConnectBackend(exc=RuntimeError("unsupported"))
+        ab._openssh = _ConnectBackend(exc=OpenSSHFallbackError("unsupported"))
         ab._paramiko = _ConnectBackend(connection=paramiko_conn)
 
         assert ab.connect(cfg) is paramiko_conn
         assert ab._openssh.called == 1
         assert ab._paramiko.called == 1
+
+    def test_no_connect_fallback_on_openssh_connection_error(self):
+        cfg = SSHConfig(host="example.com", username="u", password="pw")
+        ab = AutoBackend()
+        ab._openssh = _ConnectBackend(exc=RuntimeError("Permission denied"))
+        ab._paramiko = _ConnectBackend(connection=object())
+
+        with pytest.raises(RuntimeError):
+            ab.connect(cfg)
+        assert ab._paramiko.called == 0
 
     def test_no_connect_fallback_on_host_key_confirmation(self):
         cfg = SSHConfig(host="example.com", username="u")
@@ -202,18 +217,18 @@ class TestOpenSSHPreconditions:
                 remote_port=2, stop_event=threading.Event(),
             )
 
-    def test_rejects_password(self, monkeypatch, tmp_path):
+    def test_allows_password(self, monkeypatch, tmp_path):
         import runicorn.config as cfg_mod
         import runicorn.remote.ssh_backend as bmod
         monkeypatch.setattr(cfg_mod, "get_known_hosts_file_path", lambda: tmp_path / "known_hosts")
         monkeypatch.setattr(OpenSSHBackend, "_resolve_ssh_path", staticmethod(lambda *_: "ssh"))
         monkeypatch.setattr(bmod.shutil, "which", lambda name: "ssh-keyscan")
 
-        with pytest.raises(RuntimeError):
-            OpenSSHBackend().create_tunnel(
-                connection=_DummyConnection(password="pw"), local_port=1,
-                remote_host="x", remote_port=2, stop_event=threading.Event(),
-            )
+        tunnel = OpenSSHBackend().create_tunnel(
+            connection=_DummyConnection(password="pw"), local_port=1,
+            remote_host="x", remote_port=2, stop_event=threading.Event(),
+        )
+        assert tunnel is not None
 
 
 # === resolve_ssh_path ===
@@ -335,6 +350,35 @@ class TestOpenSSHCommandConnection:
         with pytest.raises(HostKeyConfirmationRequiredError) as exc:
             conn.connect()
         assert exc.value.problem.reason == "unknown"
+
+    def test_password_auth_uses_askpass(self, monkeypatch, tmp_path):
+        import runicorn.config as cfg_mod
+
+        calls = []
+        monkeypatch.setattr(cfg_mod, "get_known_hosts_file_path", lambda: tmp_path / "known_hosts")
+        monkeypatch.setattr(OpenSSHBackend, "_resolve_ssh_path", staticmethod(lambda *_: "ssh"))
+        monkeypatch.setattr(
+            "runicorn.remote.ssh_backend.shutil.which",
+            lambda name: "ssh-keyscan" if name == "ssh-keyscan" else None,
+        )
+
+        def fake_run(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        monkeypatch.setattr("runicorn.remote.ssh_backend.subprocess.run", fake_run)
+
+        conn = OpenSSHCommandConnection(
+            SSHConfig(host="example.com", username="alice", password="pw", use_agent=False)
+        )
+
+        assert conn.connect() is True
+        cmd, kwargs = calls[0]
+        assert "BatchMode=no" in cmd
+        assert "PreferredAuthentications=keyboard-interactive,password" in cmd
+        assert "PubkeyAuthentication=no" in cmd
+        assert kwargs["env"]["SSH_ASKPASS_REQUIRE"] == "force"
+        assert kwargs["env"]["RUNICORN_SSH_ASKPASS_SECRET"] == "pw"
 
 
 class TestSSHConnectionPool:
