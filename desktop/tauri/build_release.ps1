@@ -16,7 +16,14 @@ function Write-Warn($msg) { Write-Warning $msg }
 function Run($cmd, $cwd)  {
   Write-Verbose "[RUN] $cmd"
   if ($cwd) { Push-Location $cwd }
-  try { & powershell -NoLogo -NoProfile -Command $cmd } finally { if ($cwd) { Pop-Location } }
+  try {
+    & powershell -NoLogo -NoProfile -Command $cmd
+    if ($LASTEXITCODE -ne 0) {
+      throw "Command failed with exit code ${LASTEXITCODE}: $cmd"
+    }
+  } finally {
+    if ($cwd) { Pop-Location }
+  }
 }
 
 # Resolve paths

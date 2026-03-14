@@ -10,7 +10,6 @@ import subprocess
 import threading
 import time
 import tempfile
-import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, List, Optional, Protocol, Tuple, TYPE_CHECKING
@@ -38,27 +37,26 @@ class _OpenSSHAskpassHelper:
         temp_dir = Path(tempfile.mkdtemp(prefix="runicorn-ssh-askpass-"))
         self._temp_dir = temp_dir
 
-        helper_py = temp_dir / "askpass.py"
-        helper_py.write_text(
-            (
-                "import os\n"
-                "import sys\n"
-                f"sys.stdout.write(os.environ.get({self._SECRET_ENV!r}, ''))\n"
-                "sys.stdout.flush()\n"
-            ),
-            encoding="utf-8",
-        )
-
         if os.name == "nt":
             wrapper = temp_dir / "askpass.cmd"
+            powershell = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+            powershell_cmd = str(powershell) if powershell.exists() else "powershell"
             wrapper.write_text(
-                f'@echo off\r\n"{sys.executable}" "{helper_py}"\r\n',
+                (
+                    "@echo off\r\n"
+                    f'"{powershell_cmd}" -NoLogo -NoProfile -NonInteractive '
+                    "-ExecutionPolicy Bypass "
+                    f'-Command "[Console]::Out.Write($env:{self._SECRET_ENV})"\r\n'
+                ),
                 encoding="utf-8",
             )
         else:
             wrapper = temp_dir / "askpass.sh"
             wrapper.write_text(
-                f"#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(helper_py))}\n",
+                (
+                    "#!/bin/sh\n"
+                    f'printf "%s" "${self._SECRET_ENV}"\n'
+                ),
                 encoding="utf-8",
             )
             wrapper.chmod(0o700)

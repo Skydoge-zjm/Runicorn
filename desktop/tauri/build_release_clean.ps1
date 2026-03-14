@@ -16,7 +16,14 @@ function Warn($m) { Write-Warning $m }
 function RunCmd([string]$cmd, [string]$cwd) {
   if ($Verbose) { Write-Host "[RUN] $cmd" -ForegroundColor DarkGray }
   if ($cwd) { Push-Location $cwd }
-  try { & powershell -NoLogo -NoProfile -Command $cmd } finally { if ($cwd) { Pop-Location } }
+  try {
+    & powershell -NoLogo -NoProfile -Command $cmd
+    if ($LASTEXITCODE -ne 0) {
+      throw "Command failed with exit code ${LASTEXITCODE}: $cmd"
+    }
+  } finally {
+    if ($cwd) { Pop-Location }
+  }
 }
 
 # Paths

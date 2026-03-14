@@ -229,8 +229,10 @@ fn start(app: AppHandle) {
     }
 
     if !backend_ready {
+        let app_for_dialog = app.clone();
         let _ = app.run_on_main_thread(move || {
-            app.dialog()
+            app_for_dialog
+                .dialog()
                 .message("Failed to start backend. Please check your Python installation.")
                 .title("Runicorn - Startup Error")
                 .blocking_show();

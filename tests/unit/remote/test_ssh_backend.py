@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -13,6 +14,7 @@ from runicorn.remote.ssh_backend import (
     OpenSSHBackend,
     OpenSSHCommandConnection,
     OpenSSHFallbackError,
+    _OpenSSHAskpassHelper,
 )
 
 
@@ -361,6 +363,7 @@ class TestOpenSSHCommandConnection:
             "runicorn.remote.ssh_backend.shutil.which",
             lambda name: "ssh-keyscan" if name == "ssh-keyscan" else None,
         )
+        monkeypatch.setattr(_OpenSSHAskpassHelper, "cleanup", lambda self: None)
 
         def fake_run(cmd, **kwargs):
             calls.append((cmd, kwargs))
@@ -379,6 +382,10 @@ class TestOpenSSHCommandConnection:
         assert "PubkeyAuthentication=no" in cmd
         assert kwargs["env"]["SSH_ASKPASS_REQUIRE"] == "force"
         assert kwargs["env"]["RUNICORN_SSH_ASKPASS_SECRET"] == "pw"
+        askpass_path = Path(kwargs["env"]["SSH_ASKPASS"])
+        assert askpass_path.name == "askpass.cmd"
+        assert "RUNICORN_SSH_ASKPASS_SECRET" in askpass_path.read_text(encoding="utf-8")
+        assert "powershell" in askpass_path.read_text(encoding="utf-8").lower()
 
 
 class TestSSHConnectionPool:
