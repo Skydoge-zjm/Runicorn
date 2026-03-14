@@ -2,6 +2,55 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-03-15
+
+### Remote Viewer & SSH
+
+- **NEW**: Step-based Remote Viewer setup flow with saved servers, saved connection profiles, and clearer progress feedback
+- **NEW**: Host key confirmation and known-host management in the UI
+- **NEW**: Health monitoring, reconnecting/degraded session states, idle shutdown, and automatic cleanup of SSH connections
+- **NEW**: OpenSSH-first behavior with password authentication support and better backend selection
+- **IMPROVED**: Faster remote environment probing through caching and batched Runicorn checks
+- **IMPROVED**: Remote session management simplified around a single Stop action
+
+### Web UI & Experiment Workflow
+
+- **IMPROVED**: Professional default appearance and removal of overly decorative UI effects
+- **NEW**: Better compare workflow with URL-backed compare state, hover-linked charts, and tags shown in compare panels
+- **NEW**: ZIP export plus import preview with conflict detection
+- **NEW**: Unified recycle-bin flow for runs and folder-level delete operations
+- **IMPROVED**: Path tree workflow with better folder actions and visual polish
+- **IMPROVED**: Settings drawer reorganization, theme-aware dialogs, and stronger dark-mode consistency
+- **NEW**: Dedicated user-guide coverage for assets, remote UI, performance monitoring, and run detail views
+
+### Performance, Logs, and Monitoring
+
+- **NEW**: Virtualized log rendering for large logs
+- **NEW**: Backend-collected GPU telemetry history with settings for collection interval and retention
+- **IMPROVED**: Better handling of long-running logs, ANSI output, and live-log usability
+- **IMPROVED**: Chart and table polish, including theme-aware tooltips and cleaner interaction patterns
+
+### SDK, Compatibility, and Storage
+
+- **NEW**: Logging compatibility for ImageNet-style meters, TensorBoard `SummaryWriter`, and `tensorboardX`
+- **IMPROVED**: SDK docs and examples updated for current path-based and local-first workflows
+- **IMPROVED**: Unified SQLite-backed storage/index path with Viewer reads preferring SQLite and filesystem fallback retained
+- **IMPROVED**: Config, storage, and client code reorganized and cleaned up for a more consistent internal structure
+
+### Reliability & Bug Fixes
+
+- **FIXED**: Large batch of backend/frontend issues from the project-wide bug audit (including run lifecycle, assets, remote sessions, and UI behavior)
+- **FIXED**: Database lock and shutdown race issues around viewer sync and SQLite access
+- **FIXED**: Legacy schema/config migration issues and several remote-session edge cases
+- **IMPROVED**: Test coverage substantially expanded across unit, integration, E2E, and frontend suites
+
+### Desktop
+
+- **NEW**: Desktop Remote Viewer sessions can open in native windows
+- **IMPROVED**: Better desktop workflow for opening links in the system browser
+
+---
+
 ## [0.6.0] - 2025-01
 
 ### 🚀 Major New Features

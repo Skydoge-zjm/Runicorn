@@ -95,13 +95,13 @@ runicorn viewer  # → 点击 "Remote" → 输入 SSH 信息 → 完成！
 
 ---
 
-## 🆕 v0.6.0（最新）
+## 🆕 v0.7.0（最新）
 
-- 📦 **新 Assets 系统** — SHA256 内容寻址存储，50-90% 去重率
-- 📝 **增强日志** — 控制台捕获、Python logging 处理器、MetricLogger 兼容
-- 🌳 **路径层级导航** — VSCode 风格的 PathTreePanel
-- 📊 **内联比较视图** — 多运行指标对比，ECharts 联动
-- 🔐 **SSH 后端架构** — OpenSSH → AsyncSSH → Paramiko 回退链
+- 🌐 **Remote Viewer 强化** — 保存连接、健康监控、重连状态与 OpenSSH 密码支持
+- 🎨 **Web UI 产品化改进** — 更清晰的导航、更顺手的对比流程、ZIP 导入导出预览与统一回收站
+- 📈 **日志与监控** — 虚拟滚动日志、更一致的暗色模式、后端采集的 GPU 遥测历史
+- 🔌 **日志兼容增强** — 更好支持 ImageNet meters、TensorBoard 与 tensorboardX
+- 🖥️ **桌面端改进** — 当前桌面工作流支持原生远程会话窗口
 
 ---
 
@@ -111,4 +111,4 @@ MIT — 详见 [LICENSE](LICENSE)
 
 ---
 
-**版本**: v0.6.0 | **更新日期**: 2026-01-15
+**版本**: v0.7.0 | **更新日期**: 2026-03-15

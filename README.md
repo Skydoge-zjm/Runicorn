@@ -95,13 +95,13 @@ runicorn viewer  # → Click "Remote" → SSH credentials → Done!
 
 ---
 
-## 🆕 v0.6.0 (Latest)
+## 🆕 v0.7.0 (Latest)
 
-- 📦 **New Assets System** — SHA256 content-addressed storage with 50-90% deduplication
-- 📝 **Enhanced Logging** — Console capture, Python logging handler, MetricLogger compatibility
-- 🌳 **Path-based Hierarchy** — VSCode-style navigation with PathTreePanel
-- 📊 **Inline Compare View** — Multi-run metric comparison with ECharts
-- 🔐 **SSH Backend Architecture** — OpenSSH → AsyncSSH → Paramiko fallback chain
+- 🌐 **Remote Viewer Hardening** — Saved connections, health monitoring, reconnect states, and OpenSSH password support
+- 🎨 **Web UI Productization** — Cleaner navigation, better compare flow, ZIP import/export preview, and unified recycle bin
+- 📈 **Logs & Monitoring** — Virtualized logs, stronger dark-mode consistency, and backend-collected GPU telemetry history
+- 🔌 **Logging Compatibility** — Better support for ImageNet meters, TensorBoard, and tensorboardX
+- 🖥️ **Desktop Improvements** — Native remote-session windows in the current desktop workflow
 
 ---
 
@@ -111,4 +111,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-**Version**: v0.6.0 | **Last Updated**: 2026-01-15
+**Version**: v0.7.0 | **Last Updated**: 2026-03-15

@@ -28,7 +28,7 @@ def _read_version() -> str:
                 return candidate.read_text(encoding="utf-8").strip()
             except OSError:
                 continue
-    return "0.6.0"
+    return "0.7.0"
 
 
 def build_parser() -> argparse.ArgumentParser:
