@@ -65,8 +65,9 @@ By default, data is stored in:
 
 **Method 1** (Web UI):
 1. Open viewer: `runicorn viewer`
-2. Click ⚙️ Settings → Data Directory
-3. Enter path and click Save
+2. Click ⚙️ Settings
+3. Open the storage-related settings
+4. Enter the path and save
 
 **Method 2** (CLI):
 ```bash
@@ -139,7 +140,7 @@ run.summary({"model": "RandomForest", "final_accuracy": accuracy})
 run.finish()
 ```
 
-### How do I use console capture? <span class="rn-badge">v0.6.0</span>
+### How do I use console capture?
 
 ```python
 import runicorn as rn
@@ -151,7 +152,17 @@ run.finish()
 
 Control tqdm capture with `tqdm_mode`: `"smart"` (default, final state only), `"all"`, or `"none"`.
 
-See [Enhanced Logging Guide](../getting-started/enhanced-logging.md) for Python logging handler integration.
+When `capture_console=True`:
+
+- `print(...)` still appears in your terminal
+- the same output is also captured into `logs.txt`
+
+If you use `run.log_text(...)` instead:
+
+- it writes directly to `logs.txt`
+- it does not print to the terminal by itself
+
+See [Logging Compatibility](../getting-started/logging-compat.md) for Python logging handler integration and compatibility helpers.
 
 ### How do I view my experiments?
 
@@ -182,7 +193,7 @@ Then access from other computers: `http://YOUR_IP:8000`
 
 ### What is the Assets System?
 
-The Assets System <span class="rn-badge">v0.6.0</span> provides SHA256 content-addressed storage for workspace snapshots and files, with automatic deduplication (50-90% space savings).
+The Assets System provides structured run attachments such as code snapshots, datasets, pretrained references, and archived outputs, backed by deduplicated storage where appropriate.
 
 ### How do I snapshot my workspace code?
 
@@ -195,7 +206,7 @@ run.finish()
 # Workspace snapshot saved automatically
 ```
 
-See [Assets System Guide](../getting-started/assets-system.md) for manual snapshots and blob storage.
+See [Assets & Outputs](../sdk/assets-and-outputs.md) for snapshot, dataset, pretrained, and output-capture workflows.
 
 ### How much storage does Runicorn use?
 
@@ -212,11 +223,11 @@ Example: 10 experiments × 500MB = 5GB → Deduplicated: ~1GB
 
 ---
 
-## Remote Viewer <span class="rn-badge">v0.5.0+</span>
+## Remote Viewer
 
 ### How do I view experiments on a remote server?
 
-**v0.5.0** introduces **Remote Viewer** — a VSCode-style remote access feature:
+Use the **Remote** page in the Web UI:
 
 **Step 1**: Start local viewer
 ```bash
@@ -236,6 +247,8 @@ runicorn viewer
 
 !!! tip "No File Sync Needed"
     Remote Viewer runs directly on your server. Data never leaves the remote machine — only the UI is tunneled to your browser. Latency < 100ms!
+
+After the session starts, you enter almost the same viewer experience as the local one. The important difference is that the viewer backend process is running on the remote server.
 
 ### Do I need to install Runicorn on the remote server?
 
@@ -281,16 +294,21 @@ Yes! The Remote page supports multiple concurrent connections. Each connection c
 
 ### Why is listing experiments slow?
 
-If you have 1000+ experiments, use the **V2 API** for 100x faster queries.
+Common causes are:
 
-**Check your query performance**:
-- Open browser DevTools → Network tab
-- Look at API call times
-- If `/api/runs` takes >5s, you need V2
+- very large storage roots
+- slow disks or network-mounted storage
+- remote latency
+- first load after import or refresh-heavy workflows
 
-**Solution**: Frontend automatically uses V2 API when available.
+What to try:
 
-### How do I handle experiments with 100k+ data points? <span class="rn-badge">v0.5.2+</span>
+- verify the storage root is the one you expect
+- reduce unnecessary auto-refresh
+- let the local index catch up after large imports
+- keep path organization clean so large trees stay easier to browse
+
+### How do I handle experiments with 100k+ data points?
 
 Use **LTTB downsampling**:
 
@@ -303,21 +321,22 @@ Use **LTTB downsampling**:
 GET /api/runs/{run_id}/metrics_step?downsample=2000
 ```
 
-### Why are charts loading faster in v0.5.3?
+### Why are charts usually still usable with lots of data?
 
-v0.5.3 introduces several optimizations:
+Runicorn combines several optimizations:
 
 - **Lazy loading** — Charts only render when visible
 - **Memo optimization** — Fewer unnecessary re-renders
 - **Incremental cache** — Backend parses only new data
+- **Downsampling** — Large metric series can be reduced to a view-friendly size
 
-See [Performance Tips](../ui/performance.md) for details.
+See [GPU & Performance](../ui/gpu-and-performance.md) and [Settings & Themes](../ui/settings-and-themes.md) for the current performance-related UI controls.
 
 ### How many experiments can Runicorn handle?
 
 Tested with:
 - ✅ **10,000 experiments**: Excellent performance
-- ✅ **100,000 experiments**: Good performance (use V2 API)
+- ✅ **100,000 experiments**: Good performance on a healthy local setup
 - ⚠️ **1,000,000 experiments**: Possible but may require optimization
 
 ### Does Runicorn support distributed training?
@@ -501,17 +520,20 @@ wandb.finish()
 
 ### Can I export to TensorBoard format?
 
-The Python SDK includes an exporter:
+Not as a direct TensorBoard event export.
+
+What you can do today is export metrics and reports in supported formats:
 
 ```python
 from runicorn import MetricsExporter
 
 exporter = MetricsExporter(run.run_dir)
 
-# Export to TensorBoard-compatible format (planned feature)
-# Currently supported: CSV, Excel, Markdown
+# Supported today: CSV, Excel, Markdown, HTML reports
 exporter.to_csv("metrics.csv")
 ```
+
+If you want TensorBoard-style APIs during training, use the compatibility helpers described in [Logging Compatibility](../getting-started/logging-compat.md).
 
 ---
 

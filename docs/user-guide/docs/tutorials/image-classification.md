@@ -27,7 +27,6 @@ pip install runicorn torch torchvision matplotlib
 ## Step 1: Setup and Initialization
 
 ```python
-import runicorn as rn
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -35,6 +34,7 @@ import torchvision
 import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
+import runicorn as rn
 
 # Initialize experiment
 run = rn.init(
@@ -43,10 +43,10 @@ run = rn.init(
     capture_console=True    # Capture console output
 )
 
-# Log configuration
-run.log_text("="*50)
-run.log_text("CIFAR-10 Classification with ResNet18")
-run.log_text("="*50)
+# Console header
+print("=" * 50)
+print("CIFAR-10 Classification with ResNet18")
+print("=" * 50)
 
 # Set primary metric
 run.set_primary_metric("test_accuracy", mode="max")
@@ -61,8 +61,8 @@ hyperparams = {
     "epochs": 50
 }
 
-run.summary(hyperparams)
-run.log_text(f"Hyperparameters: {hyperparams}")
+run.log_config(extra=hyperparams)
+print(f"Hyperparameters: {hyperparams}")
 ```
 
 ---
@@ -98,8 +98,8 @@ testloader = torch.utils.data.DataLoader(
     testset, batch_size=128, shuffle=False, num_workers=2
 )
 
-run.log_text(f"Training samples: {len(trainset)}")
-run.log_text(f"Test samples: {len(testset)}")
+print(f"Training samples: {len(trainset)}")
+print(f"Test samples: {len(testset)}")
 ```
 
 ---
@@ -118,10 +118,10 @@ model = model.to(device)
 total_params = sum(p.numel() for p in model.parameters())
 trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-run.log_text(f"Model: ResNet18")
-run.log_text(f"Total parameters: {total_params:,}")
-run.log_text(f"Trainable parameters: {trainable_params:,}")
-run.log_text(f"Device: {device}")
+print(f"Model: ResNet18")
+print(f"Total parameters: {total_params:,}")
+print(f"Trainable parameters: {trainable_params:,}")
+print(f"Device: {device}")
 
 # Criterion and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -137,6 +137,10 @@ scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50)
 import time
 
 best_test_acc = 0.0
+latest_test_loss = 0.0
+latest_test_accuracy = 0.0
+latest_epoch_time = 0.0
+training_start = time.time()
 
 for epoch in range(50):
     epoch_start = time.time()
@@ -161,12 +165,24 @@ for epoch in range(50):
         train_total += targets.size(0)
         train_correct += predicted.eq(targets).sum().item()
         
-        # Log every 50 batches
+        # Log once per training step (one optimizer update == one step)
+        run.log({
+            "batch_loss": loss.item(),
+            "batch_acc": 100.0 * predicted.eq(targets).sum().item() / targets.size(0),
+            "train_loss": loss.item(),
+            "train_accuracy": 100.0 * predicted.eq(targets).sum().item() / targets.size(0),
+            "test_loss": latest_test_loss,
+            "test_accuracy": latest_test_accuracy,
+            "learning_rate": optimizer.param_groups[0]['lr'],
+            "epoch_time": latest_epoch_time,
+        }, stage=f"epoch_{epoch+1}")
+
         if batch_idx % 50 == 0:
-            run.log({
-                "batch_loss": loss.item(),
-                "batch_acc": 100.0 * predicted.eq(targets).sum().item() / targets.size(0)
-            }, stage="train")
+            print(
+                f"Epoch {epoch+1} Batch {batch_idx}: "
+                f"loss={loss.item():.4f}, "
+                f"acc={100.0 * predicted.eq(targets).sum().item() / targets.size(0):.2f}%"
+            )
     
     train_loss = train_loss / len(trainloader)
     train_acc = 100.0 * train_correct / train_total
@@ -191,21 +207,15 @@ for epoch in range(50):
     test_loss = test_loss / len(testloader)
     test_acc = 100.0 * test_correct / test_total
     
-    # ===== Log Epoch Metrics =====
+    # ===== Update Latest Eval Snapshot =====
     epoch_time = time.time() - epoch_start
+    latest_test_loss = test_loss
+    latest_test_accuracy = test_acc
+    latest_epoch_time = epoch_time
     current_lr = optimizer.param_groups[0]['lr']
     
-    run.log({
-        "train_loss": train_loss,
-        "train_accuracy": train_acc,
-        "test_loss": test_loss,
-        "test_accuracy": test_acc,
-        "learning_rate": current_lr,
-        "epoch_time": epoch_time
-    }, step=epoch + 1, stage="epoch")
-    
-    # Log progress
-    run.log_text(
+    # Console progress (captured because capture_console=True)
+    print(
         f"Epoch {epoch+1}/50: "
         f"train_loss={train_loss:.4f}, train_acc={train_acc:.2f}%, "
         f"test_loss={test_loss:.4f}, test_acc={test_acc:.2f}%, "
@@ -225,12 +235,12 @@ for epoch in range(50):
             'test_accuracy': test_acc,
         }, checkpoint_path)
         
-        run.log_text(f"✓ New best accuracy: {test_acc:.2f}%")
+        print(f"✓ New best accuracy: {test_acc:.2f}%")
     
     # Update learning rate
     scheduler.step()
 
-run.log_text("Training completed!")
+print("Training completed!")
 ```
 
 ---
@@ -242,14 +252,14 @@ run.log_text("Training completed!")
 final_model_path = "resnet18_cifar10_final.pth"
 torch.save(model.state_dict(), final_model_path)
 
-run.log_text(f"✓ Model saved to {final_model_path}")
+print(f"✓ Model saved to {final_model_path}")
 
 # Save final summary
 run.summary({
     "final_test_accuracy": test_acc,
     "best_test_accuracy": best_test_acc,
     "total_epochs": 50,
-    "total_training_time": time.time() - epoch_start,
+    "total_training_time": time.time() - training_start,
     "model_path": final_model_path
 })
 
@@ -311,12 +321,14 @@ Run the same experiment with different hyperparameters:
 
 ```python
 # Experiment 1: Baseline
-run1 = rn.init(path="image_classification/resnet18_lr0-001")
+run1 = rn.init(path="image_classification/resnet18_lr0-001", alias="baseline")
 # ... training with lr=0.001 ...
+run1.finish()
 
 # Experiment 2: Higher learning rate
-run2 = rn.init(path="image_classification/resnet18_lr0-01")
+run2 = rn.init(path="image_classification/resnet18_lr0-01", alias="high-lr")
 # ... training with lr=0.01 ...
+run2.finish()
 ```
 
 Then compare in Web UI:
@@ -328,44 +340,22 @@ Then compare in Web UI:
 
 ```python
 # ResNet34
-run = rn.init(path="image_classification/cifar10_resnet34")
+run = rn.init(path="image_classification/cifar10_resnet34", alias="resnet34")
 model = torchvision.models.resnet34(num_classes=10)
 # ... training ...
+run.finish()
 
 # EfficientNet
-run = rn.init(path="image_classification/cifar10_efficientnet")
+run = rn.init(path="image_classification/cifar10_efficientnet", alias="efficientnet")
 model = torchvision.models.efficientnet_b0(num_classes=10)
 # ... training ...
+run.finish()
 ```
-
----
-
-## Full Code
-
-Download complete example:
-
-```bash
-# Clone repository
-git clone https://github.com/Skydoge-zjm/Runicorn.git
-
-# Run example
-cd runicorn/examples
-python image_classification_tutorial.py
-```
-
-Or view on GitHub: [image_classification_tutorial.py](https://github.com/Skydoge-zjm/Runicorn/blob/main/examples/image_classification_tutorial.py)
-
----
-
-## Related Tutorials
-
-- More tutorials coming soon
-- Check back for NLP, multi-GPU, and other advanced tutorials
 
 ---
 
 <div class="rn-page-nav">
-  <a href="../reference/faq.md">FAQ →</a> &middot;
-  <a href="../sdk/overview.md">Python SDK →</a>
+  <a href="../../reference/faq/">FAQ →</a> &middot;
+  <a href="../../sdk/overview/">Python SDK →</a>
 </div>
 

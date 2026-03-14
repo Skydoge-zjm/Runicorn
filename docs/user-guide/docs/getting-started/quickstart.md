@@ -1,12 +1,12 @@
 # Quick Start
 
-Get Runicorn up and running in 5 minutes!
+Get Runicorn running quickly with the current 0.7.0 workflow.
+
+This page intentionally focuses on the shortest path from installation to your first visible run.
 
 ---
 
-## Installation
-
-### Step 1: Install Runicorn
+## Step 1: Install Runicorn
 
 ```bash
 pip install -U runicorn
@@ -21,170 +21,130 @@ pip install -U runicorn
     pip install runicorn
     ```
 
-### Step 2: Verify Installation
+Verify installation:
 
 ```bash
 runicorn --version
 ```
 
-You should see: `runicorn 0.6.0` (or later)
+---
+
+## Step 2: Choose a storage root
+
+Set a persistent storage location before you start collecting runs:
+
+```bash
+runicorn config --set-user-root "E:\RunicornData"
+runicorn config --show
+```
+
+Runicorn resolves storage in this order:
+
+1. `rn.init(storage=...)`
+2. `RUNICORN_DIR`
+3. `runicorn config --set-user-root ...`
+4. `./.runicorn`
+
+See [Installation & Storage](installation-and-storage.md) for the full layout and platform-specific examples.
 
 ---
 
-## Your First Experiment
+## Step 3: Run your first experiment
 
-### Step 1: Create a Simple Experiment
-
-Create a file `demo.py`:
+Create `demo.py`:
 
 ```python
-import runicorn as rn
 import random
 import time
 
-# Initialize experiment with path-based hierarchy
-run = rn.init(path="quickstart/demo_experiment")
-print(f"✓ Created experiment: {run.id}")
+import runicorn as rn
 
-# Set primary metric (optional)
+run = rn.init(
+    path="quickstart/demo-experiment",
+    alias="baseline",
+    capture_console=True,
+)
 run.set_primary_metric("accuracy", mode="max")
 
-# Training loop
 for step in range(1, 51):
-    # Simulate training
     loss = 2.0 * (0.9 ** step) + random.uniform(-0.05, 0.05)
     accuracy = min(0.98, 0.5 + step * 0.01 + random.uniform(-0.02, 0.02))
-    
-    # Log metrics
+
     run.log({
         "loss": round(loss, 4),
         "accuracy": round(accuracy, 4),
-        "learning_rate": 0.001
+        "learning_rate": 0.001,
     }, step=step)
-    
-    # Simulate time passing
+
     time.sleep(0.1)
-    
-    # Print progress
     if step % 10 == 0:
         print(f"Step {step}/50: loss={loss:.4f}, acc={accuracy:.4f}")
 
-# Save summary
 run.summary({
     "final_accuracy": 0.95,
     "total_steps": 50,
-    "notes": "Demo experiment from quickstart guide"
+    "notes": "Demo experiment from quickstart guide",
 })
 
-# Finish experiment
 run.finish()
-print("✓ Experiment completed!")
+print("Completed:", run.id)
 ```
 
-### Step 2: Run the Experiment
+Run it:
 
 ```bash
 python demo.py
 ```
 
-**Expected output**:
-```
-✓ Created experiment: 20250114_153045_a1b2c3
-Step 10/50: loss=0.6974, acc=0.6234
-Step 20/50: loss=0.2433, acc=0.7156
-Step 30/50: loss=0.0849, acc=0.8089
-Step 40/50: loss=0.0296, acc=0.8945
-Step 50/50: loss=0.0103, acc=0.9567
-✓ Experiment completed!
-```
+---
 
-### Step 3: View Results
+## Step 4: Open the viewer
 
-Start the web viewer:
+Start the local web viewer:
 
 ```bash
 runicorn viewer
 ```
 
-**Open your browser**: [http://127.0.0.1:23300](http://127.0.0.1:23300)
+Open [http://127.0.0.1:23300](http://127.0.0.1:23300).
 
-You should see your experiment in the list!
+You should now see the run in the experiments table.
 
 <figure markdown>
-  ![Experiments List](../assets/experiment_list.png)
-  <figcaption>View all experiments in the Web UI</figcaption>
+  ![Experiments List](../assets/main_page/experiment_list.png)
+  <figcaption>The experiments page is the main entry point for local runs.</figcaption>
 </figure>
 
 ---
 
-## Explore the Web Interface
+## Step 5: Explore the run
 
-Click on any experiment to see interactive metric charts, real-time logs, logged images, and workspace assets.
+Open the run to inspect:
 
-See [Web UI Overview](../ui/overview.md) for a full tour of all pages and features.
+- charts and best-metric tracking
+- live and captured logs
+- summary fields
+- assets, images, and config metadata
 
----
-
-## Configure Storage
-
-### Set Storage Location
-
-!!! warning "Important First Step"
-    The first time you run Runicorn, configure where to store your data.
-
-=== "Web UI"
-
-    1. Click the ⚙️ Settings icon (top-right)
-    2. Go to "Data Directory" tab
-    3. Enter path: `E:\RunicornData` (or your preferred location)
-    4. Click "Save Data Directory"
-
-=== "Command Line"
-
-    ```bash
-    runicorn config --set-user-root "E:\RunicornData"
-    ```
-
-=== "Python Code"
-
-    ```python
-    import runicorn as rn
-
-    run = rn.init(
-        path="demo",
-        storage="E:\\RunicornData"  # Explicit path
-    )
-    ```
-
-### Storage Priority
-
-Runicorn determines storage location in this order:
-
-1. `rn.init(storage="...")` - Highest priority
-2. Environment variable `RUNICORN_DIR`
-3. User config (set via UI/CLI)
-4. `./.runicorn/` in current directory - Lowest priority
+See [Web UI Overview](../ui/overview.md) for the page-by-page tour.
 
 ---
 
-## What's Next?
+## What next?
 
-### Learn More
-
-- [📖 Python SDK Overview](../sdk/overview.md) - Learn all SDK functions
-- [💻 CLI Overview](../cli/overview.md) - Command-line tools
-- [🖼️ Image Classification Tutorial](../tutorials/image-classification.md) - Complete PyTorch example
-- [❓ FAQ](../reference/faq.md) - Frequently asked questions
+- [Installation & Storage](installation-and-storage.md)
+- [Remote Viewer](remote-viewer.md)
+- [Python SDK Overview](../sdk/overview.md)
+- [CLI Overview](../cli/overview.md)
+- [Image Classification Tutorial](../tutorials/image-classification.md)
 
 ---
 
-## Getting Help
+## Getting help
 
 !!! question "Need help?"
 
-    - 📖 Search this documentation
-    - ❓ Check [FAQ](../reference/faq.md)
-    - 🐛 [Report issues](https://github.com/Skydoge-zjm/Runicorn/issues)
-    - 💬 Ask in [GitHub Discussions](https://github.com/Skydoge-zjm/Runicorn/discussions)
-
-
+    - Search this documentation
+    - Check [FAQ](../reference/faq.md)
+    - Read [Troubleshooting](../reference/troubleshooting.md)
+    - Report issues on GitHub

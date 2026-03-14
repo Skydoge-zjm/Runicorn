@@ -1,10 +1,10 @@
 # Web UI Overview
 
-Runicorn's web interface provides a powerful, modern dashboard for exploring your ML experiments.
+Runicorn's current Web UI centers around four top-level areas: experiments, assets, performance, and remote sessions.
 
 ---
 
-## Starting the Viewer
+## Starting the viewer
 
 ```bash
 runicorn viewer
@@ -12,198 +12,169 @@ runicorn viewer
 
 Open [http://127.0.0.1:23300](http://127.0.0.1:23300) in your browser.
 
-??? tip "Custom Host and Port"
+??? tip "Custom host and port"
     ```bash
-    # Allow access from other machines
     runicorn viewer --host 0.0.0.0 --port 8000
     ```
 
 ---
 
-## Main Pages
+## Main navigation
 
-### 📋 Experiments Page
+The current app header exposes these primary pages:
 
-The home page displays all your experiments in a sortable, filterable table.
+- **Experiments**: the main run list, path tree, compare mode, and recycle-bin entry point
+- **Assets**: cross-run asset browsing and preview
+- **Performance**: system metrics and GPU telemetry history
+- **Remote**: remote server profiles, active sessions, and security controls
 
-**Features**:
+See [Experiments & Paths](experiments-and-paths.md), [Compare & Analysis](compare-and-analysis.md), [Assets Page](assets-page.md), [Remote Viewer Page](remote-viewer-page.md), and [Import, Export & Recycle Bin](import-export-recycle-bin.md) for focused walkthroughs.
 
-- 🔍 **Search** — Filter by path, status, alias
-- 📊 **Best Metrics** — See primary metric at a glance
-- 🏷️ **Status Badges** — Running, Finished, Failed, Interrupted
-- 🗑️ **Soft Delete** — Move to recycle bin (recoverable)
-- ✅ **Multi-select** — Batch operations on experiments
-- 📥 **Export** — Download experiments as archive
+See [Experiments & Paths](experiments-and-paths.md), [Compare & Analysis](compare-and-analysis.md), and [Import, Export & Recycle Bin](import-export-recycle-bin.md) for focused walkthroughs.
 
-**Column Options**:
+---
+
+## Experiments page
+
+The experiments page is the daily dashboard for most users.
+
+<figure markdown>
+  ![Experiments page](../assets/main_page/experiment_list.png)
+  <figcaption>The experiments page combines the main run table with the left-side path tree.</figcaption>
+</figure>
 
 | Column | Description |
 |--------|-------------|
-| ID | Unique experiment identifier |
-| Path | Experiment path (hierarchical) |
-| Status | Current status with animated badge |
+| Path | Experiment path hierarchy |
+| Alias | Editable human-friendly label |
+| Tags | Lightweight run classification |
+| Status | Current status |
 | Created | Creation timestamp |
 | Duration | Total runtime |
 | Best Metric | Primary metric value and step |
 
----
+Key interactions:
 
-### 📈 Experiment Detail Page
-
-Click on any experiment to see detailed information.
-
-#### Metrics Charts
-
-- **Interactive Charts** — Zoom, pan, hover for values
-- **EMA Smoothing** — Adjustable smoothing factor (0-1)
-- **Log Scale** — Toggle logarithmic Y-axis
-- **Dynamic Scale** — Auto-adjust Y-axis range
-- **X-Axis Selection** — Switch between step/time/epoch
-- **Export CSV** — Download chart data
-
-#### Experiment Comparison (v0.5.3+)
-
-Compare multiple experiments on the same chart:
-
-1. Click **"Compare"** button on detail page
-2. Select experiments to overlay
-3. View all runs on unified charts
-
-!!! tip "Unified MetricChart"
-    v0.5.3 introduces a unified chart component that handles both single-run and comparison views with consistent behavior.
-
-#### Other Tabs
-
-- **Logs** — Real-time log streaming
-- **Images** — Logged images and visualizations
-- **Assets** — Workspace snapshots and stored files
-- **Config** — Environment and configuration info
+- search and filter by path, status, alias, and tags
+- open a run detail page
+- multi-select runs for export or delete
+- move runs through path-based organization
+- open the recycle bin
 
 ---
 
-### 🌳 Path Tree Panel (v0.6.0)
+## Run detail page
 
-VSCode-style hierarchical navigation for experiments organized by path.
+Run detail now uses a cleaner tab layout. The important tabs are:
 
-**Features**:
-
-- 🗂️ **Tree Navigation** — Browse experiments by path hierarchy
-- 📊 **Path Statistics** — Run counts per path node
-- 🔍 **Quick Filter** — Filter runs by clicking any path node
-- 📥 **Batch Export** — Export all runs under a path
-- 🗑️ **Batch Delete** — Soft-delete all runs under a path
-
----
-
-### 📊 Inline Compare View (v0.6.0)
-
-Compare metrics across multiple runs side-by-side.
+- **Overview**: summary, charts, run timing, and main metadata
+- **Images**: logged images if the run has any
+- **Logs**: live or captured logs in a taller, more practical layout
+- **Assets**: linked assets, snapshots, datasets, outputs, and downloads
 
 <figure markdown>
-  ![Inline Compare View](../assets/comparison.png)
-  <figcaption>Compare multiple runs with synchronized charts</figcaption>
+  ![Run detail metrics](../assets/run_detail_page/metric_charts.png)
+  <figcaption>The overview tab centers on metric charts, summary fields, and run metadata.</figcaption>
 </figure>
-
-**Features**:
-
-- 📈 **Multi-Run Charts** — Overlay metrics from different runs
-- 🔗 **Linked Axes** — Synchronized zooming with ECharts
-- 🎯 **Common Metrics** — Auto-detect shared metric keys
-- 🎨 **Color Coding** — Distinct colors for each run
 
 ---
 
-### 💻 Performance Monitor
+## Path tree and organization
 
-Real-time system performance monitoring — CPU, memory, disk, and GPU.
+The left path tree is no longer just a filter. In the current UI it is part of the main organization workflow.
+
+You can use it to:
+
+- browse path segments quickly
+- create and remove folders
+- move runs
+- batch-export a subtree
+- batch-delete into the recycle bin
+
+---
+
+## Compare mode
+
+Compare mode is centered on the experiments page rather than hidden in a separate secondary flow.
 
 <figure markdown>
-  ![Performance Monitor](../assets/hardware_monitor.png)
-  <figcaption>Real-time GPU metrics monitoring</figcaption>
+  ![Inline Compare View](../assets/main_page/comparison.png)
+  <figcaption>Compare multiple runs with synchronized charts.</figcaption>
 </figure>
 
-**Tabs**:
+Current behavior highlights:
 
-- **CPU** — Usage, frequency, per-core stats
-- **Memory & Disk** — RAM usage, disk I/O
-- **GPU Metrics** — Utilization, VRAM, power, temperature
-- **GPU Telemetry** — Historical GPU usage charts
+- compare state can live in the URL
+- the compare panel shows run aliases and tags
+- charts share linked hover and zoom behavior
+- hover on one run can highlight the same run across charts
 
 ---
 
-### 🌐 Remote Page (v0.5.0+)
+## Assets page
 
-Connect to remote training servers via SSH.
+The dedicated Assets page helps you browse stored content across runs. This is especially useful when you rely on code snapshots, archived datasets, outputs, or pretrained references.
 
-**Features**:
+<figure markdown>
+  ![Assets page](../assets/assets_system/assets_list.png)
+  <figcaption>The top-level Assets page helps you inspect stored content across runs.</figcaption>
+</figure>
 
-- 🔗 **Connection Manager** — Add/remove SSH connections
-- 🐍 **Environment Detection** — Auto-detect Python environments
-- 🚀 **Viewer Control** — Start/stop remote Viewer
-- ❤️ **Health Monitor** — Connection status and latency
+See [Assets Page](assets-page.md) for the full walkthrough.
 
-See [Remote Viewer Guide](../getting-started/remote-viewer.md) for details.
+---
+
+## Performance page
+
+The performance area now includes backend-collected GPU history instead of only a moment-in-time snapshot.
+
+Expect to see:
+
+- CPU
+- memory and disk
+- current GPU metrics
+- GPU telemetry history
+
+<figure markdown>
+  ![Performance page](../assets/performance_monitor/gpu_telemetry.png)
+  <figcaption>The performance page combines live hardware readings with GPU telemetry history.</figcaption>
+</figure>
 
 ---
 
 ## Settings
 
-Click the ⚙️ icon (top-right) to access settings.
+The settings drawer has been reorganized. Important sections now include:
 
-### Appearance
-
-| Setting | Options | Description |
-|---------|---------|-------------|
-| **Theme** | Light / Dark / Auto | Color scheme |
-| **Accent Color** | Blue, Purple, Green... | Primary accent color |
-| **Background** | Gradient / Solid / Image | Page background style |
-
-### Charts
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Chart Height** | 320px | Default chart height |
-| **Max Data Points** | 2000 | LTTB downsampling target |
-| **Animations** | On | Enable chart animations |
-| **Auto Refresh** | 5s | Real-time update interval |
-
-### Data
-
-| Setting | Description |
-|---------|-------------|
-| **Data Directory** | Storage root path |
-| **Language** | UI language (English/中文) |
-
-!!! info "Settings Persistence"
-    All settings are saved in browser localStorage and persist across sessions.
+- theme mode and accent color
+- surface colors and background style
+- compare tooltip preferences
+- chart density and max point count
+- experiment refresh cadence
+- GPU collector settings
+- dismissed alerts
 
 ---
 
-## Keyboard Shortcuts
+## Mobile and responsive behavior
 
-| Shortcut | Action |
-|----------|--------|
-| `/` | Focus search |
-| `Esc` | Close modal/drawer |
-| `R` | Refresh data |
+The current UI is more responsive than earlier versions, but it is still optimized for desktop. On smaller screens the path tree collapses more aggressively and navigation labels shrink.
 
 ---
 
-## Mobile Support
+## Next steps
 
-The UI is responsive and works on tablets, though desktop is recommended for the best experience.
-
----
-
-## Next Steps
-
-- [Remote Viewer Guide](../getting-started/remote-viewer.md) — Access remote experiments
-- [FAQ](../reference/faq.md) — Common questions
-- [Python SDK](../sdk/overview.md) — Track experiments programmatically
+- [Experiments & Paths](experiments-and-paths.md)
+- [Compare & Analysis](compare-and-analysis.md)
+- [Logs, Assets & Images](logs-assets-and-images.md)
+- [Assets Page](assets-page.md)
+- [Remote Viewer Page](remote-viewer-page.md)
+- [Settings & Themes](settings-and-themes.md)
+- [Remote Viewer Guide](../getting-started/remote-viewer.md)
 
 ---
 
 <div class="rn-page-nav">
-  <a href="../getting-started/remote-viewer.md">Remote Viewer →</a> &middot;
-  <a href="../sdk/overview.md">Python SDK →</a>
+  <a href="experiments-and-paths.md">Experiments & Paths -></a> |
+  <a href="settings-and-themes.md">Settings & Themes -></a>
 </div>

@@ -1,212 +1,77 @@
 [English](README.md) | [简体中文](README_zh.md)
 
----
+# Runicorn Documentation Map
 
-# Runicorn Documentation
+This directory contains the maintained project documentation for Runicorn.
 
-**Version**: v0.6.0  
-**Last Updated**: 2026-01-15
+## Authoritative Entry Points
 
----
+Use these as the primary documentation entry points:
 
-## 📚 Documentation Structure
+- `README.md`: package overview and installation
+- `docs/user-guide/`: published MkDocs site for end users
+- `docs/api/`: long-form API reference
+- `docs/architecture/`: system and implementation design
+- `docs/guides/`: task-oriented guides
+- `docs/reference/`: reference material such as configuration and FAQ
+- `docs/releases/`: release notes and version history
 
+## Published Site
+
+The published documentation site lives in:
+
+```text
+docs/user-guide/
 ```
-docs/
-├── guides/                 # User guides and tutorials
-├── reference/              # Technical reference (config, CLI, FAQ)
-├── architecture/           # Architecture documentation
-├── releases/               # Release notes and history
-├── api/                    # REST API documentation
-├── user-guide/             # User guide website (MkDocs)
-└── assets/                 # Images and screenshots
+
+Important pages inside the site:
+
+- `docs/user-guide/docs/cli/overview.md`
+- `docs/user-guide/docs/reference/cli-reference.md`
+- `docs/user-guide/docs/reference/api-surface.md`
+- `docs/user-guide/docs/reference/documentation-system.md`
+
+Two of those pages are generated from source code by:
+
+```text
+scripts/sync_docs_reference.py
 ```
 
----
+This reduces drift between the docs and the actual CLI/API surface.
 
-## 🎯 Quick Links
+## Non-Authoritative Work Areas
 
-### For End Users
+The following locations are not part of the maintained product documentation:
 
-📖 **[User Guide Website](user-guide/)** - Complete usage documentation
+- `docs/future/`
+- `.kiro/`
+- `.backup/`
 
-- Installation and setup
-- Python SDK reference
-- CLI commands
-- Web UI guide
-- Step-by-step tutorials
+They may contain planning notes, scratch work, or historical development artifacts, but they should not be treated as current documentation.
 
-**Deploy to GitHub Pages**: See [user-guide/mkdocs.yml](user-guide/mkdocs.yml)
+## Maintenance Workflow
 
----
+When the code changes in a user-facing way:
 
-### For Developers/Integrators
+1. Update the relevant guide pages.
+2. Regenerate source-driven reference pages:
 
-🔌 **[API Documentation](api/)** - REST API reference
+```bash
+conda run -n runicorn_dev python scripts/sync_docs_reference.py
+```
 
-- Complete endpoint documentation
-- Request/response schemas
-- Code examples (cURL, Python, JavaScript)
-- Postman collection
-- Performance benchmarks
+3. Build the site strictly:
 
-**Interactive API Docs**: Start viewer and visit `http://127.0.0.1:23300/docs`
+```bash
+conda run -n runicorn_dev mkdocs build --strict -f docs/user-guide/mkdocs.yml
+```
 
----
+## Deployment
 
-### For Contributors
+GitHub Pages deployment is handled by:
 
-🤝 **Contributing Guide** - See `../CONTRIBUTING.md`
+```text
+.github/workflows/deploy-docs.yml
+```
 
-- Code style and conventions
-- Development setup
-- Pull request process
-- Testing requirements
-
----
-
-## 📖 Core Documentation
-
-### Getting Started
-
-- **[guides/](guides/)** - User guides and tutorials
-  - [QUICKSTART.md](guides/en/QUICKSTART.md) - 5-minute quick start
-  - [REMOTE_VIEWER_GUIDE.md](guides/en/REMOTE_VIEWER_GUIDE.md) - ⭐ Remote Viewer guide (v0.5.0)
-  - [ARTIFACTS_GUIDE.md](guides/en/ARTIFACTS_GUIDE.md) - Model versioning
-  - [ENHANCED_LOGGING_GUIDE.md](guides/en/ENHANCED_LOGGING_GUIDE.md) - ⭐ Console capture, logging handler (v0.6.0)
-  - [ASSETS_GUIDE.md](guides/en/ASSETS_GUIDE.md) - ⭐ SHA256 content-addressed storage (v0.6.0)
-  - [MIGRATION_GUIDE_v0.4_to_v0.5.md](guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md) - Migration guide 0.4→0.5
-  - [DEMO_EXAMPLES_GUIDE.md](guides/en/DEMO_EXAMPLES_GUIDE.md) - Examples
-- **[user-guide/](user-guide/)** - Complete user documentation website (MkDocs)
-
-### Architecture
-
-- **[architecture/](architecture/)** - System architecture documentation
-  - [SYSTEM_OVERVIEW.md](architecture/en/SYSTEM_OVERVIEW.md) - System overview (with v0.6.0 modules)
-  - [REMOTE_VIEWER_ARCHITECTURE.md](architecture/en/REMOTE_VIEWER_ARCHITECTURE.md) - ⭐ Remote Viewer architecture (v0.5.0)
-  - [SSH_BACKEND_ARCHITECTURE.md](architecture/en/SSH_BACKEND_ARCHITECTURE.md) - ⭐ SSH backend multi-fallback design (v0.6.0)
-  - [COMPONENT_ARCHITECTURE.md](architecture/en/COMPONENT_ARCHITECTURE.md) - Component design (with PathTreePanel, CompareChartsView)
-  - [STORAGE_DESIGN.md](architecture/en/STORAGE_DESIGN.md) - Storage architecture
-  - [DATA_FLOW.md](architecture/en/DATA_FLOW.md) - Data processing pipeline
-  - [API_DESIGN.md](architecture/en/API_DESIGN.md) - API layer design
-  - [FRONTEND_ARCHITECTURE.md](architecture/en/FRONTEND_ARCHITECTURE.md) - Frontend design (with new components)
-  - [DEPLOYMENT.md](architecture/en/DEPLOYMENT.md) - Deployment options
-  - [DESIGN_DECISIONS.md](architecture/en/DESIGN_DECISIONS.md) - Technical decisions
-
-### API Documentation
-
-- **[api/](api/)** - REST API reference
-  - [README.md](api/en/README.md) - API overview
-  - [QUICK_REFERENCE.md](api/en/QUICK_REFERENCE.md) - Quick lookup
-  - [API_INDEX.md](api/en/API_INDEX.md) - Complete endpoint index
-  - [logging_api.md](api/en/logging_api.md) - ⭐ Enhanced Logging API (v0.6.0)
-  - [paths_api.md](api/en/paths_api.md) - ⭐ Path-based Hierarchy API (v0.6.0)
-  - [remote_api.md](api/en/remote_api.md) - ⭐ Remote Viewer API (v0.5.0+, updated SSH backend)
-  - Module docs: runs, artifacts, v2, metrics, config, ssh
-
-### Reference
-
-- **[reference/](reference/)** - Technical reference materials
-- **[CONFIGURATION.md](reference/en/CONFIGURATION.md)** - ⭐ Configuration reference (v0.6.0)
-  - **[CLI_REFERENCE.md](reference/en/CLI_REFERENCE.md)** - ⭐ CLI command reference (v0.6.0)
-  - **[FAQ.md](reference/en/FAQ.md)** - ⭐ Frequently asked questions (v0.5.0)
-  - [RATE_LIMIT_CONFIGURATION.md](reference/en/RATE_LIMIT_CONFIGURATION.md) - Rate limiting config
-
-### Releases
-
-- **[releases/](releases/)** - Release information
-  - [RELEASE_NOTES_v0.6.0.md](releases/en/RELEASE_NOTES_v0.6.0.md) - ⭐ v0.6.0 notes (Assets, Enhanced Logging, Path Hierarchy, SSH Backend)
-  - [RELEASE_NOTES_v0.5.0.md](releases/en/RELEASE_NOTES_v0.5.0.md) - v0.5.0 notes (Remote Viewer)
-  - [RELEASE_NOTES_v0.4.1.md](releases/en/RELEASE_NOTES_v0.4.1.md) - v0.4.1 notes
-  - [RELEASE_NOTES_v0.4.0.md](releases/en/RELEASE_NOTES_v0.4.0.md) - v0.4.0 notes
-
----
-
-## 🗂️ Documentation by Audience
-
-### I'm a User
-
-**Start here**:
-1. [QUICKSTART.md](guides/en/QUICKSTART.md) - Get started in 5 minutes
-2. [user-guide/](user-guide/) - Full user documentation
-3. [ARTIFACTS_GUIDE.md](guides/en/ARTIFACTS_GUIDE.md) - Learn model versioning
-
-**Online**: Visit GitHub Pages (after deployment)
-
----
-
-### I'm a Developer
-
-**Start here**:
-1. [api/README.md](api/README.md) - API overview
-2. [api/QUICK_REFERENCE.md](api/QUICK_REFERENCE.md) - Quick API reference
-3. Specific module docs in `api/`
-
-**Interactive**: `http://127.0.0.1:23300/docs` (Swagger UI)
-
----
-
-### I'm a Contributor
-
-**Start here**:
-1. [SYSTEM_OVERVIEW.md](architecture/en/SYSTEM_OVERVIEW.md) - Understand the system
-2. [DOCUMENTATION_OVERVIEW.md](DOCUMENTATION_OVERVIEW.md) - Complete documentation map
-3. `../CONTRIBUTING.md` - Contribution guidelines
-4. Code in `src/runicorn/` - Review implementation
-
----
-
-## 📦 Additional Resources
-
-### Examples
-
-Located in `../examples/`:
-- `quickstart_demo.py` - Minimal example
-- `complete_workflow_demo.py` - Full workflow
-- `test_artifacts.py` - Artifacts usage
-- `remote_storage_demo.py` - Remote sync
-
-See [DEMO_EXAMPLES_GUIDE.md](guides/en/DEMO_EXAMPLES_GUIDE.md) for details.
-
-### Future Plans
-
-For planned features and development roadmap:
-- **GitHub Issues**: Feature requests and enhancements
-- **GitHub Projects**: Development timeline and milestones
-- **GitHub Discussions**: Community proposals and ideas
-
----
-
-## 🔄 Changelog
-
-For version history, see:
-- **Main Changelog**: `../CHANGELOG.md` - User-facing changes
-
----
-
-## 🆘 Need Help?
-
-- 📖 Search documentation
-- ❓ Check [user-guide/docs/reference/faq.md](user-guide/docs/reference/faq.md)
-- 🐛 [Report issues](https://github.com/Skydoge-zjm/runicorn/issues)
-- 💬 [Ask questions](https://github.com/Skydoge-zjm/runicorn/discussions)
-
----
-
-## 📊 Documentation Status
-
-| Category | Completion | Status |
-|----------|------------|--------|
-| API Docs (with Remote, Paths, Logging) | 100% | ✅ Complete |
-| Architecture (with SSH Backend) | 100% | ✅ Complete |
-| Reference (Config/CLI/FAQ) | 100% | ✅ Complete |
-| User Guides (with Enhanced Logging, Assets) | 95% | ✅ Near complete |
-| User Guide Website | 90% | 🔄 In progress |
-| Tutorials | 40% | 🔄 Growing |
-
----
-
-**Last Updated**: 2026-01-15  
-**Maintained By**: Runicorn Documentation Team  
-**v0.6.0 Highlights**: New Assets System (SHA256 storage), Enhanced Logging (console capture, MetricLogger), Path-based Hierarchy, SSH Backend Architecture (OpenSSH + AsyncSSH + Paramiko fallback)
-
+That workflow now regenerates the source-driven reference pages before building the MkDocs site.

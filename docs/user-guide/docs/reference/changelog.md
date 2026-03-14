@@ -2,6 +2,42 @@
 
 All notable changes to Runicorn.
 
+## <span class="rn-badge">v0.7.0</span> — 2026-03
+
+### Remote Viewer hardening
+
+- New remote wizard flow with clearer steps and progress feedback
+- Faster environment probing and batched environment checks
+- Saved server/profile workflow refined
+- Health monitoring, reconnecting and degraded states, and cleaner Stop behavior
+- OpenSSH password support and more predictable backend selection
+
+### Web UI productization
+
+- Professional default appearance and cleaner navigation
+- Better path tree workflow for organizing and deleting runs
+- Compare mode improvements, including URL-backed state and hover linking across charts
+- ZIP export plus import preview with conflict detection
+- Unified recycle-bin model for runs and folder-level delete flows
+
+### Logs, themes, and monitoring
+
+- Virtualized log rendering for large log streams
+- Better dark-mode consistency and theme-aware dialogs
+- Theme presets and surface color controls
+- Backend-collected GPU telemetry history and improved performance page layout
+
+### SDK and compatibility
+
+- Logging compatibility expanded to ImageNet-style meters, TensorBoard, and tensorboardX
+- Safer finish behavior and output watcher cleanup
+- Stronger SQLite-backed indexing and migration behavior under the hood
+
+### Desktop
+
+- Current desktop build can open remote sessions in native windows
+- External links can be opened in the system browser
+
 ---
 
 ## <span class="rn-badge">v0.6.0</span> — 2026-01-15
@@ -167,7 +203,7 @@ All notable changes to Runicorn.
 ### 🎉 Artifacts (Model Versioning)
 
 !!! warning "Deprecated in v0.6.0"
-    The Artifacts API (`rn.Artifact`, `run.log_artifact`, `run.use_artifact`) has been replaced by the [Assets System](../getting-started/assets-system.md) in v0.6.0. See the Assets guide for the current approach.
+    The Artifacts API (`rn.Artifact`, `run.log_artifact`, `run.use_artifact`) has been replaced by the current assets workflow. See [Assets & Outputs](../sdk/assets-and-outputs.md) for the supported approach.
 
 #### Core Features
 
@@ -228,6 +264,6 @@ All notable changes to Runicorn.
 ---
 
 <div align="center">
-  <p><strong>Latest version: <span class="rn-badge">v0.6.0</span></strong></p>
+  <p><strong>Latest version: <span class="rn-badge">v0.7.0</span></strong></p>
   <p><code>pip install -U runicorn</code></p>
 </div>

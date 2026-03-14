@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+import runicorn
 from runicorn.cli import main
 
 
@@ -30,6 +31,13 @@ class TestCLISubcommands:
         with pytest.raises(SystemExit) as exc_info:
             main([])
         assert exc_info.value.code == 2
+
+    def test_version_flag(self, capsys: pytest.CaptureFixture[str]):
+        """``runicorn --version`` exits with code 0 and prints the current package version."""
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--version"])
+        assert exc_info.value.code == 0
+        assert capsys.readouterr().out.strip() == f"runicorn {runicorn.__version__}"
 
     def test_config_show(self, monkeypatch: pytest.MonkeyPatch, tmp_path):
         """``runicorn config --show`` runs without error."""

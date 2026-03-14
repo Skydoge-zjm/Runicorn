@@ -1,222 +1,194 @@
 # Remote Viewer Guide
 
-Access experiments on remote GPU servers without file sync — VSCode Remote-style architecture!
+Access experiments on remote servers without copying the whole run directory to your local machine.
 
 ---
 
 ## Overview
 
-**Remote Viewer** (v0.5.0+) is a revolutionary feature that lets you view experiments running on remote servers directly from your local browser. Unlike traditional file sync approaches, Remote Viewer:
+Remote Viewer runs a lightweight Runicorn viewer process on the remote machine and forwards it through SSH. In Runicorn 0.7.0, this workflow is much more robust than the older 0.6.0-era docs suggest.
 
-- ✅ **Zero file transfer** — Data stays on the remote server
-- ✅ **Instant access** — No waiting for sync (< 100ms latency)
-- ✅ **Secure** — All traffic goes through SSH tunnel
-- ✅ **Easy setup** — Just SSH credentials + Python environment
+Key points:
 
-<figure markdown>
-  ![Remote Viewer](../assets/remote.png)
-  <figcaption>Connect to remote servers via SSH tunnel</figcaption>
-</figure>
-
-!!! info "Architecture"
-    Remote Viewer works like VSCode Remote Development. A Viewer process runs on your remote server, and you access it through an SSH tunnel. Your data never leaves the server!
-
----
+- zero file sync for normal browsing
+- saved server profiles and connection presets
+- host key confirmation inside the UI
+- faster environment probing
+- health monitoring and reconnect states
+- OpenSSH-first connection flow with password support
 
 ## Prerequisites
 
-### On Remote Server
+### Remote machine
 
-1. **Python 3.10+** installed
-2. **Runicorn** installed in a Python environment:
+1. Python 3.10+ installed
+2. Runicorn installed in the Python environment you plan to use:
    ```bash
-   # Conda environment
    conda activate ml_env
    pip install runicorn
-   
-   # Or virtualenv
-   source /path/to/venv/bin/activate
-   pip install runicorn
    ```
-3. **SSH access** enabled
+3. SSH access enabled
 
-### On Local Machine
+### Local machine
 
-1. **Runicorn** installed: `pip install runicorn`
-2. **SSH credentials** — password or private key
+1. Runicorn installed: `pip install runicorn`
+2. SSH credentials available
+3. Local viewer running: `runicorn viewer`
 
 ---
 
-## Quick Start
+## Connection flow
 
-### Step 1: Start Local Viewer
+### 1. Open the Remote page
 
-```bash
-runicorn viewer
-```
+Start the local viewer, then open [http://127.0.0.1:23300](http://127.0.0.1:23300) and click **Remote**.
 
-Open [http://127.0.0.1:23300](http://127.0.0.1:23300)
+### 2. Add or choose a saved server
 
-### Step 2: Go to Remote Page
+The current UI separates saved servers from saved connection profiles. That lets you reuse the same host with different Python environments or storage roots.
 
-Click **"Remote"** in the navigation menu.
-
-### Step 3: Connect to Server
-
-Fill in the connection form:
+Typical fields:
 
 | Field | Example | Description |
 |-------|---------|-------------|
-| **Host** | `gpu-server.lab.com` | Remote server hostname or IP |
-| **Port** | `22` | SSH port (default: 22) |
-| **Username** | `your_username` | SSH login username |
-| **Auth Method** | Key / Password | Choose authentication method |
-| **Private Key** | `~/.ssh/id_rsa` | Path to SSH private key |
-| **Password** | `••••••••` | SSH password (if using password auth) |
+| Host | `gpu-server.lab.com` | Remote server hostname or IP |
+| Port | `22` | SSH port |
+| Username | `your_username` | SSH login |
+| Auth Method | SSH key / Password | Runicorn 0.7.0 supports both |
+| Private Key | `~/.ssh/id_ed25519` | Recommended for regular use |
+| Password | `••••••••` | Supported in the OpenSSH path |
 
-Click **Connect**.
+### 3. Confirm the host key if prompted
 
-### Step 4: Select Python Environment
+If the host is new or its key changed, Runicorn asks you to confirm the SSH host key in the UI before continuing.
 
-After connecting, Runicorn automatically detects Python environments with Runicorn installed:
+### 4. Pick a Python environment
 
-- Conda environments
-- Virtualenvs
-- System Python
+The environment step is now much faster than older versions because the SSH side caches environment discovery and batches Runicorn checks.
 
-Select the environment you use for training.
+You can choose from:
 
-### Step 5: Start Remote Viewer
+- conda environments
+- virtualenvs
+- system Python
+- saved environment presets
 
-Click **Start Viewer**. This will:
+### 5. Review config and start the session
 
-1. Launch a Viewer process on the remote server
-2. Create an SSH tunnel to your local machine
-3. Open the remote experiments in your browser
+When you press **Start**, Runicorn will:
 
-!!! success "Done!"
-    You can now browse remote experiments as if they were local!
+1. start the remote viewer process
+2. open the SSH tunnel
+3. register the session locally
+4. show the session card and status
+
+After that, what you enter is almost the same viewer experience as the local one. The key difference is that the viewer backend is running on the remote server, while you are interacting with it through the local UI.
 
 ---
 
-## Features
+## Authentication options
 
-### Real-time Experiment Monitoring
+### SSH key
 
-- 📊 **Live metrics** — Charts update as training progresses
-- 📝 **Live logs** — Stream training logs in real-time
-- 🖼️ **Images** — View logged images immediately
+Recommended for regular use.
 
-### Connection Management
+### Password
 
-- 🔗 **Multiple connections** — Connect to multiple servers
-- 💾 **Save credentials** — Store connection settings (encrypted)
-- 🔄 **Auto-reconnect** — Automatic reconnection on network issues
+Runicorn 0.7.0 adds OpenSSH password support for command and tunnel paths. If authentication fails, Runicorn no longer jumps to Paramiko just because the password was wrong.
 
-### Health Monitoring
+---
 
-- ✅ **Connection status** — See if connection is alive
-- ⏱️ **Latency** — Monitor network latency
-- 📈 **Viewer status** — Check if remote Viewer is running
+## Session states and recovery
+
+Remote session cards can show states such as:
+
+- `running`
+- `reconnecting`
+- `degraded`
+- `disconnected`
+- `stopped`
+
+Runicorn 0.7.0 adds:
+
+- health monitoring for long-running sessions
+- tunnel auto-reconnect
+- better handling for crashed remote viewer processes
+- clearer status messages in the UI
+
+### Stop behavior
+
+The UI now centers around a single **Stop** action. When the last session using a connection is stopped, Runicorn also cleans up the underlying SSH connection automatically.
+
+---
+
+## Idle shutdown
+
+Remote-mode viewers can auto-stop after an idle timeout. This matters most when you start remote sessions that should not stay open forever on shared servers.
+
+---
+
+## Best practices
+
+!!! tip "Prefer SSH keys when possible"
+
+    Key-based auth is still the smoothest option for repeated use.
+
+!!! tip "Install Runicorn in the environment you actually train with"
+
+    The environment picker can only launch a remote viewer where Runicorn is available.
+
+!!! tip "Reuse saved server profiles"
+
+    Save the host once, then vary profiles for different remote roots or environments.
+
+!!! tip "Treat host key warnings seriously"
+
+    If a familiar host suddenly shows a changed key, verify it before accepting.
 
 ---
 
 ## Troubleshooting
 
-### Connection Failed
+### Authentication failed
 
-```
-Error: SSH authentication failed
-```
+Check the username, auth method, key path, or password first. If password auth fails, fix the credentials rather than expecting an automatic backend switch.
 
-**Solutions**:
+### No environments found
 
-1. Verify SSH credentials are correct
-2. Check if SSH key has correct permissions: `chmod 600 ~/.ssh/id_rsa`
-3. Try connecting via terminal first: `ssh user@host`
+Make sure the target Python environment has Runicorn installed and is accessible over SSH.
 
-### No Environments Detected
+### Session becomes degraded or reconnecting
 
-```
-Warning: No compatible Python environments found
-```
+This usually means the remote process or tunnel hit a transient issue. Wait for automatic recovery first. If the state stays degraded, stop the session and start it again.
 
-**Solutions**:
+### Host key confirmation keeps reappearing
 
-1. Install Runicorn on remote server:
-   ```bash
-   pip install runicorn
-   ```
-2. Check if environment is activated before running detection
-3. Verify Python version is 3.10+
-
-### Viewer Won't Start
-
-```
-Error: Failed to start remote Viewer
-```
-
-**Solutions**:
-
-1. Check if port is available on remote server
-2. Verify Runicorn is installed in selected environment
-3. Check remote server logs for errors
-
-### High Latency
-
-If you experience slow response times:
-
-1. Check network connection quality
-2. Consider using a closer server
-3. Reduce chart refresh rate in settings
+Open the security drawer, inspect known-host entries, and remove stale records if the host really changed.
 
 ---
 
-## Best Practices
+## Remote Viewer vs the old sync mindset
 
-!!! tip "Use SSH Keys"
-    SSH keys are more secure and convenient than passwords. Generate one if you haven't:
-    ```bash
-    ssh-keygen -t ed25519 -C "your_email@example.com"
-    ssh-copy-id user@remote-server
-    ```
-
-!!! tip "Persistent Storage Path"
-    Always use a consistent storage path on remote server:
-    ```python
-    run = rn.init(
-        path="training",
-        storage="/data/runicorn"  # Consistent path
-    )
-    ```
-
-!!! tip "Save Connections"
-    Save frequently used connections for quick access. Credentials are stored securely.
+| Topic | Current Remote Viewer | Old sync-style workflow |
+|-------|-----------------------|-------------------------|
+| Primary model | SSH tunnel to remote viewer | Copy run files around |
+| Startup | Connect and start | Sync first, browse later |
+| Storage | Remote data stays remote | Local mirror required |
+| Recovery | Health monitor and reconnect states | Usually manual retry |
+| Security | Host key confirmation and saved connections | External to the workflow |
 
 ---
 
-## Comparison: Remote Viewer vs File Sync
+## Next steps
 
-| Feature | Remote Viewer (v0.5.0+) | File Sync (v0.4.x) |
-|---------|------------------------|-------------------|
-| **Data Location** | Stays on server | Copied to local |
-| **Initial Wait** | None (instant) | Minutes to hours |
-| **Bandwidth** | Low (UI only) | High (all files) |
-| **Privacy** | Data never leaves server | Data copied locally |
-| **Storage** | No local storage needed | Requires local space |
-| **Real-time** | ✅ Yes | ⚠️ Delayed |
-
----
-
-## Next Steps
-
-- [Python SDK Overview](../sdk/overview.md) — Learn the SDK
-- [CLI Overview](../cli/overview.md) — Command-line tools
-- [FAQ](../reference/faq.md) — Common questions
+- [Desktop App](../reference/desktop-app.md)
+- [Remote Workflow Tutorial](../tutorials/remote-workflow.md)
+- [Web UI Overview](../ui/overview.md)
+- [Troubleshooting](../reference/troubleshooting.md)
 
 ---
 
 <div class="rn-page-nav">
-  <a href="../sdk/overview.md">Python SDK →</a> &middot;
-  <a href="../cli/overview.md">CLI Reference →</a>
+  <a href="../ui/overview.md">Web UI Overview -></a> |
+  <a href="../tutorials/remote-workflow.md">Remote Workflow Tutorial -></a>
 </div>

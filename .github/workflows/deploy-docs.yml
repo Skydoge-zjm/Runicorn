@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - 'docs/user-guide/**'
+      - 'src/runicorn/cli.py'
+      - 'scripts/sync_docs_reference.py'
+      - 'VERSION.txt'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
@@ -35,6 +38,10 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r docs/user-guide/requirements.txt
+
+      - name: Sync generated CLI reference
+        run: |
+          python scripts/sync_docs_reference.py
       
       - name: Build documentation
         run: |

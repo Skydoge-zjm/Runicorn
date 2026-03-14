@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Space, Alert, Tag, Switch, Select, Button, Spin, App, Tooltip, Badge, Row, Col, Typography, Statistic, Divider, Collapse, Tabs, theme } from 'antd'
-import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, LineChartOutlined, MinusOutlined, ReloadOutlined, RocketOutlined, ClockCircleOutlined, CalendarOutlined, FolderOpenOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined } from '@ant-design/icons'
-import { getRunDetail, getStepMetrics } from '../api'
+import { ThunderboltOutlined, DashboardOutlined, DatabaseOutlined, LineChartOutlined, MinusOutlined, ReloadOutlined, RocketOutlined, ClockCircleOutlined, CalendarOutlined, FolderOpenOutlined, CheckCircleOutlined, SyncOutlined, CloseCircleOutlined, PictureOutlined } from '@ant-design/icons'
+import { getRunDetail, getStepMetrics, getRunImages, downloadRunAssetUrl } from '../api'
+import type { RunImage } from '../api'
 import LogsViewer from '../components/LogsViewer'
 import MetricChart from '../components/MetricChart'
 import RunAssets from '../components/RunAssets'
@@ -58,6 +59,7 @@ export default function RunDetailPage() {
   const { message } = App.useApp()
   const navigate = useNavigate()
   const [detail, setDetail] = useState<RunDetail | null>(null)
+  const [images, setImages] = useState<RunImage[]>([])
   const [stepMetrics, setStepMetrics] = useState<{ columns: string[]; rows: any[]; total?: number; sampled?: number }>({ columns: [], rows: [] })
   const [detailLoading, setDetailLoading] = useState(false)
   const [metricsLoading, setMetricsLoading] = useState(false)
@@ -125,6 +127,16 @@ export default function RunDetailPage() {
       if (showLoading) setMetricsLoading(false)
     }
   }, [id, settings.maxDataPoints, t])
+
+  const loadImages = useCallback(async () => {
+    try {
+      const result = await getRunImages(id)
+      setImages(result.images || [])
+    } catch (error) {
+      logger.error('Failed to load run images:', error)
+      setImages([])
+    }
+  }, [id])
 
   // Compute refresh interval based on run status
   const refreshInterval = useMemo(() => {

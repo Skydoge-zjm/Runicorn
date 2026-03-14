@@ -100,21 +100,36 @@ nav:
   - Home: index.md
   - Getting Started:
     - Quick Start: getting-started/quickstart.md
-    - Path-based Hierarchy: getting-started/path-hierarchy.md
+    - Installation & Storage: getting-started/installation-and-storage.md
     - Remote Viewer: getting-started/remote-viewer.md
-    - Enhanced Logging: getting-started/enhanced-logging.md
-    - Assets System: getting-started/assets-system.md
   - Python SDK:
     - Overview: sdk/overview.md
+    - Run Lifecycle: sdk/run-lifecycle.md
+    - Assets & Outputs: sdk/assets-and-outputs.md
+    - Integrations: sdk/integrations.md
+    - Logging Compatibility: getting-started/logging-compat.md
   - Command Line:
     - CLI Overview: cli/overview.md
+    - Common Workflows: cli/common-workflows.md
+    - CLI Reference: reference/cli-reference.md
   - Web UI:
     - Overview: ui/overview.md
-    - Performance Tips: ui/performance.md
+    - Experiments & Paths: ui/experiments-and-paths.md
+    - Compare & Analysis: ui/compare-and-analysis.md
+    - Run Detail Logs & Images: ui/logs-assets-and-images.md
+    - Assets Page: ui/assets-page.md
+    - Remote Viewer Page: ui/remote-viewer-page.md
+    - Import, Export & Recycle Bin: ui/import-export-recycle-bin.md
+    - Settings & Themes: ui/settings-and-themes.md
+    - GPU & Performance: ui/gpu-and-performance.md
   - Tutorials:
     - Image Classification: tutorials/image-classification.md
+    - Remote Workflow: tutorials/remote-workflow.md
   - Reference:
     - FAQ: reference/faq.md
+    - Troubleshooting: reference/troubleshooting.md
+    - Path-based Hierarchy: reference/path-hierarchy.md
+    - Desktop App: reference/desktop-app.md
     - Changelog: reference/changelog.md
 
 # Plugins

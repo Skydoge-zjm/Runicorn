@@ -17,8 +17,27 @@ from .sdk import _default_storage_dir
 from .storage.file_utils import iter_all_runs, find_run_dir_by_id
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def _read_version() -> str:
+    candidates = [
+        Path(__file__).parent.parent.parent / "VERSION.txt",
+        Path(__file__).with_name("VERSION.txt"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            try:
+                return candidate.read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
+    return "0.6.0"
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="runicorn", description="Runicorn CLI")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_read_version()}",
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_viewer = sub.add_parser("viewer", help="Start the local read-only viewer API")
@@ -85,6 +104,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_delete.add_argument("--run-id", dest="run_ids", action="append", help="Run ID to delete (can specify multiple)")
     p_delete.add_argument("--dry-run", action="store_true", help="Preview deletion without actually deleting")
     p_delete.add_argument("--force", action="store_true", help="Skip confirmation prompt")
+
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = build_parser()
 
     args = parser.parse_args(argv)
 
