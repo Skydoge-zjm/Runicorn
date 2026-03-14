@@ -1,8 +1,8 @@
 """
-Minimal SummaryWriter compatibility layer for TensorBoard-style scalar logging.
+Minimal SummaryWriter compatibility layer for TensorBoard-style logging.
 
 This module follows the high-frequency PyTorch SummaryWriter API closely for
-scalar logging use cases, while routing metrics into Runicorn when an active
+common logging use cases, while routing metrics into Runicorn when an active
 run exists. The goal is to support low-friction migration by replacing the
 import in common training scripts.
 
@@ -75,7 +75,7 @@ def _join_tag(main_tag: str, tag: str) -> str:
 
 
 class SummaryWriter:
-    """A minimal TensorBoard SummaryWriter-compatible scalar logger."""
+    """A minimal TensorBoard SummaryWriter-compatible logger."""
 
     def __init__(
         self,
@@ -90,6 +90,7 @@ class SummaryWriter:
             log_dir = _default_log_dir(comment)
 
         self.log_dir = str(log_dir)
+        self.logdir = self.log_dir
         self.purge_step = purge_step
         self.max_queue = max_queue
         self.flush_secs = flush_secs
@@ -164,6 +165,74 @@ class SummaryWriter:
         run = _get_active_run()
         if run is not None and metrics:
             run.log(metrics, step=step)
+
+    def add_text(
+        self,
+        tag: str,
+        text_string: str,
+        global_step: Any = None,
+        walltime: Optional[float] = None,
+    ) -> None:
+        del walltime
+        self._ensure_open()
+
+        if not isinstance(text_string, str):
+            raise TypeError(
+                f"SummaryWriter.add_text() expected a string for '{tag}', "
+                f"got {type(text_string).__name__}"
+            )
+
+        step = _coerce_step(global_step)
+        if global_step is not None and step is None:
+            raise TypeError(
+                f"SummaryWriter.add_text() expected an integer-like global_step, "
+                f"got {type(global_step).__name__}"
+            )
+
+        run = _get_active_run()
+        if run is not None:
+            prefix = f"[{tag}] " if tag else ""
+            run.log_text(prefix + text_string)
+
+    def add_hparams(
+        self,
+        hparam_dict: dict[str, Any],
+        metric_dict: dict[str, Any],
+        run_name: Optional[str] = None,
+        global_step: Any = None,
+    ) -> None:
+        del run_name
+        self._ensure_open()
+
+        if type(hparam_dict) is not dict or type(metric_dict) is not dict:
+            raise TypeError("hparam_dict and metric_dict should be dictionary.")
+
+        step = _coerce_step(global_step)
+        if global_step is not None and step is None:
+            raise TypeError(
+                f"SummaryWriter.add_hparams() expected an integer-like global_step, "
+                f"got {type(global_step).__name__}"
+            )
+
+        metrics = {}
+        for tag, scalar_value in metric_dict.items():
+            numeric = _coerce_numeric(scalar_value)
+            if numeric is None:
+                raise TypeError(
+                    f"SummaryWriter.add_hparams() expected numeric metric values, "
+                    f"got {type(scalar_value).__name__} for '{tag}'"
+                )
+            metrics[str(tag)] = numeric
+
+        run = _get_active_run()
+        if run is None:
+            return
+
+        run.log_config(extra={"hparams": hparam_dict})
+
+        if metrics:
+            run.log(metrics, step=step)
+            run.summary(metrics)
 
     def flush(self) -> None:
         return

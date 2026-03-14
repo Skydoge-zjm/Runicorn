@@ -69,6 +69,39 @@ class TestSummaryWriter:
         with patch("runicorn.sdk.get_active_run", return_value=None):
             writer.add_scalar("train/loss", 0.1, 1)
             writer.add_scalars("train", {"acc": 0.8}, 1)
+            writer.add_text("notes", "hello", 1)
+            writer.add_hparams({"lr": 0.001}, {"metric": 0.9}, global_step=1)
+
+    def test_add_text_forwards_to_run_log_text(self, tmp_path: Path):
+        writer = SummaryWriter(log_dir=str(tmp_path / "tb"))
+        mock_run = MagicMock()
+
+        with patch("runicorn.sdk.get_active_run", return_value=mock_run):
+            writer.add_text("notes", "hello world", 5)
+
+        mock_run.log_text.assert_called_once_with("[notes] hello world")
+
+    def test_add_hparams_records_config_metrics_and_summary(self, tmp_path: Path):
+        writer = SummaryWriter(log_dir=str(tmp_path / "tb"))
+        mock_run = MagicMock()
+
+        with patch("runicorn.sdk.get_active_run", return_value=mock_run):
+            writer.add_hparams(
+                {"lr": 0.001, "batch_size": 32},
+                {"hparam/accuracy": 0.95, "hparam/loss": 0.1},
+                global_step=10,
+            )
+
+        mock_run.log_config.assert_called_once_with(
+            extra={"hparams": {"lr": 0.001, "batch_size": 32}}
+        )
+        mock_run.log.assert_called_once_with(
+            {"hparam/accuracy": 0.95, "hparam/loss": 0.1},
+            step=10,
+        )
+        mock_run.summary.assert_called_once_with(
+            {"hparam/accuracy": 0.95, "hparam/loss": 0.1}
+        )
 
     def test_invalid_scalar_raises_type_error(self, tmp_path: Path):
         writer = SummaryWriter(log_dir=str(tmp_path / "tb"))
@@ -84,6 +117,18 @@ class TestSummaryWriter:
 
         with pytest.raises(TypeError):
             writer.add_scalars("train", {"loss": "oops"}, 1)
+
+        with pytest.raises(TypeError):
+            writer.add_text("notes", 123, 1)
+
+        with pytest.raises(TypeError):
+            writer.add_hparams([], {})
+
+        with pytest.raises(TypeError):
+            writer.add_hparams({}, [])
+
+        with pytest.raises(TypeError):
+            writer.add_hparams({}, {"metric": "bad"})
 
     def test_close_is_idempotent_and_add_after_close_reopens(self, tmp_path: Path):
         writer = SummaryWriter(log_dir=str(tmp_path / "tb"))

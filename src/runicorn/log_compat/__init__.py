@@ -8,6 +8,7 @@ Available modules:
 - torchvision: MetricLogger and SmoothedValue compatible with torchvision/DeiT
 - imagenet: AverageMeter and ProgressMeter compatible with PyTorch ImageNet examples
 - tensorboard: SummaryWriter compatible with common scalar logging usage
+- tensorboardX: SummaryWriter compatible with tensorboardX-style usage
 
 Usage:
     # Replace torchvision import with runicorn
@@ -24,6 +25,7 @@ from __future__ import annotations
 
 from .imagenet import AverageMeter, ProgressMeter, Summary
 from .tensorboard import SummaryWriter
+from .tensorboardX import SummaryWriter as TensorboardXSummaryWriter
 from .torchvision import MetricLogger, SmoothedValue
 
 # Alias for convenience
@@ -42,6 +44,7 @@ __all__ = [
     "ImagenetProgressMeter",
     "ImagenetSummary",
     "TensorboardSummaryWriter",
+    "TensorboardXSummaryWriter",
     "MetricLogger",
     "SmoothedValue",
     "TorchvisionMetricLogger",
