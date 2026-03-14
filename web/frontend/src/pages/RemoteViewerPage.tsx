@@ -55,6 +55,7 @@ import {
   connectRemote,
   listCondaEnvs,
   getRemoteConfig,
+  listRemoteStorageCandidates,
   startRemoteViewer,
   stopRemoteViewer,
   disconnectRemote,
@@ -67,6 +68,7 @@ import { ApiError } from '../types/remote'
 import type {
   HostKeyConfirmationRequiredDetail,
   HostKeyInfo,
+  RemoteStorageCandidate,
   SSHConnectionConfig,
   SSHConnectionState,
   KnownHostsEntry,
@@ -103,6 +105,9 @@ export default function RemoteViewerPage() {
   const [hostKeyModalLoading, setHostKeyModalLoading] = useState(false)
   const [hostKeyModalTarget, setHostKeyModalTarget] = useState<string | undefined>(undefined)
   const [hostKeyModalHostKey, setHostKeyModalHostKey] = useState<HostKeyInfo | undefined>(undefined)
+  const [storageCandidates, setStorageCandidates] = useState<RemoteStorageCandidate[]>([])
+  const [fetchingStorageCandidates, setFetchingStorageCandidates] = useState(false)
+  const [storageCandidatesRequested, setStorageCandidatesRequested] = useState(false)
   const hostKeyDecisionResolverRef = useRef<((decision: 'confirm' | 'cancel') => void) | null>(null)
   const [knownHosts, setKnownHosts] = useState<KnownHostsEntry[]>([])
   const [knownHostsLoading, setKnownHostsLoading] = useState(false)
@@ -130,6 +135,7 @@ export default function RemoteViewerPage() {
 
   const activeSessions = sessions.filter(s => s.status !== 'stopped')
   const connectedServers = new Set(sessions.map(s => s.host)).size
+  const isEnvironmentStep = Boolean(sshConnection && !sshConnection.remoteConfig)
 
   const isHostKeyConfirmationRequiredError = (
     error: unknown
@@ -317,6 +323,8 @@ export default function RemoteViewerPage() {
     if (!sshConnection) return
     
     setFetchingConfig(true)
+    setStorageCandidates([])
+    setStorageCandidatesRequested(false)
     try {
       // Get remote config for selected environment
       const remoteConfig = await getRemoteConfig(sshConnection.connectionId, envName)
@@ -335,6 +343,31 @@ export default function RemoteViewerPage() {
       message.error(error instanceof Error ? error.message : t('remote.config.fetchFailed'))
     } finally {
       setFetchingConfig(false)
+    }
+  }
+
+  const handleDetectStorageCandidates = async (scanRoot: string, maxDepth: number) => {
+    if (!sshConnection || !sshConnection.selectedEnv) return
+
+    setFetchingStorageCandidates(true)
+    setStorageCandidatesRequested(true)
+    try {
+      const detectedStorageCandidates = await listRemoteStorageCandidates(
+        sshConnection.connectionId,
+        sshConnection.selectedEnv,
+        scanRoot,
+        maxDepth,
+      )
+      setStorageCandidates(detectedStorageCandidates)
+    } catch (error) {
+      setStorageCandidates([])
+      message.warning(
+        error instanceof Error
+          ? error.message
+          : t('remote.config.detectFailed'),
+      )
+    } finally {
+      setFetchingStorageCandidates(false)
     }
   }
   
@@ -371,6 +404,8 @@ export default function RemoteViewerPage() {
       
       const serverIdToStart = wizardServerId
       setSSHConnection(null)
+      setStorageCandidates([])
+      setStorageCandidatesRequested(false)
       setWizardOpen(false)
       setWizardServerId(null)
       setWizardEditProfileId(null)
@@ -410,8 +445,11 @@ export default function RemoteViewerPage() {
     
     // Reset all connection-related states
     setSSHConnection(null)
+    setStorageCandidates([])
+    setStorageCandidatesRequested(false)
     setFetchingEnvs(false)
     setFetchingConfig(false)
+    setFetchingStorageCandidates(false)
     setWizardOpen(false)
     setWizardServerId(null)
     setWizardEditProfileId(null)
@@ -427,6 +465,8 @@ export default function RemoteViewerPage() {
     setWizardServerId(null)
     setWizardEditProfileId(null)
     setSSHConnection(null)
+    setStorageCandidates([])
+    setStorageCandidatesRequested(false)
     serverForm.resetFields()
   }
 
@@ -435,6 +475,8 @@ export default function RemoteViewerPage() {
     setWizardServerId(serverId)
     setWizardEditProfileId(null)
     setSSHConnection(null)
+    setStorageCandidates([])
+    setStorageCandidatesRequested(false)
     serverForm.resetFields()
   }
 
@@ -443,6 +485,8 @@ export default function RemoteViewerPage() {
     setWizardServerId(serverId)
     setWizardEditProfileId(profileId)
     setSSHConnection(null)
+    setStorageCandidates([])
+    setStorageCandidatesRequested(false)
     serverForm.resetFields()
   }
 
@@ -956,7 +1000,26 @@ export default function RemoteViewerPage() {
         styles={{ body: { display: 'flex', flexDirection: 'column', padding: '16px 24px 12px' } }}
       >
         {/* Step content */}
-        <div style={{ flex: 1, minHeight: 420, maxHeight: 'calc(80vh - 180px)', overflowY: 'auto', overflowX: 'hidden' }}>
+        <div
+          style={
+            isEnvironmentStep
+              ? {
+                  flex: 1,
+                  height: 'calc(80vh - 180px)',
+                  minHeight: 420,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }
+              : {
+                  flex: 1,
+                  minHeight: 420,
+                  maxHeight: 'calc(80vh - 180px)',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                }
+          }
+        >
           {!sshConnection ? (
             wizardProgress ? (
               <div style={{
@@ -1078,6 +1141,8 @@ export default function RemoteViewerPage() {
                       setWizardServerId(null)
                       setWizardEditProfileId(null)
                       setSSHConnection(null)
+                      setStorageCandidates([])
+                      setStorageCandidatesRequested(false)
                       serverForm.resetFields()
                     }}
                   >
@@ -1100,20 +1165,24 @@ export default function RemoteViewerPage() {
                 }}
                 onConfirm={handleSaveProfile}
                 onCancel={handleCancelConfig}
+                onDetectStorageCandidates={handleDetectStorageCandidates}
+                storageCandidates={storageCandidates}
+                storageCandidatesLoading={fetchingStorageCandidates}
+                storageCandidatesRequested={storageCandidatesRequested}
                 loading={starting}
               />
             </Spin>
           ) : (
-            <Spin spinning={fetchingEnvs} tip={t('remote.env.fetching')}>
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
               <CondaEnvSelector
                 envs={sshConnection.condaEnvs || []}
                 connectionId={sshConnection.connectionId}
                 initialEnv={wizardProfile?.condaEnv}
                 onSelect={handleSelectEnvironment}
                 onCancel={handleCancelConfig}
-                loading={fetchingConfig}
+                loading={fetchingConfig || fetchingEnvs}
               />
-            </Spin>
+            </div>
           )}
         </div>
 

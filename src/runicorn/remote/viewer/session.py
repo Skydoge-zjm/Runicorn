@@ -6,10 +6,10 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
-from ..connection import SSHConnection
+from ..ssh_backend import SshConnection
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class RemoteViewerSession:
     Represents an active remote viewer instance with SSH tunnel.
     """
     session_id: str
-    connection: SSHConnection
+    connection: SshConnection
     remote_host: str
     remote_port: int
     local_port: int

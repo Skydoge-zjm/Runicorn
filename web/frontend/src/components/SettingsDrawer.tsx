@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Drawer, Tabs, Segmented, Radio, Input, Slider, ColorPicker, Space, Typography, Button, Divider, App, Upload, Card, Switch, InputNumber, Alert, Modal, Tag, Select, theme } from 'antd'
-import { WarningOutlined } from '@ant-design/icons'
+import { WarningOutlined, SearchOutlined, FolderOpenOutlined } from '@ant-design/icons'
 import { AppstoreOutlined, BgColorsOutlined, DatabaseOutlined, SettingOutlined, InfoCircleOutlined, ThunderboltOutlined, EyeOutlined, ExportOutlined, BellOutlined, DashboardOutlined } from '@ant-design/icons'
-import { getConfig, setUserRootDir as apiSetUserRootDir, previewImport, confirmImport } from '../api'
+import { getConfig, setUserRootDir as apiSetUserRootDir, previewImport, confirmImport, listLocalStorageCandidates } from '../api'
 import type { ImportPreviewResult } from '../api'
+import type { RemoteStorageCandidate } from '../types/remote'
 import { useTranslation } from 'react-i18next'
 import SystemInfoPanel from './SystemInfoPanel'
 import DismissedAlertsManager from './DismissedAlertsManager'
@@ -30,6 +31,11 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
   // ----- Data directory
   const [userRootDir, setUserRootDir] = useState<string>('')
   const [storagePath, setStoragePath] = useState<string>('')
+  const [scanRoot, setScanRoot] = useState<string>('')
+  const [scanDepth, setScanDepth] = useState<number>(3)
+  const [storageCandidates, setStorageCandidates] = useState<RemoteStorageCandidate[]>([])
+  const [detectingStorageCandidates, setDetectingStorageCandidates] = useState(false)
+  const [storageCandidatesRequested, setStorageCandidatesRequested] = useState(false)
   const [savingRoot, setSavingRoot] = useState(false)
   const [importing, setImporting] = useState(false)
   const [previewData, setPreviewData] = useState<ImportPreviewResult | null>(null)
@@ -40,10 +46,13 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
     let active = true
     if (open) {
       getConfig()
-        .then(({ user_root_dir, storage }) => {
+        .then(({ user_root_dir, storage, home_directory }) => {
           if (!active) return
           setUserRootDir(user_root_dir || '')
           setStoragePath(storage || '')
+          setScanRoot(user_root_dir || home_directory || '')
+          setStorageCandidates([])
+          setStorageCandidatesRequested(false)
         })
         .catch(() => {})
     }
@@ -64,6 +73,25 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
       message.error(typeof e?.message === 'string' ? e.message : t('settings.messages.update_failed'))
     } finally {
       setSavingRoot(false)
+    }
+  }
+
+  const detectLocalStorageCandidates = async () => {
+    if (!scanRoot || scanRoot.trim().length < 1) {
+      message.warning(t('settings.messages.enter_valid_path'))
+      return
+    }
+
+    try {
+      setDetectingStorageCandidates(true)
+      setStorageCandidatesRequested(true)
+      const candidates = await listLocalStorageCandidates(scanRoot.trim(), scanDepth)
+      setStorageCandidates(candidates)
+    } catch (e: any) {
+      setStorageCandidates([])
+      message.error(typeof e?.message === 'string' ? e.message : t('settings.messages.detect_failed'))
+    } finally {
+      setDetectingStorageCandidates(false)
     }
   }
 
@@ -419,6 +447,71 @@ export default function SettingsDrawer({ open, onClose, value, onChange }: {
             >
               {t('settings.data.save')}
             </Button>
+          </div>
+
+          <Divider style={{ margin: '8px 0' }} />
+
+          <div>
+            <Typography.Text strong>{t('settings.data.detected_roots.title')}</Typography.Text>
+            <Typography.Paragraph type="secondary" style={{ fontSize: '12px', margin: '4px 0 8px 0' }}>
+              {t('settings.data.detected_roots.hint')}
+            </Typography.Paragraph>
+            <Space.Compact style={{ width: '100%', marginBottom: 8 }}>
+              <Input
+                placeholder={t('settings.data.detected_roots.scan_root_placeholder')}
+                value={scanRoot}
+                onChange={(e) => setScanRoot(e.target.value)}
+              />
+              <InputNumber
+                min={1}
+                max={8}
+                value={scanDepth}
+                onChange={(v) => setScanDepth(Number(v) || 3)}
+                addonBefore={t('settings.data.detected_roots.depth')}
+                style={{ width: 130 }}
+              />
+            </Space.Compact>
+            <Button
+              icon={<SearchOutlined />}
+              loading={detectingStorageCandidates}
+              onClick={() => void detectLocalStorageCandidates()}
+              style={{ marginBottom: 12 }}
+            >
+              {t('settings.data.detected_roots.action')}
+            </Button>
+
+            {storageCandidates.length > 0 ? (
+              <Space direction="vertical" style={{ width: '100%' }} size={8}>
+                {storageCandidates.map((candidate) => (
+                  <Button
+                    key={candidate.path}
+                    block
+                    icon={<FolderOpenOutlined />}
+                    onClick={() => setUserRootDir(candidate.path)}
+                    style={{ height: 'auto', justifyContent: 'space-between', paddingBlock: 10 }}
+                  >
+                    <Space direction="vertical" size={6} style={{ width: '100%', alignItems: 'flex-start' }}>
+                      <Typography.Text style={{ wordBreak: 'break-all', textAlign: 'left' }}>
+                        {candidate.path}
+                      </Typography.Text>
+                      <Space size={[6, 6]} wrap>
+                        <Tag color="blue">{t('settings.data.detected_roots.candidate_runs', { count: candidate.runCount })}</Tag>
+                        {candidate.hasArchive && <Tag color="green">{t('settings.data.detected_roots.candidate_archive')}</Tag>}
+                        {candidate.hasIndex && <Tag color="purple">{t('settings.data.detected_roots.candidate_index')}</Tag>}
+                      </Space>
+                    </Space>
+                  </Button>
+                ))}
+              </Space>
+            ) : storageCandidatesRequested ? (
+              <Typography.Text type="secondary">
+                {t('settings.data.detected_roots.empty')}
+              </Typography.Text>
+            ) : (
+              <Typography.Text type="secondary">
+                {t('settings.data.detected_roots.prompt')}
+              </Typography.Text>
+            )}
           </div>
         </Space>
       </Card>

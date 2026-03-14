@@ -180,51 +180,33 @@ class RemoteAPI:
         data = self.client.get("/api/remote/viewer/sessions")
         return data.get("sessions", [])
     
-    def list_remote_directory(
+    def list_remote_storage_candidates(
         self,
         connection_id: str,
-        path: str,
+        conda_env: str = "system",
+        scan_root: Optional[str] = None,
+        max_depth: int = 3,
     ) -> List[Dict[str, Any]]:
         """
-        List remote directory contents.
+        Detect candidate Runicorn storage roots under the remote user's home directory.
         
         Args:
             connection_id: SSH connection ID
-            path: Remote directory path
+            conda_env: Conda environment name used to resolve a Python interpreter
             
         Returns:
-            List of files and directories
+            List of candidate storage roots
         """
         params = {
             "connection_id": connection_id,
-            "path": path,
+            "conda_env": conda_env,
+            "max_depth": max_depth,
         }
-        
-        data = self.client.get("/api/remote/fs/list", params=params)
-        return data.get("items", [])
-    
-    def check_remote_path(
-        self,
-        connection_id: str,
-        path: str,
-    ) -> bool:
-        """
-        Check if remote path exists.
-        
-        Args:
-            connection_id: SSH connection ID
-            path: Remote path
-            
-        Returns:
-            True if path exists
-        """
-        params = {
-            "connection_id": connection_id,
-            "path": path,
-        }
-        
-        data = self.client.get("/api/remote/fs/exists", params=params)
-        return data.get("exists", False)
+        if scan_root is not None:
+            params["scan_root"] = scan_root
+
+        data = self.client.get("/api/remote/storage-candidates", params=params)
+        return data.get("candidates", [])
     
     def get_remote_status(self) -> Dict[str, Any]:
         """

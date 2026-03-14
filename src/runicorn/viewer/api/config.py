@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException, Request, Body
@@ -25,6 +26,104 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _detect_local_storage_candidates(*, scan_root: str | None, max_depth: int) -> Dict[str, Any]:
+    common_names = {".runicorn", "runicorn_data"}
+    prune = {
+        ".cache", ".cargo", ".conda", ".git", ".hg", ".idea", ".local", ".npm",
+        ".rustup", ".ssh", ".venv", ".vscode", "__pycache__", "anaconda", "anaconda3",
+        "env", "miniconda", "miniconda3", "node_modules", "venv",
+    }
+    max_run_depth = 4
+    max_candidates = 12
+    max_run_scan = 64
+
+    root = Path(scan_root).expanduser().resolve() if scan_root else Path.home().resolve()
+    if not root.exists():
+        raise HTTPException(status_code=400, detail="Scan root does not exist")
+    if not root.is_dir():
+        raise HTTPException(status_code=400, detail="Scan root is not a directory")
+
+    def run_count_for(candidate_root: Path) -> int:
+        runs_dir = candidate_root / "runs"
+        if not runs_dir.is_dir():
+            return 0
+
+        count = 0
+        for current, dirs, files in os.walk(runs_dir):
+            current_path = Path(current)
+            rel_depth = 0 if current_path == runs_dir else len(current_path.relative_to(runs_dir).parts)
+            if rel_depth > max_run_depth:
+                dirs[:] = []
+                continue
+            if "meta.json" in files or "status.json" in files:
+                count += 1
+                dirs[:] = []
+                if count >= max_run_scan:
+                    break
+        return count
+
+    candidates = []
+    for current, dirs, _files in os.walk(root):
+        current_path = Path(current)
+        rel_depth = 0 if current_path == root else len(current_path.relative_to(root).parts)
+        if rel_depth > max_depth:
+            dirs[:] = []
+            continue
+
+        dirs[:] = [
+            name for name in dirs
+            if name not in prune and (not name.startswith(".") or name in common_names)
+        ]
+
+        has_runs = (current_path / "runs").is_dir()
+        has_archive = (current_path / "archive").is_dir()
+        has_index = (current_path / "index").is_dir()
+        common_name = current_path.name in common_names
+
+        if not has_runs and not has_archive and not has_index and not common_name:
+            continue
+
+        run_count = run_count_for(current_path) if has_runs else 0
+        if not (run_count > 0 or has_archive or has_index or (common_name and has_runs)):
+            continue
+
+        score = 0
+        if run_count > 0:
+            score += 100 + min(run_count, 20)
+        if has_archive:
+            score += 25
+        if has_index:
+            score += 15
+        if common_name:
+            score += 10
+
+        candidates.append({
+            "path": str(current_path),
+            "run_count": run_count,
+            "has_archive": has_archive,
+            "has_index": has_index,
+            "score": score,
+        })
+
+    candidates.sort(key=lambda item: (-item["score"], item["path"]))
+    deduped = []
+    seen = set()
+    for item in candidates:
+        path = item["path"]
+        if path in seen:
+            continue
+        seen.add(path)
+        deduped.append(item)
+        if len(deduped) >= max_candidates:
+            break
+
+    return {
+        "scan_root": str(root),
+        "max_depth": max_depth,
+        "candidates": deduped,
+    }
+
+
 @router.get("/config")
 async def get_config(request: Request) -> Dict[str, Any]:
     """
@@ -40,7 +139,20 @@ async def get_config(request: Request) -> Dict[str, Any]:
         "user_root_dir": str(get_user_root_dir() or storage_root),
         "storage": str(storage_root),
         "config_file": str(config_file_path),
+        "home_directory": str(Path.home().resolve()),
     }
+
+
+@router.get("/config/storage-candidates")
+async def get_local_storage_candidates(
+    scan_root: str | None = None,
+    max_depth: int = 3,
+) -> Dict[str, Any]:
+    effective_depth = max(1, min(int(max_depth), 8))
+    return _detect_local_storage_candidates(
+        scan_root=scan_root,
+        max_depth=effective_depth,
+    )
 
 
 @router.post("/config/user_root_dir")

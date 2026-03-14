@@ -1,3 +1,5 @@
+import type { RemoteStorageCandidate } from './types/remote'
+
 const BASE_URL: string = (import.meta as any).env?.VITE_API_BASE || '/api'
 const url = (p: string) => `${BASE_URL}${p}`
 
@@ -114,13 +116,31 @@ export async function listRunsByName(project: string, name: string) {
 
 // ----- Config helpers -----
 export async function getConfig() {
-  return apiFetch<{ user_root_dir: string; storage: string }>('/config')
+  return apiFetch<{ user_root_dir: string; storage: string; home_directory?: string }>('/config')
 }
 
 export async function setUserRootDir(path: string) {
   return apiFetch<{ ok: boolean; user_root_dir: string; storage: string }>('/config/user_root_dir', {
     method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ path }),
   })
+}
+
+export async function listLocalStorageCandidates(
+  scanRoot?: string,
+  maxDepth: number = 3,
+): Promise<RemoteStorageCandidate[]> {
+  const params = new URLSearchParams({ max_depth: String(maxDepth) })
+  if (scanRoot) {
+    params.set('scan_root', scanRoot)
+  }
+
+  const data = await apiFetch<{ candidates?: Array<any> }>(`/config/storage-candidates?${params.toString()}`)
+  return (data.candidates || []).map((item: any) => ({
+    path: item.path,
+    runCount: item.run_count ?? item.runCount ?? 0,
+    hasArchive: Boolean(item.has_archive ?? item.hasArchive),
+    hasIndex: Boolean(item.has_index ?? item.hasIndex),
+  }))
 }
 
 // SSH connection config APIs

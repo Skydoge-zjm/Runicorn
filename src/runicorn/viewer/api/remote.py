@@ -5,6 +5,7 @@ Provides unified remote access via SSH for Remote Viewer mode.
 """
 from __future__ import annotations
 
+import json
 import logging
 import shlex
 from typing import Any, Dict, Optional, List
@@ -94,6 +95,179 @@ class KnownHostsEntry(BaseModel):
     key_type: str
     key_base64: str
     fingerprint_sha256: str
+
+
+def _parse_connection_id(connection_id: str) -> tuple[str, int, str]:
+    try:
+        username_host, port_str = connection_id.rsplit(":", 1)
+        username, host = username_host.split("@", 1)
+        return host, int(port_str), username
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid connection_id format: {connection_id}",
+        ) from e
+
+
+def _get_active_connection(request: Request, connection_id: str):
+    if not hasattr(request.app.state, 'connection_pool'):
+        raise HTTPException(
+            status_code=400,
+            detail="Connection pool not initialized"
+        )
+
+    pool = request.app.state.connection_pool
+    host, port, username = _parse_connection_id(connection_id)
+    connection = pool.get_connection(host, port, username)
+    if not connection or not connection.is_connected:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Connection not found or inactive: {connection_id}"
+        )
+    return connection
+
+
+def _resolve_python_command(connection: Any, conda_env: str) -> str:
+    from ...remote.environment import RemoteEnvironmentDetector
+
+    detector = RemoteEnvironmentDetector(connection)
+    cmd_prefix = detector.get_python_command_for_env(conda_env or "system")
+    if not cmd_prefix:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Environment '{conda_env}' not found. Please check the environment name."
+        )
+    return cmd_prefix
+
+
+def _detect_remote_storage_candidates(
+    connection: Any,
+    python_cmd: str,
+    *,
+    scan_root: Optional[str],
+    max_depth: int,
+) -> List[Dict[str, Any]]:
+    script = """
+import json
+import os
+import sys
+from pathlib import Path
+
+COMMON_NAMES = {".runicorn", "runicorn_data"}
+PRUNE = {
+    ".cache", ".cargo", ".conda", ".local", ".npm", ".rustup", ".ssh",
+    ".vscode-server", "__pycache__", "node_modules", "miniconda3", "anaconda3",
+    "miniconda", "anaconda", "venv", ".venv", "env",
+}
+MAX_RUN_DEPTH = 4
+MAX_CANDIDATES = 12
+MAX_RUN_SCAN = 64
+
+requested_root = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] else str(Path.home())
+max_depth = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+root = Path(requested_root).expanduser().resolve()
+
+if not root.exists():
+    raise SystemExit("Scan root does not exist")
+if not root.is_dir():
+    raise SystemExit("Scan root is not a directory")
+
+candidates = []
+
+def run_count_for(root: Path) -> int:
+    runs_dir = root / "runs"
+    if not runs_dir.is_dir():
+        return 0
+
+    count = 0
+    for current, dirs, files in os.walk(runs_dir):
+        current_path = Path(current)
+        rel_depth = 0 if current_path == runs_dir else len(current_path.relative_to(runs_dir).parts)
+        if rel_depth > MAX_RUN_DEPTH:
+            dirs[:] = []
+            continue
+        if "meta.json" in files or "status.json" in files:
+            count += 1
+            dirs[:] = []
+            if count >= MAX_RUN_SCAN:
+                break
+    return count
+
+for current, dirs, files in os.walk(root):
+    current_path = Path(current)
+    rel_depth = 0 if current_path == root else len(current_path.relative_to(root).parts)
+    if rel_depth > max_depth:
+        dirs[:] = []
+        continue
+
+    dirs[:] = [
+        d for d in dirs
+        if d not in PRUNE and (not d.startswith(".") or d in COMMON_NAMES)
+    ]
+
+    has_runs = (current_path / "runs").is_dir()
+    has_archive = (current_path / "archive").is_dir()
+    has_index = (current_path / "index").is_dir()
+    common_name = current_path.name in COMMON_NAMES
+
+    if not has_runs and not has_archive and not has_index and not common_name:
+        continue
+
+    run_count = run_count_for(current_path) if has_runs else 0
+    if not (run_count > 0 or has_archive or has_index or (common_name and has_runs)):
+        continue
+
+    score = 0
+    if run_count > 0:
+        score += 100 + min(run_count, 20)
+    if has_archive:
+        score += 25
+    if has_index:
+        score += 15
+    if common_name:
+        score += 10
+
+    candidates.append({
+        "path": str(current_path),
+        "run_count": run_count,
+        "has_archive": has_archive,
+        "has_index": has_index,
+        "score": score,
+    })
+
+candidates.sort(key=lambda item: (-item["score"], item["path"]))
+seen = set()
+deduped = []
+for item in candidates:
+    path = item["path"]
+    if path in seen:
+        continue
+    seen.add(path)
+    deduped.append(item)
+    if len(deduped) >= MAX_CANDIDATES:
+        break
+
+print(json.dumps({"scan_root": str(root), "candidates": deduped}, ensure_ascii=False))
+""".strip()
+
+    stdout, stderr, exit_code = connection.exec_command(
+        f"{python_cmd} -c {shlex.quote(script)} {shlex.quote(scan_root or '')} {int(max_depth)}"
+    )
+    if exit_code != 0:
+        raise RuntimeError(stderr.strip() or "Failed to detect remote storage candidates")
+
+    try:
+        data = json.loads(stdout.strip() or "{}")
+    except json.JSONDecodeError as e:
+        raise RuntimeError("Invalid storage candidate payload from remote host") from e
+
+    candidates = data.get("candidates")
+    if not isinstance(candidates, list):
+        return []
+    return [
+        item for item in candidates
+        if isinstance(item, dict) and isinstance(item.get("path"), str)
+    ]
 
 
 # ==================== Connection Management ====================
@@ -745,46 +919,10 @@ async def get_remote_config(
     Raises:
         HTTPException: If connection not found or runicorn not available
     """
-    if not hasattr(request.app.state, 'connection_pool'):
-        raise HTTPException(
-            status_code=400,
-            detail="Connection pool not initialized"
-        )
-    
-    pool: SSHConnectionPool = request.app.state.connection_pool
-    
-    # Parse connection_id
-    try:
-        username_host, port_str = connection_id.rsplit(":", 1)
-        username, host = username_host.split("@", 1)
-        port = int(port_str)
-    except Exception:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid connection_id format: {connection_id}"
-        )
-    
-    # Get connection
-    connection = pool.get_connection(host, port, username)
-    if not connection or not connection.is_connected:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Connection not found or inactive: {connection_id}"
-        )
+    connection = _get_active_connection(request, connection_id)
     
     try:
-        from ...remote.environment import RemoteEnvironmentDetector
-        
-        # Use environment detector to get Python command
-        detector = RemoteEnvironmentDetector(connection)
-        
-        # Get Python command (system uses detected python3/python, conda uses env path)
-        cmd_prefix = detector.get_python_command_for_env(conda_env or "system")
-        if not cmd_prefix:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Environment '{conda_env}' not found. Please check the environment name."
-            )
+        cmd_prefix = _resolve_python_command(connection, conda_env)
         logger.info(f"Using Python command for {conda_env or 'system'}: {cmd_prefix}")
         
         # Get Python version
@@ -848,6 +986,8 @@ async def get_remote_config(
         
         # Get storage root from remote server's configuration
         # Priority: 1) RUNICORN_DIR env var, 2) user config file (only if runicorn installed), 3) reasonable default
+        stdout, _, _ = connection.exec_command("echo $HOME")
+        home_dir = stdout.strip()
         
         # First, check environment variable
         stdout, stderr, env_exit = connection.exec_command("echo $RUNICORN_DIR")
@@ -898,7 +1038,8 @@ async def get_remote_config(
             "defaultStorageRoot": absolute_root,
             "storageRootExists": path_exists,
             "suggestedRemotePort": suggested_port,
-            "connectionId": connection_id
+            "connectionId": connection_id,
+            "homeDirectory": home_dir,
         }
         
         logger.info(f"Remote config for {conda_env}: Python={python_version}, Runicorn={runicorn_version}, Root={absolute_root}, Port={suggested_port}")
@@ -915,159 +1056,38 @@ async def get_remote_config(
         )
 
 
-# ==================== Remote File System ====================
+# ==================== Remote Storage ====================
 
-@router.get("/remote/fs/list")
-async def list_remote_directory(
+@router.get("/remote/storage-candidates")
+async def list_remote_storage_candidates(
     request: Request,
     connection_id: str,
-    path: str = "~"
+    conda_env: str = "system",
+    scan_root: Optional[str] = None,
+    max_depth: int = 3,
 ) -> Dict[str, Any]:
-    """
-    List remote directory contents.
-    
-    Args:
-        connection_id: SSH connection ID (format: user@host:port)
-        path: Remote directory path
-        
-    Returns:
-        Directory listing
-        
-    Raises:
-        HTTPException: If connection not found or operation fails
-    """
-    if not hasattr(request.app.state, 'connection_pool'):
-        raise HTTPException(
-            status_code=400,
-            detail="Connection pool not initialized"
-        )
-    
-    pool: SSHConnectionPool = request.app.state.connection_pool
-    
-    # Parse connection_id
     try:
-        username_host, port_str = connection_id.rsplit(":", 1)
-        username, host = username_host.split("@", 1)
-        port = int(port_str)
-    except Exception:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid connection_id format: {connection_id}"
+        connection = _get_active_connection(request, connection_id)
+        python_cmd = _resolve_python_command(connection, conda_env)
+        effective_max_depth = max(1, min(int(max_depth), 8))
+        candidates = _detect_remote_storage_candidates(
+            connection,
+            python_cmd,
+            scan_root=scan_root,
+            max_depth=effective_max_depth,
         )
-    
-    # Get connection
-    connection = pool.get_connection(host, port, username)
-    if not connection or not connection.is_connected:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Connection not found or inactive: {connection_id}"
-        )
-    
-    try:
-        # Get SFTP client
-        sftp = connection.get_sftp()
-        
-        # Expand home directory
-        if path == "~" or path.startswith("~/"):
-            stdout, _, _ = connection.exec_command("echo $HOME")
-            home = stdout.strip()
-            path = path.replace("~", home, 1)
-        
-        # List directory
-        items = []
-        for entry in sftp.listdir_attr(path):
-            import stat
-            items.append({
-                "name": entry.filename,
-                "is_dir": stat.S_ISDIR(entry.st_mode),
-                "size": entry.st_size if not stat.S_ISDIR(entry.st_mode) else 0,
-                "mtime": entry.st_mtime,
-            })
-        
-        # Sort: directories first, then by name
-        items.sort(key=lambda x: (not x["is_dir"], x["name"]))
-        
         return {
-            "path": path,
-            "items": items
+            "scan_root": scan_root,
+            "max_depth": effective_max_depth,
+            "candidates": candidates,
         }
-        
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Failed to list remote directory: {e}")
+        logger.error(f"Failed to detect remote storage candidates: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to list directory: {str(e)}"
-        )
-
-
-@router.get("/remote/fs/exists")
-async def check_remote_path_exists(
-    request: Request,
-    connection_id: str,
-    path: str
-) -> Dict[str, Any]:
-    """
-    Check if remote path exists.
-    
-    Args:
-        connection_id: SSH connection ID
-        path: Remote path to check
-        
-    Returns:
-        Existence check result
-    """
-    if not hasattr(request.app.state, 'connection_pool'):
-        raise HTTPException(
-            status_code=400,
-            detail="Connection pool not initialized"
-        )
-    
-    pool: SSHConnectionPool = request.app.state.connection_pool
-    
-    # Parse connection_id
-    try:
-        username_host, port_str = connection_id.rsplit(":", 1)
-        username, host = username_host.split("@", 1)
-        port = int(port_str)
-    except Exception:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid connection_id format: {connection_id}"
-        )
-    
-    # Get connection
-    connection = pool.get_connection(host, port, username)
-    if not connection or not connection.is_connected:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Connection not found or inactive: {connection_id}"
-        )
-    
-    try:
-        # Check if path exists using test command (use shlex.quote for safe shell handling)
-        safe_path = shlex.quote(path)
-        stdout, stderr, exit_code = connection.exec_command(
-            f"test -e {safe_path} && echo 'exists' || echo 'not_exists'"
-        )
-        exists = stdout.strip() == "exists"
-        
-        # Check if it's a directory
-        is_dir = False
-        if exists:
-            stdout2, _, _ = connection.exec_command(f"test -d {safe_path} && echo 'yes' || echo 'no'")
-            is_dir = stdout2.strip() == "yes"
-        
-        return {
-            "path": path,
-            "exists": exists,
-            "is_dir": is_dir
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to check remote path: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to check path: {str(e)}"
+            detail=f"Failed to detect remote storage candidates: {str(e)}"
         )
 
 

@@ -11,9 +11,8 @@ import time
 import uuid
 from typing import Optional, Dict
 
-from ..connection import SSHConnection
 from ..host_key import HostKeyConfirmationRequiredError
-from ..ssh_backend import SshBackend, AutoBackend
+from ..ssh_backend import SshBackend, AutoBackend, SshConnection
 from .session import (
     RemoteViewerSession,
     STATUS_RUNNING,
@@ -60,7 +59,7 @@ class RemoteViewerManager:
     
     def start_remote_viewer(
         self,
-        connection: SSHConnection,
+        connection: SshConnection,
         remote_root: str,
         local_port: Optional[int] = None,
         remote_port: Optional[int] = None,
@@ -411,7 +410,7 @@ class RemoteViewerManager:
     
     # Helper methods
     
-    def _find_python(self, connection: SSHConnection) -> Optional[str]:
+    def _find_python(self, connection: SshConnection) -> Optional[str]:
         """Find Python3 executable on remote."""
         for cmd in ["python3", "python"]:
             try:
@@ -431,7 +430,7 @@ class RemoteViewerManager:
     
     def _find_remote_available_port(
         self, 
-        connection: SSHConnection, 
+        connection: SshConnection, 
         start_port: int = 8080, 
         end_port: int = 9000
     ) -> int:
@@ -459,7 +458,7 @@ for port in range({start_port}, {end_port}):
     
     def _start_remote_viewer_process(
         self,
-        connection: SSHConnection,
+        connection: SshConnection,
         python_cmd: str,
         remote_root: str,
         remote_port: int,
@@ -491,7 +490,7 @@ for port in range({start_port}, {end_port}):
     
     def _check_remote_viewer_health(
         self,
-        connection: SSHConnection,
+        connection: SshConnection,
         remote_port: int,
         timeout: int = 10
     ) -> bool:
@@ -524,7 +523,7 @@ for port in range({start_port}, {end_port}):
     
     def _cleanup_remote_viewer(
         self,
-        connection: SSHConnection,
+        connection: SshConnection,
         session_id: str,
         remote_port: Optional[int] = None
     ) -> None:
