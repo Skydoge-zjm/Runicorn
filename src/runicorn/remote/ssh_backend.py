@@ -4,9 +4,13 @@ import asyncio
 import base64
 import logging
 import os
+import shlex
 import shutil
 import subprocess
 import threading
+import time
+import tempfile
+import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, List, Optional, Protocol, Tuple, TYPE_CHECKING
@@ -19,6 +23,59 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class OpenSSHFallbackError(RuntimeError):
+    """Error type for cases where falling back to another backend is reasonable."""
+
+
+class _OpenSSHAskpassHelper:
+    _SECRET_ENV = "RUNICORN_SSH_ASKPASS_SECRET"
+
+    def __init__(self, secret: str):
+        self._secret = secret
+        self._temp_dir: Optional[Path] = None
+
+    def build_env(self) -> dict[str, str]:
+        temp_dir = Path(tempfile.mkdtemp(prefix="runicorn-ssh-askpass-"))
+        self._temp_dir = temp_dir
+
+        helper_py = temp_dir / "askpass.py"
+        helper_py.write_text(
+            (
+                "import os\n"
+                "import sys\n"
+                f"sys.stdout.write(os.environ.get({self._SECRET_ENV!r}, ''))\n"
+                "sys.stdout.flush()\n"
+            ),
+            encoding="utf-8",
+        )
+
+        if os.name == "nt":
+            wrapper = temp_dir / "askpass.cmd"
+            wrapper.write_text(
+                f'@echo off\r\n"{sys.executable}" "{helper_py}"\r\n',
+                encoding="utf-8",
+            )
+        else:
+            wrapper = temp_dir / "askpass.sh"
+            wrapper.write_text(
+                f"#!/bin/sh\nexec {shlex.quote(sys.executable)} {shlex.quote(str(helper_py))}\n",
+                encoding="utf-8",
+            )
+            wrapper.chmod(0o700)
+
+        env = os.environ.copy()
+        env["SSH_ASKPASS"] = str(wrapper)
+        env["SSH_ASKPASS_REQUIRE"] = "force"
+        env[self._SECRET_ENV] = self._secret
+        env.setdefault("DISPLAY", "runicorn-askpass:0")
+        return env
+
+    def cleanup(self) -> None:
+        if self._temp_dir is not None:
+            shutil.rmtree(self._temp_dir, ignore_errors=True)
+            self._temp_dir = None
+
+
 class SshTunnel(Protocol):
     def start(self) -> None: ...
 
@@ -27,6 +84,9 @@ class SshTunnel(Protocol):
 
 class SshConnection(Protocol):
     config: "SSHConfig"
+    env_cache: dict[str, Any]
+
+    def connect(self) -> bool: ...
 
     def disconnect(self) -> None: ...
 
@@ -112,6 +172,9 @@ class OpenSSHTunnel:
         host: str,
         port: int,
         username: str,
+        password: Optional[str],
+        private_key_path: Optional[str],
+        use_agent: bool,
         local_port: int,
         remote_host: str,
         remote_port: int,
@@ -122,6 +185,9 @@ class OpenSSHTunnel:
         self._host = host
         self._port = port
         self._username = username
+        self._password = password
+        self._private_key_path = private_key_path
+        self._use_agent = use_agent
         self._local_port = local_port
         self._remote_host = remote_host
         self._remote_port = remote_port
@@ -131,6 +197,7 @@ class OpenSSHTunnel:
         self._proc: Optional[subprocess.Popen] = None
         self._stderr_lines: List[str] = []
         self._stderr_lock = threading.Lock()
+        self._askpass_helper: Optional[_OpenSSHAskpassHelper] = None
 
     def start(self) -> None:
         """Start and monitor the ssh tunnel process."""
@@ -151,8 +218,7 @@ class OpenSSHTunnel:
         user_host = f"{self._username}@{self._host}" if self._username else self._host
         forward_spec = f"127.0.0.1:{self._local_port}:{self._remote_host}:{self._remote_port}"
 
-        # We use BatchMode=yes to avoid hanging waiting for interactive password input.
-        # If password auth is required, ssh should fail quickly and the caller may fall back.
+        batch_mode = "no" if self._password else "yes"
         cmd = [
             self._ssh_path,
             "-N",
@@ -163,7 +229,7 @@ class OpenSSHTunnel:
             "-o",
             "ExitOnForwardFailure=yes",
             "-o",
-            "BatchMode=yes",
+            f"BatchMode={batch_mode}",
             "-o",
             "StrictHostKeyChecking=yes",
             "-o",
@@ -172,8 +238,34 @@ class OpenSSHTunnel:
             "ServerAliveInterval=30",
             "-o",
             "ServerAliveCountMax=3",
-            user_host,
         ]
+
+        if self._private_key_path:
+            cmd.extend(
+                [
+                    "-i",
+                    str(Path(self._private_key_path).expanduser()),
+                    "-o",
+                    "IdentitiesOnly=yes",
+                ]
+            )
+
+        if not self._use_agent:
+            cmd.extend(["-o", "IdentityAgent=none"])
+
+        if self._password:
+            cmd.extend(
+                [
+                    "-o",
+                    "PreferredAuthentications=keyboard-interactive,password",
+                    "-o",
+                    "PubkeyAuthentication=no",
+                    "-o",
+                    "NumberOfPasswordPrompts=1",
+                ]
+            )
+
+        cmd.append(user_host)
 
         logger.info(
             "Starting OpenSSH tunnel: ssh=%s target=%s port=%s forward=%s known_hosts=%s",
@@ -191,6 +283,11 @@ class OpenSSHTunnel:
             # Prevent popping up a console window on Windows/Tauri.
             creationflags = int(getattr(subprocess, "CREATE_NO_WINDOW"))
 
+        env = None
+        if self._password:
+            self._askpass_helper = _OpenSSHAskpassHelper(self._password)
+            env = self._askpass_helper.build_env()
+
         self._proc = subprocess.Popen(
             cmd,
             stdin=subprocess.DEVNULL,
@@ -199,6 +296,7 @@ class OpenSSHTunnel:
             text=True,
             bufsize=1,
             creationflags=creationflags,
+            env=env,
         )
 
         # Drain stderr in a background thread to avoid blocking if the buffer fills.
@@ -311,6 +409,9 @@ class OpenSSHTunnel:
         self._proc = None
 
         if proc is None:
+            if self._askpass_helper is not None:
+                self._askpass_helper.cleanup()
+                self._askpass_helper = None
             return
 
         try:
@@ -330,6 +431,10 @@ class OpenSSHTunnel:
         except Exception:
             pass
 
+        if self._askpass_helper is not None:
+            self._askpass_helper.cleanup()
+            self._askpass_helper = None
+
     @staticmethod
     def _is_host_key_failure(stderr: str) -> bool:
         s = stderr or ""
@@ -341,7 +446,8 @@ class OpenSSHTunnel:
             return True
         return False
 
-    def _ssh_keyscan(self, *, host: str, port: int) -> Optional[str]:
+    @staticmethod
+    def _ssh_keyscan(*, host: str, port: int) -> Optional[str]:
         """Best-effort ssh-keyscan to obtain the presented host key.
 
         Returns:
@@ -409,12 +515,11 @@ class OpenSSHTunnel:
 
 
 class OpenSSHBackend(SshBackend):
-    """OpenSSH-based backend for tunneling.
+    """OpenSSH-based backend for command execution and tunneling.
 
     NOTE:
-    - This backend currently focuses on the tunnel transport layer.
-    - Remote command execution / SFTP are still handled by the existing Paramiko-based
-      `SSHConnection` object (provided by the caller).
+    - Remote commands prefer the system OpenSSH client.
+    - SFTP remains available through the connection's lazy Paramiko fallback.
     """
 
     def __init__(self, ssh_path: Optional[str] = None):
@@ -470,8 +575,9 @@ class OpenSSHBackend(SshBackend):
         return None
 
     def connect(self, config: "SSHConfig") -> SshConnection:
-        # For now we keep using the existing Paramiko connection implementation.
-        return ParamikoBackend().connect(config)
+        conn = OpenSSHCommandConnection(config, ssh_path=self._ssh_path)
+        conn.connect()
+        return conn
 
     def create_tunnel(
         self,
@@ -486,27 +592,25 @@ class OpenSSHBackend(SshBackend):
 
         ssh_path = self._resolve_ssh_path(self._ssh_path)
         if not ssh_path:
-            raise RuntimeError("OpenSSH client not available")
+            raise OpenSSHFallbackError("OpenSSH client not available")
 
         # For the Phase 0/1 flow we require ssh-keyscan to construct the 409 host key payload
         # in unknown/changed scenarios. If it's not available, fall back to Paramiko.
         if not shutil.which("ssh-keyscan"):
-            raise RuntimeError("ssh-keyscan not available")
+            raise OpenSSHFallbackError("ssh-keyscan not available")
 
-        # Password auth for OpenSSH tunneling requires extra components (sshpass/PTY)
-        # and is intentionally not enabled by default.
-        if getattr(connection, "config", None) is not None:
-            cfg = connection.config
-            if getattr(cfg, "password", None):
-                raise RuntimeError("OpenSSH tunnel does not support password authentication")
+        cfg = connection.config
 
         known_hosts = get_known_hosts_file_path()
 
         return OpenSSHTunnel(
             ssh_path=ssh_path,
-            host=connection.config.host,
-            port=connection.config.port,
-            username=connection.config.username,
+            host=cfg.host,
+            port=cfg.port,
+            username=cfg.username,
+            password=getattr(cfg, "password", None),
+            private_key_path=getattr(cfg, "private_key_path", None),
+            use_agent=getattr(cfg, "use_agent", True),
             local_port=local_port,
             remote_host=remote_host,
             remote_port=remote_port,
@@ -829,6 +933,303 @@ class AsyncSSHBackend(SshBackend):
         )
 
 
+class OpenSSHCommandConnection:
+    """Command-oriented SSH connection implemented via the system OpenSSH client.
+
+    This connection intentionally focuses on command execution first. SFTP remains
+    available through a lazy Paramiko fallback so that existing file APIs keep
+    working while command paths move off Paramiko.
+    """
+
+    _HEALTH_CHECK_TTL_S = 5.0
+
+    def __init__(self, config: "SSHConfig", ssh_path: Optional[str] = None):
+        self.config = config
+        self.env_cache: dict[str, Any] = {}
+        self._ssh_path = ssh_path
+        self._connected = False
+        self._last_health_check = 0.0
+        self._lock = threading.Lock()
+        self._paramiko_fallback: Optional[SshConnection] = None
+
+    def connect(self) -> bool:
+        with self._lock:
+            if self._connected and self._check_health_locked():
+                return True
+
+            try:
+                self._run_ssh_command("exit 0", timeout=self.config.timeout)
+                self._connected = True
+                self._last_health_check = time.monotonic()
+                logger.info("OpenSSH command connection ready: %s", self.config.get_key())
+                return True
+            except Exception:
+                self._connected = False
+                self._last_health_check = 0.0
+                raise
+
+    def disconnect(self) -> None:
+        with self._lock:
+            self._connected = False
+            self._last_health_check = 0.0
+
+            if self._paramiko_fallback is not None:
+                try:
+                    self._paramiko_fallback.disconnect()
+                except Exception as e:
+                    logger.warning(f"Error closing Paramiko fallback SSH connection: {e}")
+                self._paramiko_fallback = None
+
+            logger.info("OpenSSH command connection disconnected: %s", self.config.get_key())
+
+    def exec_command(self, command: str, timeout: Optional[int] = None) -> Tuple[str, str, int]:
+        if not self._connected:
+            raise RuntimeError("Not connected to SSH server")
+
+        try:
+            stdout, stderr, exit_code = self._run_ssh_command(
+                command,
+                timeout=timeout or self.config.timeout,
+            )
+        except Exception:
+            with self._lock:
+                self._connected = False
+                self._last_health_check = 0.0
+            raise
+
+        with self._lock:
+            self._connected = True
+            self._last_health_check = time.monotonic()
+
+        return stdout, stderr, exit_code
+
+    def get_sftp(self) -> Any:
+        with self._lock:
+            if self._paramiko_fallback is None:
+                logger.info(
+                    "Creating Paramiko fallback connection for SFTP: %s",
+                    self.config.get_key(),
+                )
+                self._paramiko_fallback = ParamikoBackend().connect(self.config)
+
+            return self._paramiko_fallback.get_sftp()
+
+    @property
+    def is_connected(self) -> bool:
+        with self._lock:
+            if not self._connected:
+                return False
+            if time.monotonic() - self._last_health_check <= self._HEALTH_CHECK_TTL_S:
+                return True
+
+            healthy = self._check_health_locked()
+            self._connected = healthy
+            if healthy:
+                self._last_health_check = time.monotonic()
+            return healthy
+
+    def get_paramiko_fallback_connection(self) -> SshConnection:
+        with self._lock:
+            if self._paramiko_fallback is None:
+                logger.info(
+                    "Creating Paramiko fallback connection for tunnel/SFTP: %s",
+                    self.config.get_key(),
+                )
+                self._paramiko_fallback = ParamikoBackend().connect(self.config)
+            return self._paramiko_fallback
+
+    def _check_health_locked(self) -> bool:
+        try:
+            self._run_ssh_command("exit 0", timeout=min(self.config.timeout, 5))
+            return True
+        except Exception:
+            return False
+
+    def _run_ssh_command(self, command: str, timeout: int) -> Tuple[str, str, int]:
+        cmd = self._build_ssh_command(command)
+        creationflags = 0
+        if os.name == "nt" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+            creationflags = int(getattr(subprocess, "CREATE_NO_WINDOW"))
+
+        askpass_helper: Optional[_OpenSSHAskpassHelper] = None
+        env = None
+        if self.config.password:
+            askpass_helper = _OpenSSHAskpassHelper(self.config.password)
+            env = askpass_helper.build_env()
+
+        try:
+            result = subprocess.run(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=False,
+                creationflags=creationflags,
+                env=env,
+            )
+        except subprocess.TimeoutExpired as e:
+            logger.warning("OpenSSH command timed out: host=%s cmd=%s", self.config.host, command)
+            raise TimeoutError(
+                f"OpenSSH command timed out after {timeout}s: {command}"
+            ) from e
+        except Exception as e:
+            logger.error(f"Failed to launch OpenSSH command: {e}")
+            raise RuntimeError(f"Failed to launch OpenSSH client: {e}") from e
+        finally:
+            if askpass_helper is not None:
+                askpass_helper.cleanup()
+
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+
+        if OpenSSHTunnel._is_host_key_failure(stderr):
+            raise self._build_host_key_error(stderr)
+
+        if self._is_transport_failure(result.returncode, stderr):
+            raise RuntimeError(stderr.strip() or "OpenSSH transport failed")
+
+        return stdout, stderr, int(result.returncode)
+
+    def _build_ssh_command(self, remote_command: str) -> List[str]:
+        from ..config import get_known_hosts_file_path
+
+        self._ensure_supported()
+
+        ssh_path = OpenSSHBackend._resolve_ssh_path(self._ssh_path)
+        if not ssh_path:
+            raise OpenSSHFallbackError("OpenSSH client not available")
+
+        known_hosts_path = get_known_hosts_file_path()
+        try:
+            known_hosts_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
+        user_host = f"{self.config.username}@{self.config.host}" if self.config.username else self.config.host
+
+        cmd = [
+            ssh_path,
+            "-T",
+            "-p",
+            str(self.config.port),
+            "-o",
+            f"BatchMode={'no' if self.config.password else 'yes'}",
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            f"UserKnownHostsFile={str(known_hosts_path)}",
+            "-o",
+            f"ConnectTimeout={max(int(self.config.timeout), 1)}",
+            "-o",
+            f"ServerAliveInterval={max(int(self.config.keepalive_interval), 1)}",
+            "-o",
+            "ServerAliveCountMax=3",
+        ]
+
+        if self.config.private_key_path:
+            cmd.extend(
+                [
+                    "-i",
+                    str(Path(self.config.private_key_path).expanduser()),
+                    "-o",
+                    "IdentitiesOnly=yes",
+                ]
+            )
+
+        if not self.config.use_agent:
+            cmd.extend(["-o", "IdentityAgent=none"])
+
+        if self.config.password:
+            cmd.extend(
+                [
+                    "-o",
+                    "PreferredAuthentications=keyboard-interactive,password",
+                    "-o",
+                    "PubkeyAuthentication=no",
+                    "-o",
+                    "NumberOfPasswordPrompts=1",
+                ]
+            )
+
+        cmd.extend([user_host, remote_command])
+        return cmd
+
+    def _ensure_supported(self) -> None:
+        if self.config.private_key:
+            raise OpenSSHFallbackError("OpenSSH command connection does not support inline private keys")
+        if not shutil.which("ssh-keyscan"):
+            raise OpenSSHFallbackError("ssh-keyscan not available")
+
+    def _build_host_key_error(self, stderr: str) -> Exception:
+        from .host_key import HostKeyConfirmationRequiredError, HostKeyProblem
+        from .known_hosts import (
+            compute_fingerprint_sha256,
+            find_known_host_key_base64,
+            format_known_hosts_host,
+            parse_openssh_public_key,
+        )
+
+        reason = "changed" if "REMOTE HOST IDENTIFICATION HAS CHANGED" in stderr else "unknown"
+        presented = OpenSSHTunnel._ssh_keyscan(host=self.config.host, port=self.config.port)
+        if presented is None:
+            return RuntimeError(
+                "Host key verification failed, but could not retrieve host key via ssh-keyscan"
+            )
+
+        parsed = parse_openssh_public_key(presented)
+        expected_public_key = None
+        expected_fingerprint = None
+        if reason == "changed":
+            expected_key_base64 = find_known_host_key_base64(
+                host=self.config.host,
+                port=self.config.port,
+                key_type=parsed.key_type,
+            )
+            if expected_key_base64:
+                expected_public_key = f"{parsed.key_type} {expected_key_base64}"
+                try:
+                    expected_parsed = parse_openssh_public_key(expected_public_key)
+                    expected_fingerprint = compute_fingerprint_sha256(expected_parsed.key_bytes)
+                except Exception:
+                    expected_public_key = None
+                    expected_fingerprint = None
+
+        problem = HostKeyProblem(
+            host=self.config.host,
+            port=self.config.port,
+            known_hosts_host=format_known_hosts_host(self.config.host, self.config.port),
+            key_type=parsed.key_type,
+            fingerprint_sha256=compute_fingerprint_sha256(parsed.key_bytes),
+            public_key=f"{parsed.key_type} {parsed.key_base64}",
+            reason=reason,
+            expected_fingerprint_sha256=expected_fingerprint,
+            expected_public_key=expected_public_key,
+        )
+        return HostKeyConfirmationRequiredError(problem)
+
+    @staticmethod
+    def _is_transport_failure(returncode: int, stderr: str) -> bool:
+        if returncode != 255:
+            return False
+
+        markers = [
+            "Permission denied",
+            "Could not resolve hostname",
+            "Connection refused",
+            "Connection timed out",
+            "No route to host",
+            "Connection closed by",
+            "Connection reset by",
+            "Broken pipe",
+            "kex_exchange_identification",
+            "Host key verification failed",
+        ]
+        return any(marker in stderr for marker in markers)
+
+
 class AutoBackend(SshBackend):
     """Backend selector.
 
@@ -847,8 +1248,14 @@ class AutoBackend(SshBackend):
         self._paramiko = ParamikoBackend()
 
     def connect(self, config: "SSHConfig") -> SshConnection:
-        # Connection establishment remains Paramiko for now.
-        return self._paramiko.connect(config)
+        try:
+            return self._openssh.connect(config)
+        except OpenSSHFallbackError as e:
+            logger.info(
+                "Falling back from OpenSSH connection backend: reason=%s",
+                str(e),
+            )
+            return self._paramiko.connect(config)
 
     def create_tunnel(
         self,
@@ -869,7 +1276,7 @@ class AutoBackend(SshBackend):
                 remote_port=remote_port,
                 stop_event=stop_event,
             )
-        except Exception as e:
+        except OpenSSHFallbackError as e:
             if isinstance(e, HostKeyConfirmationRequiredError):
                 raise
 
@@ -895,8 +1302,17 @@ class AutoBackend(SshBackend):
                 str(e),
             )
 
+        fallback_connection = connection
+        get_paramiko_fallback_connection = getattr(
+            connection,
+            "get_paramiko_fallback_connection",
+            None,
+        )
+        if callable(get_paramiko_fallback_connection):
+            fallback_connection = get_paramiko_fallback_connection()
+
         return self._paramiko.create_tunnel(
-            connection=connection,
+            connection=fallback_connection,
             local_port=local_port,
             remote_host=remote_host,
             remote_port=remote_port,

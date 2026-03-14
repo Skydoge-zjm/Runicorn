@@ -20,6 +20,18 @@ export function useCompareMode(runs: RunData[], selectedRowKeys: string[]) {
   , [searchParams])
   const compareMode = compareIdsFromUrl.length >= 1
   const needsMoreRuns = compareIdsFromUrl.length === 1
+  const runIdSet = useMemo(
+    () => new Set(runs.map(run => run.run_id)),
+    [runs],
+  )
+  const validRunIds = useMemo(
+    () => compareIdsFromUrl.filter(runId => runIdSet.has(runId)),
+    [compareIdsFromUrl, runIdSet],
+  )
+  const missingRunIds = useMemo(
+    () => compareIdsFromUrl.filter(runId => !runIdSet.has(runId)),
+    [compareIdsFromUrl, runIdSet],
+  )
 
   const [compareRunInfos, setCompareRunInfos] = useState<CompareRunInfo[]>([])
   const [compareMetrics, setCompareMetrics] = useState<Map<string, MetricsData>>(new Map())

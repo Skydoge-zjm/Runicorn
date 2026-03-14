@@ -6,12 +6,25 @@ import { createWrapper } from '../__tests__/helpers'
 import { useCompareMode } from './useCompareMode'
 import type { RunData } from './useExperimentData'
 
-// Mock antd message
+const { messageMock } = vi.hoisted(() => ({
+  messageMock: {
+    success: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+  },
+}))
+
+// Mock antd App.useApp() message API
 vi.mock('antd', async () => {
   const actual = await vi.importActual('antd')
   return {
     ...actual,
-    message: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
+    message: messageMock,
+    App: {
+      ...(actual as any).App,
+      useApp: () => ({ message: messageMock }),
+    },
   }
 })
 

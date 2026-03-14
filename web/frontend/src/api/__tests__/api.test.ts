@@ -8,6 +8,7 @@ import {
   exportRunsZip,
   previewImport,
   confirmImport,
+  listLocalStorageCandidates,
   updateRunAlias,
   updateRunTags,
   getColumnWidths,
@@ -424,6 +425,27 @@ describe('Config & SSH connection endpoints', () => {
   it('setUserRootDir', async () => {
     const data = await setUserRootDir('/new/path')
     expect(data.ok).toBe(true)
+  })
+
+  it('listLocalStorageCandidates', async () => {
+    server.use(
+      http.get('/api/config/storage-candidates', () =>
+        HttpResponse.json({
+          candidates: [
+            {
+              path: '/tmp/runicorn_data',
+              run_count: 2,
+              has_archive: true,
+              has_index: false,
+            },
+          ],
+        }),
+      ),
+    )
+    const data = await listLocalStorageCandidates('/tmp', 2)
+    expect(data).toHaveLength(1)
+    expect(data[0].path).toBe('/tmp/runicorn_data')
+    expect(data[0].runCount).toBe(2)
   })
 
   it('getSavedSSHConnections', async () => {

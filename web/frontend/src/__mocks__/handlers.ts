@@ -70,10 +70,17 @@ export const handlers = [
 
   // ── Config ──
   http.get(`${BASE}/config`, () =>
-    HttpResponse.json({ user_root_dir: '/tmp', storage: '/tmp/runicorn' }),
+    HttpResponse.json({ user_root_dir: '/tmp', storage: '/tmp/runicorn', home_directory: '/tmp' }),
   ),
   http.post(`${BASE}/config/user_root_dir`, () =>
     HttpResponse.json({ ok: true, user_root_dir: '/tmp', storage: '/tmp/runicorn' }),
+  ),
+  http.get(`${BASE}/config/storage-candidates`, () =>
+    HttpResponse.json({
+      scan_root: '/tmp',
+      max_depth: 3,
+      candidates: [],
+    }),
   ),
   http.get(`${BASE}/config/column-widths`, () =>
     HttpResponse.json({ widths: {} }),

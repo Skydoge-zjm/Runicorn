@@ -68,7 +68,7 @@ import {
   disconnectRemote,
   stopRemoteViewer,
   getSessionStatus,
-  browseRemoteDirectory,
+  listRemoteStorageCandidates,
   testConnection,
   listKnownHosts,
   removeKnownHost,
@@ -122,16 +122,27 @@ describe('getSessionStatus', () => {
   })
 })
 
-describe('browseRemoteDirectory', () => {
-  it('returns file entries', async () => {
+describe('listRemoteStorageCandidates', () => {
+  it('returns storage candidates', async () => {
     server.use(
-      http.get('/api/remote/fs/list', () =>
-        HttpResponse.json([{ name: 'file.txt', type: 'file' }]),
+      http.get('/api/remote/storage-candidates', () =>
+        HttpResponse.json({
+          candidates: [
+            {
+              path: '/home/user/runicorn_data',
+              run_count: 3,
+              has_archive: true,
+              has_index: true,
+            },
+          ],
+        }),
       ),
     )
-    const entries = await browseRemoteDirectory('conn1', '/home')
+    const entries = await listRemoteStorageCandidates('conn1', 'myenv')
     expect(entries).toHaveLength(1)
-    expect(entries[0].name).toBe('file.txt')
+    expect(entries[0].path).toBe('/home/user/runicorn_data')
+    expect(entries[0].runCount).toBe(3)
+    expect(entries[0].hasArchive).toBe(true)
   })
 })
 

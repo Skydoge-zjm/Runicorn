@@ -13,16 +13,24 @@ import {
   Tag,
   Typography,
   Input,
+  InputNumber,
   Form,
+  Divider,
   theme
 } from 'antd'
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
-  SaveOutlined
+  SaveOutlined,
+  FolderOpenOutlined,
+  SearchOutlined,
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import type { RemoteConfig, SSHConnectionConfig } from '../../types/remote'
+import type {
+  RemoteConfig,
+  RemoteStorageCandidate,
+  SSHConnectionConfig
+} from '../../types/remote'
 import DismissibleAlert from '../DismissibleAlert'
 
 const { Text } = Typography
@@ -32,6 +40,10 @@ interface RemoteConfigCardProps {
   sshConfig: SSHConnectionConfig
   onConfirm: (profileName: string, remoteRoot: string, localPort?: number, remotePort?: number) => void
   onCancel: () => void
+  onDetectStorageCandidates: (scanRoot: string, maxDepth: number) => void
+  storageCandidates?: RemoteStorageCandidate[]
+  storageCandidatesLoading?: boolean
+  storageCandidatesRequested?: boolean
   loading?: boolean
 }
 
@@ -40,11 +52,22 @@ export default function RemoteConfigCard({
   sshConfig,
   onConfirm,
   onCancel,
+  onDetectStorageCandidates,
+  storageCandidates = [],
+  storageCandidatesLoading = false,
+  storageCandidatesRequested = false,
   loading = false
 }: RemoteConfigCardProps) {
   const { t } = useTranslation()
   const { token } = theme.useToken()
   const [form] = Form.useForm()
+  const selectedRemoteRoot = Form.useWatch('remoteRoot', form)
+
+  const defaultScanRoot = config.homeDirectory || (() => {
+    const idx = config.defaultStorageRoot.lastIndexOf('/')
+    if (idx > 0) return config.defaultStorageRoot.slice(0, idx)
+    return config.defaultStorageRoot
+  })()
 
   const handleConfirm = async () => {
     const values = await form.validateFields()
@@ -59,6 +82,11 @@ export default function RemoteConfigCard({
         : Number(values.remotePort)
 
     onConfirm(values.profileName, values.remoteRoot, localPort, remotePort)
+  }
+
+  const handleDetect = async () => {
+    const values = await form.validateFields(['scanRoot', 'scanDepth'])
+    onDetectStorageCandidates(values.scanRoot, Number(values.scanDepth))
   }
 
   return (
@@ -126,6 +154,8 @@ export default function RemoteConfigCard({
             sshConfig.saveName ||
             `${sshConfig.condaEnv || 'system'} - ${(sshConfig.remoteRoot || config.defaultStorageRoot)}`,
           remoteRoot: sshConfig.remoteRoot || config.defaultStorageRoot,
+          scanRoot: defaultScanRoot,
+          scanDepth: 3,
           localPort: sshConfig.localPort,
           remotePort: sshConfig.remotePort || config.suggestedRemotePort
         }}
@@ -137,6 +167,103 @@ export default function RemoteConfigCard({
         >
           <Input placeholder={t('remote.profile.namePlaceholder')} />
         </Form.Item>
+
+        <Form.Item label={t('remote.config.detectedStorageRoots')}>
+          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+            <Text type="secondary">
+              {t('remote.config.detectedStorageRootsHint')}
+            </Text>
+
+            <Space.Compact style={{ width: '100%' }}>
+              <Form.Item
+                name="scanRoot"
+                rules={[{ required: true, message: t('remote.form.required') }]}
+                style={{ flex: 1, marginBottom: 0 }}
+              >
+                <Input placeholder={t('remote.config.scanRootPlaceholder')} />
+              </Form.Item>
+              <Form.Item
+                name="scanDepth"
+                rules={[{ required: true, message: t('remote.form.required') }]}
+                style={{ width: 120, marginBottom: 0 }}
+              >
+                <InputNumber
+                  min={1}
+                  max={8}
+                  style={{ width: '100%' }}
+                  addonBefore={t('remote.config.scanDepth')}
+                />
+              </Form.Item>
+            </Space.Compact>
+
+            <Button
+              icon={<SearchOutlined />}
+              onClick={() => void handleDetect()}
+              loading={storageCandidatesLoading}
+            >
+              {t('remote.config.detectAction')}
+            </Button>
+
+            {storageCandidatesLoading ? (
+              <Text type="secondary">{t('remote.config.detectingStorageRoots')}</Text>
+            ) : storageCandidates.length > 0 ? (
+              storageCandidates.map(candidate => {
+                const active = candidate.path === selectedRemoteRoot
+                return (
+                  <Button
+                    key={candidate.path}
+                    block
+                    type={active ? 'primary' : 'default'}
+                    icon={<FolderOpenOutlined />}
+                    onClick={() => form.setFieldValue('remoteRoot', candidate.path)}
+                    style={{
+                      height: 'auto',
+                      justifyContent: 'space-between',
+                      paddingBlock: 10,
+                    }}
+                  >
+                    <Space
+                      direction="vertical"
+                      size={6}
+                      style={{ width: '100%', alignItems: 'flex-start' }}
+                    >
+                      <Text
+                        style={{
+                          color: active ? token.colorWhite : token.colorText,
+                          wordBreak: 'break-all',
+                          textAlign: 'left',
+                        }}
+                      >
+                        {candidate.path}
+                      </Text>
+                      <Space size={[6, 6]} wrap>
+                        <Tag color={active ? 'default' : 'blue'}>
+                          {t('remote.config.candidateRuns', { count: candidate.runCount })}
+                        </Tag>
+                        {candidate.hasArchive && (
+                          <Tag color={active ? 'default' : 'green'}>
+                            {t('remote.config.candidateArchive')}
+                          </Tag>
+                        )}
+                        {candidate.hasIndex && (
+                          <Tag color={active ? 'default' : 'purple'}>
+                            {t('remote.config.candidateIndex')}
+                          </Tag>
+                        )}
+                      </Space>
+                    </Space>
+                  </Button>
+                )
+              })
+            ) : storageCandidatesRequested ? (
+              <Text type="secondary">{t('remote.config.noDetectedStorageRoots')}</Text>
+            ) : (
+              <Text type="secondary">{t('remote.config.detectPrompt')}</Text>
+            )}
+          </Space>
+        </Form.Item>
+
+        <Divider style={{ margin: '8px 0 16px' }} />
 
         <Form.Item
           label={t('remote.config.confirmStorageRoot')}

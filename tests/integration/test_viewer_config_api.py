@@ -39,6 +39,43 @@ class TestSetUserRootDir:
         assert "user_root_dir" in data
 
 
+class TestLocalStorageCandidates:
+
+    def test_returns_storage_candidates(
+        self, viewer_client: TestClient, monkeypatch
+    ) -> None:
+        import runicorn.viewer.api.config as config_api
+
+        monkeypatch.setattr(
+            config_api,
+            "_detect_local_storage_candidates",
+            lambda **kwargs: {
+                "scan_root": "C:\\Users\\Lenovo",
+                "max_depth": 2,
+                "candidates": [
+                    {
+                        "path": "C:\\Users\\Lenovo\\runicorn_data",
+                        "run_count": 4,
+                        "has_archive": True,
+                        "has_index": True,
+                        "score": 144,
+                    }
+                ],
+            },
+        )
+
+        resp = viewer_client.get(
+            "/api/config/storage-candidates",
+            params={"scan_root": "C:\\Users\\Lenovo", "max_depth": 2},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scan_root"] == "C:\\Users\\Lenovo"
+        assert data["max_depth"] == 2
+        assert len(data["candidates"]) == 1
+
+
 class TestSSHConnectionsCRUD:
 
     def test_get_empty_connections(

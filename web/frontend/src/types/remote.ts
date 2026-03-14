@@ -163,20 +163,15 @@ export interface RemoteSession {
   error?: string
 }
 
-/**
- * Remote directory entry
- */
-export interface RemoteFileEntry {
-  /** File/directory name */
-  name: string
-  /** Full path */
+export interface RemoteStorageCandidate {
+  /** Candidate storage root path */
   path: string
-  /** Is directory */
-  isDir: boolean
-  /** File size (if file) */
-  size?: number
-  /** Modification time */
-  mtime?: number
+  /** Number of detected runs under this storage root */
+  runCount: number
+  /** Whether archive/ exists */
+  hasArchive: boolean
+  /** Whether index/ exists */
+  hasIndex: boolean
 }
 
 /**
@@ -245,6 +240,8 @@ export interface RemoteConfig {
   suggestedRemotePort: number
   /** Connection ID */
   connectionId: string
+  /** Remote user's home directory */
+  homeDirectory?: string
 }
 
 /**

@@ -8,7 +8,7 @@ import type {
   SSHConnectionConfig,
   SSHSession,
   RemoteSession,
-  RemoteFileEntry,
+  RemoteStorageCandidate,
   ConnectionTestResult,
   KnownHostsAcceptRequest,
   KnownHostsEntry,
@@ -190,20 +190,34 @@ export async function getSessionStatus(sessionId: string): Promise<RemoteSession
   return response.json()
 }
 
-/**
- * Browse remote directory
- */
-export async function browseRemoteDirectory(
+export async function listRemoteStorageCandidates(
   connectionId: string,
-  path: string
-): Promise<RemoteFileEntry[]> {
+  condaEnv: string = 'system',
+  scanRoot?: string,
+  maxDepth: number = 3,
+): Promise<RemoteStorageCandidate[]> {
+  const params = new URLSearchParams({
+    connection_id: connectionId,
+    conda_env: condaEnv,
+    max_depth: String(maxDepth),
+  })
+  if (scanRoot) {
+    params.set('scan_root', scanRoot)
+  }
+
   const response = await fetch(
-    `${API_BASE}/fs/list?connection_id=${encodeURIComponent(connectionId)}&path=${encodeURIComponent(path)}`
+    `${API_BASE}/storage-candidates?${params.toString()}`
   )
 
-  await ensureOk(response, 'Failed to list directory')
+  await ensureOk(response, 'Failed to detect remote storage candidates')
 
-  return response.json()
+  const data = await response.json()
+  return (data.candidates || []).map((item: any) => ({
+    path: item.path,
+    runCount: item.run_count ?? item.runCount ?? 0,
+    hasArchive: Boolean(item.has_archive ?? item.hasArchive),
+    hasIndex: Boolean(item.has_index ?? item.hasIndex),
+  }))
 }
 
 /**

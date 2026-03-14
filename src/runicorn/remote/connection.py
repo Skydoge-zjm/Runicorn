@@ -9,7 +9,7 @@ import logging
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, TYPE_CHECKING
 
 import paramiko
 from paramiko import SSHClient, SFTPClient
@@ -39,6 +39,9 @@ from .host_key import (
     UnknownHostKeyError,
 )
 from .known_hosts import compute_fingerprint_sha256, format_known_hosts_host
+
+if TYPE_CHECKING:
+    from .ssh_backend import SshBackend, SshConnection
 
 logger = logging.getLogger(__name__)
 
@@ -385,11 +388,14 @@ class SSHConnectionPool:
     - Thread-safe
     """
     
-    def __init__(self):
-        self._pool: Dict[str, SSHConnection] = {}
+    def __init__(self, backend: Optional["SshBackend"] = None):
+        from .ssh_backend import AutoBackend
+
+        self._backend = backend or AutoBackend()
+        self._pool: Dict[str, "SshConnection"] = {}
         self._lock = threading.Lock()
     
-    def get_or_create(self, config: SSHConfig) -> SSHConnection:
+    def get_or_create(self, config: SSHConfig) -> "SshConnection":
         """
         Get existing connection or create new one.
         
@@ -416,8 +422,7 @@ class SSHConnectionPool:
             
             # Create new connection
             logger.info(f"Creating new connection: {key}")
-            conn = SSHConnection(config)
-            conn.connect()
+            conn = self._backend.connect(config)
             self._pool[key] = conn
             return conn
     
@@ -444,7 +449,7 @@ class SSHConnectionPool:
                 return True
             return False
     
-    def get_connection(self, host: str, port: int, username: str) -> Optional[SSHConnection]:
+    def get_connection(self, host: str, port: int, username: str) -> Optional["SshConnection"]:
         """Get existing connection from pool (without creating)."""
         key = f"{username}@{host}:{port}"
         return self._pool.get(key)

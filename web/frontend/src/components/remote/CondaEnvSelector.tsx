@@ -327,6 +327,8 @@ export default function CondaEnvSelector({
 
   return (
     <Card
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      styles={{ body: { display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } }}
       title={
         <Space>
           <CheckCircleOutlined style={{ color: token.colorSuccess }} />
@@ -343,136 +345,137 @@ export default function CondaEnvSelector({
         style={{ marginBottom: 16 }}
       />
 
-      <Radio.Group
-        value={selectedEnv}
-        onChange={e => setSelectedEnv(e.target.value)}
-        style={{ width: '100%' }}
-      >
-        <List
-          dataSource={envs}
-          size="small"
-          renderItem={env => {
-            const versionInfo = envVersions[env.name] || { loading: true }
-            const getEnvTypeTag = () => {
-              if (env.type === 'conda') return <Tag color="green" style={{ fontSize: '10px', padding: '0 3px', lineHeight: '14px' }}>conda</Tag>
-              if (env.type === 'system') return <Tag style={{ fontSize: '10px', padding: '0 3px', lineHeight: '14px' }}>system</Tag>
-              if (env.type === 'venv') return <Tag color="orange" style={{ fontSize: '10px', padding: '0 3px', lineHeight: '14px' }}>venv</Tag>
-              return null
-            }
-            
-            return (
-              <List.Item
-                style={{
-                  cursor: 'pointer',
-                  background: selectedEnv === env.name ? token.colorPrimaryBg : 'transparent',
-                  padding: '6px 12px',
-                  borderRadius: '4px',
-                  marginBottom: '2px',
-                  minHeight: 'auto'
-                }}
-                onClick={() => setSelectedEnv(env.name)}
-              >
-                <Row style={{ width: '100%' }} align="middle">
-                  <Col flex="none" style={{ marginRight: 12 }}>
-                    <Radio value={env.name} />
-                  </Col>
-                  <Col flex="auto">
-                    {/* Left: Env name and path */}
-                    <div style={{ lineHeight: '1.2' }}>
-                      <div>
-                        <Space size={4}>
-                          <Text strong style={{ fontSize: '14px', lineHeight: '1.2' }}>{env.name}</Text>
-                          {getEnvTypeTag()}
-                          {env.isDefault && (
-                            <Tag color="blue" style={{ fontSize: '10px', padding: '0 3px', lineHeight: '14px' }}>
-                              {t('remote.env.default')}
-                            </Tag>
-                          )}
-                        </Space>
-                      </div>
-                      <div style={{ marginTop: '2px' }}>
-                        <Text type="secondary" code style={{ fontSize: '11px', lineHeight: '1.2' }}>
-                          {env.path}
-                        </Text>
-                      </div>
-                    </div>
-                  </Col>
-                  <Col flex="none" style={{ textAlign: 'right', minWidth: 140 }}>
-                    {/* Right: Python and Runicorn versions */}
-                    <div style={{ lineHeight: '1.2' }}>
-                      <div>
-                        {versionInfo.loading ? (
-                          <Spin indicator={<LoadingOutlined style={{ fontSize: 12 }} />} />
-                        ) : versionInfo.error ? (
-                          <Text type="danger" style={{ fontSize: '11px' }}>
-                            <CloseCircleOutlined /> {t('remote.env.detectFailed')}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
+        <Radio.Group
+          value={selectedEnv}
+          onChange={e => setSelectedEnv(e.target.value)}
+          style={{ width: '100%' }}
+        >
+          <List
+            dataSource={envs}
+            size="small"
+            renderItem={env => {
+              const versionInfo = envVersions[env.name] || { loading: true }
+              const getEnvTypeTag = () => {
+                if (env.type === 'conda') return <Tag color="green" style={{ fontSize: '10px', padding: '0 3px', lineHeight: '14px' }}>conda</Tag>
+                if (env.type === 'system') return <Tag style={{ fontSize: '10px', padding: '0 3px', lineHeight: '14px' }}>system</Tag>
+                if (env.type === 'venv') return <Tag color="orange" style={{ fontSize: '10px', padding: '0 3px', lineHeight: '14px' }}>venv</Tag>
+                return null
+              }
+              
+              return (
+                <List.Item
+                  style={{
+                    cursor: 'pointer',
+                    background: selectedEnv === env.name ? token.colorPrimaryBg : 'transparent',
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    marginBottom: '2px',
+                    minHeight: 'auto'
+                  }}
+                  onClick={() => setSelectedEnv(env.name)}
+                >
+                  <Row style={{ width: '100%' }} align="middle">
+                    <Col flex="none" style={{ marginRight: 12 }}>
+                      <Radio value={env.name} />
+                    </Col>
+                    <Col flex="auto">
+                      <div style={{ lineHeight: '1.2' }}>
+                        <div>
+                          <Space size={4}>
+                            <Text strong style={{ fontSize: '14px', lineHeight: '1.2' }}>{env.name}</Text>
+                            {getEnvTypeTag()}
+                            {env.isDefault && (
+                              <Tag color="blue" style={{ fontSize: '10px', padding: '0 3px', lineHeight: '14px' }}>
+                                {t('remote.env.default')}
+                              </Tag>
+                            )}
+                          </Space>
+                        </div>
+                        <div style={{ marginTop: '2px' }}>
+                          <Text type="secondary" code style={{ fontSize: '11px', lineHeight: '1.2' }}>
+                            {env.path}
                           </Text>
-                        ) : (
-                          <Text type="secondary" style={{ fontSize: '11px' }}>
-                            {versionInfo.pythonVersion || 'N/A'}
-                          </Text>
-                        )}
+                        </div>
                       </div>
-                      <div style={{ marginTop: '2px' }}>
-                        {versionInfo.loading ? (
-                          <Spin indicator={<LoadingOutlined style={{ fontSize: 12 }} />} />
-                        ) : versionInfo.error ? (
-                          <Text type="danger" style={{ fontSize: '11px' }}>
-                            N/A
-                          </Text>
-                        ) : versionInfo.runicornVersion ? (
-                          versionInfo.versionStatus === 'too_old' ? (
+                    </Col>
+                    <Col flex="none" style={{ textAlign: 'right', minWidth: 140 }}>
+                      <div style={{ lineHeight: '1.2' }}>
+                        <div>
+                          {versionInfo.loading ? (
+                            <Spin indicator={<LoadingOutlined style={{ fontSize: 12 }} />} />
+                          ) : versionInfo.error ? (
                             <Text type="danger" style={{ fontSize: '11px' }}>
-                              <CloseCircleOutlined /> Runicorn {versionInfo.runicornVersion}
-                            </Text>
-                          ) : versionInfo.versionStatus === 'mismatch' ? (
-                            <Text type="warning" style={{ fontSize: '11px' }}>
-                              <WarningOutlined /> Runicorn {versionInfo.runicornVersion}
+                              <CloseCircleOutlined /> {t('remote.env.detectFailed')}
                             </Text>
                           ) : (
-                            <Text type="success" style={{ fontSize: '11px' }}>
-                              Runicorn {versionInfo.runicornVersion}
+                            <Text type="secondary" style={{ fontSize: '11px' }}>
+                              {versionInfo.pythonVersion || 'N/A'}
                             </Text>
-                          )
-                        ) : (
-                          <Text type="warning" style={{ fontSize: '11px' }}>
-                            <WarningOutlined /> {t('remote.env.runicornNotInstalled')}
-                          </Text>
-                        )}
+                          )}
+                        </div>
+                        <div style={{ marginTop: '2px' }}>
+                          {versionInfo.loading ? (
+                            <Spin indicator={<LoadingOutlined style={{ fontSize: 12 }} />} />
+                          ) : versionInfo.error ? (
+                            <Text type="danger" style={{ fontSize: '11px' }}>
+                              N/A
+                            </Text>
+                          ) : versionInfo.runicornVersion ? (
+                            versionInfo.versionStatus === 'too_old' ? (
+                              <Text type="danger" style={{ fontSize: '11px' }}>
+                                <CloseCircleOutlined /> Runicorn {versionInfo.runicornVersion}
+                              </Text>
+                            ) : versionInfo.versionStatus === 'mismatch' ? (
+                              <Text type="warning" style={{ fontSize: '11px' }}>
+                                <WarningOutlined /> Runicorn {versionInfo.runicornVersion}
+                              </Text>
+                            ) : (
+                              <Text type="success" style={{ fontSize: '11px' }}>
+                                Runicorn {versionInfo.runicornVersion}
+                              </Text>
+                            )
+                          ) : (
+                            <Text type="warning" style={{ fontSize: '11px' }}>
+                              <WarningOutlined /> {t('remote.env.runicornNotInstalled')}
+                            </Text>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </Col>
-                </Row>
-              </List.Item>
-            )
-          }}
+                    </Col>
+                  </Row>
+                </List.Item>
+              )
+            }}
+          />
+        </Radio.Group>
+      </div>
+
+      <div style={{ flexShrink: 0, paddingTop: 16, background: token.colorBgContainer }}>
+        <DismissibleAlert
+          alertId="remote.env.checkRunicorn"
+          type="warning"
+          message={t('remote.env.checkRunicorn')}
+          description={t('remote.env.checkRunicornHint')}
+          icon={<WarningOutlined />}
+          style={{ marginBottom: 16 }}
         />
-      </Radio.Group>
 
-      <DismissibleAlert
-        alertId="remote.env.checkRunicorn"
-        type="warning"
-        message={t('remote.env.checkRunicorn')}
-        description={t('remote.env.checkRunicornHint')}
-        icon={<WarningOutlined />}
-        style={{ marginTop: 16, marginBottom: 16 }}
-      />
-
-      {/* Action Buttons */}
-      <Space style={{ marginTop: 16 }}>
-        <Button
-          type="primary"
-          icon={<RightOutlined />}
-          onClick={handleConfirm}
-          loading={loading}
-          size="large"
-        >
-          {t('remote.env.continue')}
-        </Button>
-        <Button onClick={onCancel} disabled={loading}>
-          {t('remote.form.cancel')}
-        </Button>
-      </Space>
+        <Space>
+          <Button
+            type="primary"
+            icon={<RightOutlined />}
+            onClick={handleConfirm}
+            loading={loading}
+            size="large"
+          >
+            {t('remote.env.continue')}
+          </Button>
+          <Button onClick={onCancel} disabled={loading}>
+            {t('remote.form.cancel')}
+          </Button>
+        </Space>
+      </div>
     </Card>
   )
 }
