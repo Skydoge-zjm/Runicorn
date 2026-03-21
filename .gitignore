@@ -9,6 +9,7 @@ __pycache__/
 .build/
 build/
 dist/
+.wheel_check/
 .eggs/
 *.egg-info/
 pip-wheel-metadata/

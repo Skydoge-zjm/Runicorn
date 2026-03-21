@@ -18,6 +18,11 @@ from ...remote.host_key import HostKeyConfirmationRequiredError, HostKeyProblem
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+_REMOTE_PYTHON_COMMAND_MIN_TIMEOUT_S = 30
+_REMOTE_RUNICORN_IMPORT_MIN_TIMEOUT_S = 120
+_REMOTE_PIP_SHOW_MIN_TIMEOUT_S = 60
+_REMOTE_STORAGE_SCAN_MIN_TIMEOUT_S = 120
+
 
 def _build_host_key_confirmation_required_detail(problem: HostKeyProblem) -> Dict[str, Any]:
     """Build a stable 409 payload for host key confirmation."""
@@ -140,6 +145,15 @@ def _resolve_python_command(connection: Any, conda_env: str) -> str:
     return cmd_prefix
 
 
+def _get_command_timeout(connection: Any, minimum: int) -> int:
+    configured = getattr(getattr(connection, "config", None), "timeout", 0)
+    try:
+        configured_timeout = int(configured)
+    except (TypeError, ValueError):
+        configured_timeout = 0
+    return max(configured_timeout, minimum)
+
+
 def _detect_remote_storage_candidates(
     connection: Any,
     python_cmd: str,
@@ -251,7 +265,8 @@ print(json.dumps({"scan_root": str(root), "candidates": deduped}, ensure_ascii=F
 """.strip()
 
     stdout, stderr, exit_code = connection.exec_command(
-        f"{python_cmd} -c {shlex.quote(script)} {shlex.quote(scan_root or '')} {int(max_depth)}"
+        f"{python_cmd} -c {shlex.quote(script)} {shlex.quote(scan_root or '')} {int(max_depth)}",
+        timeout=_get_command_timeout(connection, _REMOTE_STORAGE_SCAN_MIN_TIMEOUT_S),
     )
     if exit_code != 0:
         raise RuntimeError(stderr.strip() or "Failed to detect remote storage candidates")
@@ -926,7 +941,10 @@ async def get_remote_config(
         logger.info(f"Using Python command for {conda_env or 'system'}: {cmd_prefix}")
         
         # Get Python version
-        stdout, stderr, exit_code = connection.exec_command(f"{cmd_prefix} --version")
+        stdout, stderr, exit_code = connection.exec_command(
+            f"{cmd_prefix} --version",
+            timeout=_get_command_timeout(connection, _REMOTE_PYTHON_COMMAND_MIN_TIMEOUT_S),
+        )
         if exit_code != 0:
             raise HTTPException(
                 status_code=500,
@@ -938,7 +956,8 @@ async def get_remote_config(
         # Check runicorn installation
         # Use getattr to safely get version, fallback to "unknown"
         stdout, stderr, exit_code = connection.exec_command(
-            f"{cmd_prefix} -c 'import runicorn; print(getattr(runicorn, \"__version__\", \"unknown\"))'"
+            f"{cmd_prefix} -c 'import runicorn; print(getattr(runicorn, \"__version__\", \"unknown\"))'",
+            timeout=_get_command_timeout(connection, _REMOTE_RUNICORN_IMPORT_MIN_TIMEOUT_S),
         )
         
         logger.info(f"Checking runicorn: exit_code={exit_code}, stdout={stdout[:100]}, stderr={stderr[:200]}")
@@ -948,7 +967,8 @@ async def get_remote_config(
         if exit_code != 0:
             # Try to get more information from pip
             pip_stdout, _, pip_exit = connection.exec_command(
-                f"{cmd_prefix} -m pip show runicorn"
+                f"{cmd_prefix} -m pip show runicorn",
+                timeout=_get_command_timeout(connection, _REMOTE_PIP_SHOW_MIN_TIMEOUT_S),
             )
             
             # Check if it's an editable installation
@@ -964,7 +984,8 @@ async def get_remote_config(
                     
                     # Try again with PYTHONPATH
                     stdout, stderr, exit_code = connection.exec_command(
-                        f"PYTHONPATH={editable_path}:$PYTHONPATH {cmd_prefix} -c 'import runicorn; print(runicorn.__version__)'"
+                        f"PYTHONPATH={editable_path}:$PYTHONPATH {cmd_prefix} -c 'import runicorn; print(runicorn.__version__)'",
+                        timeout=_get_command_timeout(connection, _REMOTE_RUNICORN_IMPORT_MIN_TIMEOUT_S),
                     )
                     
                     if exit_code == 0:
@@ -999,7 +1020,8 @@ async def get_remote_config(
         elif runicorn_version is not None:
             # Second, try config file (only if runicorn is installed)
             stdout, stderr, config_exit = connection.exec_command(
-                f"{cmd_prefix} -c 'from runicorn.config import get_user_root_dir; d=get_user_root_dir(); print(d if d else \"\")'"
+                f"{cmd_prefix} -c 'from runicorn.config import get_user_root_dir; d=get_user_root_dir(); print(d if d else \"\")'",
+                timeout=_get_command_timeout(connection, _REMOTE_RUNICORN_IMPORT_MIN_TIMEOUT_S),
             )
             
             if config_exit == 0 and stdout.strip():
@@ -1026,7 +1048,8 @@ async def get_remote_config(
         
         # Get available ports (use same Python as config)
         stdout, stderr, port_exit = connection.exec_command(
-            f"{cmd_prefix} -c 'import socket; s=socket.socket(); s.bind((\"\", 0)); print(s.getsockname()[1]); s.close()'"
+            f"{cmd_prefix} -c 'import socket; s=socket.socket(); s.bind((\"\", 0)); print(s.getsockname()[1]); s.close()'",
+            timeout=_get_command_timeout(connection, _REMOTE_PYTHON_COMMAND_MIN_TIMEOUT_S),
         )
         suggested_port = int(stdout.strip()) if port_exit == 0 and stdout.strip().isdigit() else 23300
         

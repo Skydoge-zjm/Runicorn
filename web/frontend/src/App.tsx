@@ -11,6 +11,7 @@ import AssetsPage from './pages/AssetsPage'
 import AssetDetailPage from './pages/AssetDetailPage'
 import RemoteViewerPage from './pages/RemoteViewerPage'
 import PerformanceMonitorPage from './pages/PerformanceMonitorPage'
+import DiagnosticsPage from './pages/DiagnosticsPage'
 import { PageTransition } from './components/animations/PageTransition'
 import { health, getConfig } from './api'
 import SettingsDrawer from './components/SettingsDrawer'
@@ -339,6 +340,7 @@ export default function App() {
                   <Route path="/assets/:id" element={<AssetDetailPage />} />
                   <Route path="/performance" element={<PerformanceMonitorPage />} />
                   <Route path="/remote" element={<RemoteViewerPage />} />
+                  <Route path="/diagnostics" element={<DiagnosticsPage />} />
                 </Routes>
               </PageTransition>
             </div>

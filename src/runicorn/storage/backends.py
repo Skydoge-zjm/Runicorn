@@ -12,6 +12,7 @@ import sqlite3
 import time
 import uuid
 from abc import ABC, abstractmethod
+from importlib.resources import files
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Iterator
 import threading
@@ -290,11 +291,9 @@ class SQLiteStorageBackend(StorageBackend):
         """Initialize database schema from SQL file."""
         # Migrate old schema before applying current schema.sql
         self._migrate_legacy_schema()
-        
-        schema_path = Path(__file__).parent / "schema.sql"
-        
+
         try:
-            schema_sql = schema_path.read_text(encoding="utf-8")
+            schema_sql = files("runicorn.storage").joinpath("schema.sql").read_text(encoding="utf-8")
             conn = self.pool.get_connection()
             try:
                 conn.executescript(schema_sql)
@@ -302,6 +301,12 @@ class SQLiteStorageBackend(StorageBackend):
                 logger.info("Database schema initialized successfully")
             finally:
                 self.pool.return_connection(conn)
+        except FileNotFoundError as e:
+            logger.error(
+                "Failed to initialize database schema: missing packaged resource schema.sql. "
+                "This usually means the installed wheel/sdist is incomplete."
+            )
+            raise
         except Exception as e:
             logger.error(f"Failed to initialize database schema: {e}")
             raise

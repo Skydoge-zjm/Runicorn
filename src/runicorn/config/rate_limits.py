@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from importlib.resources import files
 from pathlib import Path
 from typing import Any, Dict
 
@@ -32,25 +33,25 @@ def get_rate_limit_config() -> Dict[str, Any]:
             logger.warning(f"Failed to load user rate limits config: {e}")
 
     # Priority 2: Check package defaults directory (bundled with code)
-    rate_limits_file = Path(__file__).parent / '_defaults' / 'rate_limits.json'
+    try:
+        config = json.loads(
+            files("runicorn.config").joinpath("_defaults", "rate_limits.json").read_text(
+                encoding="utf-8"
+            )
+        )
 
-    if rate_limits_file.exists():
+        # Copy to user directory for future edits
         try:
-            with open(rate_limits_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+            user_config_dir.mkdir(parents=True, exist_ok=True)
+            with open(user_rate_limits_file, 'w', encoding='utf-8') as uf:
+                json.dump(config, uf, indent=2, ensure_ascii=False)
+            logger.info(f"Copied rate limits config to user directory: {user_rate_limits_file}")
+        except Exception as copy_error:
+            logger.debug(f"Could not copy rate limits to user dir: {copy_error}")
 
-                # Copy to user directory for future edits
-                try:
-                    user_config_dir.mkdir(parents=True, exist_ok=True)
-                    with open(user_rate_limits_file, 'w', encoding='utf-8') as uf:
-                        json.dump(config, uf, indent=2, ensure_ascii=False)
-                    logger.info(f"Copied rate limits config to user directory: {user_rate_limits_file}")
-                except Exception as copy_error:
-                    logger.debug(f"Could not copy rate limits to user dir: {copy_error}")
-
-                return config
-        except Exception as e:
-            logger.warning(f"Failed to load package rate limits config: {e}")
+        return config
+    except Exception as e:
+        logger.warning(f"Failed to load package rate limits config: {e}")
 
     # Priority 3: Return sensible defaults
     return {

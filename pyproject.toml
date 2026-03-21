@@ -69,6 +69,8 @@ include = ["runicorn*"]
 # Include prebuilt frontend if present
 runicorn = [
   "VERSION.txt",
+  "config/_defaults/*.json",
+  "storage/*.sql",
   "webui/**",
 ]
 

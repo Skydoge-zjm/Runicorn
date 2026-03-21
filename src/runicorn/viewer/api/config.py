@@ -26,6 +26,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _storage_backend_payload(request: Request) -> Dict[str, Any]:
+    backend = getattr(request.app.state, "storage_backend", None)
+    using_sqlite = backend is not None
+    return {
+        "mode": "sqlite" if using_sqlite else "file",
+        "label": "SQLite-backed" if using_sqlite else "File-based fallback",
+        "available": using_sqlite,
+        "backend_class": backend.__class__.__name__ if backend is not None else None,
+    }
+
+
 def _detect_local_storage_candidates(*, scan_root: str | None, max_depth: int) -> Dict[str, Any]:
     common_names = {".runicorn", "runicorn_data"}
     prune = {
@@ -140,6 +151,7 @@ async def get_config(request: Request) -> Dict[str, Any]:
         "storage": str(storage_root),
         "config_file": str(config_file_path),
         "home_directory": str(Path.home().resolve()),
+        "storage_backend": _storage_backend_payload(request),
     }
 
 

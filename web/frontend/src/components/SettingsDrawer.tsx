@@ -765,7 +765,7 @@ setImportMode('merge')
                 <span>{t('settings.tabs.system_info')}</span>
               </Space>
             ),
-            children: <SystemInfoPanel />,
+            children: <SystemInfoPanel onOpenDiagnostics={onClose} />,
           },
         ]}
         tabPosition="top"

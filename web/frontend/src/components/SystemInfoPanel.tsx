@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Card, Descriptions, Space, Button, Typography, Spin, App, Tag, Row, Col, Statistic, Progress, Collapse } from 'antd'
-import { CopyOutlined, ReloadOutlined, InfoCircleOutlined, DatabaseOutlined } from '@ant-design/icons'
+import { CopyOutlined, ReloadOutlined, InfoCircleOutlined, DatabaseOutlined, BugOutlined } from '@ant-design/icons'
 import { health, getConfig, getStorageStats, StorageStats } from '../api'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 
 const { Text, Title } = Typography
 
-export default function SystemInfoPanel() {
+export default function SystemInfoPanel({ onOpenDiagnostics }: { onOpenDiagnostics?: () => void }) {
   const { t } = useTranslation()
   const { message } = App.useApp()
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [systemInfo, setSystemInfo] = useState<any>(null)
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null)
@@ -54,6 +56,7 @@ Runicorn System Information
 Version Information:
 - Runicorn: ${systemInfo.health.version}
 - Status: ${systemInfo.health.status}
+- Storage Backend: ${systemInfo.health.storage_backend?.label || 'Unknown'} (${systemInfo.health.storage_backend?.mode || 'unknown'})
 
 Storage Configuration:
 - Storage Root: ${systemInfo.config.storage || systemInfo.config.user_root_dir || 'Not configured'}
@@ -77,6 +80,11 @@ Generated: ${new Date().toLocaleString()}
     }).catch(() => {
       message.error(t('settings.system_info.copy_failed'))
     })
+  }
+
+  const openDiagnostics = () => {
+    onOpenDiagnostics?.()
+    navigate('/diagnostics?source=session')
   }
   
   if (loading || !systemInfo) {
@@ -133,6 +141,18 @@ Generated: ${new Date().toLocaleString()}
         <Descriptions column={1} size="small">
           <Descriptions.Item label={t('settings.system_info.storage_root')}>
             <Text code copyable>{systemInfo.config.storage || systemInfo.config.user_root_dir || 'Not configured'}</Text>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('settings.system_info.storage_backend')}>
+            <Space>
+              <Tag color={systemInfo.health.storage_backend?.mode === 'sqlite' ? 'blue' : 'orange'}>
+                {systemInfo.health.storage_backend?.mode === 'sqlite'
+                  ? t('settings.system_info.storage_backend_sqlite')
+                  : t('settings.system_info.storage_backend_file')}
+              </Tag>
+              {systemInfo.health.storage_backend?.backend_class && (
+                <Text type="secondary" code>{systemInfo.health.storage_backend.backend_class}</Text>
+              )}
+            </Space>
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -312,6 +332,15 @@ Generated: ${new Date().toLocaleString()}
         </Card>
       )}
       
+      <Card size="small">
+        <Space direction="vertical" style={{ width: '100%' }} size="small">
+          <Text type="secondary">{t('diagnostics.subtitle')}</Text>
+          <Button type="primary" icon={<BugOutlined />} onClick={openDiagnostics} block>
+            {t('settings.system_info.diagnostics')}
+          </Button>
+        </Space>
+      </Card>
+
     </Space>
   )
 }

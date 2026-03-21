@@ -1,6 +1,7 @@
 """Tests for runicorn.config.rate_limits — rate limit config read/write."""
 from __future__ import annotations
 
+from importlib.resources import files
 import json
 from pathlib import Path
 
@@ -10,6 +11,13 @@ from runicorn.config.rate_limits import get_rate_limit_config, save_rate_limit_c
 
 
 class TestGetRateLimitConfig:
+    def test_package_defaults_resource_is_packaged(self, mock_config_root: Path) -> None:
+        default_json = files("runicorn.config").joinpath("_defaults", "rate_limits.json").read_text(
+            encoding="utf-8"
+        )
+        loaded = json.loads(default_json)
+        assert "default" in loaded
+        assert "settings" in loaded
 
     def test_load_defaults_when_no_user_file(self, mock_config_root: Path) -> None:
         """No user file → fall through to package defaults or hardcoded."""

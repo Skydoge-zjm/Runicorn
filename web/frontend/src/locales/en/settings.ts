@@ -10,10 +10,13 @@ export default {
   'settings.system_info.runicorn_version': 'Runicorn Version',
   'settings.system_info.api_status': 'API Status',
   
-  'settings.system_info.storage_config': 'Storage Configuration',
-  'settings.system_info.storage_root': 'Storage Root',
-  
-  'settings.system_info.config_files': 'Configuration Files',
+'settings.system_info.storage_config': 'Storage Configuration',
+'settings.system_info.storage_root': 'Storage Root',
+'settings.system_info.storage_backend': 'Storage Backend',
+'settings.system_info.storage_backend_sqlite': 'SQLite-backed',
+'settings.system_info.storage_backend_file': 'File-based fallback',
+
+'settings.system_info.config_files': 'Configuration Files',
   'settings.system_info.config_file': 'Main Config',
   'settings.system_info.rate_limit_config': 'Rate Limit Config',
   
