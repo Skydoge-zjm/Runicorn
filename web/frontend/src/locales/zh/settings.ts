@@ -10,10 +10,13 @@ export default {
   'settings.system_info.runicorn_version': 'Runicorn 版本',
   'settings.system_info.api_status': 'API 状态',
   
-  'settings.system_info.storage_config': '存储配置',
-  'settings.system_info.storage_root': '存储根目录',
-  
-  'settings.system_info.config_files': '配置文件',
+'settings.system_info.storage_config': '存储配置',
+'settings.system_info.storage_root': '存储根目录',
+'settings.system_info.storage_backend': '存储后端',
+'settings.system_info.storage_backend_sqlite': '基于 SQLite',
+'settings.system_info.storage_backend_file': '文件回退模式',
+
+'settings.system_info.config_files': '配置文件',
   'settings.system_info.config_file': '主配置',
   'settings.system_info.rate_limit_config': '速率限制配置',
   

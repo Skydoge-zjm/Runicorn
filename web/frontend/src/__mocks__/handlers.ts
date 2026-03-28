@@ -5,7 +5,16 @@ const BASE = '/api'
 export const handlers = [
   // ── Health ──
   http.get(`${BASE}/health`, () =>
-    HttpResponse.json({ status: 'ok', version: '0.1.0' }),
+    HttpResponse.json({
+      status: 'ok',
+      version: '0.1.0',
+      storage_backend: {
+        mode: 'sqlite',
+        label: 'SQLite-backed',
+        available: true,
+        backend_class: 'SQLiteStorageBackend',
+      },
+    }),
   ),
 
   // ── Runs ──
@@ -70,7 +79,17 @@ export const handlers = [
 
   // ── Config ──
   http.get(`${BASE}/config`, () =>
-    HttpResponse.json({ user_root_dir: '/tmp', storage: '/tmp/runicorn', home_directory: '/tmp' }),
+    HttpResponse.json({
+      user_root_dir: '/tmp',
+      storage: '/tmp/runicorn',
+      home_directory: '/tmp',
+      storage_backend: {
+        mode: 'sqlite',
+        label: 'SQLite-backed',
+        available: true,
+        backend_class: 'SQLiteStorageBackend',
+      },
+    }),
   ),
   http.post(`${BASE}/config/user_root_dir`, () =>
     HttpResponse.json({ ok: true, user_root_dir: '/tmp', storage: '/tmp/runicorn' }),

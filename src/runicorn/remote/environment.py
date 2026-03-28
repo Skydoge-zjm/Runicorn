@@ -13,6 +13,13 @@ from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+_FAST_COMMAND_MIN_TIMEOUT_S = 10
+_PYTHON_VERSION_MIN_TIMEOUT_S = 30
+_CONDA_COMMAND_MIN_TIMEOUT_S = 120
+_BATCH_CHECK_BASE_TIMEOUT_S = 30
+_BATCH_CHECK_PER_ENV_S = 15
+_BATCH_CHECK_MAX_TIMEOUT_S = 300
+
 
 @dataclass
 class PythonEnvironment:
@@ -70,6 +77,15 @@ class RemoteEnvironmentDetector:
         self._conda_path: Optional[str] = cache.get('conda_path')
         self._conda_root: Optional[str] = cache.get('conda_root')
         self._env_list: Optional[List[PythonEnvironment]] = cache.get('env_list')
+
+    def _get_command_timeout(self, minimum: int) -> int:
+        """Use the connection timeout as a floor, but never below the requested minimum."""
+        configured = getattr(getattr(self.connection, "config", None), "timeout", 0)
+        try:
+            configured_timeout = int(configured)
+        except (TypeError, ValueError):
+            configured_timeout = 0
+        return max(configured_timeout, minimum)
     
     def detect_all_environments(self) -> List[PythonEnvironment]:
         """
@@ -123,7 +139,10 @@ class RemoteEnvironmentDetector:
             return self._conda_path
         
         # Method 1: Check if conda is in PATH
-        stdout, _, exit_code = self.connection.exec_command("which conda")
+        stdout, _, exit_code = self.connection.exec_command(
+            "which conda",
+            timeout=self._get_command_timeout(_FAST_COMMAND_MIN_TIMEOUT_S),
+        )
         if exit_code == 0 and stdout.strip():
             self._conda_path = stdout.strip()
             self._save_to_cache('conda_path', self._conda_path)
@@ -135,7 +154,10 @@ class RemoteEnvironmentDetector:
             # Expand home directory
             expanded_path = conda_path.replace("~", "$HOME")
             test_cmd = f'test -f {expanded_path} && echo "exists"'
-            stdout, _, exit_code = self.connection.exec_command(test_cmd)
+            stdout, _, exit_code = self.connection.exec_command(
+                test_cmd,
+                timeout=self._get_command_timeout(_FAST_COMMAND_MIN_TIMEOUT_S),
+            )
             
             if exit_code == 0 and stdout.strip() == "exists":
                 self._conda_path = expanded_path
@@ -164,7 +186,10 @@ class RemoteEnvironmentDetector:
         for init_file in self.SHELL_INIT_FILES:
             # Try to read the init file
             expanded_file = init_file.replace("~", "$HOME")
-            stdout, _, exit_code = self.connection.exec_command(f"cat {expanded_file}")
+            stdout, _, exit_code = self.connection.exec_command(
+                f"cat {expanded_file}",
+                timeout=self._get_command_timeout(_FAST_COMMAND_MIN_TIMEOUT_S),
+            )
             
             if exit_code != 0:
                 continue
@@ -205,7 +230,8 @@ class RemoteEnvironmentDetector:
         
         # Get list of conda environments
         stdout, stderr, exit_code = self.connection.exec_command(
-            f"{conda_path} info --envs"
+            f"{conda_path} info --envs",
+            timeout=self._get_command_timeout(_CONDA_COMMAND_MIN_TIMEOUT_S),
         )
         
         if exit_code != 0:
@@ -263,7 +289,8 @@ class RemoteEnvironmentDetector:
         # Method 1: Direct path to python (fast, no conda activation overhead)
         python_path = f"{env_path}/bin/python"
         stdout, stderr, exit_code = self.connection.exec_command(
-            f"{python_path} --version"
+            f"{python_path} --version",
+            timeout=self._get_command_timeout(_PYTHON_VERSION_MIN_TIMEOUT_S),
         )
         
         version_output = stdout.strip() if stdout.strip() else stderr.strip()
@@ -272,7 +299,8 @@ class RemoteEnvironmentDetector:
         
         # Method 2: Fallback to conda run (handles broken symlinks etc.)
         stdout, stderr, exit_code = self.connection.exec_command(
-            f"{conda_path} run -n {env_name} python --version"
+            f"{conda_path} run -n {env_name} python --version",
+            timeout=self._get_command_timeout(_CONDA_COMMAND_MIN_TIMEOUT_S),
         )
         
         version_output = stdout.strip() if stdout.strip() else stderr.strip()
@@ -291,7 +319,8 @@ class RemoteEnvironmentDetector:
         # Try python3 first, then python
         for python_cmd in ['python3', 'python']:
             stdout, _, exit_code = self.connection.exec_command(
-                f"which {python_cmd}"
+                f"which {python_cmd}",
+                timeout=self._get_command_timeout(_FAST_COMMAND_MIN_TIMEOUT_S),
             )
             
             if exit_code != 0:
@@ -301,7 +330,8 @@ class RemoteEnvironmentDetector:
             
             # Get version
             stdout, stderr, exit_code = self.connection.exec_command(
-                f"{python_path} --version"
+                f"{python_path} --version",
+                timeout=self._get_command_timeout(_PYTHON_VERSION_MIN_TIMEOUT_S),
             )
             
             if exit_code == 0:
@@ -354,7 +384,8 @@ class RemoteEnvironmentDetector:
         
         # Get environment path
         stdout, _, exit_code = self.connection.exec_command(
-            f"{conda_path} info --envs | grep '^{env_name} '"
+            f"{conda_path} info --envs | grep '^{env_name} '",
+            timeout=self._get_command_timeout(_CONDA_COMMAND_MIN_TIMEOUT_S),
         )
         
         if exit_code != 0 or not stdout.strip():
@@ -405,7 +436,16 @@ class RemoteEnvironmentDetector:
         batch_cmd = " ; ".join(check_lines)
         
         logger.info(f"Batch checking runicorn in {len(env_paths)} environments")
-        stdout, stderr, exit_code = self.connection.exec_command(batch_cmd)
+        batch_timeout = self._get_command_timeout(
+            min(
+                _BATCH_CHECK_BASE_TIMEOUT_S + len(env_paths) * _BATCH_CHECK_PER_ENV_S,
+                _BATCH_CHECK_MAX_TIMEOUT_S,
+            )
+        )
+        stdout, stderr, exit_code = self.connection.exec_command(
+            batch_cmd,
+            timeout=batch_timeout,
+        )
         
         # Parse results
         results: Dict[str, Optional[str]] = {}

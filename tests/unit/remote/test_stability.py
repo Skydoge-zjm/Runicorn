@@ -30,10 +30,10 @@ from runicorn.remote.viewer.session import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_connection(*, connected: bool = True) -> MagicMock:
+def _make_connection(*, connected: bool = True, timeout: int = 30) -> MagicMock:
     conn = MagicMock()
     conn.is_connected = connected
-    conn.config = SimpleNamespace(host="h", port=22, username="u")
+    conn.config = SimpleNamespace(host="h", port=22, username="u", timeout=timeout)
     return conn
 
 
@@ -222,6 +222,41 @@ class TestHealthMonitor:
         # Stop it to clean up the test
         manager._health_stop.set()
         manager._health_thread.join(timeout=2)
+
+
+class TestRemoteViewerStartup:
+    def test_get_remote_runicorn_version_uses_extended_timeout(self):
+        from runicorn.remote.viewer.manager import RemoteViewerManager
+
+        manager = RemoteViewerManager()
+        connection = _make_connection(timeout=30)
+        connection.exec_command.return_value = ("0.5.1\n", "", 0)
+
+        version = manager._get_remote_runicorn_version(
+            connection,
+            "/opt/miniconda3/envs/torch/bin/python",
+        )
+
+        assert version == "0.5.1"
+        assert connection.exec_command.call_args.kwargs["timeout"] > connection.config.timeout
+
+    def test_start_remote_viewer_process_uses_extended_timeout(self):
+        from runicorn.remote.viewer.manager import RemoteViewerManager
+
+        manager = RemoteViewerManager()
+        connection = _make_connection(timeout=8)
+        connection.exec_command.return_value = ("43210\n", "", 0)
+
+        remote_pid = manager._start_remote_viewer_process(
+            connection=connection,
+            python_cmd="/opt/miniconda3/envs/torch/bin/python",
+            remote_root="/data/runicorn",
+            remote_port=23300,
+            session_id="slowenv",
+        )
+
+        assert remote_pid == 43210
+        assert connection.exec_command.call_args.kwargs["timeout"] > connection.config.timeout
 
 
 # ===================================================================

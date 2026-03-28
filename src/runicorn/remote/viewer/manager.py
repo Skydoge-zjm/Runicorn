@@ -6,6 +6,7 @@ Manages remote viewer sessions with SSH tunnel.
 from __future__ import annotations
 
 import logging
+import shlex
 import threading
 import time
 import uuid
@@ -32,6 +33,14 @@ _TUNNEL_MAX_BACKOFF_S = 60
 # Health monitor parameters.
 _HEALTH_CHECK_INTERVAL_S = 30
 _MAX_PROCESS_RESTART_ATTEMPTS = 3
+_REMOTE_VIEWER_PYTHON_CHECK_MIN_TIMEOUT_S = 30
+_REMOTE_VIEWER_RUNICORN_IMPORT_MIN_TIMEOUT_S = 120
+_REMOTE_VIEWER_PORT_DISCOVERY_MIN_TIMEOUT_S = 30
+_REMOTE_VIEWER_START_COMMAND_MIN_TIMEOUT_S = 30
+_REMOTE_VIEWER_STARTUP_GRACE_S = 2
+_REMOTE_VIEWER_HEALTH_MIN_TIMEOUT_S = 45
+_REMOTE_VIEWER_HEALTH_PROBE_TIMEOUT_S = 6
+_REMOTE_VIEWER_LOG_ROOT = "/tmp/runicorn-viewer"
 
 
 class RemoteViewerManager:
@@ -56,6 +65,14 @@ class RemoteViewerManager:
         # Health monitor thread — started lazily on first session.
         self._health_thread: Optional[threading.Thread] = None
         self._health_stop = threading.Event()
+
+    def _get_command_timeout(self, connection: SshConnection, minimum: int) -> int:
+        configured = getattr(getattr(connection, "config", None), "timeout", 0)
+        try:
+            configured_timeout = int(configured)
+        except (TypeError, ValueError):
+            configured_timeout = 0
+        return max(configured_timeout, minimum)
     
     def start_remote_viewer(
         self,
@@ -105,15 +122,7 @@ class RemoteViewerManager:
             
             # Step 2: Check runicorn installation
             logger.info(f"[{session_id}] Checking runicorn installation...")
-            stdout, stderr, exit_code = connection.exec_command(
-                f"{python_cmd} -c 'import runicorn; print(getattr(runicorn, \"__version__\", \"unknown\"))'"
-            )
-            if exit_code != 0:
-                raise RuntimeError(
-                    f"runicorn not installed on remote server.\n"
-                    f"Please install: {python_cmd} -m pip install runicorn"
-                )
-            remote_version = stdout.strip()
+            remote_version = self._get_remote_runicorn_version(connection, python_cmd)
             logger.info(f"[{session_id}] Remote runicorn version: {remote_version}")
             
             # Step 3: Find available remote port
@@ -133,8 +142,12 @@ class RemoteViewerManager:
             logger.info(f"[{session_id}] Remote viewer started (PID: {remote_pid})")
             
             # Step 5: Wait for viewer to be ready
-            time.sleep(2)  # Give viewer time to start
-            if not self._check_remote_viewer_health(connection, remote_port):
+            time.sleep(_REMOTE_VIEWER_STARTUP_GRACE_S)  # Give viewer time to start
+            if not self._check_remote_viewer_health(
+                connection,
+                remote_port,
+                session_id=session_id,
+            ):
                 raise RuntimeError("Remote viewer failed health check")
             logger.info(f"[{session_id}] Remote viewer is healthy")
             
@@ -415,18 +428,46 @@ class RemoteViewerManager:
         for cmd in ["python3", "python"]:
             try:
                 stdout, stderr, exit_code = connection.exec_command(
-                    f"which {cmd}"
+                    f"which {cmd}",
+                    timeout=self._get_command_timeout(
+                        connection,
+                        _REMOTE_VIEWER_PYTHON_CHECK_MIN_TIMEOUT_S,
+                    ),
                 )
                 if exit_code == 0 and stdout.strip():
                     # Verify it's Python 3
                     stdout2, _, exit_code2 = connection.exec_command(
-                        f"{cmd} --version"
+                        f"{cmd} --version",
+                        timeout=self._get_command_timeout(
+                            connection,
+                            _REMOTE_VIEWER_PYTHON_CHECK_MIN_TIMEOUT_S,
+                        ),
                     )
                     if exit_code2 == 0 and "Python 3" in stdout2:
                         return cmd
             except Exception:
                 continue
         return None
+
+    def _get_remote_runicorn_version(
+        self,
+        connection: SshConnection,
+        python_cmd: str,
+    ) -> str:
+        """Check that runicorn is importable in the target environment."""
+        stdout, stderr, exit_code = connection.exec_command(
+            f"{python_cmd} -c 'import runicorn; print(getattr(runicorn, \"__version__\", \"unknown\"))'",
+            timeout=self._get_command_timeout(
+                connection,
+                _REMOTE_VIEWER_RUNICORN_IMPORT_MIN_TIMEOUT_S,
+            ),
+        )
+        if exit_code != 0:
+            raise RuntimeError(
+                f"runicorn not installed on remote server.\n"
+                f"Please install: {python_cmd} -m pip install runicorn"
+            )
+        return stdout.strip()
     
     def _find_remote_available_port(
         self, 
@@ -449,7 +490,11 @@ for port in range({start_port}, {end_port}):
         continue
 """
         stdout, stderr, exit_code = connection.exec_command(
-            f"python3 -c \"{script}\""
+            f"python3 -c \"{script}\"",
+            timeout=self._get_command_timeout(
+                connection,
+                _REMOTE_VIEWER_PORT_DISCOVERY_MIN_TIMEOUT_S,
+            ),
         )
         if exit_code == 0 and stdout.strip().isdigit():
             return int(stdout.strip())
@@ -465,19 +510,36 @@ for port in range({start_port}, {end_port}):
         session_id: str,
     ) -> int:
         """Start remote viewer process and return PID."""
+        remote_log_dir = f"{_REMOTE_VIEWER_LOG_ROOT}/sessions/{session_id}"
+        bootstrap_log_path = f"{remote_log_dir}/bootstrap.log"
+        viewer_log_path = f"{remote_log_dir}/viewer.log"
+
         # Build command
         cmd = (
-            f"nohup {python_cmd} -m runicorn viewer "
-            f"--storage '{remote_root}' "
+            f"mkdir -p {shlex.quote(remote_log_dir)} && "
+            f"nohup env "
+            f"RUNICORN_REMOTE_MODE=1 "
+            f"RUNICORN_REMOTE_SESSION_ID={shlex.quote(session_id)} "
+            f"RUNICORN_REMOTE_LOG_ROOT={shlex.quote(_REMOTE_VIEWER_LOG_ROOT)} "
+            f"RUNICORN_REMOTE_LOG_DIR={shlex.quote(remote_log_dir)} "
+            f"RUNICORN_LOG_FILE={shlex.quote(viewer_log_path)} "
+            f"{shlex.quote(python_cmd)} -m runicorn viewer "
+            f"--storage {shlex.quote(remote_root)} "
             f"--host 127.0.0.1 "
             f"--port {remote_port} "
             f"--remote-mode "
             f"--log-level INFO "
-            f"> /tmp/runicorn_viewer_{session_id}.log 2>&1 & echo $!"
+            f"> {shlex.quote(bootstrap_log_path)} 2>&1 & echo $!"
         )
         
         logger.info(f"Starting remote viewer with command: {cmd}")
-        stdout, stderr, exit_code = connection.exec_command(cmd, timeout=5)
+        stdout, stderr, exit_code = connection.exec_command(
+            cmd,
+            timeout=self._get_command_timeout(
+                connection,
+                _REMOTE_VIEWER_START_COMMAND_MIN_TIMEOUT_S,
+            ),
+        )
         
         if exit_code != 0:
             raise RuntimeError(f"Failed to start remote viewer: {stderr}")
@@ -492,18 +554,29 @@ for port in range({start_port}, {end_port}):
         self,
         connection: SshConnection,
         remote_port: int,
-        timeout: int = 10
+        timeout: Optional[int] = None,
+        session_id: Optional[str] = None,
     ) -> bool:
         """Check if remote viewer is responding."""
         logger.info(f"Health check: Testing port {remote_port} on remote server")
-        
+        wait_budget = timeout or self._get_command_timeout(
+            connection,
+            _REMOTE_VIEWER_HEALTH_MIN_TIMEOUT_S,
+        )
+
         # Try to connect to the port
         cmd = f"timeout 5 bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/{remote_port}'"
-        
-        for attempt in range(timeout):
+
+        for attempt in range(wait_budget):
             try:
-                stdout, stderr, exit_code = connection.exec_command(cmd, timeout=6)
-                logger.debug(f"Health check attempt {attempt + 1}/{timeout}: exit_code={exit_code}, stderr={stderr[:100]}")
+                stdout, stderr, exit_code = connection.exec_command(
+                    cmd,
+                    timeout=_REMOTE_VIEWER_HEALTH_PROBE_TIMEOUT_S,
+                )
+                logger.debug(
+                    f"Health check attempt {attempt + 1}/{wait_budget}: "
+                    f"exit_code={exit_code}, stderr={stderr[:100]}"
+                )
                 if exit_code == 0:
                     logger.info(f"Health check passed on attempt {attempt + 1}")
                     return True
@@ -512,12 +585,17 @@ for port in range({start_port}, {end_port}):
             time.sleep(1)
         
         # If health check failed, try to get viewer process logs
-        logger.error(f"Health check failed after {timeout} attempts")
-        log_stdout, _, _ = connection.exec_command(
-            f"cat /tmp/runicorn_viewer_*.log 2>/dev/null | tail -20"
-        )
-        if log_stdout.strip():
-            logger.error(f"Remote viewer logs:\n{log_stdout}")
+        logger.error(f"Health check failed after {wait_budget} attempts")
+        if session_id:
+            remote_log_dir = f"{_REMOTE_VIEWER_LOG_ROOT}/sessions/{session_id}"
+            for log_name in ("bootstrap.log", "viewer.log"):
+                log_path = f"{remote_log_dir}/{log_name}"
+                log_stdout, _, _ = connection.exec_command(
+                    f"test -f {shlex.quote(log_path)} && "
+                    f"tail -20 {shlex.quote(log_path)} || true"
+                )
+                if log_stdout.strip():
+                    logger.error(f"Remote viewer {log_name}:\n{log_stdout}")
         
         return False
     
@@ -533,9 +611,6 @@ for port in range({start_port}, {end_port}):
             if remote_port:
                 cmd = f"lsof -ti:{remote_port} | xargs -r kill"
                 connection.exec_command(cmd)
-            
-            # Remove log file
-            connection.exec_command(f"rm -f /tmp/runicorn_viewer_{session_id}.log")
         except Exception as e:
             logger.debug(f"Cleanup warning: {e}")
     

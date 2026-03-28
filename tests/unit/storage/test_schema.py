@@ -1,6 +1,7 @@
 """Tests for storage/schema.sql — DDL completeness and idempotency."""
 from __future__ import annotations
 
+from importlib.resources import files
 import sqlite3
 from pathlib import Path
 
@@ -43,6 +44,9 @@ def db_conn(tmp_path: Path):
 
 
 class TestSchema:
+    def test_schema_resource_is_packaged(self) -> None:
+        schema_sql = files("runicorn.storage").joinpath("schema.sql").read_text(encoding="utf-8")
+        assert "CREATE TABLE IF NOT EXISTS experiments" in schema_sql
 
     def test_creates_all_tables(self, db_conn: sqlite3.Connection) -> None:
         rows = db_conn.execute(

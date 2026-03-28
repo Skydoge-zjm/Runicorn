@@ -116,7 +116,17 @@ export async function listRunsByName(project: string, name: string) {
 
 // ----- Config helpers -----
 export async function getConfig() {
-  return apiFetch<{ user_root_dir: string; storage: string; home_directory?: string }>('/config')
+  return apiFetch<{
+    user_root_dir: string
+    storage: string
+    home_directory?: string
+    storage_backend?: {
+      mode: 'sqlite' | 'file'
+      label: string
+      available: boolean
+      backend_class?: string | null
+    }
+  }>('/config')
 }
 
 export async function setUserRootDir(path: string) {

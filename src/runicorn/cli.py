@@ -121,6 +121,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             host = "127.0.0.1"
             log_level = args.log_level.lower()
             idle_timeout = args.idle_timeout
+            os.environ["RUNICORN_REMOTE_MODE"] = "1"
             print(f"[Remote Mode] Starting viewer on {host}:{args.port}", flush=True)
             print(f"[Remote Mode] Log level: {log_level}", flush=True)
             print(f"[Remote Mode] Storage: {args.storage or 'default'}", flush=True)
@@ -128,6 +129,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         else:
             host = args.host
             log_level = "info"
+            os.environ.pop("RUNICORN_REMOTE_MODE", None)
         
         # Pass idle_timeout via env so create_app can pick it up.
         if idle_timeout > 0:

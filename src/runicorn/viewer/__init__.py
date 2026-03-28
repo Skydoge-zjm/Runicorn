@@ -26,6 +26,7 @@ from .api import (
     health_router,
     runs_router, 
     metrics_router,
+    diagnostics_router,
     config_router,
     experiments_router,
     export_router,
@@ -40,6 +41,7 @@ from .api import (
 
 # Import version from main package
 from .. import __version__
+from .utils.diagnostics import build_diagnostics_context
 
 logger = logging.getLogger(__name__)
 
@@ -126,9 +128,12 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     """
     # Initialize storage root
     root = get_storage_root(storage)
-    
+
+    remote_mode = str(os.environ.get("RUNICORN_REMOTE_MODE", "")).lower() in ("1", "true", "yes")
+    log_context = build_diagnostics_context(remote_mode=remote_mode)
+
     # Setup logging
-    setup_logging()
+    log_context = setup_logging(session_context=log_context)
     
     # Create FastAPI app
     app = FastAPI(
@@ -136,6 +141,8 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
         version=__version__,
         description="Local experiment tracking and visualization platform"
     )
+    app.state.log_context = log_context
+    app.state.remote_mode = remote_mode
     
     # Configure CORS
     app.add_middleware(
@@ -331,6 +338,7 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     app.include_router(health_router, prefix="/api", tags=["health"])
     app.include_router(runs_router, prefix="/api", tags=["runs"])
     app.include_router(metrics_router, prefix="/api", tags=["metrics"])
+    app.include_router(diagnostics_router, prefix="/api", tags=["diagnostics"])
     app.include_router(config_router, prefix="/api", tags=["config"])
     app.include_router(experiments_router, prefix="/api", tags=["experiments"])
     app.include_router(export_router, prefix="/api", tags=["export"])
