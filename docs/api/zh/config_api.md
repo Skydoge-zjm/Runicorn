@@ -4,9 +4,9 @@
 
 # Config API - 配置管理
 
-**模块**: Config API  
-**基础路径**: `/api/config`  
-**版本**: v1.0  
+**模块**: Config API
+**基础路径**: `/api/config`
+**版本**: v1.0
 **描述**: 管理 Runicorn 配置，包括存储路径和 SSH 连接。
 
 ---
@@ -268,5 +268,5 @@ runicorn config --set-user-root "E:\\RunicornData"
 
 ---
 
-**最后更新**: 2025-10-14
+**最后更新**: 2026-03-28
 

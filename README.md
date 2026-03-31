@@ -3,7 +3,7 @@
 **English** | [简体中文](README_zh.md)
 
 [![PyPI version](https://img.shields.io/pypi/v/runicorn)](https://pypi.org/project/runicorn/)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
@@ -20,7 +20,7 @@
 |---------|-------------|
 | 🏠 **100% Local** | Your data never leaves your machine |
 | 📊 **Real-time Visualization** | Live metrics, logs, and GPU monitoring |
-| 📦 **Model Versioning** | Git-like Artifacts with deduplication |
+| 📦 **Assets & Snapshots** | Workspace snapshots plus dataset/config/pretrained references |
 | 🌐 **Remote Viewer** | Access remote GPU servers via SSH (like VSCode Remote) |
 | 🖥️ **Desktop App** | Native Windows app with auto-backend |
 
@@ -43,29 +43,29 @@ runicorn viewer  # Open http://127.0.0.1:23300
 ```python
 import runicorn as rn
 
-run = rn.init(project="my_project", name="exp_1")
+run = rn.init(path="my_project/exp_1", alias="baseline")
 
 for epoch in range(100):
     loss = train_one_epoch()
-    run.log({"loss": loss, "epoch": epoch})
+    run.log({"loss": loss}, step=epoch + 1)
 
 run.finish()
 ```
 
 ---
 
-## 📦 Model Versioning
+## 📦 Assets & Workspace Snapshots
 
 ```python
-# Save
-artifact = rn.Artifact("my-model", type="model")
-artifact.add_file("model.pth")
-run.log_artifact(artifact)  # → v1, v2, v3...
+from pathlib import Path
 
-# Load
-artifact = run.use_artifact("my-model:latest")
-model_path = artifact.download()
+snapshot = rn.snapshot_workspace(Path.cwd(), Path("workspace_snapshot.zip"))
+
+print(snapshot["archive_path"])
+print(snapshot["file_count"])
 ```
+
+Use `run.log_config(...)`, `run.log_dataset(...)`, and `run.log_pretrained(...)` inside a run to attach reusable training context without relying on the removed `Artifact` API.
 
 ---
 
@@ -111,4 +111,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-**Version**: v0.7.0 | **Last Updated**: 2026-03-15
+**Version**: v0.7.0 | **Last Updated**: 2026-03-28

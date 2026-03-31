@@ -4,10 +4,10 @@
 
 # Frontend Architecture
 
-**Document Type**: Architecture  
-**Purpose**: React application design and patterns  
-**Version**: v0.6.0  
-**Last Updated**: 2025-01-XX
+**Document Type**: Architecture
+**Purpose**: React application design and patterns
+**Version**: v0.7.0
+**Last Updated**: 2026-03-28
 
 ---
 
@@ -23,17 +23,21 @@ src/
 ├── pages/                 # Page components
 │   ├── ExperimentPage.tsx
 │   ├── RunDetailPage.tsx
-│   ├── ArtifactsPage.tsx
-│   └── UnifiedRemotePage.tsx
+│   ├── AssetsPage.tsx
+│   ├── AssetDetailPage.tsx
+│   ├── PerformanceMonitorPage.tsx
+│   ├── DiagnosticsPage.tsx
+│   └── RemoteViewerPage.tsx
 │
 ├── components/            # Reusable components
 │   ├── MetricChart.tsx
 │   ├── LogsViewer.tsx
-│   ├── LineageGraph.tsx
+│   ├── RunAssets.tsx
 │   ├── SettingsDrawer.tsx
 │   ├── PathTreePanel.tsx      # v0.6.0 - Path tree navigation
 │   ├── CompareChartsView.tsx  # v0.6.0 - Multi-run comparison
-│   └── CompareRunsPanel.tsx   # v0.6.0 - Compare mode panel
+│   ├── CompareRunsPanel.tsx   # v0.6.0 - Compare mode panel
+│   └── assets/AssetPreview.tsx
 │
 ├── contexts/              # React Context
 │   └── SettingsContext.tsx
@@ -99,11 +103,11 @@ const [settings, setSettings] = useState(() => {
 function RunDetailPage() {
   const [run, setRun] = useState(null)
   const [loading, setLoading] = useState(true)
-  
+
   useEffect(() => {
     fetchRunDetail(id).then(setRun).finally(() => setLoading(false))
   }, [id])
-  
+
   return <RunDetailView run={run} loading={loading} />
 }
 ```
@@ -257,19 +261,19 @@ interface MetricChartProps {
 }
 
 // Usage - Single run
-<MetricChart 
-  runs={[{ id: runId, metrics: stepMetrics }]} 
-  xKey="global_step" 
-  yKey="loss" 
-  title="Training Loss" 
+<MetricChart
+  runs={[{ id: runId, metrics: stepMetrics }]}
+  xKey="global_step"
+  yKey="loss"
+  title="Training Loss"
 />
 
 // Usage - Multi-run comparison
-<MetricChart 
+<MetricChart
   runs={selectedRuns.map(r => ({ id: r.id, label: r.name, metrics: r.metrics }))}
-  xKey="global_step" 
-  yKey="loss" 
-  title="Loss Comparison" 
+  xKey="global_step"
+  yKey="loss"
+  title="Loss Comparison"
 />
 ```
 
@@ -290,7 +294,7 @@ function LazyChartWrapper({ children, height = 320, threshold = 0.1 }) {
 
   useEffect(() => {
     if (hasLoaded) return
-    
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -328,26 +332,26 @@ const MetricChart = memo(function MetricChart({ runs, xKey, yKey, ... }) {
 }, (prevProps, nextProps) => {
   // Compare runs array by fingerprint, not reference
   if (prevProps.runs.length !== nextProps.runs.length) return false
-  
+
   for (let i = 0; i < prevProps.runs.length; i++) {
     const prevRun = prevProps.runs[i]
     const nextRun = nextProps.runs[i]
-    
+
     if (prevRun.id !== nextRun.id) return false
     if (prevRun.label !== nextRun.label) return false
-    
+
     // Compare by row count and last step (fingerprint)
     const prevRowCount = prevRun.metrics?.rows?.length ?? 0
     const nextRowCount = nextRun.metrics?.rows?.length ?? 0
     if (prevRowCount !== nextRowCount) return false
-    
+
     if (prevRowCount > 0) {
       const prevLastStep = prevRun.metrics.rows[prevRowCount - 1]?.global_step
       const nextLastStep = nextRun.metrics.rows[nextRowCount - 1]?.global_step
       if (prevLastStep !== nextLastStep) return false
     }
   }
-  
+
   return prevProps.xKey === nextProps.xKey && prevProps.yKey === nextProps.yKey
 })
 ```
@@ -384,7 +388,7 @@ const metrics = await getStepMetrics(runId, settings.maxDataPoints)
 
 ---
 
-## New Frontend Features (v0.6.0) 🆕
+## Frontend Features Added in v0.6.0+ 🆕
 
 ### Path Tree Navigation
 
@@ -490,7 +494,7 @@ const ansiConverter = new AnsiToHtml({
 
 ---
 
-## Remote Viewer Frontend (v0.5.0)
+## Remote Viewer Frontend
 
 ### New Pages and Components
 
@@ -528,7 +532,7 @@ useEffect(() => {
       updateConnectionHealth(conn.connection_id, health)
     }
   }, 30000)  // Every 30 seconds
-  
+
   return () => clearInterval(interval)
 }, [connections])
 ```
@@ -542,18 +546,18 @@ useEffect(() => {
 ```typescript
 function useConnectionHealth(connectionId: string, interval = 30000) {
   const [health, setHealth] = useState<HealthStatus | null>(null)
-  
+
   useEffect(() => {
     if (!connectionId) return
     checkHealth(connectionId).then(setHealth)
-    
+
     const timer = setInterval(() => {
       checkHealth(connectionId).then(setHealth)
     }, interval)
-    
+
     return () => clearInterval(timer)
   }, [connectionId, interval])
-  
+
   return health
 }
 ```

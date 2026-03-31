@@ -3,7 +3,7 @@
 [English](README.md) | **简体中文**
 
 [![PyPI version](https://img.shields.io/pypi/v/runicorn)](https://pypi.org/project/runicorn/)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
@@ -20,7 +20,7 @@
 |------|------|
 | 🏠 **100% 本地** | 数据永远不离开你的机器 |
 | 📊 **实时可视化** | 实时指标、日志和 GPU 监控 |
-| 📦 **模型版本控制** | Git 风格的 Artifacts，智能去重 |
+| 📦 **资产与快照** | 工作区快照，以及数据集/配置/预训练模型引用 |
 | 🌐 **Remote Viewer** | 通过 SSH 访问远程 GPU 服务器（类似 VSCode Remote） |
 | 🖥️ **桌面应用** | Windows 原生应用，自动后端 |
 
@@ -43,29 +43,29 @@ runicorn viewer  # 打开 http://127.0.0.1:23300
 ```python
 import runicorn as rn
 
-run = rn.init(project="my_project", name="exp_1")
+run = rn.init(path="my_project/exp_1", alias="baseline")
 
 for epoch in range(100):
     loss = train_one_epoch()
-    run.log({"loss": loss, "epoch": epoch})
+    run.log({"loss": loss}, step=epoch + 1)
 
 run.finish()
 ```
 
 ---
 
-## 📦 模型版本控制
+## 📦 资产与工作区快照
 
 ```python
-# 保存
-artifact = rn.Artifact("my-model", type="model")
-artifact.add_file("model.pth")
-run.log_artifact(artifact)  # → v1, v2, v3...
+from pathlib import Path
 
-# 加载
-artifact = run.use_artifact("my-model:latest")
-model_path = artifact.download()
+snapshot = rn.snapshot_workspace(Path.cwd(), Path("workspace_snapshot.zip"))
+
+print(snapshot["archive_path"])
+print(snapshot["file_count"])
 ```
+
+在 run 内可以使用 `run.log_config(...)`、`run.log_dataset(...)` 和 `run.log_pretrained(...)` 记录可复用的训练上下文；旧的 `Artifact` API 已不再公开。
 
 ---
 
@@ -111,4 +111,4 @@ MIT — 详见 [LICENSE](LICENSE)
 
 ---
 
-**版本**: v0.7.0 | **更新日期**: 2026-03-15
+**版本**: v0.7.0 | **更新日期**: 2026-03-28

@@ -4,535 +4,333 @@
 
 # Python API Client - Programmatic Access
 
-**Module**: Python API Client  
-**Package**: `runicorn.api`  
-**Version**: v1.0  
-**Description**: Programmatic access to Runicorn Viewer REST API through Python code.
-
----
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Installation](#installation)
-3. [Quick Start](#quick-start)
-4. [Core Classes](#core-classes)
-5. [API Methods](#api-methods)
-6. [Extended APIs](#extended-apis)
-7. [Error Handling](#error-handling)
-8. [Best Practices](#best-practices)
-9. [Complete Examples](#complete-examples)
+**Module**: Python API Client
+**Package**: `runicorn.client`
+**Utility Module**: `runicorn.client.utils`
+**Version**: v0.7.0
+**Last Updated**: 2026-03-28
+**Description**: Programmatic access to the Runicorn Viewer REST API from Python.
 
 ---
 
 ## Overview
 
-The Python API Client provides a clean wrapper around the Runicorn Viewer REST API, enabling you to:
+The current Python client is exposed from `runicorn.client`, not `runicorn.api`.
 
-- 📊 Query and analyze experiment data
-- 🔌 Control Remote Viewer sessions
-- 📤 Export data in various formats
-- 🐼 Integrate with pandas DataFrames
+It is designed for:
 
-### Key Features
+- querying runs and path hierarchies
+- fetching metrics for analysis
+- exporting CSV/report artifacts
+- controlling Remote Viewer sessions
+- converting API responses into pandas DataFrames
 
-- ✅ **Type Safe**: Full type hints support
-- ✅ **Auto Retry**: Built-in request retry mechanism
-- ✅ **Context Manager**: Support `with` statement for automatic cleanup
-- ✅ **DataFrame Integration**: Built-in pandas conversion tools
-- ✅ **Modular Design**: Remote API as independent extension
+`connect()` verifies `GET /api/health` when the client is created, so connection failures surface early.
 
 ---
 
 ## Installation
 
-The Python API Client is included in the main Runicorn package:
+The client ships with the main Runicorn package:
 
 ```bash
-# Install Runicorn (includes API Client)
 pip install runicorn
-
-# Or install from source
-pip install -e .
 ```
 
-### Dependencies
-
-**Required**:
-- `requests` >= 2.25.0
-- `urllib3` >= 1.26.0
-
-**Optional**:
-- `pandas` >= 1.2.0 (for DataFrame utilities)
+If you want DataFrame helpers, install pandas separately:
 
 ```bash
-# Install with optional dependencies
-pip install "runicorn[pandas]"
+pip install pandas
 ```
 
 ---
 
 ## Quick Start
 
-### Basic Usage
-
 ```python
-import runicorn.api as api
+import runicorn.client as client_mod
 
-# Connect to Viewer
-client = api.connect("http://127.0.0.1:23300")
+with client_mod.connect("http://127.0.0.1:23300") as client:
+    runs = client.list_runs_by_path(path="vision", exact=False)
+    print(f"Matched runs: {len(runs)}")
 
-# List experiments
-experiments = client.list_experiments(project="vision")
-print(f"Found {len(experiments)} experiments")
-
-# Get metrics
-for exp in experiments[:3]:
-    metrics = client.get_metrics(exp["id"])
-    print(f"{exp['name']}: {list(metrics['metrics'].keys())}")
-
-# Close connection
-client.close()
-```
-
-### Using Context Manager
-
-```python
-import runicorn.api as api
-
-# Automatically manage connection lifecycle
-with api.connect() as client:
-    experiments = client.list_experiments()
-    # ... use client
-# Automatically calls client.close()
+    if runs:
+        metrics = client.get_metrics(runs[0]["id"], downsample=500)
+        print(metrics["columns"])
+        print(metrics["rows"][:2])
 ```
 
 ---
 
-## Core Classes
+## Core Client
 
-### RunicornClient
-
-Main client class providing access to Viewer API.
-
-#### Constructor
+### `connect()`
 
 ```python
-RunicornClient(
-    base_url: str = "http://127.0.0.1:23300",
-    timeout: int = 30,
-    max_retries: int = 3
+import runicorn.client as client_mod
+
+client = client_mod.connect(
+    base_url="http://127.0.0.1:23300",
+    timeout=30,
+    max_retries=3,
 )
 ```
 
-**Parameters**:
-- `base_url` (str): Viewer base URL
-- `timeout` (int): Request timeout in seconds
-- `max_retries` (int): Maximum retry attempts
+Returns a `RunicornClient` instance.
 
-**Example**:
+### `RunicornClient`
+
+You can also construct the client directly:
+
 ```python
-from runicorn.api import RunicornClient
+from runicorn.client import RunicornClient
 
-# Use custom configuration
 client = RunicornClient(
-    base_url="http://localhost:8080",
-    timeout=60,
-    max_retries=5
+    base_url="http://127.0.0.1:23300",
+    timeout=30,
+    max_retries=3,
 )
 ```
 
-#### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `base_url` | `str` | Viewer base URL |
-| `timeout` | `int` | Request timeout |
-| `session` | `requests.Session` | HTTP session object |
-| `remote` | `RemoteAPI` | Remote API extension |
-
----
-
-## API Methods
-
-### Experiment Management
-
-#### list_experiments()
-
-List all experiments.
+The client supports context-manager usage:
 
 ```python
-client.list_experiments(
-    project: Optional[str] = None,
-    name: Optional[str] = None,
-    status: Optional[str] = None,
-    limit: Optional[int] = None,
-    offset: Optional[int] = None
-) -> List[Dict[str, Any]]
-```
+import runicorn.client as client_mod
 
-**Parameters**:
-- `project`: Filter by project name
-- `name`: Filter by experiment name
-- `status`: Filter by status (`running`, `finished`, `failed`)
-- `limit`: Maximum number of results
-- `offset`: Pagination offset
-
-**Returns**: List of experiment records
-
-**Example**:
-```python
-# List all experiments
-all_experiments = client.list_experiments()
-
-# Filter
-vision_exps = client.list_experiments(project="vision")
-running_exps = client.list_experiments(status="running")
-
-# Pagination
-page1 = client.list_experiments(limit=10, offset=0)
-page2 = client.list_experiments(limit=10, offset=10)
+with client_mod.connect() as client:
+    health = client.health_check()
+    print(health["status"])
 ```
 
 ---
 
-#### get_experiment()
+## Experiment Management
 
-Get experiment details.
+The Viewer UI and Python client now use **run** terminology. Older docs may still say "experiment", but the current public client methods are:
+
+### `list_runs()`
 
 ```python
-client.get_experiment(run_id: str) -> Dict[str, Any]
+runs = client.list_runs()
 ```
 
-**Parameters**:
-- `run_id`: Run ID
+Returns a list of run records such as `id`, `path`, `alias`, and `status`.
 
-**Returns**: Detailed experiment information
+### `get_run(run_id)`
 
-**Example**:
 ```python
-run = client.get_experiment("20250124_120000_abc123")
-
-print(f"Project: {run['project']}")
-print(f"Name: {run['name']}")
-print(f"Status: {run['status']}")
-print(f"Created: {run['created_at']}")
+run = client.get_run("20260328_120000_abcd12")
+print(run["path"], run["status"])
 ```
 
-**Alias**: `get_run()`
-
----
-
-### Metrics Data
-
-#### get_metrics()
-
-Get metrics data for a run.
+### `list_paths(include_stats=False)`
 
 ```python
-client.get_metrics(
-    run_id: str,
-    metric_names: Optional[List[str]] = None,
-    limit: Optional[int] = None
-) -> Dict[str, Any]
+path_info = client.list_paths(include_stats=True)
+print(path_info.keys())
 ```
 
-**Parameters**:
-- `run_id`: Run ID
-- `metric_names`: List of specific metric names
-- `limit`: Limit number of data points
+This returns the path listing/tree payload exposed by `/api/paths`.
 
-**Returns**: Metrics data dictionary
+### `list_runs_by_path(path=None, exact=False)`
 
-**Example**:
+Use this instead of the removed `list_experiments(project=..., name=...)` pattern.
+
 ```python
-# Get all metrics
-metrics = client.get_metrics("20250124_120000_abc123")
-
-# Get specific metrics
-metrics = client.get_metrics(
-    "20250124_120000_abc123",
-    metric_names=["loss", "accuracy"]
-)
-
-# Process metrics
-for metric_name, points in metrics["metrics"].items():
-    values = [p["value"] for p in points]
-    print(f"{metric_name}: min={min(values)}, max={max(values)}")
+vision_runs = client.list_runs_by_path(path="vision", exact=False)
+baseline_runs = client.list_runs_by_path(path="vision/baseline", exact=True)
 ```
 
 ---
 
-### Configuration
+## Metrics Data
 
-#### get_config()
-
-Get Viewer configuration.
+### `get_metrics(run_id, downsample=None)`
 
 ```python
-client.get_config() -> Dict[str, Any]
+metrics = client.get_metrics("20260328_120000_abcd12", downsample=1000)
 ```
 
-**Returns**: Configuration information
+The response shape is:
+
+```python
+{
+    "columns": ["global_step", "loss", "acc"],
+    "rows": [
+        {"global_step": 1, "loss": 0.8, "acc": 0.52},
+        {"global_step": 2, "loss": 0.6, "acc": 0.61},
+    ],
+    ...
+}
+```
+
+Use `metrics["columns"]` and `metrics["rows"]`. Do not expect the old `metrics["metrics"]` structure.
+
+### `export_csv(run_id)`
+
+```python
+csv_bytes = client.export_csv("20260328_120000_abcd12")
+```
+
+### `export_report(run_id, format="markdown")`
+
+```python
+report_bytes = client.export_report("20260328_120000_abcd12", format="html")
+```
+
+`format` currently supports `"markdown"` and `"html"`.
 
 ---
 
-#### update_config()
+## Configuration And Health
 
-Update Viewer configuration.
+### `get_config()`
 
 ```python
-client.update_config(config: Dict[str, Any]) -> Dict[str, Any]
+config = client.get_config()
 ```
 
----
-
-### Data Export
-
-#### export_experiment()
-
-Export experiment data.
+### `set_user_root_dir(path)`
 
 ```python
-client.export_experiment(
-    run_id: str,
-    format: str = "json",
-    include_media: bool = False
-) -> bytes
+updated = client.set_user_root_dir(r"E:\runs")
 ```
 
-**Parameters**:
-- `run_id`: Run ID
-- `format`: Export format (`json`, `csv`)
-- `include_media`: Include media files
+### `get_gpu_info()`
 
-**Returns**: Exported binary data
-
-**Example**:
 ```python
-# Export as JSON
-data = client.export_experiment("run_id", format="json")
-with open("experiment.json", "wb") as f:
-    f.write(data)
-
-# Export as CSV
-data = client.export_experiment("run_id", format="csv")
-with open("metrics.csv", "wb") as f:
-    f.write(data)
+gpu = client.get_gpu_info()
 ```
 
----
-
-## Extended APIs
-
-### Remote API
-
-Access via `client.remote`.
-
-#### connect()
-
-Establish SSH connection.
+### `health_check()`
 
 ```python
-client.remote.connect(
-    host: str,
-    port: int = 22,
-    username: str = None,
-    password: str = None,
-    private_key_path: str = None,
-    passphrase: str = None
-) -> Dict[str, Any]
+health = client.health_check()
+```
+
+### `get_storage_stats()`
+
+```python
+stats = client.get_storage_stats()
+```
+
+### `check_status()`
+
+```python
+result = client.check_status()
 ```
 
 ---
 
-#### start_viewer()
+## Remote API
 
-Start remote Viewer.
+Remote Viewer helpers are exposed under `client.remote`.
 
 ```python
-client.remote.start_viewer(
-    connection_id: str,
-    remote_root: str,
-    local_port: Optional[int] = None,
-    remote_port: Optional[int] = None
-) -> Dict[str, Any]
+import runicorn.client as client_mod
+
+with client_mod.connect() as client:
+    client.remote.connect(
+        host="gpu-server",
+        port=22,
+        username="alice",
+        private_key_path="C:/Users/alice/.ssh/id_ed25519",
+    )
+
+    session = client.remote.start_viewer(
+        host="gpu-server",
+        port=22,
+        username="alice",
+        remote_root="/data/runicorn",
+        conda_env="runicorn_dev",
+    )
+
+    print(session)
 ```
 
-**Example**:
+Current remote helpers:
+
+- `client.remote.connect(...)`
+- `client.remote.disconnect(host, port=22, username=...)`
+- `client.remote.list_sessions()`
+- `client.remote.start_viewer(...)`
+- `client.remote.stop_viewer(session_id)`
+- `client.remote.list_viewer_sessions()`
+- `client.remote.list_remote_storage_candidates(connection_id, conda_env="system", scan_root=None, max_depth=3)`
+- `client.remote.get_remote_status()`
+- `client.remote.confirm_host_key(...)`
+
+Notes:
+
+- `start_viewer()` currently expects `host`, `port`, `username`, and `remote_root`.
+- `connection_id="user@host:port"` is still accepted for backward compatibility, but the preferred flow is explicit SSH parameters.
+- If the server requests host-key confirmation, catch `HostKeyConfirmationRequiredError`, call `confirm_host_key(...)`, then retry the original operation.
+
+---
+
+## Utility Functions
+
+Import helpers from `runicorn.client.utils`:
+
 ```python
-session = client.remote.start_viewer(
-    connection_id="remote-server.com",
-    remote_root="/data/runicorn"
-)
+import runicorn.client as client_mod
+import runicorn.client.utils as client_utils
 
-print(f"Access at: http://localhost:{session['local_port']}")
+with client_mod.connect() as client:
+    runs = client.list_runs()
+    runs_df = client_utils.runs_to_dataframe(runs)
+
+    if runs:
+        metrics = client.get_metrics(runs[0]["id"])
+        metrics_df = client_utils.metrics_to_dataframe(metrics)
 ```
+
+Available helpers:
+
+- `metrics_to_dataframe(metrics_data)`
+- `runs_to_dataframe(runs)`
+- `export_metrics_to_csv(client, run_id, output_path)`
+- `compare_runs(client, run_ids, metric_name)`
+
+Backward-compatibility note:
+
+- `experiments_to_dataframe` is still available as an alias of `runs_to_dataframe`.
 
 ---
 
 ## Error Handling
 
-### Exception Hierarchy
-
-```
-RunicornAPIError
-├── ConnectionError       # Connection failed
-├── NotFoundError         # Resource not found (404)
-├── BadRequestError       # Invalid parameters (400)
-├── ServerError           # Server error (500+)
-└── AuthenticationError   # Authentication failed
-```
-
-### Example
+The package exports these commonly used exceptions:
 
 ```python
-from runicorn.api import (
-    RunicornClient,
+from runicorn.client import (
     ConnectionError,
     NotFoundError,
-    BadRequestError
+    BadRequestError,
+    ServerError,
+    HostKeyConfirmationRequiredError,
 )
+```
+
+Example:
+
+```python
+import runicorn.client as client_mod
+from runicorn.client import ConnectionError, NotFoundError
 
 try:
-    client = RunicornClient("http://localhost:23300")
-    run = client.get_run("nonexistent_id")
-    
-except ConnectionError as e:
-    print(f"Cannot connect to Viewer: {e}")
-    print("Make sure Viewer is running: runicorn viewer")
-    
-except NotFoundError as e:
-    print(f"Resource not found: {e}")
-    
-except BadRequestError as e:
-    print(f"Invalid parameters: {e}")
+    with client_mod.connect() as client:
+        run = client.get_run("missing-run")
+except NotFoundError:
+    print("Run not found")
+except ConnectionError as exc:
+    print(f"Viewer unavailable: {exc}")
 ```
 
 ---
 
-## Best Practices
+## Notes
 
-### 1. Use Context Manager
-
-```python
-# Recommended: Auto resource management
-with api.connect() as client:
-    experiments = client.list_experiments()
-    # ... use client
-
-# Not recommended: Manual management
-client = api.connect()
-try:
-    experiments = client.list_experiments()
-finally:
-    client.close()
-```
-
-### 2. Batch Operations
-
-```python
-# Recommended: Batch retrieval
-experiments = client.list_experiments()
-for exp in experiments:
-    metrics = client.get_metrics(exp["id"])
-    # ... process
-
-# Not recommended: Frequent reconnection
-for i in range(100):
-    with api.connect() as client:
-        # Creates new connection each time
-```
-
-### 3. DataFrame Integration
-
-```python
-# Use built-in utilities for DataFrame conversion
-from runicorn.api import utils
-import pandas as pd
-
-with api.connect() as client:
-    # Convert experiments to DataFrame
-    experiments = client.list_experiments()
-    df_exps = utils.experiments_to_dataframe(experiments)
-    
-    # Convert metrics to DataFrame
-    metrics = client.get_metrics("run_id")
-    df_metrics = utils.metrics_to_dataframe(metrics)
-    
-    # Analysis
-    print(df_metrics.describe())
-    print(df_exps.groupby("project").size())
-```
-
----
-
-## Complete Examples
-
-### Example 1: Analyze Experiment Performance
-
-```python
-import runicorn.api as api
-
-with api.connect() as client:
-    # Get all vision experiments
-    experiments = client.list_experiments(project="vision")
-    
-    # Find best experiment
-    best_run = None
-    best_acc = 0
-    
-    for exp in experiments:
-        metrics = client.get_metrics(exp["id"])
-        
-        if "accuracy" in metrics["metrics"]:
-            acc_points = metrics["metrics"]["accuracy"]
-            max_acc = max(p["value"] for p in acc_points)
-            
-            if max_acc > best_acc:
-                best_acc = max_acc
-                best_run = exp
-    
-    if best_run:
-        print(f"Best experiment: {best_run['name']}")
-        print(f"Accuracy: {best_acc:.2f}%")
-```
-
-### Example 2: Export Multiple Experiments
-
-```python
-import runicorn.api as api
-from pathlib import Path
-
-output_dir = Path("exports")
-output_dir.mkdir(exist_ok=True)
-
-with api.connect() as client:
-    experiments = client.list_experiments(project="nlp", limit=10)
-    
-    for exp in experiments:
-        # Export as JSON
-        data = client.export_experiment(exp["id"], format="json")
-        
-        # Save file
-        filename = f"{exp['name']}_{exp['id']}.json"
-        filepath = output_dir / filename
-        filepath.write_bytes(data)
-        
-        print(f"✓ Exported: {filename}")
-```
-
----
-
-## Reference
-
-- **REST API Docs**: [README.md](./README.md)
-- **SDK Docs**: [../user-guide/docs/sdk/overview.md](../user-guide/docs/sdk/overview.md)
-- **Example Code**: `tests/common/test_api_client.py`
-- **Source Code**: `src/runicorn/api/`
-
----
-
-**Last Updated**: 2025-10-24  
-**Maintainer**: Runicorn Development Team  
-**API Version**: v1.0
+- Use `runicorn.client`, not the removed `runicorn.api` path.
+- Use path-based filtering with `list_runs_by_path(...)` instead of the removed `project` / `name` filters.
+- Treat metric payloads as `{columns, rows}` responses and convert them with `runicorn.client.utils` when needed.

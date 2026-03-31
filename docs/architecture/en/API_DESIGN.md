@@ -4,7 +4,7 @@
 
 # API Layer Architecture
 
-**Document Type**: Architecture  
+**Document Type**: Architecture
 **Purpose**: Design principles and patterns for the Runicorn API layer
 
 ---
@@ -15,7 +15,7 @@
 
 **Resources**:
 - Experiments (`/runs`)
-- Artifacts (`/artifacts`)
+- Run assets (`/runs/{id}/assets`)
 - Metrics (`/runs/{id}/metrics`)
 - Configuration (`/config`)
 
@@ -55,18 +55,22 @@ async def list_runs(request: Request):
     # Async file operations
     async with aiofiles.open(path) as f:
         content = await f.read()
-    
+
     # Async database queries
     experiments = await storage.list_experiments()
-    
+
     return experiments
 ```
 
 ---
 
-## V1 vs V2 API Design
+## File-Scan Fallback vs SQLite-Backed Fast Path
 
-### V1 API (File-Based)
+Earlier drafts called this split "V1" vs "V2". In the current codebase these are
+implementation modes behind the same public routes (`/runs`, `/paths/runs`,
+`/runs/{run_id}`), not separate route namespaces.
+
+### File-Scan Fallback
 
 **Design**:
 - Direct file system access
@@ -94,7 +98,7 @@ async def list_runs_v1(request: Request):
 
 ---
 
-### V2 API (SQLite-Based)
+### SQLite-Backed Fast Path
 
 **Design**:
 - Database queries with indexes
@@ -109,30 +113,20 @@ async def list_runs_v1(request: Request):
 
 **Example**:
 ```python
-@router.get("/v2/experiments")
-async def list_experiments_v2(
-    project: str = None,
-    status: str = None,
-    page: int = 1,
-    per_page: int = 50
-):
-    query = QueryParams(
-        project=project,
-        status=status.split(',') if status else None,
-        limit=per_page,
-        offset=(page - 1) * per_page
-    )
-    
-    # Single SQL query with indexes
-    experiments = await storage.list_experiments(query)
-    total = await storage.count_experiments(query)
-    
-    return {
-        "experiments": experiments,
-        "total": total,
-        "page": page,
-        "has_next": (page * per_page) < total
-    }
+@router.get("/runs")
+async def list_runs(request: Request):
+    backend = get_backend(request)
+
+    if backend is not None:
+        db_rows = list_runs_from_db(backend)
+        if db_rows is not None:
+            return [RunListItem(**row) for row in db_rows]
+
+    # Fall back to file scanning only when SQLite is unavailable.
+    items = []
+    for entry in iter_all_runs(request.app.state.storage_root):
+        ...
+    return items
 ```
 
 ---
@@ -193,14 +187,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Rate limit exceeded"},
                 headers={"Retry-After": str(retry_after)}
             )
-        
+
         # Process request
         response = await call_next(request)
-        
+
         # Add rate limit headers
         response.headers["X-RateLimit-Limit"] = str(limit)
         response.headers["X-RateLimit-Remaining"] = str(remaining)
-        
+
         return response
 ```
 
@@ -210,20 +204,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 class SlidingWindowLimiter:
     def __init__(max_requests, window_seconds):
         self.requests = {}  # {client_ip: [timestamps]}
-    
+
     def is_allowed(client_ip):
         now = time.time()
-        
+
         # Remove old timestamps
         self.requests[client_ip] = [
             ts for ts in self.requests.get(client_ip, [])
             if now - ts < window_seconds
         ]
-        
+
         # Check limit
         if len(self.requests[client_ip]) >= max_requests:
             return False
-        
+
         # Record request
         self.requests[client_ip].append(now)
         return True
@@ -253,10 +247,10 @@ def validate_batch_size(size: int, max_size: int = 100) -> bool:
 def validate_path(path: str, base_dir: Path) -> bool:
     if '..' in path:
         return False
-    
+
     full_path = (base_dir / path).resolve()
     base_resolved = base_dir.resolve()
-    
+
     # Ensure path is within base_dir
     return str(full_path).startswith(str(base_resolved))
 ```
@@ -265,31 +259,22 @@ def validate_path(path: str, base_dir: Path) -> bool:
 
 ## Response Optimization
 
-### Pagination
+### Windowed Query Pattern
 
 **Standard pattern**:
 ```python
-@router.get("/v2/experiments")
-async def list_experiments(
-    page: int = 1,
-    per_page: int = 50
-):
-    offset = (page - 1) * per_page
-    
-    experiments = await db.query(
-        "SELECT * FROM experiments LIMIT ? OFFSET ?",
-        (per_page, offset)
-    )
-    
-    total = await db.count("experiments")
-    
+def query_runs_window(backend, limit: int = 50, offset: int = 0):
+    query = QueryParams(limit=limit, offset=offset)
+    runs = backend.list_experiments(query)
+    total = backend.count_experiments(QueryParams())
+
     return {
-        "experiments": experiments,
+        "runs": runs,
         "total": total,
-        "page": page,
-        "per_page": per_page,
-        "has_next": offset + len(experiments) < total,
-        "has_prev": page > 1
+        "limit": limit,
+        "offset": offset,
+        "has_next": offset + len(runs) < total,
+        "has_prev": offset > 0
     }
 ```
 
@@ -312,15 +297,15 @@ GET /api/runs?fields=id,status,project
 @app.websocket("/runs/{run_id}/logs/ws")
 async def logs_websocket(websocket: WebSocket, run_id: str):
     await websocket.accept()
-    
+
     try:
         # Stream logs
         async for line in tail_file(log_path):
             await websocket.send_text(line)
-    
+
     except WebSocketDisconnect:
         logger.info(f"Client disconnected: {run_id}")
-    
+
     finally:
         # Cleanup resources
         await cleanup()
@@ -332,7 +317,7 @@ async def logs_websocket(websocket: WebSocket, run_id: str):
 function connectWebSocket(url, onReconnect) {
     let ws = new WebSocket(url)
     let reconnectDelay = 1000  // Start with 1s
-    
+
     ws.onclose = () => {
         console.log(`Reconnecting in ${reconnectDelay}ms...`)
         setTimeout(() => {
@@ -340,19 +325,19 @@ function connectWebSocket(url, onReconnect) {
             connectWebSocket(url, onReconnect)
         }, reconnectDelay)
     }
-    
+
     ws.onopen = () => {
         reconnectDelay = 1000  // Reset on successful connect
         if (onReconnect) onReconnect()
     }
-    
+
     return ws
 }
 ```
 
 ---
 
-## Remote API Design (v0.5.0)
+## Remote API Design
 
 ### Resource Hierarchy
 
@@ -408,7 +393,7 @@ POST /api/remote/viewer/start
 async def start_viewer(request: StartViewerRequest):
     # 1. Immediately return accepted status
     task_id = uuid.uuid4().hex
-    
+
     # 2. Execute asynchronously in background
     background_tasks.add_task(
         _start_viewer_task,
@@ -416,7 +401,7 @@ async def start_viewer(request: StartViewerRequest):
         env_name=request.env_name,
         task_id=task_id
     )
-    
+
     # 3. Return task ID for polling
     return {
         "status": "starting",
@@ -497,7 +482,7 @@ async def connect(request: ConnectRequest):
         username=request.username,
         password=request.password  # Burn after reading
     )
-    
+
     # Store connection object, not credentials
     connection_manager.add(connection_id, ssh_client)
 ```

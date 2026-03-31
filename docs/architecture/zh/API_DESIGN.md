@@ -4,7 +4,7 @@
 
 # API 层架构
 
-**文档类型**: 架构  
+**文档类型**: 架构
 **目的**: Runicorn API 层的设计原则和模式
 
 ---
@@ -15,7 +15,7 @@
 
 **资源**:
 - 实验（`/runs`）
-- Artifacts（`/artifacts`）
+- 运行资产（`/runs/{id}/assets`）
 - 指标（`/runs/{id}/metrics`）
 - 配置（`/config`）
 
@@ -55,18 +55,21 @@ async def list_runs(request: Request):
     # 异步文件操作
     async with aiofiles.open(path) as f:
         content = await f.read()
-    
+
     # 异步数据库查询
     experiments = await storage.list_experiments()
-    
+
     return experiments
 ```
 
 ---
 
-## V1 vs V2 API 设计
+## 文件扫描回退 与 SQLite 快速路径
 
-### V1 API（基于文件）
+早期文档会把这两条实现路径叫作 V1 / V2；在当前代码里，它们是同一组公开路由
+（`/runs`、`/paths/runs`、`/runs/{run_id}`）背后的不同实现方式，而不是两个并行的路由版本。
+
+### 文件扫描回退
 
 **设计**:
 - 直接文件系统访问
@@ -80,7 +83,7 @@ async def list_runs(request: Request):
 
 ---
 
-### V2 API（基于 SQLite）
+### SQLite 快速路径
 
 **设计**:
 - 带索引的数据库查询
@@ -131,14 +134,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 content={"detail": "Rate limit exceeded"},
                 headers={"Retry-After": str(retry_after)}
             )
-        
+
         # 处理请求
         response = await call_next(request)
-        
+
         # 添加速率限制头部
         response.headers["X-RateLimit-Limit"] = str(limit)
         response.headers["X-RateLimit-Remaining"] = str(remaining)
-        
+
         return response
 ```
 
@@ -152,15 +155,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 @app.websocket("/runs/{run_id}/logs/ws")
 async def logs_websocket(websocket: WebSocket, run_id: str):
     await websocket.accept()
-    
+
     try:
         # 流式日志
         async for line in tail_file(log_path):
             await websocket.send_text(line)
-    
+
     except WebSocketDisconnect:
         logger.info(f"客户端断开连接: {run_id}")
-    
+
     finally:
         # 清理资源
         await cleanup()
@@ -168,7 +171,7 @@ async def logs_websocket(websocket: WebSocket, run_id: str):
 
 ---
 
-## Remote API 设计（v0.5.0）
+## Remote API 设计
 
 ### 资源层次
 
@@ -224,7 +227,7 @@ POST /api/remote/viewer/start
 async def start_viewer(request: StartViewerRequest):
     # 1. 立即返回接受状态
     task_id = uuid.uuid4().hex
-    
+
     # 2. 后台异步执行
     background_tasks.add_task(
         _start_viewer_task,
@@ -232,7 +235,7 @@ async def start_viewer(request: StartViewerRequest):
         env_name=request.env_name,
         task_id=task_id
     )
-    
+
     # 3. 返回任务 ID 供轮询
     return {
         "status": "starting",
@@ -313,7 +316,7 @@ async def connect(request: ConnectRequest):
         username=request.username,
         password=request.password  # 用后即焚
     )
-    
+
     # 存储连接对象，不存储凭据
     connection_manager.add(connection_id, ssh_client)
 ```

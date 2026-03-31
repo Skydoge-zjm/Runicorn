@@ -1,7 +1,7 @@
 # Remote Viewer API Reference
 
-> **Version**: v0.6.0  
-> **Last Updated**: 2025-01-XX  
+> **Version**: v0.7.0
+> **Last Updated**: 2026-03-28
 > **Base URL**: `http://127.0.0.1:23300`
 
 [English](remote_api.md) | [简体中文](../zh/remote_api.md)
@@ -36,7 +36,7 @@ The Remote Viewer API provides complete functionality for connecting to remote s
 - 🚀 **Viewer Lifecycle**: Start, monitor, and stop remote Viewer
 - 💓 **Health Monitoring**: Real-time connection and Viewer status checks
 - 🔒 **Security**: All communication via SSH encryption
-- 🔄 **Multi-Backend Architecture**: Automatic fallback chain for maximum compatibility (v0.6.0)
+- 🔄 **Multi-Backend Architecture**: Automatic fallback chain for maximum compatibility
 
 ### Workflow
 
@@ -98,13 +98,13 @@ def create_tunnel(connection, local_port, remote_port):
         return OpenSSHTunnel(...)
     except (SSHNotFound, PasswordAuthRequired, HostKeyError):
         pass  # Fall through (except HostKeyError which is re-raised)
-    
+
     # Try AsyncSSH second (async, good performance)
     try:
         return AsyncSSHTunnel(...)
     except (AsyncSSHNotAvailable, HostKeyError):
         pass  # Fall through (except HostKeyError which is re-raised)
-    
+
     # Final fallback to Paramiko (always works)
     return ParamikoTunnel(...)
 ```
@@ -685,8 +685,8 @@ In some cases (e.g. host key verification), `detail` is a structured object (see
 
 ---
 
-**Author**: Runicorn Development Team  
-**Version**: v0.6.0  
-**Last Updated**: 2025-01-XX
+**Author**: Runicorn Development Team
+**Version**: v0.7.0
+**Last Updated**: 2026-03-28
 
 **[Back to API Index](API_INDEX.md)** | **[View Quick Reference](QUICK_REFERENCE.md)**

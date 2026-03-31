@@ -1,6 +1,7 @@
 """Tests for runicorn.storage.backends.SQLiteStorageBackend."""
 from __future__ import annotations
 
+import sqlite3
 import time
 from pathlib import Path
 from typing import List
@@ -210,12 +211,136 @@ class TestMetrics:
         assert all(m.metric_name == "loss" for m in loss_only)
         assert len(loss_only) == 3
 
+    def test_same_metric_and_timestamp_are_kept_as_distinct_rows(
+        self, sqlite_backend: SQLiteStorageBackend
+    ) -> None:
+        sqlite_backend.create_experiment(_make_experiment("met_dup_001"))
+        shared_ts = time.time()
+        metrics = [
+            MetricRecord(
+                experiment_id="met_dup_001",
+                timestamp=shared_ts,
+                metric_name="loss",
+                metric_value=0.5,
+                step=1,
+                recorded_at=shared_ts,
+            ),
+            MetricRecord(
+                experiment_id="met_dup_001",
+                timestamp=shared_ts,
+                metric_name="loss",
+                metric_value=0.4,
+                step=2,
+                recorded_at=shared_ts + 0.001,
+            ),
+        ]
+
+        ok = sqlite_backend.log_metrics("met_dup_001", metrics)
+        assert ok is True
+
+        retrieved = sqlite_backend.get_metrics("met_dup_001", metric_names=["loss"])
+        assert [m.metric_value for m in retrieved] == [0.5, 0.4]
+        assert [m.step for m in retrieved] == [1, 2]
+
     def test_log_empty_metrics_returns_true(self, sqlite_backend: SQLiteStorageBackend) -> None:
         assert sqlite_backend.log_metrics("whatever", []) is True
 
     def test_get_metrics_nonexistent_returns_empty(self, sqlite_backend: SQLiteStorageBackend) -> None:
         result = sqlite_backend.get_metrics("no_such_exp")
         assert result == []
+
+    def test_backend_migrates_legacy_metrics_schema(self, storage_root: Path) -> None:
+        db_path = storage_root / "runicorn.db"
+        conn = sqlite3.connect(str(db_path))
+        try:
+            now = time.time()
+            conn.executescript("""
+                CREATE TABLE experiments (
+                    id TEXT PRIMARY KEY,
+                    path TEXT NOT NULL,
+                    alias TEXT,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    started_at REAL,
+                    ended_at REAL,
+                    status TEXT NOT NULL,
+                    exit_reason TEXT,
+                    pid INTEGER,
+                    python_version TEXT,
+                    platform TEXT,
+                    hostname TEXT,
+                    best_metric_name TEXT,
+                    best_metric_value REAL,
+                    best_metric_step INTEGER,
+                    best_metric_mode TEXT,
+                    deleted_at REAL,
+                    delete_reason TEXT,
+                    run_dir TEXT NOT NULL
+                    ,
+                    workspace_root TEXT,
+                    duration_seconds REAL,
+                    metric_count INTEGER DEFAULT 0
+                );
+                CREATE TABLE metrics (
+                    experiment_id TEXT NOT NULL,
+                    timestamp REAL NOT NULL,
+                    metric_name TEXT NOT NULL,
+                    metric_value REAL,
+                    step INTEGER,
+                    stage TEXT,
+                    recorded_at REAL NOT NULL,
+                    PRIMARY KEY (experiment_id, timestamp, metric_name),
+                    FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE
+                );
+            """)
+            conn.execute(
+                """
+                INSERT INTO experiments (id, path, alias, created_at, updated_at, status, run_dir, workspace_root, metric_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("legacy_001", "legacy/path", None, now, now, "running", "/tmp/runs/legacy_001", None, 1),
+            )
+            conn.execute(
+                """
+                INSERT INTO metrics (experiment_id, timestamp, metric_name, metric_value, step, stage, recorded_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("legacy_001", now, "loss", 0.5, 1, None, now),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        backend = SQLiteStorageBackend(storage_root)
+        try:
+            migrated = backend.get_metrics("legacy_001")
+            assert len(migrated) == 1
+            assert migrated[0].metric_value == 0.5
+
+            conn = backend.pool.get_connection()
+            try:
+                columns = {row[1] for row in conn.execute("PRAGMA table_info(metrics)").fetchall()}
+            finally:
+                backend.pool.return_connection(conn)
+            assert "id" in columns
+
+            duplicate_ts = migrated[0].timestamp
+            ok = backend.log_metrics(
+                "legacy_001",
+                [
+                    MetricRecord(
+                        experiment_id="legacy_001",
+                        timestamp=duplicate_ts,
+                        metric_name="loss",
+                        metric_value=0.4,
+                        step=2,
+                    )
+                ],
+            )
+            assert ok is True
+            assert [m.metric_value for m in backend.get_metrics("legacy_001", ["loss"])] == [0.5, 0.4]
+        finally:
+            backend.close()
 
 
 # ===========================================================================

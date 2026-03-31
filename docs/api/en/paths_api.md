@@ -4,8 +4,8 @@
 
 # Path Hierarchy API
 
-**Version**: v0.6.0  
-**Router**: `projects.py` (exported as `projects_router`)  
+**Version**: v0.7.0
+**Router**: `projects.py` (exported as `projects_router`)
 **Prefix**: `/api`
 
 Flexible path-based experiment organization with tree navigation, batch operations, and export.

@@ -4,9 +4,9 @@
 
 # Config API - Configuration Management
 
-**Module**: Config API  
-**Base Path**: `/api/config`  
-**Version**: v1.0  
+**Module**: Config API
+**Base Path**: `/api/config`
+**Version**: v1.0
 **Description**: Manage Runicorn configuration including storage paths and SSH connections.
 
 ---
@@ -154,18 +154,18 @@ async function setStorageRoot(path) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path })
     })
-    
+
     if (!response.ok) {
       const error = await response.json()
       throw new Error(error.detail)
     }
-    
+
     const result = await response.json()
     console.log(`Storage updated: ${result.storage}`)
-    
+
     // Reload page to reflect changes
     window.location.reload()
-    
+
   } catch (error) {
     console.error('Failed to update storage root:', error.message)
   }
@@ -456,20 +456,20 @@ import os
 import runicorn as rn
 
 # Method 1: Explicit parameter (highest priority)
-run = rn.init(project="demo", storage="E:\\CustomPath")
+run = rn.init(path="demo", storage="E:\\CustomPath")
 
 # Method 2: Environment variable
 os.environ['RUNICORN_DIR'] = "E:\\CustomPath"
-run = rn.init(project="demo")
+run = rn.init(path="demo")
 
 # Method 3: User config (via API)
 import requests
-requests.post('http://127.0.0.1:23300/api/config/user_root_dir', 
+requests.post('http://127.0.0.1:23300/api/config/user_root_dir',
               json={"path": "E:\\CustomPath"})
-run = rn.init(project="demo")
+run = rn.init(path="demo")
 
 # Method 4: Default (legacy)
-run = rn.init(project="demo")  # Uses ./.runicorn/
+run = rn.init(path="demo")  # Uses ./.runicorn/
 ```
 
 ---
@@ -506,5 +506,5 @@ runicorn config --set-user-root "E:\\RunicornData"
 
 ---
 
-**Last Updated**: 2025-10-14
+**Last Updated**: 2026-03-28
 

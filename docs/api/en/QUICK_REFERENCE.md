@@ -4,7 +4,7 @@
 
 # Runicorn API Quick Reference
 
-**Version**: v0.6.0  
+**Version**: v0.7.0
 **Base URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -79,7 +79,7 @@ POST /api/remote/disconnect
 Body: {"host": "gpu-server.com", "port": 22, "username": "user"}
 ```
 
-### Enhanced Logging API 🆕 (v0.6.0)
+### Enhanced Logging API 🆕
 
 ```python
 import runicorn
@@ -103,7 +103,7 @@ metric_logger = MetricLogger()
 metric_logger.update(loss=0.5, accuracy=0.95)  # Auto-logged to Runicorn
 ```
 
-### Path Hierarchy API 🆕 (v0.6.0)
+### Path Hierarchy API 🆕
 
 ```bash
 # List all paths with statistics
@@ -269,7 +269,7 @@ from datetime import datetime
 ts = time.time()  # 1704067200.5
 
 # Convert to datetime
-dt = datetime.fromtimestamp(ts)  # 2025-10-14 15:30:45
+dt = datetime.fromtimestamp(ts)  # Example: 2026-03-28 15:30:45
 
 # Convert from datetime
 ts = dt.timestamp()  # 1704067200.5
@@ -353,11 +353,11 @@ For detailed API documentation, see:
 
 - **[README.md](./README.md)** - API overview and getting started
 - **[runs_api.md](./runs_api.md)** - Experiment management
-- **[artifacts_api.md](./artifacts_api.md)** - Model version control
-- **[v2_api.md](./v2_api.md)** - High-performance queries
+- **[python_client_api.md](./python_client_api.md)** - Python client usage
 - **[metrics_api.md](./metrics_api.md)** - Metrics and logs
 - **[config_api.md](./config_api.md)** - Configuration
 - **[remote_api.md](./remote_api.md)** - Remote Viewer API
+- **[REMOTE_API_EXAMPLES.md](./REMOTE_API_EXAMPLES.md)** - Remote Viewer examples
 - **[logging_api.md](./logging_api.md)** - Enhanced Logging API 🆕
 - **[paths_api.md](./paths_api.md)** - Path Hierarchy API 🆕
 
@@ -367,5 +367,5 @@ For detailed API documentation, see:
 
 ---
 
-**Last Updated**: 2025-01-XX
+**Last Updated**: 2026-03-28
 

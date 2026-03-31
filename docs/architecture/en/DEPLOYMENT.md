@@ -4,7 +4,7 @@
 
 # Deployment Architecture
 
-**Document Type**: Architecture  
+**Document Type**: Architecture
 **Purpose**: Document deployment options and production considerations
 
 ---
@@ -195,7 +195,7 @@ http://server-ip:23300
 **Prerequisites**:
 - Node.js 18+
 - Rust (stable)
-- Python 3.8+
+- Python 3.10+
 - NSIS (for installer)
 
 **Build**:
@@ -204,7 +204,7 @@ cd desktop/tauri
 .\build_release.ps1 -Bundles nsis
 ```
 
-**Output**: 
+**Output**:
 ```
 desktop/tauri/src-tauri/target/release/bundle/nsis/
 └── Runicorn_Desktop_0.4.0_x64-setup.exe
@@ -220,7 +220,7 @@ desktop/tauri/src-tauri/target/release/bundle/nsis/
 
 ---
 
-## Remote Viewer Deployment (v0.5.0)
+## Remote Viewer Deployment
 
 ### Architecture
 
@@ -260,7 +260,7 @@ pip install runicorn
 import runicorn as rn
 
 run = rn.init(
-    project="training",
+    path="training/remote-demo",
     storage="~/RunicornData"  # Or any path
 )
 
@@ -284,7 +284,7 @@ runicorn viewer
 #      * Port: 22
 #      * Username: researcher
 #      * Auth: SSH key or password
-#    
+#
 # 4. System automatically:
 #    ✓ Detects remote Python environments
 #    ✓ Selects environment with Runicorn
@@ -300,7 +300,7 @@ runicorn viewer
 
 ### Comparison with Old Approach (SSH File Sync)
 
-| Feature | Old (SSH Sync) | Remote Viewer (v0.5.0) |
+| Feature | Old (SSH Sync) | Remote Viewer |
 |---------|----------------|------------------------|
 | **Data Transfer** | Sync large files | No sync, direct access |
 | **Wait Time** | Minutes for first sync | Instant connect (5-10s) |
@@ -339,7 +339,7 @@ runicorn viewer
   - Use VPN for remote access
   - Use SSH tunneling: `ssh -L 23300:localhost:23300 server`
 
-**Future**: API key authentication planned for v0.5+
+**Current status**: API-key authentication is not part of the current deployment model; document it here only if a later release actually adds it.
 
 ---
 
@@ -347,9 +347,9 @@ runicorn viewer
 
 **For large deployments (10,000+ experiments)**:
 
-1. **Use V2 API exclusively**
-   - Frontend: Always query `/api/v2/experiments`
-   - Avoid V1 file-scanning endpoints
+1. **Prefer the SQLite-backed list endpoints**
+   - Frontend: Use `/api/runs`, `/api/paths/runs`, and `/api/runs/{run_id}`
+   - Avoid custom file-scanning list logic in large deployments
 
 2. **Adjust SQLite settings**:
 ```python
@@ -432,7 +432,7 @@ runicorn artifacts --action stats
 **Performance**:
 ```bash
 # Check query times (should be <100ms)
-curl http://localhost:23300/api/v2/experiments?per_page=50
+curl http://localhost:23300/api/runs
 
 # Monitor in browser DevTools → Network tab
 ```
@@ -448,7 +448,7 @@ lsof -i :23300  # Linux/Mac
 netstat -ano | findstr :23300  # Windows
 
 # Check Python version
-python --version  # Must be 3.8+
+python --version  # Must be 3.10+
 
 # Check installation
 pip list | grep runicorn
@@ -468,8 +468,8 @@ runicorn viewer
 
 **Slow queries**:
 ```bash
-# Check if using V1 API (slow)
-# Solution: Ensure frontend uses V2 API
+# Check whether custom tooling is bypassing the SQLite-backed list endpoints
+# Solution: Prefer /api/runs or /api/paths/runs instead of ad-hoc file scans
 
 # Or: Rebuild indexes
 sqlite3 runicorn.db "REINDEX;"
@@ -481,7 +481,7 @@ sqlite3 runicorn.db "REINDEX;"
 
 ### Pre-Deployment
 
-- [ ] Python 3.8+ installed
+- [ ] Python 3.10+ installed
 - [ ] Sufficient disk space (estimate: experiments × 10MB + models)
 - [ ] Network accessible (if shared deployment)
 - [ ] Firewall configured (if applicable)

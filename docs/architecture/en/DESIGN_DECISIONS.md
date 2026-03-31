@@ -4,7 +4,7 @@
 
 # Design Decisions
 
-**Document Type**: Architecture  
+**Document Type**: Architecture
 **Purpose**: Document key technical decisions and their rationale
 
 ---
@@ -19,11 +19,11 @@
 1. **Pure File System** (v0.1-v0.2 approach)
    - Simple, human-readable
    - Slow queries (5-10s for 1000 experiments)
-   
+
 2. **Pure SQLite**
    - Fast queries
    - Not suitable for large files (100MB+ models)
-   
+
 3. **External Database** (PostgreSQL, MySQL)
    - Best performance for queries
    - Requires server setup, complex for users
@@ -53,15 +53,15 @@
 1. **No deduplication**
    - Simple
    - 100GB for 100 checkpoints
-   
+
 2. **Git-LFS**
    - Industry standard
    - External dependency, server required
-   
+
 3. **Compression** (gzip, zstd)
    - Reduces size
    - CPU cost, still redundant storage
-   
+
 4. **Block-level dedup** (ZFS, btrfs)
    - OS-level
    - Not portable, requires specific filesystem
@@ -91,11 +91,11 @@
 1. **Flask**
    - Simple, widely used
    - Sync-only, manual docs, slower
-   
+
 2. **Django + DRF**
    - Full-featured
    - Heavy, opinionated, overkill for API-only
-   
+
 3. **aiohttp**
    - Pure async
    - Lower-level, more boilerplate
@@ -107,7 +107,7 @@
 - Native async/await support
 - Pydantic validation (type-safe)
 - Fast (comparable to Node.js/Go)
-- Modern Python 3.8+ features
+- Modern Python 3.10+ features
 
 **Trade-offs**:
 - ✅ Best developer experience
@@ -162,15 +162,15 @@
 1. **PostgreSQL**
    - Best performance
    - Requires server, complex setup
-   
+
 2. **MySQL/MariaDB**
    - Good performance
    - Requires server
-   
+
 3. **MongoDB**
    - Flexible schema
    - Requires server, different query model
-   
+
 4. **In-memory** (Redis, Memcached)
    - Fastest
    - Not persistent
@@ -203,15 +203,15 @@
 1. **Semantic Versioning** (1.0.0, 1.1.0)
    - Industry standard for software
    - Complex for ML (what's major vs minor?)
-   
+
 2. **Git-like hashes**
    - Unique, distributed
    - Not user-friendly
-   
+
 3. **Timestamps**
    - Automatic
    - Hard to reference ("the 2AM version")
-   
+
 4. **User-defined**
    - Full control
    - Risk of conflicts, inconsistency
@@ -242,11 +242,11 @@
    - Most popular
    - Heavy (~100MB+ app size)
    - Chromium embedded
-   
+
 2. **Qt/PyQt**
    - Native look
    - Different UI code from web
-   
+
 3. **PWA** (Progressive Web App)
    - No installation
    - Limited OS integration
@@ -277,15 +277,15 @@
 1. **Full rsync**
    - Complete sync
    - Slow for large datasets (hours)
-   
+
 2. **Cloud storage** (S3, GCS)
    - Scalable
    - External dependency, cost
-   
+
 3. **Custom protocol**
    - Optimized
    - Requires server-side daemon
-   
+
 4. **Database replication**
    - Efficient
    - Complex setup
@@ -316,15 +316,15 @@
 1. **Hardcoded strings**
    - Simple
    - No i18n
-   
+
 2. **gettext** (Python standard)
    - Standard for Python
    - Awkward for React
-   
+
 3. **react-intl**
    - React-specific
    - More verbose
-   
+
 4. **Inline translations**
    - Simple
    - Unmaintainable
@@ -386,13 +386,13 @@
 
 ### What We'd Do Differently
 
-1. **Earlier V2 API**: Should have started with SQLite
+1. **Earlier SQLite-backed list path**: Should have started with SQLite
 2. **More modular**: Some tight coupling in early code
 3. **Testing**: Wish we had more integration tests earlier
 
 ---
 
-## Remote Viewer Architecture (v0.5.0)
+## Remote Viewer Architecture
 
 ### Decision: Remote Viewer vs File Sync
 

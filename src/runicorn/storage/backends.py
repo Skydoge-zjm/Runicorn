@@ -27,136 +27,136 @@ logger = logging.getLogger(__name__)
 class StorageBackend(ABC):
     """
     Abstract base class for storage backends.
-    
+
     This defines the interface that all storage backends must implement.
     """
-    
+
     @abstractmethod
     def create_experiment(self, experiment: ExperimentRecord) -> str:
         """
         Create a new experiment record.
-        
+
         Args:
             experiment: Experiment record to create
-            
+
         Returns:
             Created experiment ID
         """
         pass
-    
+
     @abstractmethod
     def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
         """
         Update experiment metadata.
-        
+
         Args:
             exp_id: Experiment ID to update
             updates: Dictionary of fields to update
-            
+
         Returns:
             True if successful, False otherwise
         """
         pass
-    
+
     @abstractmethod
     def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
         """
         Retrieve a single experiment by ID.
-        
+
         Args:
             exp_id: Experiment ID to retrieve
-            
+
         Returns:
             Experiment record if found, None otherwise
         """
         pass
-    
+
     @abstractmethod
     def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
         """
         List experiments matching query parameters.
-        
+
         Args:
             query: Query parameters for filtering and pagination
-            
+
         Returns:
             List of matching experiment records
         """
         pass
-    
+
     @abstractmethod
     def count_experiments(self, query: QueryParams) -> int:
         """
         Count experiments matching query parameters.
-        
+
         Args:
             query: Query parameters for filtering
-            
+
         Returns:
             Number of matching experiments
         """
         pass
-    
+
     @abstractmethod
     def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
         """
         Log metric data points for an experiment.
-        
+
         Args:
             exp_id: Experiment ID
             metrics: List of metric records to store
-            
+
         Returns:
             True if successful, False otherwise
         """
         pass
-    
+
     @abstractmethod
     def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
         """
         Retrieve metric data for an experiment.
-        
+
         Args:
             exp_id: Experiment ID
             metric_names: Optional list of specific metrics to retrieve
-            
+
         Returns:
             List of metric records
         """
         pass
-    
+
     @abstractmethod
     def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
         """
         Soft delete experiments.
-        
+
         Args:
             exp_ids: List of experiment IDs to delete
             reason: Reason for deletion
-            
+
         Returns:
             Dictionary mapping experiment ID to success status
         """
         pass
-    
+
     @abstractmethod
     def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
         """
         Restore soft-deleted experiments.
-        
+
         Args:
             exp_ids: List of experiment IDs to restore
-            
+
         Returns:
             Dictionary mapping experiment ID to success status
         """
         pass
-    
+
     @abstractmethod
     def get_storage_stats(self) -> StorageStats:
         """
         Get storage system statistics.
-        
+
         Returns:
             Storage statistics and health metrics
         """
@@ -167,11 +167,11 @@ class ConnectionPool:
     """
     SQLite connection pool for concurrent access.
     """
-    
+
     def __init__(self, db_path: Path, pool_size: int = 10):
         """
         Initialize connection pool.
-        
+
         Args:
             db_path: Path to SQLite database file
             pool_size: Maximum number of connections in pool
@@ -180,18 +180,18 @@ class ConnectionPool:
         self.pool = queue.Queue(maxsize=pool_size)
         self.lock = threading.Lock()
         self.all_connections = []  # Track all connections for cleanup
-        
+
         # Create connections
         for _ in range(pool_size):
             conn = self._create_connection()
             self.all_connections.append(conn)
             self.pool.put(conn)
-    
+
     def _create_connection(self) -> sqlite3.Connection:
         """Create a new SQLite connection with optimizations."""
         conn = sqlite3.connect(str(self.db_path), timeout=10.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row  # Enable dict-like access
-        
+
         # Performance optimizations
         conn.execute("PRAGMA journal_mode=WAL")        # Write-Ahead Logging
         conn.execute("PRAGMA synchronous=NORMAL")      # Balance safety and speed
@@ -199,21 +199,21 @@ class ConnectionPool:
         conn.execute("PRAGMA temp_store=memory")       # Store temp data in memory
         conn.execute("PRAGMA mmap_size=268435456")     # 256MB memory mapping
         conn.execute("PRAGMA cache_size=10000")        # 10MB cache
-        
+
         return conn
-    
+
     def get_connection(self) -> sqlite3.Connection:
         """Get connection from pool."""
         return self.pool.get()
-    
+
     def return_connection(self, conn: sqlite3.Connection) -> None:
         """Return connection to pool."""
         self.pool.put(conn)
-    
+
     def close_all(self) -> None:
         """
         Close all connections in pool.
-        
+
         This forcibly closes ALL connections, including those currently in use.
         Should only be called when shutting down.
         """
@@ -224,14 +224,14 @@ class ConnectionPool:
                     conn.close()
                 except Exception as e:
                     logger.debug(f"Failed to close connection: {e}")
-            
+
             # Clear the pool
             while not self.pool.empty():
                 try:
                     self.pool.get_nowait()
                 except queue.Empty:
                     break
-            
+
             # Clear the list
             self.all_connections.clear()
 
@@ -239,34 +239,34 @@ class ConnectionPool:
 class SQLiteStorageBackend(StorageBackend):
     """
     High-performance SQLite storage backend.
-    
+
     This backend provides fast queries and analytics capabilities
     while maintaining compatibility with the file-based approach.
     """
-    
+
     def __init__(self, root_dir: Path):
         """
         Initialize SQLite storage backend.
-        
+
         Args:
             root_dir: Root directory containing the database
         """
         self.root_dir = Path(root_dir)
         self.root_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self.db_path = self.root_dir / "runicorn.db"
         self.pool = ConnectionPool(self.db_path)
-        
+
         # Initialize database schema
         self._initialize_schema()
-    
+
     def close(self) -> None:
         """Close all database connections and WAL files."""
         if hasattr(self, 'pool') and self.pool:
             try:
                 self.pool.close_all()
                 logger.debug("Closed all database connections")
-                
+
                 # Force checkpoint to close WAL file (Windows critical)
                 if self.db_path.exists():
                     try:
@@ -276,21 +276,22 @@ class SQLiteStorageBackend(StorageBackend):
                         temp_conn.close()
                     except Exception as e:
                         logger.debug(f"Failed to checkpoint WAL: {e}")
-                
+
             except Exception as e:
                 logger.warning(f"Failed to close database pool: {e}")
-    
+
     def __del__(self):
         """Destructor to ensure connections are closed."""
         try:
             self.close()
         except Exception:
             pass
-    
+
     def _initialize_schema(self) -> None:
         """Initialize database schema from SQL file."""
         # Migrate old schema before applying current schema.sql
         self._migrate_legacy_schema()
+        self._migrate_metrics_identity_schema()
 
         try:
             schema_sql = files("runicorn.storage").joinpath("schema.sql").read_text(encoding="utf-8")
@@ -310,10 +311,10 @@ class SQLiteStorageBackend(StorageBackend):
         except Exception as e:
             logger.error(f"Failed to initialize database schema: {e}")
             raise
-    
+
     def _migrate_legacy_schema(self) -> None:
         """Migrate old schema (project/name) to new schema (path/alias/workspace_root).
-        
+
         Old schema had 'project' and 'name' columns on the experiments table.
         New schema replaced them with 'path' (flexible hierarchy), 'alias', and
         'workspace_root'.  Since CREATE TABLE IF NOT EXISTS won't alter an
@@ -329,18 +330,18 @@ class SQLiteStorageBackend(StorageBackend):
             )
             if not cursor.fetchone():
                 return  # Fresh install, nothing to migrate
-            
+
             # Read existing columns
             cursor = conn.execute("PRAGMA table_info(experiments)")
             columns = {row[1] for row in cursor}
-            
+
             if 'project' not in columns:
                 return  # Already fully migrated or unknown schema
-            
+
             needs_add_columns = 'path' not in columns
-            
+
             logger.info("Detected legacy schema (project/name), migrating to new schema (path/alias/workspace_root)...")
-            
+
             # Step 1: Add new columns if not yet present
             if needs_add_columns:
                 for col_sql in [
@@ -352,7 +353,7 @@ class SQLiteStorageBackend(StorageBackend):
                         conn.execute(col_sql)
                     except sqlite3.OperationalError:
                         pass  # Column already exists
-                
+
                 # Migrate data: path = project/name (or just project if name is empty)
                 conn.execute("""
                     UPDATE experiments
@@ -362,14 +363,14 @@ class SQLiteStorageBackend(StorageBackend):
                     END
                     WHERE path = 'default'
                 """)
-            
+
             # Step 2: Drop ALL views on experiments (they'll be recreated by schema.sql)
             cursor = conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='view'"
             )
             for row in cursor.fetchall():
                 conn.execute(f"DROP VIEW IF EXISTS {row[0]}")
-            
+
             # Step 3: Drop any indexes referencing legacy columns
             cursor = conn.execute(
                 "SELECT name, sql FROM sqlite_master "
@@ -378,22 +379,93 @@ class SQLiteStorageBackend(StorageBackend):
             for row in cursor.fetchall():
                 if 'project' in row[1] or '"name"' in row[1] or ', name' in row[1] or '(name' in row[1]:
                     conn.execute(f"DROP INDEX IF EXISTS {row[0]}")
-            
+
             # Step 4: Drop legacy columns (SQLite 3.35+ / Python 3.12+)
             for col in ('project', 'name'):
                 try:
                     conn.execute(f"ALTER TABLE experiments DROP COLUMN {col}")
                 except sqlite3.OperationalError as e:
                     logger.debug(f"Could not drop column {col}: {e}")
-            
+
             conn.commit()
             logger.info("Legacy schema migration completed")
-            
+
         except Exception as e:
             logger.warning(f"Legacy schema migration failed: {e}")
         finally:
             self.pool.return_connection(conn)
-    
+
+    def _migrate_metrics_identity_schema(self) -> None:
+        """Upgrade legacy metrics table to use an independent row identity.
+
+        Older schemas used ``(experiment_id, timestamp, metric_name)`` as the
+        primary key. Combined with ``INSERT OR REPLACE``, that could overwrite
+        rapid consecutive writes of the same metric. The new schema keeps the
+        query-facing columns unchanged and adds an internal autoincrement key.
+        """
+        conn = self.pool.get_connection()
+        try:
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='metrics'"
+            )
+            if not cursor.fetchone():
+                return
+
+            cursor = conn.execute("PRAGMA table_info(metrics)")
+            columns = {row[1] for row in cursor.fetchall()}
+            if "id" in columns:
+                return
+
+            logger.info(
+                "Detected legacy metrics schema without stable row identity; migrating..."
+            )
+
+            conn.execute("DROP TABLE IF EXISTS metrics__new")
+            conn.execute("""
+                CREATE TABLE metrics__new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    experiment_id TEXT NOT NULL,
+                    timestamp REAL NOT NULL,
+                    metric_name TEXT NOT NULL,
+                    metric_value REAL,
+                    step INTEGER,
+                    stage TEXT,
+                    recorded_at REAL NOT NULL DEFAULT (unixepoch()),
+                    FOREIGN KEY (experiment_id) REFERENCES experiments(id) ON DELETE CASCADE
+                )
+            """)
+            conn.execute("""
+                INSERT INTO metrics__new (
+                    experiment_id,
+                    timestamp,
+                    metric_name,
+                    metric_value,
+                    step,
+                    stage,
+                    recorded_at
+                )
+                SELECT
+                    experiment_id,
+                    timestamp,
+                    metric_name,
+                    metric_value,
+                    step,
+                    stage,
+                    COALESCE(recorded_at, timestamp, unixepoch())
+                FROM metrics
+                ORDER BY timestamp ASC
+            """)
+            conn.execute("DROP TABLE metrics")
+            conn.execute("ALTER TABLE metrics__new RENAME TO metrics")
+            conn.commit()
+            logger.info("Legacy metrics schema migration completed")
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Metrics schema migration failed: {e}")
+            raise
+        finally:
+            self.pool.return_connection(conn)
+
     def create_experiment(self, experiment: ExperimentRecord) -> str:
         """Create experiment in SQLite database."""
         conn = self.pool.get_connection()
@@ -408,32 +480,32 @@ class SQLiteStorageBackend(StorageBackend):
             """, (
                 experiment.id, experiment.path, experiment.alias,
                 experiment.created_at, experiment.updated_at, experiment.status,
-                experiment.pid, experiment.python_version, experiment.platform, 
+                experiment.pid, experiment.python_version, experiment.platform,
                 experiment.hostname, experiment.run_dir,
                 experiment.workspace_root,
                 experiment.best_metric_name, experiment.best_metric_value,
                 experiment.best_metric_step, experiment.best_metric_mode
             ))
             conn.commit()
-            
+
             logger.debug(f"Created experiment {experiment.id} in database")
             return experiment.id
-            
+
         except Exception as e:
             logger.error(f"Failed to create experiment {experiment.id}: {e}")
             raise
         finally:
             self.pool.return_connection(conn)
-    
+
     def update_experiment(self, exp_id: str, updates: Dict[str, Any]) -> bool:
         """Update experiment in SQLite database."""
         if not updates:
             return True
-        
+
         # Build dynamic UPDATE query
         set_clauses = []
         params = []
-        
+
         for key, value in updates.items():
             # Validate column name to prevent SQL injection
             if not validate_column_name(key, ALLOWED_EXPERIMENT_COLUMNS):
@@ -441,67 +513,67 @@ class SQLiteStorageBackend(StorageBackend):
                 continue
             set_clauses.append(f"{key} = ?")
             params.append(value)
-        
+
         if not set_clauses:
             logger.warning("No valid columns to update")
             return False
-        
+
         # Always update the updated_at timestamp
         set_clauses.append("updated_at = ?")
         params.append(time.time())
         params.append(exp_id)  # For WHERE clause
-        
+
         query = f"UPDATE experiments SET {', '.join(set_clauses)} WHERE id = ?"
-        
+
         conn = self.pool.get_connection()
         try:
             cursor = conn.execute(query, params)
             conn.commit()
-            
+
             success = cursor.rowcount > 0
             if success:
                 logger.debug(f"Updated experiment {exp_id} with {len(updates)} fields")
             else:
                 logger.warning(f"No experiment found with ID {exp_id}")
-            
+
             return success
-            
+
         except Exception as e:
             logger.error(f"Failed to update experiment {exp_id}: {e}")
             return False
         finally:
             self.pool.return_connection(conn)
-    
+
     def get_experiment(self, exp_id: str) -> Optional[ExperimentRecord]:
         """Get experiment from SQLite database."""
         conn = self.pool.get_connection()
         try:
             cursor = conn.execute("SELECT * FROM experiments WHERE id = ?", (exp_id,))
             row = cursor.fetchone()
-            
+
             if row:
                 # Convert sqlite3.Row to dict and then to ExperimentRecord
                 data = dict(row)
                 return ExperimentRecord.from_dict(data)
-            
+
             return None
-            
+
         except Exception as e:
             logger.error(f"Failed to get experiment {exp_id}: {e}")
             return None
         finally:
             self.pool.return_connection(conn)
-    
+
     def list_experiments(self, query: QueryParams) -> List[ExperimentRecord]:
         """List experiments with high-performance SQL queries."""
         sql_parts = ["SELECT * FROM experiments"]
         where_clauses = []
         params = []
-        
+
         # Build WHERE clause dynamically
         if not query.include_deleted:
             where_clauses.append("deleted_at IS NULL")
-        
+
         if query.path:
             if query.path_exact:
                 where_clauses.append("path = ?")
@@ -511,69 +583,69 @@ class SQLiteStorageBackend(StorageBackend):
                 where_clauses.append("(path = ? OR path LIKE ?)")
                 params.append(query.path)
                 params.append(f"{query.path}/%")
-        
+
         if query.alias:
             where_clauses.append("alias LIKE ?")
             params.append(f"%{query.alias}%")
-        
+
         if query.status:
             placeholders = ",".join("?" * len(query.status))
             where_clauses.append(f"status IN ({placeholders})")
             params.extend(query.status)
-        
+
         if query.created_after:
             where_clauses.append("created_at >= ?")
             params.append(query.created_after)
-        
+
         if query.created_before:
             where_clauses.append("created_at <= ?")
             params.append(query.created_before)
-        
+
         if query.search_text:
             # Search in path, alias, and id
             where_clauses.append("(path LIKE ? OR alias LIKE ? OR id LIKE ?)")
             search_pattern = f"%{query.search_text}%"
             params.extend([search_pattern, search_pattern, search_pattern])
-        
+
         if query.best_metric_range:
             where_clauses.append("best_metric_value BETWEEN ? AND ?")
             params.extend(query.best_metric_range)
-        
+
         # Add WHERE clause if we have conditions
         if where_clauses:
             sql_parts.append("WHERE " + " AND ".join(where_clauses))
-        
+
         # Add ORDER BY and LIMIT
         order_direction = "DESC" if query.order_desc else "ASC"
         sql_parts.append(f"ORDER BY {query.order_by} {order_direction}")
         sql_parts.append("LIMIT ? OFFSET ?")
         params.extend([query.limit, query.offset])
-        
+
         # Execute query
         conn = self.pool.get_connection()
         try:
             cursor = conn.execute(" ".join(sql_parts), params)
             rows = cursor.fetchall()
-            
+
             # Convert to ExperimentRecord objects
             return [ExperimentRecord.from_dict(dict(row)) for row in rows]
-            
+
         except Exception as e:
             logger.error(f"Failed to list experiments: {e}")
             return []
         finally:
             self.pool.return_connection(conn)
-    
+
     def count_experiments(self, query: QueryParams) -> int:
         """Count experiments matching query."""
         sql_parts = ["SELECT COUNT(*) FROM experiments"]
         where_clauses = []
         params = []
-        
+
         # Build WHERE clause (same logic as list_experiments)
         if not query.include_deleted:
             where_clauses.append("deleted_at IS NULL")
-        
+
         if query.path:
             if query.path_exact:
                 where_clauses.append("path = ?")
@@ -582,36 +654,36 @@ class SQLiteStorageBackend(StorageBackend):
                 where_clauses.append("(path = ? OR path LIKE ?)")
                 params.append(query.path)
                 params.append(f"{query.path}/%")
-        
+
         if query.alias:
             where_clauses.append("alias LIKE ?")
             params.append(f"%{query.alias}%")
-        
+
         if query.status:
             placeholders = ",".join("?" * len(query.status))
             where_clauses.append(f"status IN ({placeholders})")
             params.extend(query.status)
-        
+
         if query.created_after:
             where_clauses.append("created_at >= ?")
             params.append(query.created_after)
-        
+
         if query.created_before:
             where_clauses.append("created_at <= ?")
             params.append(query.created_before)
-        
+
         if query.search_text:
             where_clauses.append("(path LIKE ? OR alias LIKE ? OR id LIKE ?)")
             search_pattern = f"%{query.search_text}%"
             params.extend([search_pattern, search_pattern, search_pattern])
-        
+
         if query.best_metric_range:
             where_clauses.append("best_metric_value BETWEEN ? AND ?")
             params.extend(query.best_metric_range)
-        
+
         if where_clauses:
             sql_parts.append("WHERE " + " AND ".join(where_clauses))
-        
+
         conn = self.pool.get_connection()
         try:
             cursor = conn.execute(" ".join(sql_parts), params)
@@ -622,93 +694,97 @@ class SQLiteStorageBackend(StorageBackend):
             return 0
         finally:
             self.pool.return_connection(conn)
-    
+
     def log_metrics(self, exp_id: str, metrics: List[MetricRecord]) -> bool:
         """Log metrics to SQLite database."""
         if not metrics:
             return True
-        
+
         conn = self.pool.get_connection()
         try:
             # Batch insert for performance
             metric_data = [
-                (m.experiment_id, m.timestamp, m.metric_name, m.metric_value, 
+                (m.experiment_id, m.timestamp, m.metric_name, m.metric_value,
                  m.step, m.stage, m.recorded_at)
                 for m in metrics
             ]
-            
+
             conn.executemany("""
-                INSERT OR REPLACE INTO metrics 
+                INSERT INTO metrics
                 (experiment_id, timestamp, metric_name, metric_value, step, stage, recorded_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, metric_data)
-            
+
             # Update experiment metric count
             conn.execute("""
-                UPDATE experiments 
+                UPDATE experiments
                 SET metric_count = (
                     SELECT COUNT(*) FROM metrics WHERE experiment_id = ?
                 ), updated_at = ?
                 WHERE id = ?
             """, (exp_id, time.time(), exp_id))
-            
+
             conn.commit()
             logger.debug(f"Logged {len(metrics)} metrics for experiment {exp_id}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to log metrics for {exp_id}: {e}")
             return False
         finally:
             self.pool.return_connection(conn)
-    
+
     def get_metrics(self, exp_id: str, metric_names: Optional[List[str]] = None) -> List[MetricRecord]:
         """Get metrics from SQLite database."""
-        sql = "SELECT * FROM metrics WHERE experiment_id = ?"
+        sql = """
+            SELECT experiment_id, timestamp, metric_name, metric_value, step, stage, recorded_at
+            FROM metrics
+            WHERE experiment_id = ?
+        """
         params = [exp_id]
-        
+
         if metric_names:
             placeholders = ",".join("?" * len(metric_names))
             sql += f" AND metric_name IN ({placeholders})"
             params.extend(metric_names)
-        
-        sql += " ORDER BY timestamp ASC"
-        
+
+        sql += " ORDER BY timestamp ASC, id ASC"
+
         conn = self.pool.get_connection()
         try:
             cursor = conn.execute(sql, params)
             rows = cursor.fetchall()
-            
+
             return [MetricRecord.from_dict(dict(row)) for row in rows]
-            
+
         except Exception as e:
             logger.error(f"Failed to get metrics for {exp_id}: {e}")
             return []
         finally:
             self.pool.return_connection(conn)
-    
+
     def soft_delete_experiments(self, exp_ids: List[str], reason: str = "user_deleted") -> Dict[str, bool]:
         """Soft delete experiments in SQLite."""
         results = {}
         conn = self.pool.get_connection()
-        
+
         try:
             for exp_id in exp_ids:
                 cursor = conn.execute("""
-                    UPDATE experiments 
+                    UPDATE experiments
                     SET deleted_at = ?, delete_reason = ?, updated_at = ?
                     WHERE id = ? AND deleted_at IS NULL
                 """, (time.time(), reason, time.time(), exp_id))
-                
+
                 results[exp_id] = cursor.rowcount > 0
-                
+
                 if results[exp_id]:
                     logger.info(f"Soft deleted experiment {exp_id}")
                 else:
                     logger.warning(f"Experiment {exp_id} not found or already deleted")
-            
+
             conn.commit()
-            
+
         except Exception as e:
             logger.error(f"Failed to soft delete experiments: {e}")
             # Mark all as failed
@@ -716,31 +792,31 @@ class SQLiteStorageBackend(StorageBackend):
                 results[exp_id] = False
         finally:
             self.pool.return_connection(conn)
-        
+
         return results
-    
+
     def restore_experiments(self, exp_ids: List[str]) -> Dict[str, bool]:
         """Restore soft-deleted experiments in SQLite."""
         results = {}
         conn = self.pool.get_connection()
-        
+
         try:
             for exp_id in exp_ids:
                 cursor = conn.execute("""
-                    UPDATE experiments 
+                    UPDATE experiments
                     SET deleted_at = NULL, delete_reason = NULL, updated_at = ?
                     WHERE id = ? AND deleted_at IS NOT NULL
                 """, (time.time(), exp_id))
-                
+
                 results[exp_id] = cursor.rowcount > 0
-                
+
                 if results[exp_id]:
                     logger.info(f"Restored experiment {exp_id}")
                 else:
                     logger.warning(f"Experiment {exp_id} not found or not deleted")
-            
+
             conn.commit()
-            
+
         except Exception as e:
             logger.error(f"Failed to restore experiments: {e}")
             # Mark all as failed
@@ -748,44 +824,44 @@ class SQLiteStorageBackend(StorageBackend):
                 results[exp_id] = False
         finally:
             self.pool.return_connection(conn)
-        
+
         return results
-    
+
     def get_storage_stats(self) -> StorageStats:
         """Get SQLite storage statistics."""
         conn = self.pool.get_connection()
         try:
             # Get experiment counts
             cursor = conn.execute("""
-                SELECT 
+                SELECT
                     COUNT(*) as total,
                     COUNT(CASE WHEN deleted_at IS NULL THEN 1 END) as active,
                     COUNT(CASE WHEN deleted_at IS NOT NULL THEN 1 END) as deleted
                 FROM experiments
             """)
             exp_counts = cursor.fetchone()
-            
+
             # Get metric counts
             cursor = conn.execute("SELECT COUNT(*) FROM metrics")
             metric_count = cursor.fetchone()[0]
-            
+
             # Get database size
             cursor = conn.execute("PRAGMA page_count")
             page_count = cursor.fetchone()[0]
             cursor = conn.execute("PRAGMA page_size")
             page_size = cursor.fetchone()[0]
             db_size_bytes = page_count * page_size
-            
+
             return StorageStats(
                 total_experiments=exp_counts[0],
-                active_experiments=exp_counts[1], 
+                active_experiments=exp_counts[1],
                 deleted_experiments=exp_counts[2],
                 total_metrics_points=metric_count,
                 storage_size_bytes=db_size_bytes,
                 db_size_mb=db_size_bytes / (1024 * 1024),
                 updated_at=time.time()
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to get storage stats: {e}")
             return StorageStats()

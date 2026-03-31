@@ -4,8 +4,8 @@
 
 # Runicorn 架构文档
 
-**版本**: v0.6.0  
-**最后更新**: 2026-01-15  
+**版本**: v0.7.0
+**最后更新**: 2026-03-28
 **目标受众**: 开发者、贡献者、架构师
 
 ---
@@ -37,7 +37,7 @@
 - **[DATA_FLOW.md](DATA_FLOW.md)** - 数据处理管道
   - 实验生命周期
   - 指标记录流程
-  - Artifact 存储流程
+  - 资产与快照流程
   - 序列图
 
 - **[STORAGE_DESIGN.md](STORAGE_DESIGN.md)** - 存储架构
@@ -62,13 +62,13 @@
 
 ### 远程与网络
 
-- **[REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)** - ⭐ Remote Viewer 架构 (v0.5.0)
+- **[REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)** - ⭐ Remote Viewer 架构
   - SSH 隧道设计
   - 远程进程管理
   - 健康检查机制
   - 安全模型
 
-- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - ⭐ SSH 后端多回退架构 (v0.6.0)
+- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - ⭐ SSH 后端多回退架构
   - OpenSSH + AsyncSSH + Paramiko 回退链
   - 平台特定策略
   - 连接管理

@@ -4,15 +4,15 @@
 
 # SSH 后端架构
 
-**文档类型**: 架构  
-**版本**: v0.6.0  
-**最后更新**: 2025-01-XX
+**文档类型**: 架构
+**版本**: v0.7.0
+**最后更新**: 2026-03-28
 
 ---
 
 ## 概述
 
-Runicorn v0.6.0 引入了全新的多后端 SSH 架构，旨在实现最大的兼容性和可靠性。该架构将**连接管理**与**隧道传输**分离，允许每一层使用不同的实现。
+当前 Runicorn 使用多后端 SSH 架构，以获得更高的兼容性和可靠性。该架构将**连接管理**与**隧道传输**分离，允许每一层使用不同的实现。
 
 ### 设计原则
 
@@ -150,7 +150,7 @@ class AutoBackend(SshBackend):
     def connect(self, config: SSHConfig) -> SshConnection:
         # 始终使用 Paramiko
         return self._paramiko.connect(config)
-    
+
     def create_tunnel(self, *, connection, local_port, remote_host, remote_port, stop_event) -> SshTunnel:
         # 回退链: OpenSSH → AsyncSSH → Paramiko
         try:
@@ -159,14 +159,14 @@ class AutoBackend(SshBackend):
             if isinstance(e, HostKeyConfirmationRequiredError):
                 raise  # 主机密钥问题不回退
             logger.info(f"从 OpenSSH 回退: {e}")
-        
+
         try:
             return self._asyncssh.create_tunnel(...)
         except Exception as e:
             if isinstance(e, HostKeyConfirmationRequiredError):
                 raise
             logger.info(f"从 AsyncSSH 回退: {e}")
-        
+
         return self._paramiko.create_tunnel(...)
 ```
 
@@ -242,7 +242,7 @@ class AsyncSSHTunnel:
                 # 返回 False 触发 HostKeyNotVerifiable
                 # 存储 HostKeyProblem 用于 409 流程
                 ...
-        
+
         self._conn = await asyncssh.connect(
             host,
             port=port,
@@ -251,7 +251,7 @@ class AsyncSSHTunnel:
             client_factory=_RunicornSSHClient,
             ...
         )
-        
+
         self._listener = await self._conn.forward_local_port(
             "127.0.0.1", local_port, remote_host, remote_port
         )

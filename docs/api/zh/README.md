@@ -4,10 +4,10 @@
 
 # Runicorn API 文档
 
-**版本**: v0.6.0  
-**基础 URL**: `http://127.0.0.1:23300/api`  
-**协议**: HTTP/1.1  
-**格式**: JSON  
+**版本**: v0.7.0
+**基础 URL**: `http://127.0.0.1:23300/api`
+**协议**: HTTP/1.1
+**格式**: JSON
 **字符编码**: UTF-8
 
 ---
@@ -43,7 +43,7 @@ GET /api/health
 响应:
 {
   "status": "ok",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "timestamp": 1704067200.0
 }
 ```
@@ -56,7 +56,7 @@ GET /api/health
 
 > ⚠️ **安全提示**: API 设计为仅本地使用。请勿在没有适当认证和加密的情况下将其暴露到互联网。
 
-**未来版本**: 可能支持 API 密钥用于多用户场景。
+**当前范围**: 本文档按本地优先部署模型编写，当前并未定义 API 密钥认证方案。
 
 ---
 
@@ -69,11 +69,11 @@ Runicorn 提供两种 API 访问方式：
 **新增**: 程序化访问接口，简化 Python 集成
 
 ```python
-import runicorn.api as api
+import runicorn.client as client_mod
 
-with api.connect() as client:
-    experiments = client.list_experiments(project="vision")
-    metrics = client.get_metrics(experiments[0]["id"])
+with client_mod.connect() as client:
+    runs = client.list_runs_by_path(path="vision")
+    metrics = client.get_metrics(runs[0]["id"])
 ```
 
 **特性**：
@@ -97,8 +97,8 @@ HTTP REST API 端点，用于 Web UI 和第三方集成。
 | **Metrics API** | 实时指标查询和可视化数据 | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |
 | **Config API** | 配置和偏好设置管理 | [config_api.md](./config_api.md) | 6个端点 |
 | **Remote Viewer API** 🆕 | VSCode Remote 风格的远程访问 | [remote_api.md](./remote_api.md) | 12个端点 |
-| **Logging API** 🆕 | 增强日志与控制台捕获 (v0.6.0) | [logging_api.md](./logging_api.md) | SDK |
-| **Paths API** 🆕 | 路径层级导航 (v0.6.0) | [paths_api.md](./paths_api.md) | 5+3个端点 |
+| **Logging API** 🆕 | 增强日志与控制台捕获 | [logging_api.md](./logging_api.md) | SDK |
+| **Paths API** 🆕 | 路径层级导航 | [paths_api.md](./paths_api.md) | 5+3个端点 |
 | **SSH API** | SSH 连接管理（已弃用）| [ssh_api.md](./ssh_api.md) | 12个端点 |
 
 > ⚠️ **弃用**: 旧的 SSH 文件同步 API (`/api/unified/*`) 已被 Remote Viewer API 替代。查看 [迁移指南](../../guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md)
@@ -184,13 +184,13 @@ import time
 
 def api_call_with_retry(url):
     response = requests.get(url)
-    
+
     if response.status_code == 429:
         retry_after = int(response.headers.get('Retry-After', 60))
         print(f"速率限制。等待 {retry_after} 秒...")
         time.sleep(retry_after)
         return api_call_with_retry(url)
-    
+
     return response.json()
 ```
 
@@ -252,7 +252,7 @@ ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 
 ---
 
-**最后更新**: 2026-01-15  
+**最后更新**: 2026-03-28
 **维护者**: Runicorn 开发团队
 
 

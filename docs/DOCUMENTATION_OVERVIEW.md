@@ -1,10 +1,10 @@
 # Runicorn Documentation System Overview
 
-**Version**: v0.6.0  
-**Last Updated**: 2026-01-15  
-**Purpose**: Complete overview of all documentation in the Runicorn project
+- **Version**: v0.7.0
+- **Last Updated**: 2026-03-28
+- **Purpose**: Complete overview of all documentation in the Runicorn project
 
-**v0.6.0 Highlights**: New Assets System (SHA256 content-addressed storage), Enhanced Logging (console capture, MetricLogger), Path-based Hierarchy (VSCode-style navigation), Inline Compare View, New SSH Backend Architecture (OpenSSH + AsyncSSH + Paramiko fallback)
+**v0.7.0 Highlights**: Remote Viewer hardening, web UI productization, backend-collected GPU telemetry history, stronger logging compatibility, and desktop workflow improvements
 
 ---
 
@@ -45,17 +45,17 @@ Documentation/
 
 ## 1️⃣ User Guides
 
-**Location**: `docs/guides/`  
-**Audience**: All users  
-**Format**: Markdown  
-**Language**: English/Chinese  
+**Location**: `docs/guides/`
+**Audience**: All users
+**Format**: Markdown
+**Language**: English/Chinese
 
 ### Purpose
 
 Practical guides for:
 - Getting started with Runicorn
 - Using Remote Viewer (v0.5.0)
-- Model versioning with Artifacts
+- Working with assets, snapshots, and reusable training context
 - Migrating from 0.4.x to 0.5.0
 - Example code walkthroughs
 
@@ -64,10 +64,10 @@ Practical guides for:
 | Document | Purpose | Language |
 |----------|---------|----------|
 | `QUICKSTART.md` | 5-minute quick start | EN/ZH |
+| `REMOTE_STORAGE_USER_GUIDE.md` | Deprecated remote storage reference | EN/ZH |
 | `REMOTE_VIEWER_GUIDE.md` | ⭐ Remote Viewer usage (v0.5.0) | EN/ZH |
-| `ARTIFACTS_GUIDE.md` | Model versioning | EN/ZH |
-| `ENHANCED_LOGGING_GUIDE.md` | ⭐ Console capture, logging handler, MetricLogger (v0.6.0) | EN/ZH |
-| `ASSETS_GUIDE.md` | ⭐ SHA256 content-addressed storage, workspace snapshots (v0.6.0) | EN/ZH |
+| `ENHANCED_LOGGING_GUIDE.md` | ⭐ Console capture, logging handler, MetricLogger | EN/ZH |
+| `ASSETS_GUIDE.md` | ⭐ Workspace snapshots and asset tracking | EN/ZH |
 | `MIGRATION_GUIDE_v0.4_to_v0.5.md` | Migration guide (v0.5.0) | EN/ZH |
 | `DEMO_EXAMPLES_GUIDE.md` | Example code explanations | EN/ZH |
 
@@ -87,10 +87,10 @@ Practical guides for:
 
 ## 2️⃣ Reference Documentation
 
-**Location**: `docs/reference/`  
-**Audience**: All users  
-**Format**: Markdown  
-**Language**: English/Chinese  
+**Location**: `docs/reference/`
+**Audience**: All users
+**Format**: Markdown
+**Language**: English/Chinese
 
 ### Purpose
 
@@ -104,8 +104,8 @@ Technical reference for:
 
 | Document | Purpose | Language |
 |----------|---------|----------|
-| `CONFIGURATION.md` | ⭐ Complete config reference (v0.6.0) | EN/ZH |
-| `CLI_REFERENCE.md` | ⭐ All CLI commands (v0.6.0) | EN/ZH |
+| `CONFIGURATION.md` | ⭐ Complete config reference | EN/ZH |
+| `CLI_REFERENCE.md` | ⭐ All CLI commands | EN/ZH |
 | `FAQ.md` | ⭐ 30+ common questions (v0.5.0) | EN/ZH |
 | `RATE_LIMIT_CONFIGURATION.md` | Rate limiting setup | EN/ZH |
 
@@ -123,10 +123,10 @@ Technical reference for:
 
 ## 3️⃣ Architecture Documentation
 
-**Location**: `docs/architecture/`  
-**Audience**: Developers, contributors  
-**Format**: Markdown  
-**Language**: English/Chinese  
+**Location**: `docs/architecture/`
+**Audience**: Developers, contributors
+**Format**: Markdown
+**Language**: English/Chinese
 
 ### Purpose
 
@@ -147,7 +147,7 @@ System design documentation:
 |----------|---------|----------|
 | `SYSTEM_OVERVIEW.md` | High-level architecture | EN/ZH |
 | `REMOTE_VIEWER_ARCHITECTURE.md` | ⭐ Remote Viewer design (v0.5.0) | EN/ZH |
-| `SSH_BACKEND_ARCHITECTURE.md` | ⭐ SSH backend multi-fallback design (v0.6.0) | EN/ZH |
+| `SSH_BACKEND_ARCHITECTURE.md` | ⭐ SSH backend multi-fallback design | EN/ZH |
 | `COMPONENT_ARCHITECTURE.md` | Component design | EN/ZH |
 | `STORAGE_DESIGN.md` | Storage architecture | EN/ZH |
 | `DATA_FLOW.md` | Data processing pipeline | EN/ZH |
@@ -170,10 +170,10 @@ System design documentation:
 
 ## 4️⃣ API Documentation
 
-**Location**: `docs/api/`  
-**Audience**: Developers building integrations  
-**Format**: Markdown (API spec)  
-**Language**: English  
+**Location**: `docs/api/`
+**Audience**: Developers building integrations
+**Format**: Markdown (API spec)
+**Language**: English/Chinese
 **Access**: File-based or via FastAPI auto-docs
 
 ### Purpose
@@ -192,19 +192,19 @@ Technical reference for:
 |----------|---------|-----------|
 | `README.md` | API overview | - |
 | `QUICK_REFERENCE.md` | Quick lookup | All |
-| `API_INDEX.md` | Complete index | 50+ |
+| `API_INDEX.md` | Complete index | REST + Python Client |
+| `python_client_api.md` | Python client usage | SDK |
 | `runs_api.md` | Experiment CRUD | 6 |
-| `artifacts_api.md` | Model versioning | 7 |
-| `v2_api.md` | High-performance queries | 4 |
 | `metrics_api.md` | Metrics & logs | 4 |
 | `config_api.md` | Configuration | 6 |
 | `ssh_api.md` | Remote sync (deprecated) | 12 |
 | `remote_api.md` | ⭐ Remote Viewer API (v0.5.0+) | 8+ |
-| `logging_api.md` | ⭐ Enhanced Logging API (v0.6.0) | SDK |
-| `paths_api.md` | ⭐ Path-based Hierarchy API (v0.6.0) | 5 |
+| `REMOTE_API_EXAMPLES.md` | Remote Viewer examples | Examples |
+| `logging_api.md` | ⭐ Enhanced Logging API | SDK |
+| `paths_api.md` | ⭐ Path-based Hierarchy API | 5 |
 | `runicorn_api.postman_collection.json` | Postman import | All |
 
-**Total**: 15 API modules × 2 languages = 30 files  
+**Total**: 12 API modules × 2 languages, plus a shared Postman collection
 **Content**: 50,000+ words, 150+ code examples
 
 ### Features
@@ -241,10 +241,10 @@ http://127.0.0.1:23300/redoc # ReDoc alternative
 
 ## 5️⃣ User Guide (Website)
 
-**Location**: `docs/user-guide/`  
-**Audience**: End users (ML researchers, data scientists)  
-**Format**: MkDocs (Material theme)  
-**Language**: English  
+**Location**: `docs/user-guide/`
+**Audience**: End users (ML researchers, data scientists)
+**Format**: MkDocs (Material theme)
+**Language**: English
 **Hosting**: GitHub Pages
 
 ### Purpose
@@ -387,7 +387,7 @@ mkdocs serve
 - ✅ **FAQ**: 100% (30+ questions answered)
 - ✅ **Migration**: 100% (0.4→0.5 guide complete)
 - ✅ **Web UI**: ~70% (core features documented)
-- ⏳ **Tutorials**: ~40% (4 complete, more planned)
+- ⏳ **Tutorials**: ~40% (4 complete; coverage is still partial)
 
 ---
 

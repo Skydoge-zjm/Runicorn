@@ -1,7 +1,7 @@
 # Remote Viewer API 代码示例
 
-> **版本**: v0.6.0  
-> **最后更新**: 2026-01-15
+> **版本**: v0.7.0
+> **最后更新**: 2026-03-28
 
 [English](../en/REMOTE_API_EXAMPLES.md) | [简体中文](REMOTE_API_EXAMPLES.md)
 
@@ -27,11 +27,11 @@ from typing import Optional, Dict, List, Any
 
 class RunicornRemoteClient:
     """Runicorn Remote Viewer API 客户端"""
-    
+
     def __init__(self, base_url: str = "http://127.0.0.1:23300"):
         self.base_url = base_url
         self.session = requests.Session()
-    
+
     def connect(
         self,
         host: str,
@@ -45,7 +45,7 @@ class RunicornRemoteClient:
     ) -> Dict[str, Any]:
         """
         建立 SSH 连接
-        
+
         Args:
             host: 远程服务器地址
             username: SSH 用户名
@@ -55,7 +55,7 @@ class RunicornRemoteClient:
             private_key_path: 私钥路径（可选）
             passphrase: 私钥密码（可选）
             use_agent: 使用 SSH Agent（默认: True）
-        
+
         Returns:
             包含 connection_id 的响应字典
         """
@@ -69,7 +69,7 @@ class RunicornRemoteClient:
             "passphrase": passphrase,
             "use_agent": use_agent,
         }
-        
+
         response = self.session.post(
             f"{self.base_url}/api/remote/connect",
             json=payload
@@ -144,14 +144,14 @@ class RunicornRemoteClient:
         response = self.session.get(f"{self.base_url}/api/remote/viewer/status/{session_id}")
         response.raise_for_status()
         return response.json()
-    
+
     def close(self):
         """关闭会话"""
         self.session.close()
-    
+
     def __enter__(self):
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 ```
@@ -165,10 +165,10 @@ from runicorn_remote_client import RunicornRemoteClient
 with RunicornRemoteClient() as client:
     # 1. 连接到远程服务器
     result = client.connect(host="gpu-server.com", username="mluser", private_key_path="~/.ssh/id_rsa")
-    
+
     connection_id = result["connection_id"]
     print(f"✓ 已连接: {connection_id}")
-    
+
     # 2. （可选）列出 Python 环境
     envs = client.list_conda_envs(connection_id=connection_id)
     print(f"✓ 找到 {len(envs)} 个环境")
@@ -249,7 +249,7 @@ class RunicornRemoteClient {
    */
   async listSessions() {
     const response = await fetch(`${this.baseUrl}/api/remote/sessions`);
-    
+
     if (!response.ok) {
       throw new Error(`Failed to list sessions: ${response.statusText}`);
     }
@@ -394,7 +394,7 @@ const client = new RunicornRemoteClient();
 
     // 2. 列出环境
     const envs = await client.listCondaEnvs(connection_id);
-    
+
     console.log(`✓ 找到 ${envs.length} 个环境`);
     envs.forEach(env => {
       console.log(`  - ${env.name}: Python ${env.python_version} (${env.type})`);
@@ -441,11 +441,11 @@ from runicorn_remote_client import RunicornRemoteClient
 
 def monitor_training(host, username, key_path, env_name):
     """自动连接并监控远程训练"""
-    
+
     with RunicornRemoteClient() as client:
         # 连接
         result = client.connect(host=host, username=username, private_key_path=key_path)
-        
+
         viewer = client.start_viewer(
             host=host,
             username=username,
@@ -455,7 +455,7 @@ def monitor_training(host, username, key_path, env_name):
         )
         session_id = viewer["session"]["sessionId"]
         print(f"Viewer URL: {viewer['session']['url']}")
-        
+
         # 监控循环
         while True:
             status = client.get_viewer_session(session_id=session_id)
@@ -478,38 +478,38 @@ from runicorn_remote_client import RunicornRemoteClient
 
 def manage_multiple_servers(servers):
     """连接并管理多个服务器"""
-    
+
     client = RunicornRemoteClient()
     connections = []
-    
+
     try:
         # 连接所有服务器
         for server in servers:
             result = client.connect(**server)
             conn_id = result["connection_id"]
             connections.append(conn_id)
-            
+
             print(f"✓ 已连接到 {server['host']}: {conn_id}")
-        
+
         # 列出所有会话
         all_sessions = client.list_sessions()
         print(f"\n总计 {len(all_sessions)} 个活动会话:")
-        
+
         for sess in all_sessions:
             print(f"  - {sess['key']}: connected={sess['connected']}")
-        
+
         # 交互式管理
         while True:
             print("\n选项: (l)ist, (q)uit")
             choice = input("> ").lower()
-            
+
             if choice == 'l':
                 for sess in client.list_sessions():
                     print(f"{sess['key']}: connected={sess['connected']}")
-            
+
             elif choice == 'q':
                 break
-    
+
     finally:
         # 清理所有连接
         for server in servers:
@@ -518,7 +518,7 @@ def manage_multiple_servers(servers):
                 print(f"✓ 已断开: {server['host']}")
             except Exception as e:
                 print(f"✗ 断开失败: {server['host']} - {e}")
-        
+
         client.close()
 
 # 使用
@@ -545,24 +545,24 @@ from runicorn_remote_client import RunicornRemoteClient
 
 def select_best_environment(host, username, key_path):
     """自动选择最佳环境"""
-    
+
     with RunicornRemoteClient() as client:
         # 连接
         result = client.connect(host=host, username=username, private_key_path=key_path)
         conn_id = result["connection_id"]
-        
+
         envs = client.list_conda_envs(connection_id=conn_id)
-        
+
         if not envs:
             print("错误: 未找到安装 Runicorn 的环境")
             return None
-        
+
         best_env = next((e for e in envs if e.get("is_default")), envs[0])
-        
+
         print(f"选择环境: {best_env['name']}")
         print(f"  Python: {best_env['python_version']}")
         print(f"  Type: {best_env['type']}")
-        
+
         # 启动 Viewer
         viewer = client.start_viewer(
             host=host,
@@ -571,7 +571,7 @@ def select_best_environment(host, username, key_path):
             private_key_path=key_path,
             conda_env=best_env["name"],
         )
-        
+
         return viewer["session"]["url"]
 
 # 使用
@@ -597,19 +597,19 @@ import requests
 
 def safe_connect_and_start():
     """带完整错误处理的连接"""
-    
+
     client = RunicornRemoteClient()
     conn_id = None
-    
+
     try:
         # 连接
         result = client.connect(host="gpu-server.com", username="mluser", private_key_path="~/.ssh/id_rsa")
         conn_id = result["connection_id"]
-        
+
     except requests.exceptions.Timeout:
         print("错误: 连接超时，请检查服务器是否可达")
         return
-    
+
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 409:
             print("错误: 需要确认 host key")
@@ -618,11 +618,11 @@ def safe_connect_and_start():
         else:
             print(f"错误: HTTP {e.response.status_code} - {e}")
         return
-    
+
     except Exception as e:
         print(f"错误: 连接失败 - {e}")
         return
-    
+
     try:
         viewer = client.start_viewer(
             host="gpu-server.com",
@@ -632,15 +632,15 @@ def safe_connect_and_start():
             conda_env=None,
         )
         print(f"✓ 成功: {viewer['session']['url']}")
-        
+
     except requests.exceptions.HTTPError as e:
         error_data = e.response.json()
-        
+
         print(f"错误: {error_data.get('detail', str(e))}")
-    
+
     except Exception as e:
         print(f"错误: 启动失败 - {e}")
-    
+
     finally:
         # 确保清理
         if conn_id:
@@ -648,7 +648,7 @@ def safe_connect_and_start():
                 client.disconnect(host="gpu-server.com", port=22, username="mluser")
             except:
                 pass
-        
+
         client.close()
 
 safe_connect_and_start()
@@ -717,8 +717,8 @@ except Exception as e:
 
 ---
 
-**作者**: Runicorn Development Team  
-**版本**: v0.5.4  
-**最后更新**: 2025-12-22
+**作者**: Runicorn Development Team
+**版本**: v0.7.0
+**最后更新**: 2026-03-28
 
 **[返回 API 文档](README.md)** | **[查看 API 参考](remote_api.md)**

@@ -4,7 +4,7 @@
 
 # 数据流架构
 
-**文档类型**: 架构  
+**文档类型**: 架构
 **目的**: 记录数据如何流经 Runicorn 系统
 
 ---
@@ -19,21 +19,21 @@ sequenceDiagram
     participant SQLite
     participant WebUI
 
-    用户->>SDK: rn.init(project, name)
+    用户->>SDK: rn.init(path, alias)
     SDK->>文件系统: 创建运行目录
     SDK->>文件系统: 写入 meta.json, status.json
     SDK->>SQLite: INSERT INTO experiments
-    
+
     loop 训练
         用户->>SDK: run.log({loss: 0.1})
         SDK->>文件系统: 追加到 events.jsonl
         SDK->>SQLite: INSERT INTO metrics
     end
-    
+
     用户->>SDK: run.finish()
     SDK->>文件系统: 更新 summary.json
     SDK->>SQLite: UPDATE experiments SET status='finished'
-    
+
     用户->>WebUI: 查看实验
     WebUI->>SQLite: SELECT * FROM experiments
     SQLite-->>WebUI: 快速元数据
@@ -81,48 +81,43 @@ metrics = SELECT * FROM metrics WHERE experiment_id = ? ORDER BY step
 
 ---
 
-## Artifact 创建流程
+## 运行资产记录流程
 
 ### 序列
 
 ```
-1. 用户创建 artifact
+1. 用户调用 `run.log_config()`、`run.log_dataset()`、`run.log_pretrained()`
+   或 `snapshot_workspace()`
    ↓
-2. SDK 暂存文件
+2. SDK 规范化元数据，并判断是否需要归档内容
    ↓
-3. 调用 run.log_artifact()
+3. 对需要保存的文件/目录：
+   - 计算指纹 / SHA256
+   - 尽量复用已有 blob 或 manifest
+   - 写入或链接到 `archive/`
    ↓
-4. 对于每个文件:
-   - 计算 SHA256 哈希
-   - 检查去重池
-   - 硬链接或复制
+4. 更新运行目录中的 `assets.json`
    ↓
-5. 创建 manifest.json
+5. 启用现代存储时，同步 SQLite `assets` + `run_assets`
    ↓
-6. 创建 metadata.json
-   ↓
-7. 更新 versions.json
-   ↓
-8. 在运行目录写入 artifacts_created.json
-   ↓
-9. 返回版本号
+6. Viewer 通过 `/api/runs/{run_id}/assets` 暴露结果
 ```
 
 ### 去重决策树
 
 ```
-要保存的文件
+要归档的文件或目录
     ↓
-计算 SHA256 哈希
+计算指纹 / SHA256
     ↓
-检查: {hash} 在去重池中？
-    ├─ 是 → 创建硬链接到现有文件
-    │         (节省空间！)
-    └─ 否 → 复制到去重池
+检查：是否已有匹配的 blob / manifest？
+    ├─ 是 → 复用已有归档条目
+    │         （不重复写入）
+    └─ 否 → 写入 `archive/blobs` 或 `archive/manifests`
               ↓
-              从目标创建硬链接
+              在 `assets.json` 中记录 `archive_path`
               ↓
-              (新的唯一文件)
+              在可用时建立 run ↔ asset 的 SQLite 关联
 ```
 
 ---
@@ -194,14 +189,14 @@ metrics = SELECT * FROM metrics WHERE experiment_id = ? ORDER BY step
 @app.websocket("/runs/{run_id}/logs/ws")
 async def logs_websocket(websocket, run_id):
     await websocket.accept()
-    
+
     log_file = get_log_path(run_id)
-    
+
     with open(log_file) as f:
         # 发送现有日志
         for line in f:
             await websocket.send_text(line)
-        
+
         # 跟踪新行
         while True:
             line = f.readline()
@@ -222,57 +217,45 @@ ws.onmessage = (event) => {
 
 ---
 
-## Artifact 使用流程
+## 资产查看与下载流程
 
 ### 加载和使用
 
 ```
-1. 用户调用 use_artifact()
+1. 用户打开 Run Detail 或 Assets 页面
    ↓
-2. SDK 解析 "name:version"
+2. 前端请求 `/api/runs/{run_id}/assets`
    ↓
-3. 加载 metadata.json
+3. 后端读取 `assets.json`（必要时结合资产索引）
    ↓
-4. 加载 manifest.json
+4. UI 按 code / config / dataset / pretrained / output 分组展示
    ↓
-5. 创建 Artifact 对象
+5. 用户预览或下载某个条目
    ↓
-6. 写入 artifacts_used.json
+6. 前端调用 `/api/runs/{run_id}/assets/download?path=...`
    ↓
-7. 用户调用 download()
+7. 后端按运行目录 / 关联归档校验绝对路径
    ↓
-8. 复制文件到临时目录
-   ↓
-9. 返回路径
-   ↓
-10. 用户从路径加载模型
+8. 将文件或 ZIP 响应流式返回浏览器
 ```
 
-### 血缘追踪（自动）
+### 共享资产引用检查
 
 ```
-创建 Artifact:
-run.log_artifact(artifact)
+回收站预览：
+GET /api/runs/{run_id}/assets/refs
     ↓
-写入: runs/{run_id}/artifacts_created.json
+响应：
 {
-  "artifacts": [
-    {"name": "my-model", "version": 3, "created_at": ...}
+  "orphaned_assets": [
+    {"asset_id": "...", "asset_type": "dataset", "ref_count": 1}
+  ],
+  "shared_assets": [
+    {"asset_id": "...", "asset_type": "pretrained", "ref_count": 3}
   ]
 }
-
-使用 Artifact:
-run.use_artifact("my-model:v3")
     ↓
-写入: runs/{run_id}/artifacts_used.json
-{
-  "artifacts": [
-    {"name": "my-model", "version": 3, "used_at": ...}
-  ]
-}
-
-血缘图:
-遍历这些 JSON 文件构建依赖图
+回收站 UI 展示永久删除时会删除哪些资产、保留哪些共享资产
 ```
 
 ---
@@ -297,21 +280,20 @@ GET /api/runs
 5-10 秒后返回
 ```
 
-### V2 API（SQLite 查询）
+### 当前 SQLite 支撑的列表流
 
 ```
-GET /api/v2/experiments?project=X&status=finished
+GET /api/paths/runs?path=X&exact=false
     ↓
-构建 SQL 查询
+先从 SQLite 支撑的 experiments 表读取活动 runs
     ↓
 SELECT * FROM experiments
-WHERE project = 'X' AND status = 'finished'
+WHERE deleted_at IS NULL
 ORDER BY created_at DESC
-LIMIT 50
     ↓
-执行（使用索引）
+再按路径前缀过滤
     ↓
-50-100毫秒返回（快 100 倍！）
+典型数据量下可在 50-100 毫秒内返回
 ```
 
 ---
@@ -384,7 +366,7 @@ message.error("实验未找到")
 
 ---
 
-## Remote Viewer 数据流（v0.5.0）
+## Remote Viewer 数据流
 
 ### 连接建立流程
 

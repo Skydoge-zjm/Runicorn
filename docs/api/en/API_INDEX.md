@@ -4,9 +4,9 @@
 
 # Complete API Index
 
-**Version**: v0.6.0  
-**Total Endpoints**: 35+ REST + Python Client  
-**Last Updated**: 2026-01-15
+**Version**: v0.7.0
+**Total Endpoints**: REST API + Python Client
+**Last Updated**: 2026-03-28
 
 ---
 
@@ -24,11 +24,11 @@
 
 **Quick Example**:
 ```python
-import runicorn.api as api
+import runicorn.client as client_mod
 
-with api.connect() as client:
-    experiments = client.list_experiments(project="vision")
-    metrics = client.get_metrics(experiments[0]["id"])
+with client_mod.connect() as client:
+    runs = client.list_runs_by_path(path="vision")
+    metrics = client.get_metrics(runs[0]["id"])
 ```
 
 ---
@@ -95,9 +95,9 @@ with api.connect() as client:
 | GET | `/api/remote/viewer/sessions` | List Viewer sessions | [📖](./remote_api.md#get-apiremoteviewersessions) |
 | GET | `/api/remote/viewer/status/{session_id}` | Get Viewer status by session_id | [📖](./remote_api.md#get-apiremoteviewerstatussession_id) |
 
-### Enhanced Logging API 🆕 (v0.6.0)
+### Enhanced Logging API (introduced in v0.6.0)
 
-**New**: Console capture and Python logging integration
+**Current scope**: Console capture and Python logging integration
 
 | Component | Description | Docs |
 |-----------|-------------|------|
@@ -106,9 +106,9 @@ with api.connect() as client:
 | `get_logging_handler()` | Python logging.Handler integration | [📖](./logging_api.md#logging-handler) |
 | `MetricLogger` | torchvision-compatible metric logger | [📖](./logging_api.md#metriclogger-compatibility) |
 
-### Path Hierarchy API 🆕 (v0.6.0)
+### Path Hierarchy API (introduced in v0.6.0)
 
-**New**: Flexible path-based experiment organization
+**Current scope**: Flexible path-based experiment organization
 
 | Method | Endpoint | Description | Docs |
 |--------|----------|-------------|------|
@@ -302,7 +302,7 @@ http --pretty=all GET http://127.0.0.1:23300/api/config
 import runicorn as rn
 
 # Create experiment
-run = rn.init(project="demo", name="exp1")
+run = rn.init(path="demo/exp1")
 
 # Log metrics
 run.log({"loss": 0.1, "accuracy": 0.95}, step=100)
@@ -345,8 +345,16 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ## 📝 API Changelog
 
-### v0.6.0 (Current) 🚀
-**Major New Features**
+### v0.7.0 (Current) 🚀
+**Current Release Highlights**
+- ✅ **Remote Viewer hardening**: saved connections, health monitoring, reconnect states, and OpenSSH password support
+- ✅ **Web UI productization**: cleaner navigation, ZIP import/export preview, unified recycle bin, and improved compare flow
+- ✅ **Logs & monitoring**: virtualized logs, stronger dark-mode consistency, and backend-collected GPU telemetry history
+- ✅ **Logging compatibility**: better support for ImageNet meters, TensorBoard, and tensorboardX
+- ✅ **Desktop workflow improvements**: native remote-session handling in the current desktop flow
+
+### v0.6.0
+**Major Foundations**
 - ✅ **Enhanced Logging API**: Console capture, Python logging handler, MetricLogger compatibility
 - ✅ **Assets System**: SHA256 content-addressed workspace snapshots with deduplication
 - ✅ **Path Hierarchy API**: Flexible path-based experiment organization with tree navigation
@@ -391,9 +399,8 @@ See main [README.md](../../README.md) for full SDK documentation.
 - Metrics query
 - SSH mirror support
 
-### Future Versions
+### Possible Future Directions (Not Committed)
 
-**v0.7.0** (Planned):
 - Windows remote server support
 - GraphQL API support
 - Webhook notifications

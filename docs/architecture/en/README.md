@@ -4,8 +4,8 @@
 
 # Runicorn Architecture Documentation
 
-**Version**: v0.6.0  
-**Last Updated**: 2026-01-15  
+**Version**: v0.7.0
+**Last Updated**: 2026-03-28
 **Audience**: Developers, Contributors, Architects
 
 ---
@@ -37,7 +37,7 @@ This directory contains comprehensive architecture documentation for the Runicor
 - **[DATA_FLOW.md](DATA_FLOW.md)** - Data processing pipeline
   - Experiment lifecycle
   - Metrics logging flow
-  - Artifact storage flow
+  - Asset and snapshot flow
   - Sequence diagrams
 
 - **[STORAGE_DESIGN.md](STORAGE_DESIGN.md)** - Storage architecture
@@ -62,13 +62,13 @@ This directory contains comprehensive architecture documentation for the Runicor
 
 ### Remote & Networking
 
-- **[REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)** - ⭐ Remote Viewer architecture (v0.5.0)
+- **[REMOTE_VIEWER_ARCHITECTURE.md](REMOTE_VIEWER_ARCHITECTURE.md)** - ⭐ Remote Viewer architecture
   - SSH tunnel design
   - Remote process management
   - Health check mechanism
   - Security model
 
-- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - ⭐ SSH backend multi-fallback design (v0.6.0)
+- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - ⭐ SSH backend multi-fallback design
   - OpenSSH + AsyncSSH + Paramiko fallback chain
   - Platform-specific strategy
   - Connection management

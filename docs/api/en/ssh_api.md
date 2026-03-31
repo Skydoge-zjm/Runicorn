@@ -5,17 +5,17 @@
 # SSH/Remote API - Remote Server Synchronization
 
 > ⚠️ **Deprecated in v0.5.0**
-> 
+>
 > This API has been replaced by **Remote Viewer API**, which provides better performance and user experience.
-> 
+>
 > - **New API**: [Remote API Documentation](./remote_api.md)
 > - **Migration Guide**: [v0.4.x → v0.5.0 Migration Guide](../../guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md)
-> - **Maintenance Status**: This API will be removed in v0.6.0
+> - **Maintenance Status**: Deprecated and retained only for backward compatibility; no removal version is currently committed
 > - **Recommendation**: Migrate to Remote Viewer API immediately
 
-**Module**: SSH/Remote API (**Deprecated**)  
-**Base Path**: `/api/unified` (Unified API), `/api/ssh` (Legacy)  
-**Version**: v1.0  
+**Module**: SSH/Remote API (**Deprecated**)
+**Base Path**: `/api/unified` (Unified API), `/api/ssh` (Legacy)
+**Version**: v1.0
 **Description**: Connect to remote Linux servers via SSH and synchronize experiment data in real-time.
 
 ---
@@ -280,8 +280,8 @@ GET /api/unified/listdir?path={path}
       "mtime": 1704053400
     },
     {
-      "name": "artifacts",
-      "path": "/data/runicorn/artifacts",
+      "name": "archive",
+      "path": "/data/runicorn/archive",
       "type": "dir",
       "size": 0,
       "mtime": 1704024000
@@ -302,17 +302,17 @@ def browse_remote(path=""):
         'http://127.0.0.1:23300/api/unified/listdir',
         params={'path': path}
     )
-    
+
     data = response.json()
-    
+
     print(f"\nCurrent: {data['current_path']}")
     print("-" * 60)
-    
+
     for item in sorted(data['items'], key=lambda x: (x['type'] != 'dir', x['name'])):
         icon = "📁" if item['type'] == 'dir' else "📄"
         size = f"{item['size']:,} bytes" if item['type'] == 'file' else ""
         print(f"{icon} {item['name']:<40} {size}")
-    
+
     return data['items']
 
 # Usage
@@ -625,12 +625,12 @@ import time
 
 def monitor_connection(check_interval=30):
     """Monitor SSH connection health"""
-    
+
     while True:
         try:
             response = requests.get('http://127.0.0.1:23300/api/unified/status', timeout=5)
             status = response.json()
-            
+
             if status['connection']['connected']:
                 uptime = status['connection']['uptime_seconds']
                 cached = status.get('cached_experiments', 0)
@@ -638,11 +638,11 @@ def monitor_connection(check_interval=30):
             else:
                 print("✗ Not connected")
                 break
-                
+
         except Exception as e:
             print(f"✗ Health check failed: {e}")
             break
-        
+
         time.sleep(check_interval)
 
 # Usage
@@ -748,7 +748,7 @@ elif not status['smart_mode']['active']:
     print("✗ Smart mode not active")
 else:
     print(f"✓ Connected, cached {status['cached_experiments']} experiments")
-    
+
     # Check if remote_root is correct
     listdir = requests.get('/api/unified/listdir', params={'path': status['smart_mode']['remote_root']}).json()
     print(f"Remote root contents: {[item['name'] for item in listdir['items']]}")
@@ -760,9 +760,9 @@ else:
 
 - **Config API**: Save SSH connections - [config_api.md](./config_api.md)
 - **Runs API**: Query synced experiments - [runs_api.md](./runs_api.md)
-- **Artifacts API**: Access remote artifacts - [artifacts_api.md](./artifacts_api.md)
+- **Remote Viewer API**: Use the current remote-session workflow - [remote_api.md](./remote_api.md)
 
 ---
 
-**Last Updated**: 2025-10-14
+**Last Updated**: 2026-03-28
 

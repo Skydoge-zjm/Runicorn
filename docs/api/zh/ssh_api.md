@@ -5,17 +5,17 @@
 # SSH/Remote API - 远程服务器同步
 
 > ⚠️ **已弃用于 v0.5.0**
-> 
+>
 > 该 API 已被 **Remote Viewer API** 替代，后者提供更好的性能和用户体验。
-> 
+>
 > - **新 API**: [Remote API 文档](./remote_api.md)
 > - **迁移指南**: [v0.4.x → v0.5.0 迁移指南](../../guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md)
-> - **维护状态**: 该 API 将在 v0.6.0 中移除
+> - **维护状态**: 该 API 已弃用，目前仅为向后兼容而保留；暂未承诺具体移除版本
 > - **推荐**: 立即迁移到 Remote Viewer API
 
-**模块**: SSH/Remote API (**已弃用**)  
-**基础路径**: `/api/unified` (统一 API), `/api/ssh` (遗留)  
-**版本**: v1.0  
+**模块**: SSH/Remote API (**已弃用**)
+**基础路径**: `/api/unified` (统一 API), `/api/ssh` (遗留)
+**版本**: v1.0
 **描述**: 通过 SSH 连接到远程 Linux 服务器并实时同步实验数据。
 
 ---
@@ -280,8 +280,8 @@ GET /api/unified/listdir?path={path}
       "mtime": 1704053400
     },
     {
-      "name": "artifacts",
-      "path": "/data/runicorn/artifacts",
+      "name": "archive",
+      "path": "/data/runicorn/archive",
       "type": "dir",
       "size": 0,
       "mtime": 1704024000
@@ -302,17 +302,17 @@ def browse_remote(path=""):
         'http://127.0.0.1:23300/api/unified/listdir',
         params={'path': path}
     )
-    
+
     data = response.json()
-    
+
     print(f"\n当前: {data['current_path']}")
     print("-" * 60)
-    
+
     for item in sorted(data['items'], key=lambda x: (x['type'] != 'dir', x['name'])):
         icon = "📁" if item['type'] == 'dir' else "📄"
         size = f"{item['size']:,} bytes" if item['type'] == 'file' else ""
         print(f"{icon} {item['name']:<40} {size}")
-    
+
     return data['items']
 
 # 使用
@@ -625,12 +625,12 @@ import time
 
 def monitor_connection(check_interval=30):
     """监控 SSH 连接健康状况"""
-    
+
     while True:
         try:
             response = requests.get('http://127.0.0.1:23300/api/unified/status', timeout=5)
             status = response.json()
-            
+
             if status['connection']['connected']:
                 uptime = status['connection']['uptime_seconds']
                 cached = status.get('cached_experiments', 0)
@@ -638,11 +638,11 @@ def monitor_connection(check_interval=30):
             else:
                 print("✗ 未连接")
                 break
-                
+
         except Exception as e:
             print(f"✗ 健康检查失败: {e}")
             break
-        
+
         time.sleep(check_interval)
 
 # 使用
@@ -748,7 +748,7 @@ elif not status['smart_mode']['active']:
     print("✗ 智能模式未激活")
 else:
     print(f"✓ 已连接，已缓存 {status['cached_experiments']} 个实验")
-    
+
     # 检查 remote_root 是否正确
     listdir = requests.get('/api/unified/listdir', params={'path': status['smart_mode']['remote_root']}).json()
     print(f"远程根目录内容: {[item['name'] for item in listdir['items']]}")
@@ -760,10 +760,10 @@ else:
 
 - **Config API**: 保存 SSH 连接 - [config_api.md](./config_api.md)
 - **Runs API**: 查询已同步的实验 - [runs_api.md](./runs_api.md)
-- **Artifacts API**: 访问远程 artifacts - [artifacts_api.md](./artifacts_api.md)
+- **Remote Viewer API**: 使用当前的远程会话工作流 - [remote_api.md](./remote_api.md)
 
 ---
 
-**最后更新**: 2025-10-14
+**最后更新**: 2026-03-28
 
 

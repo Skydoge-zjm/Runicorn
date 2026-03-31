@@ -1,7 +1,7 @@
 # Remote Viewer API 参考文档
 
-> **版本**: v0.6.0  
-> **最后更新**: 2025-01-XX  
+> **版本**: v0.7.0
+> **最后更新**: 2026-03-28
 > **Base URL**: `http://127.0.0.1:23300`
 
 [English](../en/remote_api.md) | [简体中文](remote_api.md)
@@ -36,7 +36,7 @@ Remote Viewer API 提供了通过 SSH 连接远程服务器并启动 Remote View
 - 🚀 **Viewer 生命周期**: 启动、监控、停止远程 Viewer
 - 💓 **健康监控**: 实时连接和 Viewer 状态检查
 - 🔒 **安全**: 所有通信通过 SSH 加密
-- 🔄 **多后端架构**: 自动回退链以获得最大兼容性 (v0.6.0)
+- 🔄 **多后端架构**: 自动回退链以获得最大兼容性
 
 ### 工作流程
 
@@ -98,13 +98,13 @@ def create_tunnel(connection, local_port, remote_port):
         return OpenSSHTunnel(...)
     except (SSHNotFound, PasswordAuthRequired, HostKeyError):
         pass  # 继续（HostKeyError 除外，会重新抛出）
-    
+
     # 其次尝试 AsyncSSH（异步，性能良好）
     try:
         return AsyncSSHTunnel(...)
     except (AsyncSSHNotAvailable, HostKeyError):
         pass  # 继续（HostKeyError 除外，会重新抛出）
-    
+
     # 最终回退到 Paramiko（始终可用）
     return ParamikoTunnel(...)
 ```
@@ -569,8 +569,8 @@ Runicorn Viewer 使用 FastAPI 的标准错误响应：
 
 ---
 
-**作者**: Runicorn Development Team  
-**版本**: v0.6.0  
-**最后更新**: 2025-01-XX
+**作者**: Runicorn Development Team
+**版本**: v0.7.0
+**最后更新**: 2026-03-28
 
 **[返回 API 索引](API_INDEX.md)** | **[查看快速参考](QUICK_REFERENCE.md)**

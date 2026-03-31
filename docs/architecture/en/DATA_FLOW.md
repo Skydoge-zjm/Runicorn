@@ -4,7 +4,7 @@
 
 # Data Flow Architecture
 
-**Document Type**: Architecture  
+**Document Type**: Architecture
 **Purpose**: Document how data flows through the Runicorn system
 
 ---
@@ -19,21 +19,21 @@ sequenceDiagram
     participant SQLite
     participant WebUI
 
-    User->>SDK: rn.init(project, name)
+    User->>SDK: rn.init(path, alias)
     SDK->>FileSystem: Create run directory
     SDK->>FileSystem: Write meta.json, status.json
     SDK->>SQLite: INSERT INTO experiments
-    
+
     loop Training
         User->>SDK: run.log({loss: 0.1})
         SDK->>FileSystem: Append to events.jsonl
         SDK->>SQLite: INSERT INTO metrics
     end
-    
+
     User->>SDK: run.finish()
     SDK->>FileSystem: Update summary.json
     SDK->>SQLite: UPDATE experiments SET status='finished'
-    
+
     User->>WebUI: View experiment
     WebUI->>SQLite: SELECT * FROM experiments
     SQLite-->>WebUI: Fast metadata
@@ -81,48 +81,43 @@ metrics = SELECT * FROM metrics WHERE experiment_id = ? ORDER BY step
 
 ---
 
-## Artifact Creation Flow
+## Run Asset Recording Flow
 
 ### Sequence
 
 ```
-1. User creates artifact
+1. User calls `run.log_config()`, `run.log_dataset()`, `run.log_pretrained()`
+   or `snapshot_workspace()`
    ↓
-2. SDK stages files
+2. SDK normalizes metadata and decides whether to archive content
    ↓
-3. run.log_artifact() called
+3. For saved files/directories:
+   - Compute fingerprint / SHA256
+   - Reuse existing blob or manifest when possible
+   - Copy or link into `archive/`
    ↓
-4. For each file:
-   - Compute SHA256 hash
-   - Check dedup pool
-   - Hard link or copy
+4. Update `assets.json` in the run directory
    ↓
-5. Create manifest.json
+5. Sync SQLite `assets` + `run_assets` records when modern storage is enabled
    ↓
-6. Create metadata.json
-   ↓
-7. Update versions.json
-   ↓
-8. Write artifacts_created.json in run dir
-   ↓
-9. Return version number
+6. Viewer surfaces the result via `/api/runs/{run_id}/assets`
 ```
 
 ### Deduplication Decision Tree
 
 ```
-File to save
+File or directory to archive
     ↓
-Compute SHA256 hash
+Compute fingerprint / SHA256
     ↓
-Check: {hash} in dedup pool?
-    ├─ Yes → Create hard link to existing file
-    │         (Space saved!)
-    └─ No  → Copy to dedup pool
+Check: matching blob / manifest already archived?
+    ├─ Yes → Reuse existing archive entry
+    │         (No duplicate write)
+    └─ No  → Store under `archive/blobs` or `archive/manifests`
               ↓
-              Create hard link from destination
+              Record `archive_path` in `assets.json`
               ↓
-              (New unique file)
+              Link run ↔ asset in SQLite when available
 ```
 
 ---
@@ -194,14 +189,14 @@ Training Process          Backend              Frontend
 @app.websocket("/runs/{run_id}/logs/ws")
 async def logs_websocket(websocket, run_id):
     await websocket.accept()
-    
+
     log_file = get_log_path(run_id)
-    
+
     with open(log_file) as f:
         # Send existing logs
         for line in f:
             await websocket.send_text(line)
-        
+
         # Tail new lines
         while True:
             line = f.readline()
@@ -222,57 +217,45 @@ ws.onmessage = (event) => {
 
 ---
 
-## Artifact Usage Flow
+## Asset Inspection & Download Flow
 
 ### Loading and Using
 
 ```
-1. User calls use_artifact()
+1. User opens Run Detail or Assets page
    ↓
-2. SDK parses "name:version"
+2. Frontend requests `/api/runs/{run_id}/assets`
    ↓
-3. Load metadata.json
+3. Backend reads `assets.json` (and asset index when needed)
    ↓
-4. Load manifest.json
+4. UI groups code / config / dataset / pretrained / output entries
    ↓
-5. Create Artifact object
+5. User previews or downloads a selected entry
    ↓
-6. Write to artifacts_used.json
+6. Frontend calls `/api/runs/{run_id}/assets/download?path=...`
    ↓
-7. User calls download()
+7. Backend validates the absolute path against the run directory / linked archives
    ↓
-8. Copy files to temp directory
-   ↓
-9. Return path
-   ↓
-10. User loads model from path
+8. File or ZIP response is streamed back to the browser
 ```
 
-### Lineage Tracking (Automatic)
+### Shared-Asset Reference Checks
 
 ```
-Artifact Created:
-run.log_artifact(artifact)
+Recycle Bin preview:
+GET /api/runs/{run_id}/assets/refs
     ↓
-Write to: runs/{run_id}/artifacts_created.json
+Response:
 {
-  "artifacts": [
-    {"name": "my-model", "version": 3, "created_at": ...}
+  "orphaned_assets": [
+    {"asset_id": "...", "asset_type": "dataset", "ref_count": 1}
+  ],
+  "shared_assets": [
+    {"asset_id": "...", "asset_type": "pretrained", "ref_count": 3}
   ]
 }
-
-Artifact Used:
-run.use_artifact("my-model:v3")
     ↓
-Write to: runs/{run_id}/artifacts_used.json
-{
-  "artifacts": [
-    {"name": "my-model", "version": 3, "used_at": ...}
-  ]
-}
-
-Lineage Graph:
-Traverse these JSON files to build dependency graph
+Recycle bin UI shows what permanent delete would remove vs keep
 ```
 
 ---
@@ -297,21 +280,20 @@ Parse and aggregate
 Return after 5-10 seconds
 ```
 
-### V2 API (SQLite Query)
+### Current SQLite-Backed Listing Flow
 
 ```
-GET /api/v2/experiments?project=X&status=finished
+GET /api/paths/runs?path=X&exact=false
     ↓
-Build SQL query
+Read active runs from SQLite-backed experiments table
     ↓
 SELECT * FROM experiments
-WHERE project = 'X' AND status = 'finished'
+WHERE deleted_at IS NULL
 ORDER BY created_at DESC
-LIMIT 50
     ↓
-Execute (uses indexes)
+Filter rows by path prefix
     ↓
-Return in 50-100ms (100x faster!)
+Return in 50-100ms for typical datasets
 ```
 
 ---
@@ -384,7 +366,7 @@ message.error("实验未找到")
 
 ---
 
-## Remote Viewer Data Flow (v0.5.0)
+## Remote Viewer Data Flow
 
 ### Connection Establishment Flow
 

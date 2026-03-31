@@ -4,9 +4,9 @@
 
 # Remote Viewer Architecture
 
-**Document Type**: Architecture  
-**Version**: v0.5.0  
-**Last Updated**: 2025-10-25  
+**Document Type**: Architecture
+**Version**: v0.7.0
+**Last Updated**: 2026-03-28
 **Status**: Implemented ✅
 
 ---
