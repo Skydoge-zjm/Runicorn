@@ -55,17 +55,15 @@ class TestImportArchive:
             "/api/import/archive",
             files={"file": ("export.zip", data, "application/zip")},
         )
-        # 200 on success; 503 if python-multipart not installed
-        assert resp.status_code in (200, 503)
-        if resp.status_code == 200:
-            body = resp.json()
-            assert body["ok"] is True
-            assert body["imported_files"] >= 1
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["imported_files"] >= 1
 
     def test_import_no_file_422(self, viewer_client: TestClient) -> None:
         """Missing file field → 422 or 503."""
         resp = viewer_client.post("/api/import/archive")
-        assert resp.status_code in (422, 503)
+        assert resp.status_code == 422
 
     def test_import_export_format_zip(
         self, viewer_client: TestClient, viewer_storage_root
@@ -77,8 +75,7 @@ class TestImportArchive:
             "/api/import/archive",
             files={"file": ("export.zip", data, "application/zip")},
         )
-        if resp.status_code != 200:
-            pytest.skip("import endpoint unavailable (python-multipart)")
+        assert resp.status_code == 200
         body = resp.json()
         assert body["ok"] is True
         assert body["imported_files"] >= 2  # meta.json + status.json
@@ -104,8 +101,7 @@ class TestImportTriggersSync:
             "/api/import/archive",
             files={"file": ("export.zip", data, "application/zip")},
         )
-        if resp.status_code != 200:
-            pytest.skip("import endpoint unavailable (python-multipart)")
+        assert resp.status_code == 200
 
         # Trigger manual sync so the imported run appears in SQLite
         from runicorn.viewer.services.db_reader import sync_filesystem_to_db

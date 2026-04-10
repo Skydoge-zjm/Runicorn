@@ -27,13 +27,9 @@ router = APIRouter()
 
 PREVIEW_TOKEN_TTL_SECONDS = 30 * 60
 
-# Check if multipart support is available
-try:
-    import multipart  # type: ignore
-    HAS_MULTIPART = True
-except ImportError:
-    HAS_MULTIPART = False
-    logger.debug("python-multipart not available, file upload disabled")
+# python-multipart is a required dependency for upload endpoints.
+import multipart as _multipart  # type: ignore
+HAS_MULTIPART = True
 
 
 # ---------------------------------------------------------------------------

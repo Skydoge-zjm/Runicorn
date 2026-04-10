@@ -33,6 +33,9 @@ export const handlers = [
   http.get(`${BASE}/runs/:id/metrics_step`, () =>
     HttpResponse.json({ metrics: {} }),
   ),
+  http.get(`${BASE}/runs/:id/images`, () =>
+    HttpResponse.json([]),
+  ),
   http.get(`${BASE}/runs/:id/progress`, () =>
     HttpResponse.json({ progress: null }),
   ),

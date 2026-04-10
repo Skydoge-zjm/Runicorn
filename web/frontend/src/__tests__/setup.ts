@@ -3,9 +3,48 @@ import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, vi } from 'vitest'
 import { server } from '../__mocks__/server'
 
-// ── Browser API Mocks ──
+const { appApi } = vi.hoisted(() => ({
+  appApi: {
+    message: {
+      success: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      warning: vi.fn(),
+      loading: vi.fn(),
+      open: vi.fn(),
+      destroy: vi.fn(),
+    },
+    notification: {
+      success: vi.fn(),
+      error: vi.fn(),
+      info: vi.fn(),
+      warning: vi.fn(),
+      open: vi.fn(),
+      destroy: vi.fn(),
+    },
+    modal: {
+      confirm: vi.fn(),
+      info: vi.fn(),
+      success: vi.fn(),
+      warning: vi.fn(),
+      error: vi.fn(),
+      destroyAll: vi.fn(),
+    },
+  },
+}))
 
-// window.matchMedia (Ant Design)
+vi.mock('antd', async () => {
+  const actual = await vi.importActual<typeof import('antd')>('antd')
+  return {
+    ...actual,
+    message: appApi.message,
+    App: {
+      ...actual.App,
+      useApp: () => appApi,
+    },
+  }
+})
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
@@ -20,7 +59,6 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 })
 
-// ResizeObserver (ECharts / react-virtual)
 class ResizeObserverStub {
   observe = vi.fn()
   unobserve = vi.fn()
@@ -28,7 +66,6 @@ class ResizeObserverStub {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserverStub)
 
-// IntersectionObserver (LazyChartWrapper)
 class IntersectionObserverStub {
   observe = vi.fn()
   unobserve = vi.fn()
@@ -36,25 +73,23 @@ class IntersectionObserverStub {
 }
 vi.stubGlobal('IntersectionObserver', IntersectionObserverStub)
 
-// URL.createObjectURL / revokeObjectURL
 if (typeof URL !== 'undefined') {
   URL.createObjectURL = vi.fn(() => 'blob:mock-url')
   URL.revokeObjectURL = vi.fn()
 }
 
-// window.open
 vi.stubGlobal('open', vi.fn())
 
-// navigator.clipboard
 Object.defineProperty(navigator, 'clipboard', {
   value: { writeText: vi.fn().mockResolvedValue(undefined) },
   writable: true,
+  configurable: true,
 })
 
-// ── MSW Server Lifecycle ──
 beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }))
 afterEach(() => {
   server.resetHandlers()
   cleanup()
+  vi.clearAllMocks()
 })
 afterAll(() => server.close())

@@ -1,4 +1,5 @@
 import React from 'react'
+import { render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { SettingsProvider } from '../contexts/SettingsContext'
@@ -71,4 +72,14 @@ export function createWrapper(opts?: {
       </QueryClientProvider>
     )
   }
+}
+
+export function renderWithProviders(
+  ui: React.ReactElement,
+  opts?: {
+    initialEntries?: string[]
+    settings?: UiSettings
+  },
+) {
+  return render(ui, { wrapper: createWrapper(opts) })
 }

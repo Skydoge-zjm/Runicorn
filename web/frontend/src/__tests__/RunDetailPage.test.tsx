@@ -1,12 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { screen, waitFor } from '@testing-library/react'
+import { Route, Routes } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { server } from '../__mocks__/server'
-import { SettingsProvider } from '../contexts/SettingsContext'
-import { defaultSettings } from './helpers'
+import { renderWithProviders } from './helpers'
 import RunDetailPage from '../pages/RunDetailPage'
 
 // ── Mocks ──
@@ -74,23 +71,11 @@ const stepMetrics = {
 // ── Helpers ──
 
 function renderPage(runId = 'run_abc123') {
-  const qc = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
-      mutations: { retry: false },
-    },
-  })
-
-  return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/runs/${runId}`]}>
-        <SettingsProvider value={{ settings: defaultSettings, setSettings: vi.fn() }}>
-          <Routes>
-            <Route path="/runs/:id" element={<RunDetailPage />} />
-          </Routes>
-        </SettingsProvider>
-      </MemoryRouter>
-    </QueryClientProvider>,
+  return renderWithProviders(
+    <Routes>
+      <Route path="/runs/:id" element={<RunDetailPage />} />
+    </Routes>,
+    { initialEntries: [`/runs/${runId}`] },
   )
 }
 
@@ -102,6 +87,7 @@ describe('RunDetailPage integration', () => {
     server.use(
       http.get('/api/runs/run_abc123', () => HttpResponse.json(runDetail)),
       http.get('/api/runs/run_abc123/metrics_step', () => HttpResponse.json(stepMetrics)),
+      http.get('*/api/runs/:id/images', () => HttpResponse.json([])),
     )
   })
 

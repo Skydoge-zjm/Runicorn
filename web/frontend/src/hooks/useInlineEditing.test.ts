@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '../__mocks__/server'
+import { createWrapper } from '../__tests__/helpers'
 
 // Mock react-i18next before importing the hook
 vi.mock('react-i18next', () => ({
@@ -10,15 +11,6 @@ vi.mock('react-i18next', () => ({
     i18n: { language: 'en', changeLanguage: vi.fn() },
   }),
 }))
-
-// Mock antd message
-vi.mock('antd', async () => {
-  const actual = await vi.importActual('antd')
-  return {
-    ...actual,
-    message: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-  }
-})
 
 import { message } from 'antd'
 import { useInlineEditing } from './useInlineEditing'
@@ -38,7 +30,9 @@ describe('useInlineEditing', () => {
   })
 
   it('handleAliasEdit sets editingRunId and editingAlias', () => {
-    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns))
+    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns), {
+      wrapper: createWrapper(),
+    })
     act(() => result.current.handleAliasEdit('r1', 'old-alias'))
     expect(result.current.editingRunId).toBe('r1')
     expect(result.current.editingAlias).toBe('old-alias')
@@ -51,7 +45,9 @@ describe('useInlineEditing', () => {
       ),
     )
 
-    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns))
+    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns), {
+      wrapper: createWrapper(),
+    })
     act(() => {
       result.current.handleAliasEdit('r1', 'old-alias')
       result.current.setEditingAlias('new-alias')
@@ -73,7 +69,9 @@ describe('useInlineEditing', () => {
       ),
     )
 
-    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns))
+    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns), {
+      wrapper: createWrapper(),
+    })
     act(() => {
       result.current.handleAliasEdit('r1', 'old')
       result.current.setEditingAlias('new')
@@ -87,7 +85,9 @@ describe('useInlineEditing', () => {
   })
 
   it('handleAliasCancel resets state', () => {
-    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns))
+    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns), {
+      wrapper: createWrapper(),
+    })
     act(() => result.current.handleAliasEdit('r1', 'alias'))
     act(() => result.current.handleAliasCancel())
     expect(result.current.editingRunId).toBeNull()
@@ -95,7 +95,9 @@ describe('useInlineEditing', () => {
   })
 
   it('handleRemoveTag removes the specified tag', async () => {
-    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns))
+    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns), {
+      wrapper: createWrapper(),
+    })
     await act(async () => {
       result.current.handleRemoveTag('r1', 'a', ['a', 'b'])
     })
@@ -104,7 +106,9 @@ describe('useInlineEditing', () => {
   })
 
   it('handleOpenTagModal / handleAddTagFromModal / handleCloseTagModal flow', async () => {
-    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns))
+    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns), {
+      wrapper: createWrapper(),
+    })
 
     act(() => result.current.handleOpenTagModal('r1', ['a', 'b']))
     expect(result.current.tagModalOpen).toBe(true)
@@ -117,7 +121,9 @@ describe('useInlineEditing', () => {
   })
 
   it('allTagsFromRuns collects all tags from runs', () => {
-    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns))
+    const { result } = renderHook(() => useInlineEditing(mockRuns, setRuns), {
+      wrapper: createWrapper(),
+    })
     expect(result.current.allTagsFromRuns).toEqual(['a', 'b', 'c'])
   })
 })
