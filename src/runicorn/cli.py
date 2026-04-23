@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 import tarfile
 import zipfile
 import time
 from pathlib import Path
-from typing import Optional, Iterable
+from typing import Optional
 
 import uvicorn
 
@@ -552,8 +551,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         root = _default_storage_dir(getattr(args, "storage", None))
         run_ids = getattr(args, "run_ids", None) or []
         dry_run = getattr(args, "dry_run", False)
-        force = getattr(args, "force", False)
-        
         if not run_ids:
             print("Error: --run-id is required")
             print("Usage: runicorn delete --run-id <run_id> [--run-id <run_id2>] [--dry-run] [--force]")

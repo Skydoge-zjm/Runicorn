@@ -16,20 +16,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+import multipart as _multipart  # noqa: F401
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
-from ...storage.file_utils import iter_all_runs, read_json, write_json, is_run_deleted
-from ..utils.helpers import is_within_directory
+from ...storage.file_utils import is_run_deleted, iter_all_runs, read_json, write_json
 from ..services.db_reader import get_backend, sync_filesystem_to_db
+from ..utils.helpers import is_within_directory
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 PREVIEW_TOKEN_TTL_SECONDS = 30 * 60
-
-# python-multipart is a required dependency for upload endpoints.
-import multipart as _multipart  # type: ignore
-HAS_MULTIPART = True
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +234,9 @@ def _build_import_preview(file_names: List[str], existing_run_ids: set) -> Dict[
         if not run_id:
             continue
         conflict = run_id in existing_run_ids
-        runs.append({"run_id": run_id, "path": path, "files_count": run_dirs[rd], "conflict": conflict})
+        runs.append(
+            {"run_id": run_id, "path": path, "files_count": run_dirs[rd], "conflict": conflict}
+        )
         if conflict:
             conflicts.append(run_id)
 
@@ -370,200 +369,210 @@ def _extract_archive(
 # Route definitions
 # ---------------------------------------------------------------------------
 
-if HAS_MULTIPART:
-    @router.post("/import/preview")
-    async def preview_import_archive(request: Request, file: UploadFile = File(...)) -> Dict[str, Any]:
-        """Preview archive contents without importing. Returns a one-time token."""
-        storage_root = request.app.state.storage_root
+@router.post("/import/preview")
+async def preview_import_archive(request: Request, file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Preview archive contents without importing. Returns a one-time token."""
+    storage_root = request.app.state.storage_root
+    try:
+        suffix = ".zip" if file.filename and file.filename.lower().endswith(".zip") else ".tar.gz"
+    except Exception:
+        suffix = ".zip"
+
+    tmp_path = await _save_upload_to_temp(file, suffix)
+
+    try:
+        file_names = _iter_archive_file_names(tmp_path, file.filename or "")
+    except Exception as e:
         try:
-            suffix = ".zip" if file.filename and file.filename.lower().endswith(".zip") else ".tar.gz"
+            tmp_path.unlink(missing_ok=True)
         except Exception:
-            suffix = ".zip"
+            pass
+        raise HTTPException(status_code=400, detail=f"Unsupported or corrupted archive: {e}")
 
-        tmp_path = await _save_upload_to_temp(file, suffix)
+    existing_ids = {e.dir.name for e in iter_all_runs(storage_root, include_deleted=True)}
+    preview = _build_import_preview(file_names, existing_ids)
 
-        try:
-            file_names = _iter_archive_file_names(tmp_path, file.filename or "")
-        except Exception as e:
-            try:
-                tmp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            raise HTTPException(status_code=400, detail=f"Unsupported or corrupted archive: {e}")
+    _cleanup_preview_store(request.app.state)
+    store = _get_preview_store(request.app.state)
+    token = secrets.token_urlsafe(24)
+    store[token] = {
+        "path": str(tmp_path),
+        "filename": file.filename or "",
+        "created_at": time.time(),
+    }
 
-        existing_ids = {e.dir.name for e in iter_all_runs(storage_root, include_deleted=True)}
-        preview = _build_import_preview(file_names, existing_ids)
+    return {"ok": True, "token": token, "filename": file.filename or "", **preview}
 
+
+@router.post("/import/archive")
+async def import_archive(
+    request: Request,
+    file: Optional[UploadFile] = File(default=None),
+    mode: str = Form(default="merge"),
+    preview_token: Optional[str] = Form(default=None),
+) -> Dict[str, Any]:
+    """
+    Import archive into storage.
+
+    Modes:
+      merge   - extract into storage root directly (original paths)
+      isolate - extract under runs/imports/<timestamp>/...
+    """
+    storage_root = request.app.state.storage_root
+    mode = (mode or "merge").strip().lower()
+    if mode not in {"merge", "isolate"}:
+        raise HTTPException(status_code=400, detail="mode must be merge or isolate")
+
+    before_entries = iter_all_runs(storage_root)
+    before = {e.dir for e in before_entries}
+    before_ids = {e.dir.name for e in before_entries}
+
+    # Resolve source file
+    tmp_path: Optional[Path] = None
+    archive_filename = ""
+    if preview_token:
         _cleanup_preview_store(request.app.state)
         store = _get_preview_store(request.app.state)
-        token = secrets.token_urlsafe(24)
-        store[token] = {"path": str(tmp_path), "filename": file.filename or "", "created_at": time.time()}
-
-        return {"ok": True, "token": token, "filename": file.filename or "", **preview}
-
-    @router.post("/import/archive")
-    async def import_archive(
-        request: Request,
-        file: Optional[UploadFile] = File(default=None),
-        mode: str = Form(default="merge"),
-        preview_token: Optional[str] = Form(default=None),
-    ) -> Dict[str, Any]:
-        """
-        Import archive into storage.
-
-        Modes:
-          merge   – extract into storage root directly (original paths)
-          isolate – extract under runs/imports/<timestamp>/...
-        """
-        storage_root = request.app.state.storage_root
-        mode = (mode or "merge").strip().lower()
-        if mode not in {"merge", "isolate"}:
-            raise HTTPException(status_code=400, detail="mode must be merge or isolate")
-
-        before_entries = iter_all_runs(storage_root)
-        before = {e.dir for e in before_entries}
-        before_ids = {e.dir.name for e in before_entries}
-
-        # Resolve source file
-        tmp_path: Optional[Path] = None
-        archive_filename = ""
-        if preview_token:
-            _cleanup_preview_store(request.app.state)
-            store = _get_preview_store(request.app.state)
-            meta = store.pop(preview_token, None)
-            if not meta:
-                raise HTTPException(status_code=400, detail="Invalid or expired preview token")
-            tmp_path = Path(str(meta.get("path", "")))
-            archive_filename = str(meta.get("filename", ""))
-            if not tmp_path.exists():
-                raise HTTPException(status_code=400, detail="Preview archive no longer exists")
-        else:
-            if file is None:
-                raise HTTPException(status_code=422, detail="file is required when preview_token is not provided")
-            try:
-                suffix = ".zip" if file.filename and file.filename.lower().endswith(".zip") else ".tar.gz"
-            except Exception:
-                suffix = ".zip"
-            tmp_path = await _save_upload_to_temp(file, suffix)
-            archive_filename = file.filename or ""
-
-        # Build mapper
-        import_ts: Optional[str] = None
-        if mode == "isolate":
-            import_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            mapper = _build_isolate_mapper(import_ts)
-        else:
-            mapper = _default_path_mapper
-
-        # Compute conflicting run IDs and skip them during extraction
-        file_names = _iter_archive_file_names(tmp_path, archive_filename)
-        archive_run_ids = _extract_archive_run_ids(file_names)
-        skip_ids = archive_run_ids & before_ids
-        if skip_ids:
-            mapper = _wrap_mapper_skip_ids(mapper, skip_ids)
-            logger.info(f"Skipping {len(skip_ids)} duplicate run(s): {sorted(skip_ids)}")
-
-        # Extract
+        meta = store.pop(preview_token, None)
+        if not meta:
+            raise HTTPException(status_code=400, detail="Invalid or expired preview token")
+        tmp_path = Path(str(meta.get("path", "")))
+        archive_filename = str(meta.get("filename", ""))
+        if not tmp_path.exists():
+            raise HTTPException(status_code=400, detail="Preview archive no longer exists")
+    else:
+        if file is None:
+            raise HTTPException(
+                status_code=422,
+                detail="file is required when preview_token is not provided",
+            )
         try:
-            imported_files = _extract_archive(tmp_path, archive_filename, storage_root, mapper)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Unsupported or corrupted archive: {e}")
-        finally:
+            suffix = (
+                ".zip"
+                if file.filename and file.filename.lower().endswith(".zip")
+                else ".tar.gz"
+            )
+        except Exception:
+            suffix = ".zip"
+        tmp_path = await _save_upload_to_temp(file, suffix)
+        archive_filename = file.filename or ""
+
+    # Build mapper
+    import_ts: Optional[str] = None
+    if mode == "isolate":
+        import_ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        mapper = _build_isolate_mapper(import_ts)
+    else:
+        mapper = _default_path_mapper
+
+    # Compute conflicting run IDs and skip them during extraction
+    file_names = _iter_archive_file_names(tmp_path, archive_filename)
+    archive_run_ids = _extract_archive_run_ids(file_names)
+    skip_ids = archive_run_ids & before_ids
+    if skip_ids:
+        mapper = _wrap_mapper_skip_ids(mapper, skip_ids)
+        logger.info(f"Skipping {len(skip_ids)} duplicate run(s): {sorted(skip_ids)}")
+
+    # Extract
+    try:
+        imported_files = _extract_archive(tmp_path, archive_filename, storage_root, mapper)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Unsupported or corrupted archive: {e}")
+    finally:
+        try:
+            if tmp_path:
+                tmp_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    # Remove stale deleted copies for re-imported runs.
+    # Unified flow: deleted runs live under .recycle, so stale copies are
+    # deleted from there. Keep a legacy fallback for old in-place markers.
+    revived_ids: List[str] = []
+    for entry in iter_all_runs(storage_root, include_deleted=True):
+        if entry.dir.name in archive_run_ids and is_run_deleted(entry.dir):
             try:
-                if tmp_path:
-                    tmp_path.unlink(missing_ok=True)
+                if ".recycle" in entry.dir.parts:
+                    import shutil as _shutil
+
+                    _shutil.rmtree(entry.dir)
+                    logger.info(
+                        f"Removed stale .recycle copy for re-imported run: {entry.dir.name}"
+                    )
+                else:
+                    # Legacy compatibility: old soft-deletes were in-place.
+                    (entry.dir / ".deleted").unlink()
+                    logger.info(
+                        "Removed legacy in-place .deleted marker for re-imported run: "
+                        f"{entry.dir.name}"
+                    )
+                revived_ids.append(entry.dir.name)
             except Exception:
                 pass
 
-        # Remove stale deleted copies for re-imported runs.
-        # Unified flow: deleted runs live under .recycle, so stale copies are
-        # deleted from there. Keep a legacy fallback for old in-place markers.
-        revived_ids: List[str] = []
-        for entry in iter_all_runs(storage_root, include_deleted=True):
-            if entry.dir.name in archive_run_ids and is_run_deleted(entry.dir):
+    # Restore re-imported runs in DB
+    if revived_ids:
+        backend = get_backend(request)
+        if backend is not None:
+            for rid in revived_ids:
                 try:
-                    if ".recycle" in entry.dir.parts:
-                        import shutil as _shutil
-                        _shutil.rmtree(entry.dir)
-                        logger.info(f"Removed stale .recycle copy for re-imported run: {entry.dir.name}")
-                    else:
-                        # Legacy compatibility: old soft-deletes were in-place.
-                        (entry.dir / ".deleted").unlink()
-                        logger.info(f"Removed legacy in-place .deleted marker for re-imported run: {entry.dir.name}")
-                    revived_ids.append(entry.dir.name)
+                    backend.restore_experiments([rid])
                 except Exception:
                     pass
 
-        # Restore re-imported runs in DB
-        if revived_ids:
-            backend = get_backend(request)
-            if backend is not None:
-                for rid in revived_ids:
-                    try:
-                        backend.restore_experiments([rid])
-                    except Exception:
-                        pass
+    # Delta
+    after_entries = iter_all_runs(storage_root)
+    after = {e.dir for e in after_entries}
+    new_set = after - before
+    new_dirs = sorted(str(p) for p in new_set)
+    new_ids = sorted(e.dir.name for e in after_entries if e.dir in new_set)
 
-        # Delta
-        after_entries = iter_all_runs(storage_root)
-        after = {e.dir for e in after_entries}
-        new_set = after - before
-        new_dirs = sorted(str(p) for p in new_set)
-        new_ids = sorted(e.dir.name for e in after_entries if e.dir in new_set)
+    # Patch meta.json path so DB sync picks up the correct filesystem path
+    for entry in after_entries:
+        if entry.dir not in new_set:
+            continue
+        meta_path = entry.dir / "meta.json"
+        meta = read_json(meta_path)
+        if isinstance(meta, dict) and meta.get("path") != entry.path:
+            meta["path"] = entry.path
+            write_json(meta_path, meta)
 
-        # Patch meta.json path so DB sync picks up the correct filesystem path
+    logger.info(
+        f"Import completed: {len(imported_files)} files, {len(new_ids)} new runs, mode={mode}"
+    )
+
+    # Ensure imported runs are in DB with correct path
+    backend = get_backend(request)
+    if backend is not None:
+        # First, sync new runs into DB (synchronous - fast for a handful of runs)
+        try:
+            sync_filesystem_to_db(storage_root, backend)
+        except Exception as e:
+            logger.debug(f"Post-import sync failed: {e}")
+        # Force-update path + run_dir ONLY for truly new run_ids
+        # (skip duplicates to avoid overwriting original records)
         for entry in after_entries:
             if entry.dir not in new_set:
                 continue
-            meta_path = entry.dir / "meta.json"
-            meta = read_json(meta_path)
-            if isinstance(meta, dict) and meta.get("path") != entry.path:
-                meta["path"] = entry.path
-                write_json(meta_path, meta)
-
-        logger.info(f"Import completed: {len(imported_files)} files, {len(new_ids)} new runs, mode={mode}")
-
-        # Ensure imported runs are in DB with correct path
-        backend = get_backend(request)
-        if backend is not None:
-            # First, sync new runs into DB (synchronous — fast for a handful of runs)
+            run_id = entry.dir.name
+            if run_id in before_ids:
+                continue  # duplicate - don't touch the original DB record
             try:
-                sync_filesystem_to_db(storage_root, backend)
-            except Exception as e:
-                logger.debug(f"Post-import sync failed: {e}")
-            # Force-update path + run_dir ONLY for truly new run_ids
-            # (skip duplicates to avoid overwriting original records)
-            for entry in after_entries:
-                if entry.dir not in new_set:
-                    continue
-                run_id = entry.dir.name
-                if run_id in before_ids:
-                    continue  # duplicate — don't touch the original DB record
-                try:
-                    backend.update_experiment(run_id, {
-                        "path": entry.path or "default",
-                        "run_dir": str(entry.dir),
-                    })
-                except Exception:
-                    pass
+                backend.update_experiment(run_id, {
+                    "path": entry.path or "default",
+                    "run_dir": str(entry.dir),
+                })
+            except Exception:
+                pass
 
-        return {
-            "ok": True,
-            "imported_files": len(imported_files),
-            "new_run_dirs": new_dirs,
-            "new_run_ids": new_ids,
-            "skipped_run_ids": sorted(skip_ids),
-            "skipped_count": len(skip_ids),
-            "storage": str(storage_root),
-            "mode": mode,
-            "isolate_base": f"imports/{import_ts}" if import_ts else None,
-        }
-
-else:
-    @router.post("/import/preview")
-    async def import_preview_unavailable() -> Dict[str, Any]:
-        raise HTTPException(status_code=503, detail="File upload not available: python-multipart not bundled")
-
-    @router.post("/import/archive")
-    async def import_archive_unavailable() -> Dict[str, Any]:
-        raise HTTPException(status_code=503, detail="File upload not available: python-multipart not bundled")
+    return {
+        "ok": True,
+        "imported_files": len(imported_files),
+        "new_run_dirs": new_dirs,
+        "new_run_ids": new_ids,
+        "skipped_run_ids": sorted(skip_ids),
+        "skipped_count": len(skip_ids),
+        "storage": str(storage_root),
+        "mode": mode,
+        "isolate_base": f"imports/{import_ts}" if import_ts else None,
+    }

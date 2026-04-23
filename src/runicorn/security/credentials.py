@@ -6,8 +6,6 @@ Provides encryption and decryption for sensitive credentials.
 from __future__ import annotations
 
 import base64
-import hashlib
-import json
 import logging
 import os
 from pathlib import Path

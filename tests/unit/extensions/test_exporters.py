@@ -37,7 +37,7 @@ class TestMetricsExporterCsv:
         assert csv_str is not None
         lines = csv_str.strip().splitlines()
         # Header + 3 data rows + comment lines
-        data_lines = [l for l in lines if not l.startswith("#")]
+        data_lines = [line for line in lines if not line.startswith("#")]
         assert len(data_lines) == 4  # header + 3 rows
         assert "loss" in data_lines[0]
 

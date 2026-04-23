@@ -24,7 +24,7 @@ import shutil
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from .fingerprint import sha256_file
 from .blob_store import store_blob, get_blob_path

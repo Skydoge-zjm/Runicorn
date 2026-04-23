@@ -175,5 +175,5 @@ def is_encrypted(value: str) -> bool:
     # This is a heuristic check
     try:
         return value.startswith('gAAAAA') and len(value) > 50
-    except:
+    except Exception:
         return False

@@ -22,9 +22,8 @@ import aiofiles
 from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
-from ...storage.file_utils import find_run_dir_by_id, read_json
+from ...storage.file_utils import read_json
 from ..utils.incremental_cache import get_incremental_metrics_cache
-from .storage_utils import get_storage_root
 from ..services.db_reader import find_run_entry_fast
 
 logger = logging.getLogger(__name__)
@@ -453,7 +452,6 @@ async def logs_websocket(websocket: WebSocket, run_id: str) -> None:
                 )
 
             # Tail for new content with dynamic polling and timeout
-            start_time = time_module.time()
             last_activity = time_module.time()
             max_idle_time = 3600  # 1 hour timeout
             

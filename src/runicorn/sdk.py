@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
@@ -21,7 +20,7 @@ from filelock import FileLock
 from .config import get_user_root_dir
 from .enabled import NoOpRun, is_enabled
 from .workspace import get_workspace_root
-from .assets.assets_json import ensure_assets_file, read_assets, update_assets_atomic
+from .assets.assets_json import ensure_assets_file, update_assets_atomic
 from .assets.archive import archive_dir, archive_file
 from .assets.fingerprint import dir_stat_fingerprint, stat_fingerprint
 from .assets.snapshot import snapshot_workspace
@@ -1152,7 +1151,7 @@ class Run:
                 kernel32 = ctypes.windll.kernel32
                 kernel32.FlushFileBuffers.argtypes = [ctypes.c_void_p]
                 kernel32.FlushFileBuffers.restype = ctypes.c_bool
-            except:
+            except Exception:
                 pass  # Best effort
                 
         # Small delay to ensure file system catches up

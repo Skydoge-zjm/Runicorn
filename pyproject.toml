@@ -81,7 +81,16 @@ runicorn = [
 
 [tool.ruff]
 line-length = 100
-select = ["E","F","W","I"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "I001", "W291", "W293"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/**/__init__.py" = ["F401"]
+"src/runicorn/extensions/exporters.py" = ["F401"]
+"src/runicorn/sdk.py" = ["F401"]
+"tests/**/*.py" = ["E401", "F401"]
 
 [tool.mypy]
 python_version = "3.10"

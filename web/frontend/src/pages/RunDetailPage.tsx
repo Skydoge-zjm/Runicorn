@@ -254,7 +254,7 @@ export default function RunDetailPage() {
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
-          destroyInactiveTabPane={false}
+          destroyOnHidden={false}
           items={tabItems}
           style={{ marginBottom: 16 }}
         />

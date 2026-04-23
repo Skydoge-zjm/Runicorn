@@ -123,6 +123,27 @@ Body: {"path": "old_experiments", "exact": false}
 GET /api/paths/export?path=cv/yolo&format=zip
 ```
 
+### Archive Import API
+
+```bash
+# Preview an uploaded archive before importing it
+POST /api/import/preview
+Form-Data: file=@export.zip
+
+# Import an uploaded archive directly
+POST /api/import/archive
+Form-Data: file=@export.zip
+Form-Data: mode=merge    # or isolate
+
+# Import a previously previewed archive by token
+POST /api/import/archive
+Form-Data: preview_token=<token>
+Form-Data: mode=merge
+```
+
+Archive upload endpoints are part of the standard runtime and depend on the bundled
+`python-multipart` package. A normal Runicorn install is expected to expose them.
+
 ---
 
 ## Response Formats

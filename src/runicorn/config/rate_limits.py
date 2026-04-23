@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import logging
 from importlib.resources import files
-from pathlib import Path
 from typing import Any, Dict
 
 from .paths import _config_root_dir

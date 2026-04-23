@@ -9,7 +9,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from io import StringIO
 
 logger = logging.getLogger(__name__)
@@ -281,7 +281,6 @@ class MetricsExporter:
         """
         try:
             from torch.utils.tensorboard import SummaryWriter
-            HAS_TENSORBOARD = True
         except ImportError:
             logger.error("TensorBoard export requires torch. Install with: pip install torch")
             return False

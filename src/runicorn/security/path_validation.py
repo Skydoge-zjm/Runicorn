@@ -6,7 +6,6 @@ Provides secure path validation to prevent directory traversal attacks.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 from typing import Optional, Tuple
 

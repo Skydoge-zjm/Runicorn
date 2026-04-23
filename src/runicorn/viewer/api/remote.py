@@ -8,12 +8,16 @@ from __future__ import annotations
 import json
 import logging
 import shlex
-from typing import Any, Dict, Optional, List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Request, Body
 from pydantic import BaseModel, Field
 
 from ...remote.host_key import HostKeyConfirmationRequiredError, HostKeyProblem
+
+if TYPE_CHECKING:
+    from ...remote import SSHConnectionPool
+    from ...remote.viewer import RemoteViewerManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

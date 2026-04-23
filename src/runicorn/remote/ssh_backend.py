@@ -4,7 +4,6 @@ import asyncio
 import base64
 import logging
 import os
-import shlex
 import shutil
 import subprocess
 import threading

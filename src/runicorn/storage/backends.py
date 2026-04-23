@@ -14,11 +14,11 @@ import uuid
 from abc import ABC, abstractmethod
 from importlib.resources import files
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Iterator
+from typing import Any, Dict, List, Optional
 import threading
 import queue
 
-from .models import ExperimentRecord, MetricRecord, QueryParams, EnvironmentRecord, StorageStats
+from .models import ExperimentRecord, MetricRecord, QueryParams, StorageStats
 from .sql_utils import validate_column_name, ALLOWED_EXPERIMENT_COLUMNS
 
 logger = logging.getLogger(__name__)
@@ -302,7 +302,7 @@ class SQLiteStorageBackend(StorageBackend):
                 logger.info("Database schema initialized successfully")
             finally:
                 self.pool.return_connection(conn)
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             logger.error(
                 "Failed to initialize database schema: missing packaged resource schema.sql. "
                 "This usually means the installed wheel/sdist is incomplete."

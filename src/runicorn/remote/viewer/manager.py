@@ -499,7 +499,7 @@ for port in range({start_port}, {end_port}):
         if exit_code == 0 and stdout.strip().isdigit():
             return int(stdout.strip())
         
-        raise RuntimeError(f"No available port found on remote server")
+        raise RuntimeError("No available port found on remote server")
     
     def _start_remote_viewer_process(
         self,

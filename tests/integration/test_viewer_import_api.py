@@ -8,7 +8,6 @@ import time
 import zipfile
 from typing import List
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -31,7 +30,7 @@ def _make_run_zip(run_id: str, path: str = "test/import") -> bytes:
 
 
 def _make_export_format_zip(run_id: str, path: str = "test/import") -> bytes:
-    """Create zip in export format: <run_id>/... (no runs/ prefix, matches projects.export_by_path)."""
+    """Create zip in export format for path export archives."""
     buf = io.BytesIO()
     now = time.time()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -45,6 +44,21 @@ def _make_export_format_zip(run_id: str, path: str = "test/import") -> bytes:
 
 
 class TestImportArchive:
+
+    def test_preview_valid_zip_returns_token(
+        self, viewer_client: TestClient, populated_viewer_storage: List[str]
+    ) -> None:
+        data = _make_run_zip("20250201_115959_preview1")
+        resp = viewer_client.post(
+            "/api/import/preview",
+            files={"file": ("export.zip", data, "application/zip")},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert isinstance(body["token"], str) and body["token"]
+        assert body["total_runs"] == 1
+        assert body["conflict_count"] == 0
 
     def test_import_valid_zip(
         self, viewer_client: TestClient, populated_viewer_storage: List[str]
@@ -61,7 +75,7 @@ class TestImportArchive:
         assert body["imported_files"] >= 1
 
     def test_import_no_file_422(self, viewer_client: TestClient) -> None:
-        """Missing file field → 422 or 503."""
+        """Missing file field returns 422 when upload support is required."""
         resp = viewer_client.post("/api/import/archive")
         assert resp.status_code == 422
 

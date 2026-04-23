@@ -15,7 +15,7 @@ import sqlite3
 import threading
 import uuid
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from filelock import FileLock
 

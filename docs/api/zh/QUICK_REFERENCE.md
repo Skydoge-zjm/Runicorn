@@ -147,6 +147,27 @@ Body: {"path": "old_experiments", "exact": false}
 GET /api/paths/export?path=cv/yolo&format=zip
 ```
 
+### 归档导入 API
+
+```bash
+# 导入前先预览归档内容
+POST /api/import/preview
+Form-Data: file=@export.zip
+
+# 直接导入上传的归档
+POST /api/import/archive
+Form-Data: file=@export.zip
+Form-Data: mode=merge    # 或 isolate
+
+# 使用预览 token 导入之前上传的归档
+POST /api/import/archive
+Form-Data: preview_token=<token>
+Form-Data: mode=merge
+```
+
+归档上传端点属于标准运行时能力，依赖已随默认安装一起声明的
+`python-multipart`。常规 Runicorn 安装应默认提供这些端点。
+
 ---
 
 ## 响应格式

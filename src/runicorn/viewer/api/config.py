@@ -17,8 +17,7 @@ from ...config import (
     get_ssh_connections,
     add_ssh_connection,
     remove_ssh_connection,
-    get_config_file_path,
-    load_user_config
+    get_config_file_path
 )
 from ...storage.file_utils import get_storage_root
 

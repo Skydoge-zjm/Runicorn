@@ -19,7 +19,9 @@ def mock_config_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
 
-    _mock = lambda: config_dir
+    def _mock():
+        return config_dir
+
     # Patch every known binding of _config_root_dir so all consumers
     # (paths, __init__, rate_limits, encryption, etc.) see the mock.
     monkeypatch.setattr("runicorn.config.paths._config_root_dir", _mock)

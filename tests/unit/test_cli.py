@@ -1,6 +1,8 @@
 """Tests for runicorn.cli — smoke tests for each subcommand."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 import runicorn
@@ -77,8 +79,10 @@ class TestCLIExportImport:
     """Actual execution of export → import roundtrip."""
 
     @staticmethod
-    def _create_run(storage: "Path", run_id: str, path: str = "proj/exp"):
-        import json, os, time
+    def _create_run(storage: Path, run_id: str, path: str = "proj/exp"):
+        import json
+        import os
+        import time
         run_dir = storage / "runs" / path.replace("/", os.sep) / run_id
         run_dir.mkdir(parents=True)
         (run_dir / "meta.json").write_text(
@@ -114,7 +118,6 @@ class TestCLIExportImport:
         assert main(["import", "--storage", str(dst), "--archive", str(archive)]) == 0
 
         # Verify the run was imported
-        import os
         imported = list((dst / "runs").rglob("meta.json"))
         assert len(imported) >= 1
 

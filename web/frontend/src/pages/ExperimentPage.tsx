@@ -444,7 +444,7 @@ const ExperimentPage: React.FC = () => {
                   onOpenRecycleBin={() => setRecycleBinOpen(true)}
                 />
 
-                <Card bordered={false}
+                <Card variant="borderless"
                   style={{ borderRadius: 8, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
                   styles={{ body: { padding: 0, flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' } }}>
                   <Table
