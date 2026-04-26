@@ -417,7 +417,7 @@ export default function RemoteViewerPage() {
         ? { ...wizardProfile, ...profileData } as SavedConnectionProfile
         : { ...profileData, id: savedProfileId, serverId: serverIdToStart } as SavedConnectionProfile
       if (server && profile.condaEnv && profile.remoteRoot) {
-        if (server.authMethod === 'password' && !server.password) {
+        if (server.authMethod === 'password' && !server.password && !server.hasSavedPassword) {
           setPasswordDialogServer(server)
           setPasswordDialogProfile(profile as SavedConnectionProfile)
           setPasswordDialogVisible(true)
@@ -500,16 +500,18 @@ export default function RemoteViewerPage() {
 
     const authMethod = (values.authMethod as 'password' | 'key') || server?.authMethod || 'password'
 
-    const savePassword = Boolean(values.savePassword)
+    const savePassword = authMethod === 'password' ? Boolean(values.savePassword) : false
+    const savePassphrase = authMethod === 'key' ? Boolean(values.savePassphrase) : false
 
     const config: SSHConnectionConfig = {
       host: server?.host || values.host,
       port: server?.port || values.port || 22,
       username: server?.username || values.username,
       authMethod: authMethod,
-      password: authMethod === 'password' ? (values.password || server?.password) : undefined,
+      savedServerId: wizardServerId || undefined,
+      password: authMethod === 'password' ? (values.password || undefined) : undefined,
       privateKeyPath: authMethod === 'key' ? (values.privateKeyPath || server?.privateKeyPath) : undefined,
-      passphrase: authMethod === 'key' ? (values.passphrase || server?.passphrase) : undefined
+      passphrase: authMethod === 'key' ? (values.passphrase || undefined) : undefined
     }
 
     if (!wizardServerId) {
@@ -520,14 +522,33 @@ export default function RemoteViewerPage() {
         username: config.username,
         authMethod: config.authMethod,
         password: savePassword && config.authMethod === 'password' ? values.password : undefined,
-        privateKeyPath: config.privateKeyPath,
-        passphrase: config.passphrase
+        privateKeyPath: config.authMethod === 'key' ? config.privateKeyPath : undefined,
+        passphrase: savePassphrase && config.authMethod === 'key' ? values.passphrase : undefined,
+        hasSavedPassword: savePassword,
+        hasSavedPassphrase: savePassphrase,
+        hasSavedPrivateKey: config.authMethod === 'key' && Boolean(config.privateKeyPath),
       })
       setWizardServerId(serverId)
     } else {
-      if (savePassword && config.authMethod === 'password' && values.password) {
-        await updateServer(wizardServerId, { password: values.password })
+      const updates: Partial<SavedServer> = { authMethod: config.authMethod }
+
+      if (config.authMethod === 'password') {
+        updates.password = savePassword ? (values.password || undefined) : null
+        updates.hasSavedPassword = savePassword
+        updates.privateKeyPath = null
+        updates.passphrase = null
+        updates.hasSavedPrivateKey = false
+        updates.hasSavedPassphrase = false
+      } else {
+        updates.password = null
+        updates.hasSavedPassword = false
+        updates.privateKeyPath = config.privateKeyPath || null
+        updates.hasSavedPrivateKey = Boolean(config.privateKeyPath)
+        updates.passphrase = savePassphrase ? (values.passphrase || undefined) : null
+        updates.hasSavedPassphrase = savePassphrase
       }
+
+      await updateServer(wizardServerId, updates)
     }
 
     await connectAndListEnvs(config)
@@ -546,7 +567,7 @@ export default function RemoteViewerPage() {
       return
     }
 
-    if (server.authMethod === 'password' && !server.password) {
+    if (server.authMethod === 'password' && !server.password && !server.hasSavedPassword) {
       setPasswordDialogServer(server)
       setPasswordDialogProfile(profile)
       setPasswordDialogVisible(true)
@@ -573,9 +594,10 @@ export default function RemoteViewerPage() {
         port: server.port,
         username: server.username,
         authMethod: server.authMethod,
+        savedServerId: server.id,
         password: server.authMethod === 'password' ? (password || server.password) : undefined,
         privateKeyPath: server.authMethod === 'key' ? server.privateKeyPath : undefined,
-        passphrase: server.authMethod === 'key' ? server.passphrase : undefined,
+        passphrase: server.authMethod === 'key' ? (password ? undefined : server.passphrase) : undefined,
         condaEnv: profile.condaEnv,
         remoteRoot: profile.remoteRoot,
         localPort: profile.localPort,
@@ -1050,7 +1072,8 @@ export default function RemoteViewerPage() {
                   name: wizardServer?.name,
                   privateKeyPath: wizardServer?.privateKeyPath,
                   passphrase: wizardServer?.passphrase,
-                  savePassword: false
+                  savePassword: wizardServer?.hasSavedPassword ?? false,
+                  savePassphrase: wizardServer?.hasSavedPassphrase ?? false,
                 }}
               >
                 {!wizardServerId && (
@@ -1102,16 +1125,14 @@ export default function RemoteViewerPage() {
                         <Form.Item
                           label={t('remote.form.password')}
                           name="password"
-                          rules={wizardServerId && wizardServer?.authMethod === 'password' && wizardServer.password ? [] : [{ required: true, message: t('remote.form.required') }]}
+                          rules={wizardServerId && wizardServer?.authMethod === 'password' && (wizardServer.password || wizardServer.hasSavedPassword) ? [] : [{ required: true, message: t('remote.form.required') }]}
                         >
                           <Input.Password />
                         </Form.Item>
 
-                        {(!wizardServerId || (wizardServerId && wizardServer && wizardServer.authMethod === 'password' && !wizardServer.password)) && (
-                          <Form.Item name="savePassword" valuePropName="checked">
-                            <Checkbox>{t('remote.form.savePassword')}</Checkbox>
-                          </Form.Item>
-                        )}
+                        <Form.Item name="savePassword" valuePropName="checked">
+                          <Checkbox>{t('remote.form.savePassword')}</Checkbox>
+                        </Form.Item>
                       </>
                     ) : (
                       <>
@@ -1124,6 +1145,9 @@ export default function RemoteViewerPage() {
                         </Form.Item>
                         <Form.Item label={t('remote.form.passphrase')} name="passphrase">
                           <Input.Password />
+                        </Form.Item>
+                        <Form.Item name="savePassphrase" valuePropName="checked">
+                          <Checkbox>{t('remote.form.savePassphrase')}</Checkbox>
                         </Form.Item>
                       </>
                     )

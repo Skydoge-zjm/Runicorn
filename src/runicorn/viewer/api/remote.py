@@ -28,6 +28,110 @@ _REMOTE_PIP_SHOW_MIN_TIMEOUT_S = 60
 _REMOTE_STORAGE_SCAN_MIN_TIMEOUT_S = 120
 
 
+def _mask_saved_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    masked = dict(entry)
+    password = masked.pop("password", None)
+    private_key = masked.pop("private_key", None)
+    passphrase = masked.pop("passphrase", None)
+    if masked.get("kind") == "server":
+        masked["hasSavedPassword"] = bool(password)
+        masked["hasSavedPrivateKey"] = bool(private_key)
+        masked["hasSavedPassphrase"] = bool(passphrase)
+    return masked
+
+
+def _get_saved_server(server_id: str) -> Dict[str, Any]:
+    from ...config import load_saved_connections
+
+    connections = load_saved_connections()
+    for entry in connections:
+        if entry.get("kind") == "server" and entry.get("id") == server_id:
+            return entry
+
+    raise HTTPException(status_code=404, detail=f"Saved server not found: {server_id}")
+
+
+def _resolve_saved_server_payload(
+    *,
+    saved_server_id: Optional[str],
+    host: Optional[str],
+    port: int,
+    username: Optional[str],
+    password: Optional[str],
+    private_key: Optional[str],
+    private_key_path: Optional[str],
+    passphrase: Optional[str],
+    use_agent: bool,
+) -> Dict[str, Any]:
+    resolved = {
+        "host": host,
+        "port": port,
+        "username": username,
+        "password": password,
+        "private_key": private_key,
+        "private_key_path": private_key_path,
+        "passphrase": passphrase,
+        "use_agent": use_agent,
+    }
+
+    if not saved_server_id:
+        return resolved
+
+    saved = _get_saved_server(saved_server_id)
+
+    for field in ("host", "username"):
+        incoming = resolved.get(field)
+        saved_value = saved.get(field)
+        if incoming and saved_value and incoming != saved_value:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Saved server mismatch for field: {field}",
+            )
+        resolved[field] = saved_value
+
+    incoming_port = resolved.get("port")
+    saved_port = int(saved.get("port", incoming_port or 22))
+    if incoming_port and incoming_port != saved_port:
+        raise HTTPException(
+            status_code=400,
+            detail="Saved server mismatch for field: port",
+        )
+    resolved["port"] = saved_port
+
+    for credential_field in ("password", "private_key", "private_key_path", "passphrase"):
+        if resolved.get(credential_field) is None and saved.get(credential_field) is not None:
+            resolved[credential_field] = saved.get(credential_field)
+
+    return resolved
+
+
+def _merge_saved_connection_secrets(connections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    from ...config import load_saved_connections
+
+    existing_servers = {
+        entry.get("id"): entry
+        for entry in load_saved_connections()
+        if entry.get("kind") == "server" and entry.get("id")
+    }
+    merged: List[Dict[str, Any]] = []
+    for entry in connections:
+        if entry.get("kind") != "server":
+            merged.append(entry)
+            continue
+
+        existing = existing_servers.get(entry.get("id"))
+        if existing is None:
+            merged.append(entry)
+            continue
+
+        merged_entry = dict(entry)
+        for field in ("password", "private_key", "private_key_path", "passphrase"):
+            if field not in merged_entry and existing.get(field) is not None:
+                merged_entry[field] = existing.get(field)
+        merged.append(merged_entry)
+    return merged
+
+
 def _build_host_key_confirmation_required_detail(problem: HostKeyProblem) -> Dict[str, Any]:
     """Build a stable 409 payload for host key confirmation."""
 
@@ -57,21 +161,22 @@ def _build_host_key_confirmation_required_detail(problem: HostKeyProblem) -> Dic
 
 class SSHConnectRequest(BaseModel):
     """SSH connection request."""
-    host: str = Field(..., description="Remote server hostname or IP")
+    host: Optional[str] = Field(None, description="Remote server hostname or IP")
     port: int = Field(22, description="SSH port")
-    username: str = Field(..., description="SSH username")
+    username: Optional[str] = Field(None, description="SSH username")
     password: Optional[str] = Field(None, description="SSH password")
     private_key: Optional[str] = Field(None, description="Private key content")
     private_key_path: Optional[str] = Field(None, description="Path to private key file")
     passphrase: Optional[str] = Field(None, description="Passphrase for private key")
     use_agent: bool = Field(True, description="Use SSH agent")
+    saved_server_id: Optional[str] = Field(None, description="Saved server ID for server-side credential lookup")
 
 
 class RemoteViewerStartRequest(BaseModel):
     """Remote Viewer start request."""
-    host: str = Field(..., description="Remote server hostname or IP")
+    host: Optional[str] = Field(None, description="Remote server hostname or IP")
     port: int = Field(22, description="SSH port")
-    username: str = Field(..., description="SSH username")
+    username: Optional[str] = Field(None, description="SSH username")
     password: Optional[str] = Field(None, description="SSH password")
     private_key: Optional[str] = Field(None, description="Private key content")
     private_key_path: Optional[str] = Field(None, description="Path to private key file")
@@ -81,6 +186,7 @@ class RemoteViewerStartRequest(BaseModel):
     local_port: Optional[int] = Field(None, description="Local port (auto-detect if None)")
     remote_port: Optional[int] = Field(None, description="Remote port (auto-detect if None)")
     conda_env: Optional[str] = Field(None, description="Conda environment name")
+    saved_server_id: Optional[str] = Field(None, description="Saved server ID for server-side credential lookup")
 
 
 class KnownHostsAcceptRequest(BaseModel):
@@ -320,9 +426,9 @@ async def connect_remote(request: Request, payload: SSHConnectRequest) -> Dict[s
             request.app.state.connection_pool = SSHConnectionPool()
         
         pool: SSHConnectionPool = request.app.state.connection_pool
-        
-        # Create SSH configuration
-        config = SSHConfig(
+
+        resolved = _resolve_saved_server_payload(
+            saved_server_id=payload.saved_server_id,
             host=payload.host,
             port=payload.port,
             username=payload.username,
@@ -331,6 +437,23 @@ async def connect_remote(request: Request, payload: SSHConnectRequest) -> Dict[s
             private_key_path=payload.private_key_path,
             passphrase=payload.passphrase,
             use_agent=payload.use_agent,
+        )
+        if not resolved["host"] or not resolved["username"]:
+            raise HTTPException(
+                status_code=400,
+                detail="host and username are required unless saved_server_id resolves them",
+            )
+        
+        # Create SSH configuration
+        config = SSHConfig(
+            host=resolved["host"],
+            port=resolved["port"],
+            username=resolved["username"],
+            password=resolved["password"],
+            private_key=resolved["private_key"],
+            private_key_path=resolved["private_key_path"],
+            passphrase=resolved["passphrase"],
+            use_agent=resolved["use_agent"],
         )
         
         # Get or create connection
@@ -341,9 +464,9 @@ async def connect_remote(request: Request, payload: SSHConnectRequest) -> Dict[s
         return {
             "ok": True,
             "connection_id": config.get_key(),
-            "host": payload.host,
-            "port": payload.port,
-            "username": payload.username,
+            "host": resolved["host"],
+            "port": resolved["port"],
+            "username": resolved["username"],
             "connected": connection.is_connected,
         }
         
@@ -579,6 +702,23 @@ async def start_remote_viewer(
         )
     
     try:
+        resolved = _resolve_saved_server_payload(
+            saved_server_id=payload.saved_server_id,
+            host=payload.host,
+            port=payload.port,
+            username=payload.username,
+            password=payload.password,
+            private_key=payload.private_key,
+            private_key_path=payload.private_key_path,
+            passphrase=payload.passphrase,
+            use_agent=payload.use_agent,
+        )
+        if not resolved["host"] or not resolved["username"]:
+            raise HTTPException(
+                status_code=400,
+                detail="host and username are required unless saved_server_id resolves them",
+            )
+
         # Initialize connection pool if needed
         if not hasattr(request.app.state, 'connection_pool'):
             request.app.state.connection_pool = SSHConnectionPool()
@@ -592,14 +732,14 @@ async def start_remote_viewer(
         
         # Get or create SSH connection
         config = SSHConfig(
-            host=payload.host,
-            port=payload.port,
-            username=payload.username,
-            password=payload.password,
-            private_key=payload.private_key,
-            private_key_path=payload.private_key_path,
-            passphrase=payload.passphrase,
-            use_agent=payload.use_agent,
+            host=resolved["host"],
+            port=resolved["port"],
+            username=resolved["username"],
+            password=resolved["password"],
+            private_key=resolved["private_key"],
+            private_key_path=resolved["private_key_path"],
+            passphrase=resolved["passphrase"],
+            use_agent=resolved["use_agent"],
         )
         
         connection = pool.get_or_create(config)
@@ -1167,7 +1307,8 @@ async def get_saved_connections() -> Dict[str, Any]:
         # the frontend to mis-convert ALL entries through its old-to-new
         # migration path, corrupting server/connection relationships.
         valid = [
-            c for c in connections
+            _mask_saved_entry(c)
+            for c in connections
             if c.get('kind') in ('server', 'connection')
         ]
         return {
@@ -1195,7 +1336,7 @@ async def save_connection_config(connections: list = Body(...)) -> Dict[str, Any
     """
     try:
         from ...config import save_connections
-        save_connections(connections)
+        save_connections(_merge_saved_connection_secrets(connections))
         return {
             "ok": True,
             "message": "Connections saved successfully"

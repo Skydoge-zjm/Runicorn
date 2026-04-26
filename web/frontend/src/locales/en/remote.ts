@@ -25,6 +25,7 @@ export default {
   'remote.form.remotePort': 'Remote Port',
   'remote.form.saveConfig': 'Save this connection',
   'remote.form.savePassword': 'Also save password (insecure, use with caution)',
+  'remote.form.savePassphrase': 'Also save passphrase',
   'remote.form.saveName': 'Configuration Name',
   'remote.form.saveNamePlaceholder': 'GPU Server - Lab',
   'remote.profile.name': 'Connection Name',

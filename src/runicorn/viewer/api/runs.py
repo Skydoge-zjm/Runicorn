@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import shutil
 import tempfile
 import mimetypes
@@ -21,6 +20,10 @@ from pydantic import BaseModel
 from starlette.background import BackgroundTask
 
 from ...sdk import _normalize_status
+from ...security.path_validation import (
+    validate_path as validate_relative_path,
+    validate_resolved_path_against_roots,
+)
 from ...storage.file_utils import (
     iter_all_runs, 
     find_run_dir_by_id, 
@@ -120,32 +123,6 @@ def _get_allowed_download_roots(run_id: str, request: Request, run_dir: Path) ->
             _add(archive_path)
 
     return allowed
-
-
-def _path_is_allowed_for_run(target: Path, allowed_roots: List[Path]) -> bool:
-    """Allow files inside run_dir and exact/descendant matches of linked asset paths."""
-    try:
-        target_resolved = target.resolve()
-    except Exception:
-        return False
-
-    for root in allowed_roots:
-        try:
-            root_resolved = root.resolve()
-        except Exception:
-            continue
-
-        if target_resolved == root_resolved:
-            return True
-
-        try:
-            if root.is_dir():
-                target_resolved.relative_to(root_resolved)
-                return True
-        except Exception:
-            continue
-
-    return False
 
 
 @router.get("/runs", response_model=List[RunListItem])
@@ -443,9 +420,6 @@ async def update_run(run_id: str, request: Request, payload: RunUpdatePayload) -
     }
 
 
-_SAFE_PATH_RE = re.compile(r'^[a-zA-Z0-9_/\-. ]+$')
-
-
 @router.post("/runs/move")
 async def move_runs(request: Request, payload: MoveRunsPayload) -> Dict[str, Any]:
     """
@@ -459,14 +433,17 @@ async def move_runs(request: Request, payload: MoveRunsPayload) -> Dict[str, Any
     """
     storage_root = get_storage_root(request)
     target_path = payload.target_path.strip().strip("/")
+    runs_root = storage_root / "runs"
 
     # Validate target_path
     if not target_path:
         raise HTTPException(status_code=400, detail="target_path is required")
-    if ".." in target_path:
-        raise HTTPException(status_code=400, detail="target_path must not contain '..'")
-    if not _SAFE_PATH_RE.match(target_path):
-        raise HTTPException(status_code=400, detail="target_path contains invalid characters")
+    valid_target, target_dir, target_error = validate_relative_path(target_path, runs_root)
+    if not valid_target or target_dir is None:
+        raise HTTPException(
+            status_code=400,
+            detail=target_error or "target_path is invalid",
+        )
 
     if not payload.run_ids:
         raise HTTPException(status_code=400, detail="run_ids is required")
@@ -489,7 +466,7 @@ async def move_runs(request: Request, payload: MoveRunsPayload) -> Dict[str, Any
 
         old_dir = entry.dir
         old_path = entry.path or "default"
-        new_dir = storage_root / "runs" / target_path / run_id
+        new_dir = target_dir / run_id
 
         if old_dir == new_dir:
             # Already at target — skip silently
@@ -628,7 +605,8 @@ async def download_run_asset(
         raise HTTPException(status_code=403, detail="Unsafe path")
 
     allowed_roots = _get_allowed_download_roots(run_id, request, run_dir)
-    if not _path_is_allowed_for_run(target, allowed_roots):
+    is_allowed, _ = validate_resolved_path_against_roots(target, allowed_roots)
+    if not is_allowed:
         raise HTTPException(status_code=403, detail="Path does not belong to this run")
 
     if not target.exists():

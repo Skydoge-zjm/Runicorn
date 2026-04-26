@@ -25,6 +25,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _mask_saved_connection_details(conn: Dict[str, Any]) -> Dict[str, Any]:
+    masked = conn.copy()
+    password = masked.pop("password", None)
+    private_key = masked.pop("private_key", None)
+    passphrase = masked.pop("passphrase", None)
+    masked["has_password"] = bool(password)
+    masked["has_private_key"] = bool(private_key)
+    masked["has_passphrase"] = bool(passphrase)
+    return masked
+
+
 def _storage_backend_payload(request: Request) -> Dict[str, Any]:
     backend = getattr(request.app.state, "storage_backend", None)
     using_sqlite = backend is not None
@@ -244,14 +255,7 @@ async def get_saved_ssh_connections() -> Dict[str, Any]:
     # Mask sensitive data
     masked_connections = []
     for conn in connections:
-        masked = conn.copy()
-        # Never return passwords or private keys
-        masked.pop('password', None)
-        masked.pop('private_key', None)
-        masked.pop('passphrase', None)
-        # Only indicate if password/key was saved
-        masked['has_password'] = bool(conn.get('password'))
-        masked['has_private_key'] = bool(conn.get('private_key'))
+        masked = _mask_saved_connection_details(conn)
         masked_connections.append(masked)
     
     return {"connections": masked_connections}
@@ -308,14 +312,13 @@ async def save_ssh_connection(payload: Dict[str, Any] = Body(...)) -> Dict[str, 
 @router.get("/config/ssh_connections/{key}/details")
 async def get_ssh_connection_details(key: str) -> Dict[str, Any]:
     """
-    Get full details of a saved SSH connection (including credentials).
-    This is used for one-click connection.
+    Get metadata for a saved SSH connection without returning decrypted credentials.
     
     Args:
         key: Connection key (host:port@username)
         
     Returns:
-        Full connection details including credentials
+        Saved connection metadata with credential presence flags
     """
     try:
         connections = get_ssh_connections()
@@ -323,8 +326,7 @@ async def get_ssh_connection_details(key: str) -> Dict[str, Any]:
         # Find the connection by key
         for conn in connections:
             if conn.get('key') == key:
-                # Return full details including password/key for one-click connect
-                return {"ok": True, "connection": conn}
+                return {"ok": True, "connection": _mask_saved_connection_details(conn)}
         
         raise HTTPException(
             status_code=404,
@@ -336,8 +338,8 @@ async def get_ssh_connection_details(key: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to get SSH connection details: {e}")
         raise HTTPException(
-            status_code=400,
-            detail=f"Failed to get connection details: {e}"
+            status_code=500,
+            detail="Failed to get connection details"
         )
 
 

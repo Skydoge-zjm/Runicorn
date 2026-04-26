@@ -25,6 +25,7 @@ export default {
   'remote.form.remotePort': '远程端口',
   'remote.form.saveConfig': '保存此连接配置',
   'remote.form.savePassword': '同时保存密码（不安全，请谨慎使用）',
+  'remote.form.savePassphrase': '同时保存密码短语',
   'remote.form.saveName': '配置名称',
   'remote.form.saveNamePlaceholder': 'GPU 服务器 - 实验室',
   'remote.profile.name': '连接名称',

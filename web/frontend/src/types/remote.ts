@@ -37,6 +37,8 @@ export interface SSHConnectionConfig {
   privateKeyPath?: string
   /** Passphrase for private key (optional) */
   passphrase?: string
+  /** Saved server ID for server-side credential lookup */
+  savedServerId?: string
   
   // Remote Viewer configuration
   /** Remote storage root directory */
@@ -97,9 +99,12 @@ export interface SavedServer {
   port: number
   username: string
   authMethod: AuthMethod
-  password?: string
-  privateKeyPath?: string
-  passphrase?: string
+  password?: string | null
+  privateKeyPath?: string | null
+  passphrase?: string | null
+  hasSavedPassword?: boolean
+  hasSavedPrivateKey?: boolean
+  hasSavedPassphrase?: boolean
   createdAt: number
 }
 
