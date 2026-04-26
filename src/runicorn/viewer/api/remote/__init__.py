@@ -13,6 +13,16 @@ from fastapi import APIRouter, HTTPException, Request
 
 from .connections import router as connection_router
 from .known_hosts import router as known_hosts_router
+from .runtime import (
+    _REMOTE_PIP_SHOW_MIN_TIMEOUT_S,
+    _REMOTE_PYTHON_COMMAND_MIN_TIMEOUT_S,
+    _REMOTE_RUNICORN_IMPORT_MIN_TIMEOUT_S,
+    detect_remote_storage_candidates,
+    get_active_connection,
+    get_command_timeout,
+    parse_connection_id,
+    resolve_python_command,
+)
 from .saved_connections import router as saved_connections_router
 from .sessions import router as sessions_router
 from .shared import (
@@ -21,14 +31,6 @@ from .shared import (
     KnownHostsRemoveRequest,
     RemoteViewerStartRequest,
     SSHConnectRequest,
-    _REMOTE_PIP_SHOW_MIN_TIMEOUT_S,
-    _REMOTE_PYTHON_COMMAND_MIN_TIMEOUT_S,
-    _REMOTE_RUNICORN_IMPORT_MIN_TIMEOUT_S,
-    _detect_remote_storage_candidates,
-    _get_active_connection,
-    _get_command_timeout,
-    _parse_connection_id,
-    _resolve_python_command,
     logger,
 )
 from .viewer_routes import router as viewer_router
@@ -46,13 +48,20 @@ __all__ = [
     "KnownHostsRemoveRequest",
     "RemoteViewerStartRequest",
     "SSHConnectRequest",
-    "_detect_remote_storage_candidates",
-    "_get_active_connection",
-    "_get_command_timeout",
-    "_parse_connection_id",
-    "_resolve_python_command",
+    "detect_remote_storage_candidates",
+    "get_active_connection",
+    "get_command_timeout",
+    "parse_connection_id",
+    "resolve_python_command",
     "router",
 ]
+
+# Backward-compatible aliases for existing tests/imports.
+_detect_remote_storage_candidates = detect_remote_storage_candidates
+_get_active_connection = get_active_connection
+_get_command_timeout = get_command_timeout
+_parse_connection_id = parse_connection_id
+_resolve_python_command = resolve_python_command
 
 
 @router.get("/remote/conda-envs")

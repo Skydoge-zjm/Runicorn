@@ -220,11 +220,12 @@ def delete_run_with_orphan_assets(backend: "SQLiteStorageBackend", run_id: str) 
             else:
                 kept.append(asset_dict)
 
+        conn.execute("DELETE FROM run_assets WHERE run_id=?", (run_id,))
         conn.execute("DELETE FROM experiments WHERE id=?", (run_id,))
         for asset in orphaned:
+            conn.execute("DELETE FROM run_assets WHERE asset_id=?", (asset["asset_id"],))
             conn.execute("DELETE FROM assets WHERE asset_id=?", (asset["asset_id"],))
         conn.commit()
         return {"orphaned_assets": orphaned, "kept_assets": kept}
     finally:
         backend.pool.return_connection(conn)
-

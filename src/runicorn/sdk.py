@@ -500,6 +500,73 @@ class Run:
     def stop_outputs_watch(self) -> None:
         stop_outputs_watch_impl(self)
 
+    @property
+    def is_finished(self) -> bool:
+        return self._finished
+
+    def append_event(self, event: Dict[str, Any]) -> None:
+        self._append_jsonl(self._events_path, event, self._events_lock)
+
+    def update_assets_manifest(self, updater) -> None:
+        update_assets_atomic(self._assets_path, self._assets_lock, updater)
+
+    def should_stop_output_watch(self) -> bool:
+        return self._finished or self._outputs_watch_stop.is_set()
+
+    def clear_output_watch_stop(self) -> None:
+        self._outputs_watch_stop.clear()
+
+    def request_output_watch_stop(self) -> None:
+        self._outputs_watch_stop.set()
+
+    def get_output_watch_thread(self) -> Optional[threading.Thread]:
+        return self._outputs_watch_thread
+
+    def set_output_watch_thread(self, thread: Optional[threading.Thread]) -> None:
+        self._outputs_watch_thread = thread
+
+    def list_storage_assets(self) -> List[Dict[str, Any]]:
+        if not self.storage_backend:
+            return []
+        return self.storage_backend.get_assets_for_run(self.id)
+
+    def unlink_storage_asset(self, asset_id: str) -> None:
+        if self.storage_backend and hasattr(self.storage_backend, "unlink_run_asset"):
+            self.storage_backend.unlink_run_asset(self.id, asset_id)
+
+    def record_storage_asset(self, **kwargs: Any) -> None:
+        if self.storage_backend:
+            self.storage_backend.record_asset_for_run(run_id=self.id, **kwargs)
+
+    def read_summary_data(self) -> Dict[str, Any]:
+        if not self._summary_path.exists():
+            return {}
+        try:
+            data = json.loads(self._summary_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, IOError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def write_summary_data(self, data: Dict[str, Any]) -> None:
+        self._summary_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def read_status_data(self) -> Dict[str, Any]:
+        if not self._status_path.exists():
+            return {}
+        try:
+            data = json.loads(self._status_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, IOError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def write_status_data(self, data: Dict[str, Any]) -> None:
+        self._status_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def close_storage_backend(self) -> None:
+        if self.storage_backend and hasattr(self.storage_backend, "close"):
+            self.storage_backend.close()
+            self.storage_backend = None
+
     def _init_modern_storage(self) -> None:
         """Initialize modern storage backend."""
         try:

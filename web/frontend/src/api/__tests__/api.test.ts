@@ -18,13 +18,11 @@ import {
 describe('apiFetch — core behavior', () => {
   it('GET request returns parsed JSON', async () => {
     server.use(
-      http.get('/api/runs', () =>
-        HttpResponse.json({ runs: [{ run_id: 'r1' }] }),
-      ),
+      http.get('/api/runs', () => HttpResponse.json([{ id: 'r1' }])),
     )
     const data = await listRuns()
-    expect(data.runs).toHaveLength(1)
-    expect(data.runs[0].run_id).toBe('r1')
+    expect(data).toHaveLength(1)
+    expect(data[0].id).toBe('r1')
   })
 
   it('GET with path param works', async () => {
@@ -407,12 +405,10 @@ describe('Project hierarchy endpoints', () => {
 
   it('listRunsByName', async () => {
     server.use(
-      http.get('/api/projects/:project/names/:name/runs', () =>
-        HttpResponse.json({ runs: [] }),
-      ),
+      http.get('/api/projects/:project/names/:name/runs', () => HttpResponse.json([])),
     )
     const data = await listRunsByName('projA', 'exp1')
-    expect(data.runs).toEqual([])
+    expect(data).toEqual([])
   })
 })
 

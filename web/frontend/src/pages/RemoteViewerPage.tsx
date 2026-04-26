@@ -86,6 +86,8 @@ export default function RemoteViewerPage() {
   const [securityDrawerOpen, setSecurityDrawerOpen] = useState(false)
   const [wizardProgress, setWizardProgress] = useState<string | null>(null)
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wizardFlowIdRef = useRef(0)
+  const pendingWizardConnectionRef = useRef<Pick<SSHConnectionConfig, 'host' | 'port' | 'username'> | null>(null)
 
   // Hooks
   const { sessions, refetch: refetchSessions } = useRemoteSessions()
@@ -232,10 +234,39 @@ export default function RemoteViewerPage() {
     }
   }
 
+  const clearWizardProgressTimer = () => {
+    if (progressTimerRef.current) {
+      clearTimeout(progressTimerRef.current)
+      progressTimerRef.current = null
+    }
+  }
+
+  const invalidateWizardFlow = () => {
+    wizardFlowIdRef.current += 1
+    clearWizardProgressTimer()
+    setWizardProgress(null)
+    return wizardFlowIdRef.current
+  }
+
+  const cleanupPendingWizardConnection = async () => {
+    const pending = pendingWizardConnectionRef.current
+    pendingWizardConnectionRef.current = null
+    if (!pending) {
+      return
+    }
+    await disconnectRemote(pending.host, pending.port, pending.username).catch(() => {})
+  }
+
   /**
    * Step 1: Connect to SSH server and list conda environments
    */
   const connectAndListEnvs = async (config: SSHConnectionConfig) => {
+    const flowId = invalidateWizardFlow()
+    pendingWizardConnectionRef.current = {
+      host: config.host,
+      port: config.port,
+      username: config.username,
+    }
     setConnecting(true)
     setWizardProgress(t('remote.wizard.progress_connecting'))
     
@@ -249,7 +280,11 @@ export default function RemoteViewerPage() {
 
       // 1. Connect via SSH (includes auth)
       await runWithHostKeyConfirmation(() => connectRemote(config), connectionId)
-      if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+      clearWizardProgressTimer()
+      if (wizardFlowIdRef.current !== flowId) {
+        await cleanupPendingWizardConnection()
+        return
+      }
       
       // 2. Finding conda
       setWizardProgress(t('remote.wizard.progress_finding_conda'))
@@ -261,9 +296,14 @@ export default function RemoteViewerPage() {
       
       // 3. List conda environments
       const envsResult = await listCondaEnvs(connectionId)
-      if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+      clearWizardProgressTimer()
+      if (wizardFlowIdRef.current !== flowId) {
+        await cleanupPendingWizardConnection()
+        return
+      }
       
       setWizardProgress(null)
+      pendingWizardConnectionRef.current = null
 
       // 4. Store connection state with environments
       setSSHConnection({
@@ -275,7 +315,8 @@ export default function RemoteViewerPage() {
       })
       
     } catch (error) {
-      if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+      clearWizardProgressTimer()
+      pendingWizardConnectionRef.current = null
       setWizardProgress(null)
       // Clean up on error
       await disconnectRemote(config.host, config.port, config.username).catch(() => {})
@@ -407,6 +448,8 @@ export default function RemoteViewerPage() {
    * Cancel config confirmation (disconnect SSH)
    */
   const handleCancelConfig = async () => {
+    invalidateWizardFlow()
+    await cleanupPendingWizardConnection()
     if (!sshConnection) return
     
     // Disconnect SSH
@@ -431,6 +474,7 @@ export default function RemoteViewerPage() {
    * Handle connect only (without starting viewer)
    */
   const openNewServerWizard = () => {
+    invalidateWizardFlow()
     setWizardOpen(true)
     setWizardServerId(null)
     setWizardEditProfileId(null)
@@ -441,6 +485,7 @@ export default function RemoteViewerPage() {
   }
 
   const openNewProfileWizard = (serverId: string) => {
+    invalidateWizardFlow()
     setWizardOpen(true)
     setWizardServerId(serverId)
     setWizardEditProfileId(null)
@@ -451,6 +496,7 @@ export default function RemoteViewerPage() {
   }
 
   const openEditProfileWizard = (serverId: string, profileId: string) => {
+    invalidateWizardFlow()
     setWizardOpen(true)
     setWizardServerId(serverId)
     setWizardEditProfileId(profileId)
@@ -675,6 +721,8 @@ export default function RemoteViewerPage() {
   }, [getProfilesForServer, wizardEditProfileId, wizardServerId])
 
   const closeWizardForm = () => {
+    invalidateWizardFlow()
+    void cleanupPendingWizardConnection()
     setWizardOpen(false)
     setWizardServerId(null)
     setWizardEditProfileId(null)

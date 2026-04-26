@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Union
 
 from ..assets.archive import archive_dir, archive_file
 from ..assets.fingerprint import dir_stat_fingerprint, stat_fingerprint
-from ..assets.assets_json import update_assets_atomic
 
 
 def scan_outputs_once_impl(
@@ -24,7 +23,7 @@ def scan_outputs_once_impl(
     scan_outputs_once_fn,
     logger: logging.Logger,
 ) -> Dict[str, Any]:
-    if run._finished:
+    if run.is_finished:
         logger.warning("scan_outputs_once called after finish(); ignoring")
         return {}
 
@@ -44,10 +43,10 @@ def scan_outputs_once_impl(
         mode=mode,
         log_snapshot_interval_sec=log_snapshot_interval_sec,
         state_gc_after_sec=state_gc_after_sec,
-        should_stop=lambda: run._finished or run._outputs_watch_stop.is_set(),
+        should_stop=run.should_stop_output_watch,
     )
 
-    if run._finished or run._outputs_watch_stop.is_set():
+    if run.should_stop_output_watch():
         return res
 
     if run.storage_backend:
@@ -55,7 +54,7 @@ def scan_outputs_once_impl(
             for e in res.get("archived_entries") or []:
                 key = e.get("key")
                 if key and hasattr(run.storage_backend, "unlink_run_asset"):
-                    assets = run.storage_backend.get_assets_for_run(run.id)
+                    assets = run.list_storage_assets()
                     for a in assets:
                         if a.get("role") != "output":
                             continue
@@ -65,10 +64,9 @@ def scan_outputs_once_impl(
                         elif meta is None:
                             meta = {}
                         if meta.get("key") == key:
-                            run.storage_backend.unlink_run_asset(run.id, a["asset_id"])
+                            run.unlink_storage_asset(a["asset_id"])
                             break
-                run.storage_backend.record_asset_for_run(
-                    run_id=run.id,
+                run.record_storage_asset(
                     role="output",
                     asset_type="output",
                     name=e.get("name"),
@@ -98,12 +96,13 @@ def watch_outputs_impl(
     log_snapshot_interval_sec: float,
     state_gc_after_sec: float,
 ) -> None:
-    if run._outputs_watch_thread and run._outputs_watch_thread.is_alive():
+    existing_thread = run.get_output_watch_thread()
+    if existing_thread and existing_thread.is_alive():
         return
-    run._outputs_watch_stop.clear()
+    run.clear_output_watch_stop()
 
     def _loop() -> None:
-        while not run._outputs_watch_stop.is_set():
+        while not run.should_stop_output_watch():
             try:
                 run.scan_outputs_once(
                     output_dirs=output_dirs,
@@ -119,13 +118,13 @@ def watch_outputs_impl(
             run._outputs_watch_stop.wait(interval_sec)
 
     t = threading.Thread(target=_loop, daemon=True)
-    run._outputs_watch_thread = t
+    run.set_output_watch_thread(t)
     t.start()
 
 
 def stop_outputs_watch_impl(run: Any) -> None:
-    run._outputs_watch_stop.set()
-    t = run._outputs_watch_thread
+    run.request_output_watch_stop()
+    t = run.get_output_watch_thread()
     if t and t.is_alive():
         t.join(timeout=2.0)
 
@@ -140,7 +139,7 @@ def log_config_impl(
     now_ts,
     logger: logging.Logger,
 ) -> None:
-    if run._finished:
+    if run.is_finished:
         logger.warning("Run already finished, ignoring %s call", "log_config")
         return
     cfg_holder: Dict[str, Any] = {}
@@ -159,11 +158,10 @@ def log_config_impl(
         cfg_holder.update(cfg)
         return a
 
-    update_assets_atomic(run._assets_path, run._assets_lock, _upd)
+    run.update_assets_manifest(_upd)
     if run.storage_backend:
         try:
-            run.storage_backend.record_asset_for_run(
-                run_id=run.id,
+            run.record_storage_asset(
                 role="config",
                 asset_type="config",
                 name=None,
@@ -193,7 +191,7 @@ def log_dataset_impl(
     now_ts,
     logger: logging.Logger,
 ) -> None:
-    if run._finished:
+    if run.is_finished:
         logger.warning("log_dataset called after finish(); ignoring")
         return
     uri: Any = root_or_uri
@@ -236,7 +234,7 @@ def log_dataset_impl(
         a["datasets"].append(entry)
         return a
 
-    update_assets_atomic(run._assets_path, run._assets_lock, _upd)
+    run.update_assets_manifest(_upd)
     if run.storage_backend:
         try:
             fp_kind = entry.get("fingerprint_kind")
@@ -244,8 +242,7 @@ def log_dataset_impl(
             if isinstance(fp_val, dict):
                 fp_val = json.dumps(fp_val, ensure_ascii=False, sort_keys=True)
                 fp_kind = fp_kind or "stat"
-            run.storage_backend.record_asset_for_run(
-                run_id=run.id,
+            run.record_storage_asset(
                 role="dataset",
                 asset_type="dataset",
                 name=name,
@@ -275,7 +272,7 @@ def log_pretrained_impl(
     now_ts,
     logger: logging.Logger,
 ) -> None:
-    if run._finished:
+    if run.is_finished:
         logger.warning("log_pretrained called after finish(); ignoring")
         return
     archived: Optional[Dict[str, Any]] = None
@@ -314,11 +311,10 @@ def log_pretrained_impl(
         a["pretrained"].append(entry)
         return a
 
-    update_assets_atomic(run._assets_path, run._assets_lock, _upd)
+    run.update_assets_manifest(_upd)
     if run.storage_backend:
         try:
-            run.storage_backend.record_asset_for_run(
-                run_id=run.id,
+            run.record_storage_asset(
                 role="pretrained",
                 asset_type="pretrained",
                 name=name,

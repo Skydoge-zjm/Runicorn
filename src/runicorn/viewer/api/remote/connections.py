@@ -5,10 +5,10 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException, Request
 
 from ....remote.host_key import HostKeyConfirmationRequiredError
+from .credentials import resolve_saved_server_payload
 from .shared import (
     SSHConnectRequest,
     _build_host_key_confirmation_required_detail,
-    _resolve_saved_server_payload,
     logger,
 )
 
@@ -27,7 +27,7 @@ async def connect_remote(request: Request, payload: SSHConnectRequest) -> Dict[s
             request.app.state.connection_pool = SSHConnectionPool()
 
         pool: SSHConnectionPool = request.app.state.connection_pool
-        resolved = _resolve_saved_server_payload(
+        resolved = resolve_saved_server_payload(
             saved_server_id=payload.saved_server_id,
             host=payload.host,
             port=payload.port,

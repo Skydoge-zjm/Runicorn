@@ -361,3 +361,72 @@ class TestSavedServerCredentialFlow:
         assert pool.last_config.password == "secret"
         assert manager.last_start_kwargs is not None
         assert manager.last_start_kwargs["remote_root"] == "/tmp/runicorn"
+
+    def test_connect_remote_can_use_saved_server_private_key_path(
+        self,
+        viewer_client: TestClient,
+        mock_config_root,
+    ) -> None:
+        viewer_client.post(
+            "/api/remote/connections/saved",
+            json=[
+                {
+                    "kind": "server",
+                    "id": "srv_admin_example_22",
+                    "name": "admin@example:22",
+                    "host": "example.com",
+                    "port": 22,
+                    "username": "admin",
+                    "authMethod": "key",
+                    "privateKeyPath": "~/.ssh/id_ed25519",
+                    "createdAt": 1,
+                }
+            ],
+        )
+        pool = _FakePool(_FakeConnection())
+        viewer_client.app.state.connection_pool = pool
+
+        resp = viewer_client.post(
+            "/api/remote/connect",
+            json={
+                "host": "example.com",
+                "port": 22,
+                "username": "admin",
+                "saved_server_id": "srv_admin_example_22",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert pool.last_config.private_key_path == "~/.ssh/id_ed25519"
+
+    def test_get_saved_connections_normalizes_private_key_path_field(
+        self,
+        viewer_client: TestClient,
+        mock_config_root,
+    ) -> None:
+        connections_path = mock_config_root / "connections.json"
+        connections_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "kind": "server",
+                        "id": "srv_admin_example_22",
+                        "name": "admin@example:22",
+                        "host": "example.com",
+                        "port": 22,
+                        "username": "admin",
+                        "authMethod": "key",
+                        "private_key_path": "~/.ssh/id_ed25519",
+                        "createdAt": 1,
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        resp = viewer_client.get("/api/remote/connections/saved")
+
+        assert resp.status_code == 200
+        server = resp.json()["connections"][0]
+        assert server["privateKeyPath"] == "~/.ssh/id_ed25519"
+        assert "private_key_path" not in server

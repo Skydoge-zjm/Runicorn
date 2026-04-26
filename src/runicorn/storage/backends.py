@@ -199,6 +199,7 @@ class ConnectionPool:
         conn.execute("PRAGMA temp_store=memory")       # Store temp data in memory
         conn.execute("PRAGMA mmap_size=268435456")     # 256MB memory mapping
         conn.execute("PRAGMA cache_size=10000")        # 10MB cache
+        conn.execute("PRAGMA foreign_keys=ON")         # Enforce FK cascade semantics
 
         return conn
 

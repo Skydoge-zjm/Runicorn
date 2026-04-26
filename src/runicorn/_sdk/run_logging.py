@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import time
 import uuid
@@ -9,7 +8,7 @@ from typing import Any, Dict, Optional
 
 
 def set_primary_metric(run: Any, metric_name: str, mode: str, *, logger: logging.Logger) -> None:
-    if run._finished:
+    if run.is_finished:
         logger.warning("set_primary_metric called after finish(); ignoring")
         return
     if mode not in ["max", "min"]:
@@ -33,7 +32,7 @@ def log_metrics(
     metric_record_cls: Any,
     logger: logging.Logger,
 ) -> None:
-    if run._finished:
+    if run.is_finished:
         logger.warning("Run already finished, ignoring %s call", "log")
         return
     ts = now_ts()
@@ -63,7 +62,7 @@ def log_metrics(
         payload["stage"] = stage_val
 
     evt = {"ts": ts, "type": "metrics", "data": payload}
-    run._append_jsonl(run._events_path, evt, run._events_lock)
+    run.append_event(evt)
 
     if run.storage_backend and metric_record_cls is not None:
         try:
@@ -98,7 +97,7 @@ def log_metrics(
 
 
 def log_text(run: Any, text: str, *, logger: logging.Logger) -> None:
-    if run._finished:
+    if run.is_finished:
         logger.warning("Run already finished, ignoring %s call", "log_text")
         return
 
@@ -132,7 +131,7 @@ def log_image(
     image_module: Any,
     logger: logging.Logger,
 ) -> str:
-    if run._finished:
+    if run.is_finished:
         logger.warning("Run already finished, ignoring %s call", "log_image")
         return ""
 
@@ -164,21 +163,15 @@ def log_image(
         "type": "image",
         "data": {"key": key, "path": f"media/{rel_name}", "step": step, "caption": caption},
     }
-    run._append_jsonl(run._events_path, evt, run._events_lock)
+    run.append_event(evt)
     return f"media/{rel_name}"
 
 
 def apply_summary_update(run: Any, update: Dict[str, Any], *, logger: logging.Logger) -> None:
     with run._summary_lock:
-        cur: Dict[str, Any] = {}
-        if run._summary_path.exists():
-            try:
-                cur = json.loads(run._summary_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, IOError) as e:
-                logger.warning("Failed to read summary file: %s, starting fresh", e)
-                cur = {}
+        cur: Dict[str, Any] = run.read_summary_data()
         cur.update(update or {})
-        run._summary_path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+        run.write_summary_data(cur)
 
     if run.storage_backend:
         try:
@@ -198,7 +191,7 @@ def apply_summary_update(run: Any, update: Dict[str, Any], *, logger: logging.Lo
 
 
 def summary(run: Any, update: Dict[str, Any], *, logger: logging.Logger) -> None:
-    if run._finished:
+    if run.is_finished:
         logger.warning("Run already finished, ignoring %s call", "summary")
         return
     apply_summary_update(run, update, logger=logger)

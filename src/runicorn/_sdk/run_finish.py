@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import gc
-import json
 import logging
 import os
 import time as time_module
@@ -11,7 +10,7 @@ from typing import Any, Dict
 def finish_impl(run: Any, *, status: str, normalize_status, now_ts, active_run_state, logger: logging.Logger) -> None:
     status = normalize_status(status)
     run._finished = True
-    run._outputs_watch_stop.set()
+    run.request_output_watch_stop()
 
     if run._console_capture is not None:
         try:
@@ -34,15 +33,9 @@ def finish_impl(run: Any, *, status: str, normalize_status, now_ts, active_run_s
         )
 
     with run._status_lock:
-        cur: Dict[str, Any] = {}
-        if run._status_path.exists():
-            try:
-                cur = json.loads(run._status_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, IOError) as e:
-                logger.warning("Failed to read status file: %s, starting fresh", e)
-                cur = {}
+        cur: Dict[str, Any] = run.read_status_data()
         cur.update({"status": status, "ended_at": now_ts()})
-        run._status_path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+        run.write_status_data(cur)
 
     if run.storage_backend:
         try:
@@ -52,8 +45,7 @@ def finish_impl(run: Any, *, status: str, normalize_status, now_ts, active_run_s
 
         try:
             if hasattr(run.storage_backend, "close"):
-                run.storage_backend.close()
-                run.storage_backend = None
+                run.close_storage_backend()
                 logger.debug("Closed storage backend connections")
                 gc.collect()
                 time_module.sleep(0.05)
@@ -81,4 +73,3 @@ def finish_impl(run: Any, *, status: str, normalize_status, now_ts, active_run_s
 def exit_impl(run: Any, exc_type) -> None:
     status = "failed" if exc_type is not None else "finished"
     run.finish(status=status)
-
