@@ -191,3 +191,22 @@ class TestLegacyMigration:
 
         assert key_file.exists()
         assert len(key_file.read_bytes()) > 0
+
+    def test_no_legacy_migration_when_config_lacks_ssh_connections(self, mock_config_root: Path, monkeypatch) -> None:
+        """Normal reads should not enter the legacy migration branch without the old key."""
+        from runicorn.config.connections import load_saved_connections
+
+        (mock_config_root / "config.json").write_text(
+            json.dumps({"user_root_dir": "/tmp/data"}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+        calls = {"count": 0}
+
+        def _unexpected_call():
+            calls["count"] += 1
+
+        monkeypatch.setattr("runicorn.config.connections._migrate_legacy_xor_connections", _unexpected_call)
+
+        assert load_saved_connections() == []
+        assert calls["count"] == 0

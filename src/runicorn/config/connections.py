@@ -1,13 +1,15 @@
 """SSH connection configuration management.
 
-All connections are stored in a single ``connections.json`` file using
-Fernet symmetric encryption for sensitive fields.  Legacy XOR-encrypted
-data in ``config.json`` is migrated automatically on first read.
+All actively written connections live in ``connections.json`` and use Fernet
+for sensitive fields. The old ``config.json:ssh_connections`` + ``ENC:``
+format is retained only as a migration source and should be removable after a
+full release window with no observed legacy migrations.
 """
 from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, List
 
 from .paths import get_connections_file_path
@@ -22,8 +24,10 @@ logger = logging.getLogger(__name__)
 
 def load_saved_connections() -> List[Dict[str, Any]]:
     """Load saved SSH connections from connections.json and decrypt all sensitive fields."""
-    # Migrate legacy data from config.json on every read (idempotent/fast).
-    _migrate_legacy_xor_connections()
+    # Legacy migration is only relevant when the old config.json payload still
+    # exists. Keep the normal read path centered on connections.json.
+    if _legacy_config_has_ssh_connections():
+        _migrate_legacy_xor_connections()
 
     path = get_connections_file_path()
     try:
@@ -116,20 +120,70 @@ def remove_ssh_connection(key: str) -> None:
 # Legacy XOR migration  (config.json → connections.json)
 # ---------------------------------------------------------------------------
 
-def _migrate_legacy_xor_connections() -> None:
-    """One-time migration: read XOR-encrypted SSH connections from config.json,
-    merge them into connections.json (Fernet), then remove the old key.
-    """
-    cfg = load_user_config()
+def _legacy_config_has_ssh_connections() -> bool:
+    """Return True only when the legacy ``config.json`` payload still exists."""
+    from .paths import get_config_file_path
+
+    path = get_config_file_path()
+    if not path.exists():
+        return False
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.debug("Skipping legacy SSH migration check; failed to read %s: %s", path, e)
+        return False
+
+    return '"ssh_connections"' in text
+
+
+def _load_legacy_xor_connections(path: Path) -> List[Dict[str, Any]]:
+    """Load legacy SSH connections from config.json if the old key is present."""
+    try:
+        cfg = load_user_config()
+    except Exception as e:
+        logger.warning("Failed to load legacy SSH config from %s: %s", path, e)
+        return []
+
     legacy = cfg.get("ssh_connections")
     if not legacy:
-        return  # Nothing to migrate
+        return []
+    if not isinstance(legacy, list):
+        logger.warning("Ignoring malformed legacy ssh_connections in %s", path)
+        return []
+    return legacy
 
-    logger.info(f"Migrating {len(legacy)} legacy XOR SSH connections to Fernet...")
+
+def _migrate_legacy_xor_connections() -> None:
+    """Migrate legacy ``config.json:ssh_connections`` into Fernet storage.
+
+    Trigger condition:
+    - ``config.json`` still contains the historical ``ssh_connections`` key
+
+    Input source:
+    - legacy XOR or plaintext values stored in ``config.json``
+
+    Removal condition:
+    - after one release window with no observed legacy migrations, this helper
+      and the XOR compatibility path should be removed together
+    """
+    from .paths import get_config_file_path
+
+    config_path = get_config_file_path()
+    legacy = _load_legacy_xor_connections(config_path)
+    if not legacy:
+        return
+
+    logger.info(
+        "Legacy SSH migration triggered from %s with %d entries",
+        config_path,
+        len(legacy),
+    )
 
     from ..security.encryption import SENSITIVE_FIELDS
 
-    # Decrypt legacy entries using the XOR helper in encryption.py
+    # The only allowed use of the XOR helper is reading legacy config payloads
+    # so they can be re-saved via the Fernet-backed connections.json path.
     from ..security.encryption import _try_decrypt_xor_legacy
     migrated: List[Dict[str, Any]] = []
     for conn in legacy:
@@ -151,16 +205,23 @@ def _migrate_legacy_xor_connections() -> None:
             pass
 
     existing_keys = {c.get('key') for c in existing if c.get('key')}
+    migrated_new_entries = 0
     for entry in migrated:
         if entry.get('key') not in existing_keys:
             existing.append(entry)
+            migrated_new_entries += 1
 
     # Save merged list (will encrypt with Fernet)
     save_connections(existing)
+    logger.info(
+        "Legacy SSH migration wrote %d new entries into %s",
+        migrated_new_entries,
+        path,
+    )
 
     # Remove legacy key from config.json
     # Pass {"ssh_connections": None} so save_user_config pops the key
     # from the on-disk config (passing the whole cfg without the key
     # would silently leave it behind).
     save_user_config({"ssh_connections": None})
-    logger.info("Legacy XOR SSH connections migrated successfully.")
+    logger.info("Legacy SSH migration removed config.json:ssh_connections")

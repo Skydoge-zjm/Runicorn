@@ -1,7 +1,9 @@
-"""
-Credential Security Module
+"""Legacy XOR credential helper.
 
-Provides encryption and decryption for sensitive credentials.
+This module exists only to read historical ``ENC:`` values during the
+``config.json`` -> ``connections.json`` migration path. New code should use
+``runicorn.security.encryption`` and should not import this module as a
+general-purpose credential utility.
 """
 from __future__ import annotations
 
@@ -21,10 +23,11 @@ logger = logging.getLogger(__name__)
 
 class CredentialManager:
     """
-    Manages encryption and decryption of sensitive credentials.
-    
-    Uses a simple obfuscation method by default. This is NOT cryptographically secure
-    but prevents casual viewing of passwords in config files.
+    Legacy helper for migration-only credential decryption.
+
+    It uses XOR-style obfuscation and is intentionally retained only for
+    reading historical ``ENC:`` payloads. It is not part of the recommended
+    credential storage path.
     """
     
     def __init__(self, key_file: Optional[Path] = None):

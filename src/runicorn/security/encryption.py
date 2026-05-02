@@ -102,11 +102,12 @@ def encrypt_password(password: str) -> str:
 
 
 def _try_decrypt_xor_legacy(value: str) -> Optional[str]:
-    """Try to decrypt an ENC:-prefixed value using the legacy XOR scheme.
+    """Try to decrypt an ``ENC:`` value via the legacy XOR migration helper.
 
-    This is used during migration from the old credentials.py XOR system
-    to the Fernet system.  The function returns *None* if decryption fails
-    (missing key file, corrupted data, etc.).
+    This path is only kept for historical ``config.json`` / ``connections.json``
+    compatibility reads while older saved SSH credentials are migrated onto the
+    Fernet-backed storage path. It returns ``None`` when the legacy payload
+    cannot be decrypted.
     """
     if not value or not value.startswith("ENC:"):
         return None
