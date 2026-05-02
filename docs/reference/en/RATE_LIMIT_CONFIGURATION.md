@@ -72,10 +72,10 @@ Each endpoint can have its own specific configuration with the same parameters a
 
 ### 2. Status Polling Endpoints (Very Permissive)
 ```json
-"/api/unified/status": {
+"/api/remote/status": {
   "max_requests": 20000,
   "window_seconds": 60,
-  "description": "Status polling - very permissive for UI updates"
+  "description": "Remote status polling - very permissive for UI updates"
 }
 ```
 
@@ -110,7 +110,7 @@ If you're experiencing rate limit issues with status polling:
 ```json
 {
   "endpoints": {
-    "/api/unified/status": {
+    "/api/remote/status": {
       "max_requests": 300,  // Increased from 200
       "window_seconds": 60
     }

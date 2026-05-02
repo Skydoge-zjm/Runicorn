@@ -99,9 +99,9 @@ HTTP REST API endpoints for Web UI and third-party integrations.
 | **Remote Viewer API** 🆕 | VSCode Remote-style remote access | [remote_api.md](./remote_api.md) | 12 endpoints |
 | **Logging API** 🆕 | Enhanced logging with console capture | [logging_api.md](./logging_api.md) | SDK |
 | **Paths API** 🆕 | Path-based hierarchy navigation | [paths_api.md](./paths_api.md) | 5+3 endpoints |
-| **SSH API** | SSH connection management (deprecated) | [ssh_api.md](./ssh_api.md) | 12 endpoints |
+| **SSH API** | Historical deprecation note | [ssh_api.md](./ssh_api.md) | Historical note |
 
-> ⚠️ **Deprecated**: Old SSH file sync API (`/api/unified/*`) has been replaced by Remote Viewer API. See [Migration Guide](../../guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md)
+> ⚠️ **Current remote surface**: use `Remote Viewer API` and the `/api/remote/*` routes. `/api/unified/*` and `/api/ssh/*` are retained only as historical migration context in [ssh_api.md](./ssh_api.md).
 
 **Quick Reference**: See [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) for common operations
 

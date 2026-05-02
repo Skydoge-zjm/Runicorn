@@ -501,7 +501,8 @@ runicorn config --set-user-root "E:\\RunicornData"
 
 ## Related APIs
 
-- **SSH API**: Use saved connections - [ssh_api.md](./ssh_api.md)
+- **Remote Viewer API**: Start remote sessions with saved connections - [remote_api.md](./remote_api.md)
+- **SSH API (historical)**: Legacy migration context - [ssh_api.md](./ssh_api.md)
 - **Runs API**: Configure storage for runs - [runs_api.md](./runs_api.md)
 
 ---

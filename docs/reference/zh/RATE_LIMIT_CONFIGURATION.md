@@ -76,10 +76,10 @@ Runicorn 中的速率限制系统现在可以通过 JSON 配置文件进行配�
 
 ### 2. 状态轮询端点（非常宽松）
 ```json
-"/api/unified/status": {
+"/api/remote/status": {
   "max_requests": 20000,
   "window_seconds": 60,
-  "description": "状态轮询 - UI 更新非常宽松"
+  "description": "Remote 状态轮询 - UI 更新非常宽松"
 }
 ```
 
@@ -121,15 +121,15 @@ runicorn rate-limit --action list
 ### 设置端点限制
 ```bash
 runicorn rate-limit --action set \
-  --endpoint "/api/ssh/connect" \
+  --endpoint "/api/remote/connect" \
   --max-requests 5 \
   --window 60 \
-  --description "SSH 连接尝试限制"
+  --description "Remote SSH 连接尝试限制"
 ```
 
 ### 移除端点限制
 ```bash
-runicorn rate-limit --action remove --endpoint "/api/ssh/connect"
+runicorn rate-limit --action remove --endpoint "/api/remote/connect"
 ```
 
 ### 修改全局设置
@@ -153,7 +153,7 @@ runicorn rate-limit --action settings --whitelist-localhost
 
 **SSH 连接**（防止暴力破解）:
 ```json
-"/api/ssh/connect": {
+"/api/remote/connect": {
   "max_requests": 5,
   "window_seconds": 60
 }

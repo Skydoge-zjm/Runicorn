@@ -263,7 +263,8 @@ runicorn config --set-user-root "E:\\RunicornData"
 
 ## 相关 API
 
-- **SSH API**: 使用已保存的连接 - [ssh_api.md](ssh_api.md)
+- **Remote Viewer API**: 使用已保存的连接发起远程会话 - [remote_api.md](./remote_api.md)
+- **SSH API（历史）**: 旧接口迁移背景 - [ssh_api.md](./ssh_api.md)
 - **Runs API**: 配置运行存储 - [runs_api.md](runs_api.md)
 
 ---

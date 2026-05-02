@@ -99,9 +99,9 @@ HTTP REST API 端点，用于 Web UI 和第三方集成。
 | **Remote Viewer API** 🆕 | VSCode Remote 风格的远程访问 | [remote_api.md](./remote_api.md) | 12个端点 |
 | **Logging API** 🆕 | 增强日志与控制台捕获 | [logging_api.md](./logging_api.md) | SDK |
 | **Paths API** 🆕 | 路径层级导航 | [paths_api.md](./paths_api.md) | 5+3个端点 |
-| **SSH API** | SSH 连接管理（已弃用）| [ssh_api.md](./ssh_api.md) | 12个端点 |
+| **SSH API** | 历史弃用说明页 | [ssh_api.md](./ssh_api.md) | 历史说明 |
 
-> ⚠️ **弃用**: 旧的 SSH 文件同步 API (`/api/unified/*`) 已被 Remote Viewer API 替代。查看 [迁移指南](../../guides/zh/MIGRATION_GUIDE_v0.4_to_v0.5.md)
+> ⚠️ **当前有效 remote 路线**: 使用 `Remote Viewer API` 下的 `/api/remote/*`。`/api/unified/*` 与 `/api/ssh/*` 仅作为历史迁移信息保留在 [ssh_api.md](./ssh_api.md)。
 
 **快速参考**: 查看 [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) 获取常用操作
 
