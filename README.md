@@ -54,6 +54,41 @@ run.finish()
 
 ---
 
+## 🎯 Who It's For
+
+**Good fit**
+
+- You train locally or on your own servers and want experiment tracking without SaaS lock-in
+- You need metrics, logs, assets, and code context in one place
+- You regularly jump between a local workstation and remote GPU machines
+
+**Not a good fit**
+
+- You need a hosted collaboration platform, team permissions, or cloud dashboards out of the box
+- You only want a minimal CSV logger and do not care about browsing runs later
+- Your workflow depends on a managed online ecosystem rather than local or self-controlled infrastructure
+
+---
+
+## ✅ Recommended Workflow
+
+1. Add `runicorn.init(...)` to your training entrypoint and log metrics during training
+2. Open `runicorn viewer` locally to inspect runs, compare metrics, and review logs/assets
+3. Save snapshots or references for config, datasets, and pretrained inputs when the run matters
+4. Use the `Remote` page when training happens on a GPU server, so you can inspect the remote run without copying files back first
+
+---
+
+## 🔍 Why Use It
+
+| Workflow | Common friction | Runicorn |
+|---|---|---|
+| Manual local folders + scripts | Metrics, logs, configs, and outputs drift apart | Keeps run history, summary, logs, and assets tied to one run |
+| Remote SSH + tail + ad-hoc plotting | Slow to inspect, hard to compare, easy to lose context | Remote Viewer gives a structured UI over SSH without a sync-first loop |
+| Hosted experiment tracker | Requires internet/service trust and external storage | Stays local, offline, and under your storage boundary |
+
+---
+
 ## 📦 Assets & Workspace Snapshots
 
 ```python
@@ -111,4 +146,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-**Version**: v0.7.0 | **Last Updated**: 2026-03-28
+**Version**: v0.7.0 | **Last Updated**: 2026-04-27

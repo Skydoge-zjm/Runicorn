@@ -59,9 +59,9 @@ runicorn = "runicorn.cli:main"
 [project.urls]
 Homepage = "https://pypi.org/project/runicorn/"
 Changelog = "https://pypi.org/project/runicorn/#history"
-# TODO: After creating GitHub repo, add:
-# Source = "https://github.com/<user>/runicorn"
-# Issues = "https://github.com/<user>/runicorn/issues"
+Documentation = "https://Skydoge-zjm.github.io/runicorn"
+Source = "https://github.com/Skydoge-zjm/Runicorn"
+Issues = "https://github.com/Skydoge-zjm/Runicorn/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

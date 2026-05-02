@@ -108,6 +108,41 @@ class TestNoOpRun:
         noop.summary({"key": "val"})
         noop.finish()
 
+    def test_noop_run_disabled_mode_state_helpers(self):
+        """Disabled mode exposes stable helper behavior for common SDK paths."""
+        noop = NoOpRun()
+
+        noop.append_event({"kind": "metric", "value": 1})
+        noop.update_assets_manifest(lambda current: {**current, "latest": {"name": "artifact"}})
+        assert noop.should_stop_output_watch() is False
+
+        noop.request_output_watch_stop()
+        assert noop.should_stop_output_watch() is True
+        noop.clear_output_watch_stop()
+        assert noop.should_stop_output_watch() is False
+
+        marker = object()
+        noop.set_output_watch_thread(marker)
+        assert noop.get_output_watch_thread() is marker
+
+        noop.record_storage_asset(asset_id="asset-1", role="preview")
+        noop.record_storage_asset(id="asset-2", role="dataset")
+        assert noop.list_storage_assets() == [
+            {"asset_id": "asset-1", "role": "preview"},
+            {"id": "asset-2", "role": "dataset"},
+        ]
+        noop.unlink_storage_asset("asset-1")
+        assert noop.list_storage_assets() == [{"id": "asset-2", "role": "dataset"}]
+
+        noop.write_summary_data({"loss": 0.1})
+        noop.write_status_data({"status": "running"})
+        assert noop.read_summary_data() == {"loss": 0.1}
+        assert noop.read_status_data() == {"status": "running"}
+
+        noop.close_storage_backend()
+        noop.finish()
+        assert noop.should_stop_output_watch() is True
+
     def test_noop_run_attributes(self):
         """NoOpRun exposes expected attributes."""
         noop = NoOpRun(path="test/path", alias="my-alias")

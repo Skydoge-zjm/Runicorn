@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import argparse
 import os
-import tarfile
-import zipfile
-import time
 from pathlib import Path
 from typing import Optional
 
 import uvicorn
 
+from .cli_commands.export_import import handle_export, handle_import
+from .cli_commands.manage_delete import handle_delete, handle_manage
+from .cli_commands.rate_limit import handle_rate_limit
 from .viewer import create_app
 from .config import get_config_file_path, load_user_config, set_user_root_dir
 from .sdk import _default_storage_dir
@@ -163,101 +163,17 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.cmd == "export":
-        root = _default_storage_dir(getattr(args, "storage", None))
-        root.mkdir(parents=True, exist_ok=True)
-
-        # Discover candidate run directories (both new and legacy layouts)
-        candidates: list[Path] = []
-        run_id_filter = set(args.run_ids) if args.run_ids else None
-
-        for entry in iter_all_runs(root):
-            # Filter by run ID
-            if run_id_filter and entry.dir.name not in run_id_filter:
-                continue
-            # Filter by project (first segment of path)
-            if args.project and entry.project != args.project:
-                continue
-            # Filter by name (last segment of path)
-            if args.name and entry.name != args.name:
-                continue
-            candidates.append(entry.dir)
-
-        if not candidates:
-            print("No runs matched the given filters. Nothing to export.")
-            return 0
-
-        out_path = args.out_path or f"runicorn_export_{int(time.time())}.tar.gz"
-        out = Path(out_path).expanduser().resolve()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        print(f"Exporting {len(candidates)} run(s) to {out} ...")
-        # Create tar.gz with paths relative to storage root, so import can merge directly
-        with tarfile.open(out, "w:gz") as tf:
-            for rd in candidates:
-                try:
-                    arcname = rd.relative_to(root)
-                except Exception:
-                    # If not under root (shouldn't happen), fallback to name
-                    arcname = Path(rd.name)
-                tf.add(str(rd), arcname=str(arcname))
-        print("Done.")
-        return 0
+        return handle_export(
+            args,
+            default_storage_dir=_default_storage_dir,
+            iter_all_runs_fn=iter_all_runs,
+        )
 
     if args.cmd == "import":
-        root = _default_storage_dir(getattr(args, "storage", None))
-        root.mkdir(parents=True, exist_ok=True)
-        archive = Path(getattr(args, "archive")).expanduser().resolve()
-        if not archive.exists():
-            print(f"Archive not found: {archive}")
-            return 1
-
-        def is_within(base: Path, target: Path) -> bool:
-            try:
-                target.resolve().relative_to(base.resolve())
-                return True
-            except Exception:
-                return False
-
-        imported = 0
-        try:
-            fn = archive.name.lower()
-            if fn.endswith(".zip"):
-                with zipfile.ZipFile(str(archive), "r") as zf:
-                    for name in zf.namelist():
-                        if not name or name.endswith("/"):
-                            try:
-                                (root / name).mkdir(parents=True, exist_ok=True)
-                            except Exception:
-                                pass
-                            continue
-                        target = root / name
-                        if not is_within(root, target):
-                            continue
-                        target.parent.mkdir(parents=True, exist_ok=True)
-                        with zf.open(name) as src, open(target, "wb") as out:
-                            out.write(src.read())
-                        imported += 1
-            else:
-                mode = "r:gz" if (fn.endswith(".tar.gz") or fn.endswith(".tgz")) else "r"
-                with tarfile.open(str(archive), mode) as tf:
-                    for member in tf.getmembers():
-                        if not member.name:
-                            continue
-                        try:
-                            if member.issym() or member.islnk():
-                                continue
-                        except Exception:
-                            pass
-                        target = root / member.name
-                        if not is_within(root, target):
-                            continue
-                        tf.extract(member, path=str(root))
-                        if not member.isdir():
-                            imported += 1
-            print(f"Imported {imported} files into {root}")
-            return 0
-        except Exception as e:
-            print(f"Import failed: {e}")
-            return 1
+        return handle_import(
+            args,
+            default_storage_dir=_default_storage_dir,
+        )
 
     if args.cmd == "export-data":
         root = _default_storage_dir(getattr(args, "storage", None))
@@ -300,322 +216,32 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 1
     
     if args.cmd == "manage":
-        root = _default_storage_dir(getattr(args, "storage", None))
-        action = args.action
-        
-        try:
-            from .extensions.experiment import ExperimentManager
-            manager = ExperimentManager(root)
-            
-            if action == "tag":
-                if not args.run_id:
-                    print("--run-id is required for tagging")
-                    return 1
-                tags = args.tags.split(",") if args.tags else []
-                success = manager.tag_experiment(args.run_id, tags)
-                print(f"Tagged {args.run_id}: {success}")
-            
-            elif action == "search":
-                tags = args.tags.split(",") if args.tags else None
-                results = manager.search_experiments(
-                    project=args.project,
-                    tags=tags,
-                    text=args.text
-                )
-                print(f"Found {len(results)} experiments:")
-                for exp in results:
-                    print(f"  - {exp.id}: {exp.project}/{exp.name} [{', '.join(exp.tags)}]")
-            
-            elif action == "delete":
-                if not args.run_id:
-                    print("--run-id is required for deletion")
-                    return 1
-                results = manager.delete_experiments([args.run_id])
-                print(f"Deleted: {results}")
-            
-            elif action == "cleanup":
-                to_delete = manager.cleanup_old_experiments(args.days, args.dry_run)
-                if args.dry_run:
-                    print(f"Would delete {len(to_delete)} old experiments:")
-                    for run_id in to_delete:
-                        print(f"  - {run_id}")
-                else:
-                    print(f"Deleted {len(to_delete)} old experiments")
-            
-            return 0
-        except Exception as e:
-            print(f"Management failed: {e}")
-            return 1
+        from .extensions.experiment import ExperimentManager
+
+        return handle_manage(
+            args,
+            default_storage_dir=_default_storage_dir,
+            experiment_manager_cls=ExperimentManager,
+        )
     
     if args.cmd == "rate-limit":
         from .config import get_rate_limit_config, save_rate_limit_config
-        import json
-        
-        action = args.action
-        
-        if action == "show":
-            config = get_rate_limit_config()
-            print(json.dumps(config, indent=2))
-            return 0
-        
-        elif action == "list":
-            config = get_rate_limit_config()
-            
-            # Show default
-            default = config.get("default", {})
-            print("Default:")
-            print(f"  {default.get('max_requests', 6000)}/{default.get('window_seconds', 60)}s")
-            
-            # Show endpoints
-            endpoints = config.get("endpoints", {})
-            if endpoints:
-                print("\nEndpoints:")
-                for endpoint, endpoint_config in sorted(endpoints.items()):
-                    desc = endpoint_config.get('description', '')
-                    desc_str = f" - {desc}" if desc else ""
-                    burst_str = f" (burst: {endpoint_config.get('burst_size')})" if endpoint_config.get('burst_size') else ""
-                    print(f"  {endpoint}: {endpoint_config.get('max_requests')}/{endpoint_config.get('window_seconds')}s{burst_str}{desc_str}")
-            else:
-                print("\nNo endpoint-specific limits configured.")
-            return 0
-        
-        elif action == "get":
-            if not args.endpoint:
-                print("Error: --endpoint is required for 'get' action")
-                return 1
-            
-            config = get_rate_limit_config()
-            endpoint_config = config.get("endpoints", {}).get(args.endpoint)
-            
-            if endpoint_config:
-                print(f"Endpoint: {args.endpoint}")
-                print(f"  Max Requests: {endpoint_config.get('max_requests')}")
-                print(f"  Window: {endpoint_config.get('window_seconds')}s")
-                print(f"  Burst Size: {endpoint_config.get('burst_size', 'None')}")
-                if 'description' in endpoint_config:
-                    print(f"  Description: {endpoint_config.get('description')}")
-            else:
-                # Show default
-                default_config = config.get("default", {})
-                print(f"Endpoint: {args.endpoint} (using default)")
-                print(f"  Max Requests: {default_config.get('max_requests', 6000)}")
-                print(f"  Window: {default_config.get('window_seconds', 60)}s")
-                print(f"  Burst Size: {default_config.get('burst_size', 'None')}")
-            return 0
-        
-        elif action == "set":
-            if not args.endpoint or args.max_requests is None:
-                print("Error: --endpoint and --max-requests are required for 'set' action")
-                return 1
-            
-            config = get_rate_limit_config()
-            
-            if "endpoints" not in config:
-                config["endpoints"] = {}
-            
-            endpoint_config = {
-                "max_requests": args.max_requests,
-                "window_seconds": args.window,
-                "burst_size": args.burst
-            }
-            
-            if args.description:
-                endpoint_config["description"] = args.description
-            
-            config["endpoints"][args.endpoint] = endpoint_config
-            save_rate_limit_config(config)
-            
-            print(f"✓ Updated rate limit for {args.endpoint}")
-            print(f"  Max Requests: {args.max_requests}/{args.window}s")
-            if args.burst:
-                print(f"  Burst Size: {args.burst}")
-            return 0
-        
-        elif action == "remove":
-            if not args.endpoint:
-                print("Error: --endpoint is required for 'remove' action")
-                return 1
-            
-            config = get_rate_limit_config()
-            
-            if "endpoints" in config and args.endpoint in config["endpoints"]:
-                del config["endpoints"][args.endpoint]
-                save_rate_limit_config(config)
-                print(f"✓ Removed rate limit for {args.endpoint}")
-            else:
-                print(f"⚠ No specific rate limit found for {args.endpoint}")
-            return 0
-        
-        elif action == "settings":
-            config = get_rate_limit_config()
-            
-            if "settings" not in config:
-                config["settings"] = {}
-            
-            # Update settings based on args
-            if args.enable:
-                config["settings"]["enable_rate_limiting"] = True
-            elif args.disable:
-                config["settings"]["enable_rate_limiting"] = False
-            
-            if args.log_violations:
-                config["settings"]["log_violations"] = True
-            elif args.no_log_violations:
-                config["settings"]["log_violations"] = False
-            
-            if args.whitelist_localhost:
-                config["settings"]["whitelist_localhost"] = True
-            elif args.no_whitelist_localhost:
-                config["settings"]["whitelist_localhost"] = False
-            
-            save_rate_limit_config(config)
-            
-            settings = config["settings"]
-            print("✓ Updated settings:")
-            print(f"  Rate Limiting: {'Enabled' if settings.get('enable_rate_limiting', True) else 'Disabled'}")
-            print(f"  Log Violations: {'Yes' if settings.get('log_violations', True) else 'No'}")
-            print(f"  Whitelist Localhost: {'Yes' if settings.get('whitelist_localhost', False) else 'No'}")
-            return 0
-        
-        elif action == "reset":
-            confirm = input("Reset to default configuration? [y/N] ")
-            if confirm.lower() != 'y':
-                print("Cancelled.")
-                return 0
-            
-            default_config = {
-                "_comment": "Rate limits are high for local-only API with no internet exposure",
-                "default": {
-                    "max_requests": 6000,
-                    "window_seconds": 60,
-                    "burst_size": None,
-                    "description": "Default rate limit - very permissive for local use"
-                },
-                "endpoints": {},
-                "settings": {
-                    "enable_rate_limiting": False,
-                    "log_violations": True,
-                    "whitelist_localhost": False,
-                    "custom_headers": {
-                        "rate_limit_header": "X-RateLimit-Limit",
-                        "rate_limit_remaining_header": "X-RateLimit-Remaining",
-                        "rate_limit_reset_header": "X-RateLimit-Reset"
-                    }
-                }
-            }
-            
-            save_rate_limit_config(default_config)
-            print("✓ Reset to default configuration")
-            return 0
-        
-        elif action == "validate":
-            try:
-                config = get_rate_limit_config()
-                
-                # Basic validation
-                assert isinstance(config, dict), "Configuration must be a dictionary"
-                
-                # Check default section
-                if "default" in config:
-                    default = config["default"]
-                    assert isinstance(default.get("max_requests"), int), "max_requests must be an integer"
-                    assert isinstance(default.get("window_seconds"), int), "window_seconds must be an integer"
-                    assert default.get("max_requests") > 0, "max_requests must be positive"
-                    assert default.get("window_seconds") > 0, "window_seconds must be positive"
-                
-                # Check endpoints
-                if "endpoints" in config:
-                    endpoints = config["endpoints"]
-                    assert isinstance(endpoints, dict), "endpoints must be a dictionary"
-                    
-                    for endpoint, endpoint_config in endpoints.items():
-                        assert endpoint.startswith("/"), f"Endpoint '{endpoint}' must start with /"
-                        assert isinstance(endpoint_config.get("max_requests"), int), f"{endpoint}: max_requests must be an integer"
-                        assert isinstance(endpoint_config.get("window_seconds"), int), f"{endpoint}: window_seconds must be an integer"
-                        assert endpoint_config.get("max_requests") > 0, f"{endpoint}: max_requests must be positive"
-                        assert endpoint_config.get("window_seconds") > 0, f"{endpoint}: window_seconds must be positive"
-                
-                print("✓ Configuration is valid")
-                return 0
-                
-            except AssertionError as e:
-                print(f"✗ Configuration error: {e}")
-                return 1
-            except Exception as e:
-                print(f"✗ Failed to validate configuration: {e}")
-                return 1
-            
-        return 0
+
+        return handle_rate_limit(
+            args,
+            get_rate_limit_config=get_rate_limit_config,
+            save_rate_limit_config=save_rate_limit_config,
+        )
 
     if args.cmd == "delete":
-        root = _default_storage_dir(getattr(args, "storage", None))
-        run_ids = getattr(args, "run_ids", None) or []
-        dry_run = getattr(args, "dry_run", False)
-        if not run_ids:
-            print("Error: --run-id is required")
-            print("Usage: runicorn delete --run-id <run_id> [--run-id <run_id2>] [--dry-run] [--force]")
-            return 1
-        
         from .assets.cleanup import delete_run_completely
-        
-        # Preview mode
-        if dry_run:
-            print("=" * 60)
-            print("DRY RUN - No files will be deleted")
-            print("=" * 60)
-        
-        total_blobs = 0
-        total_bytes = 0
-        
-        for run_id in run_ids:
-            print(f"\n{'[Preview] ' if dry_run else ''}Deleting run: {run_id}")
-            
-            result = delete_run_completely(
-                run_id=run_id,
-                storage_root=root,
-                dry_run=dry_run,
-            )
-            
-            if not result["success"]:
-                print(f"  ✗ Failed: {result['errors']}")
-                continue
-            
-            print(f"  Run directory: {'would be deleted' if dry_run else 'deleted'}")
-            
-            orphaned = result.get("orphaned_assets", [])
-            kept = result.get("kept_assets", [])
-            
-            if orphaned:
-                print(f"  Orphaned assets ({len(orphaned)}) - {'would be' if dry_run else ''} deleted:")
-                for a in orphaned:
-                    name = a.get('name') or (a.get('fingerprint') or '')[:16] or 'unknown'
-                    print(f"    - [{a.get('asset_type')}] {name}")
-            
-            if kept:
-                print(f"  Shared assets ({len(kept)}) - kept (referenced by other runs):")
-                for a in kept:
-                    name = a.get('name') or (a.get('fingerprint') or '')[:16] or 'unknown'
-                    print(f"    - [{a.get('asset_type')}] {name}")
-            
-            blobs = result.get("blobs_deleted", 0)
-            bytes_freed = result.get("bytes_freed", 0)
-            total_blobs += blobs
-            total_bytes += bytes_freed
-            
-            if blobs > 0:
-                print(f"  Blobs deleted: {blobs} ({_format_bytes(bytes_freed)})")
-        
-        print("\n" + "=" * 60)
-        if dry_run:
-            print(f"DRY RUN Summary: Would delete {len(run_ids)} run(s)")
-            print(f"  Blobs: {total_blobs}")
-            print(f"  Space: {_format_bytes(total_bytes)}")
-        else:
-            print(f"Deleted {len(run_ids)} run(s)")
-            print(f"  Blobs removed: {total_blobs}")
-            print(f"  Space freed: {_format_bytes(total_bytes)}")
-        
-        return 0
+
+        return handle_delete(
+            args,
+            default_storage_dir=_default_storage_dir,
+            delete_run_completely_fn=delete_run_completely,
+            format_bytes_fn=_format_bytes,
+        )
     
     parser.print_help()
     return 1
