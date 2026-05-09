@@ -84,3 +84,13 @@ function Pop-RunicornProxyEnv([hashtable]$Backup) {
     [System.Environment]::SetEnvironmentVariable($name, $Backup[$name], "Process")
   }
 }
+
+function Show-RunicornBuildConfig([string]$Title, [hashtable]$Config) {
+  Write-Host ("==> {0}" -f $Title) -ForegroundColor Cyan
+  $json = $Config | ConvertTo-Json -Depth 10
+  Write-Host $json -ForegroundColor DarkGray
+}
+
+function Write-RunicornDryRun([string]$Message) {
+  Write-Host ("[DRY-RUN] {0}" -f $Message) -ForegroundColor Yellow
+}

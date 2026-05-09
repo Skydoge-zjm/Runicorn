@@ -97,6 +97,8 @@ The repository now treats desktop validation as a separate automation surface fr
   - personal overrides live in `desktop/tauri/build_config.local.json`
   - a sample local override lives in `desktop/tauri/build_config.local.example.json`
   - the local override file is intentionally git-ignored and can hold machine-specific values such as `pythonExe`, `httpProxy`, and `httpsProxy`
+  - sidecar version is no longer defaulted for non-local builds; if `useLocal` is false, pass `-RunicornVersion` explicitly
+  - all desktop build scripts also support `-DryRun` to print the merged effective configuration and planned commands without executing the build
 
 This is intentionally narrower than a full Windows release bundle. It is meant to catch script drift and Rust-side compile breakage without turning every PR into a packaging job.
 

@@ -4,7 +4,7 @@ param(
   [ValidateSet("nsis","msi")]
   [string]$Bundles = "",
   [switch]$SkipFrontend,
-  [switch]$Verbose
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,7 +14,7 @@ function Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 function Ok($m)   { Write-Host "OK: $m" -ForegroundColor Green }
 function Warn($m) { Write-Warning $m }
 function RunCmd([string]$cmd, [string]$cwd) {
-  if ($Verbose) { Write-Host "[RUN] $cmd" -ForegroundColor DarkGray }
+  if ($PSBoundParameters.ContainsKey('Verbose')) { Write-Host "[RUN] $cmd" -ForegroundColor DarkGray }
   if ($cwd) { Push-Location $cwd }
   try {
     & powershell -NoLogo -NoProfile -Command $cmd
@@ -30,6 +30,7 @@ function RunCmd([string]$cmd, [string]$cwd) {
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $ScriptDir "build_config.ps1")
 $buildConfig = Get-RunicornBuildConfig $ScriptDir
+Show-RunicornBuildConfig "Effective desktop build config" $buildConfig
 $proxyBackup = Push-RunicornProxyEnv $buildConfig["common"]
 $EffectivePythonExe = if ($PythonExe) { $PythonExe } else { [string]$buildConfig["common"]["pythonExe"] }
 $EffectiveBundles = if ($Bundles) { $Bundles } else { [string]$buildConfig["release"]["bundles"] }
@@ -44,6 +45,21 @@ Step "Repo: $RepoRoot"
 Step "src-tauri: $SrcTauriDir"
 Step "sidecar: $SidecarDir"
 Step "frontend: $FrontendDir"
+
+if ($DryRun) {
+  Write-RunicornDryRun ("PythonExe = {0}" -f $EffectivePythonExe)
+  Write-RunicornDryRun ("Bundles = {0}" -f $EffectiveBundles)
+  Write-RunicornDryRun ("SkipFrontendBuild = {0}" -f $SkipFrontendBuild)
+  Write-RunicornDryRun "Would terminate leftover desktop/sidecar processes"
+  if (-not $SkipFrontendBuild) {
+    Write-RunicornDryRun "Would run npm run build in web/frontend"
+  } else {
+    Write-RunicornDryRun "Would skip frontend build"
+  }
+  Write-RunicornDryRun ("Would invoke desktop/tauri/sidecar/build_sidecar.ps1 -PythonExe `"{0}`"" -f $EffectivePythonExe)
+  Write-RunicornDryRun ("Would run cargo tauri build --bundles {0} in desktop/tauri/src-tauri" -f $EffectiveBundles)
+  return
+}
 
 # Kill leftover processes
 Step "Terminate leftover processes"

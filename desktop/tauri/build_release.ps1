@@ -4,7 +4,8 @@ param(
   # Bundles: nsis | msi
   [string]$Bundles = "",
   # Skip frontend build if dist already exists
-  [switch]$SkipFrontend
+  [switch]$SkipFrontend,
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +31,7 @@ function Run($cmd, $cwd)  {
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path         # .../desktop/tauri
 . (Join-Path $ScriptDir "build_config.ps1")
 $buildConfig = Get-RunicornBuildConfig $ScriptDir
+Show-RunicornBuildConfig "Effective desktop build config" $buildConfig
 $proxyBackup = Push-RunicornProxyEnv $buildConfig["common"]
 $EffectivePythonExe = if ($PythonExe) { $PythonExe } else { [string]$buildConfig["common"]["pythonExe"] }
 $EffectiveBundles = if ($Bundles) { $Bundles } else { [string]$buildConfig["release"]["bundles"] }
@@ -44,6 +46,22 @@ Write-Step "Repo: $RepoRoot"
 Write-Step "src-tauri: $SrcTauriDir"
 Write-Step "sidecar: $SidecarDir"
 Write-Step "frontend: $FrontendDir"
+
+if ($DryRun) {
+  Write-RunicornDryRun ("PythonExe = {0}" -f $EffectivePythonExe)
+  Write-RunicornDryRun ("Bundles = {0}" -f $EffectiveBundles)
+  Write-RunicornDryRun ("SkipFrontendBuild = {0}" -f $SkipFrontendBuild)
+  Write-RunicornDryRun "Would terminate leftover desktop/sidecar processes"
+  if (-not $SkipFrontendBuild) {
+    Write-RunicornDryRun "Would run npm run build in web/frontend"
+  } else {
+    Write-RunicornDryRun "Would skip frontend build"
+  }
+  Write-RunicornDryRun "Would sync web/frontend/dist into src/runicorn/webui"
+  Write-RunicornDryRun ("Would run desktop/tauri/sidecar/build_sidecar.ps1 -PythonExe `"{0}`"" -f $EffectivePythonExe)
+  Write-RunicornDryRun ("Would run cargo tauri build --bundles {0} in desktop/tauri/src-tauri" -f $EffectiveBundles)
+  return
+}
 
 
 Write-Step "Terminate leftover processes"

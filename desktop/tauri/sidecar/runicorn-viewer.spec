@@ -19,7 +19,6 @@ datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('python_multipart')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
-
 a = Analysis(
     ['E:\\pycharm_project\\Runicorn\\desktop\\tauri\\sidecar\\run_viewer_app.py'],
     pathex=[],

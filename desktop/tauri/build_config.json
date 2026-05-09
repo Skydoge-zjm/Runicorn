@@ -7,7 +7,6 @@
   },
   "sidecar": {
     "useLocal": true,
-    "runicornVersion": "0.2.0",
     "pyInstaller": {
       "name": "runicorn-viewer",
       "collectAll": [
