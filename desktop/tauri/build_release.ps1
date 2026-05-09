@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
-  [string]$PythonExe = "python",
+  [string]$PythonExe = "",
   # Bundles: nsis | msi
-  [string]$Bundles = "nsis",
+  [string]$Bundles = "",
   # Skip frontend build if dist already exists
   [switch]$SkipFrontend
 )
@@ -28,6 +28,13 @@ function Run($cmd, $cwd)  {
 
 # Resolve paths
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path         # .../desktop/tauri
+. (Join-Path $ScriptDir "build_config.ps1")
+$buildConfig = Get-RunicornBuildConfig $ScriptDir
+$proxyBackup = Push-RunicornProxyEnv $buildConfig["common"]
+$EffectivePythonExe = if ($PythonExe) { $PythonExe } else { [string]$buildConfig["common"]["pythonExe"] }
+$EffectiveBundles = if ($Bundles) { $Bundles } else { [string]$buildConfig["release"]["bundles"] }
+$SkipFrontendBuild = $SkipFrontend.IsPresent -or [bool]$buildConfig["release"]["skipFrontend"]
+try {
 $RepoRoot    = Resolve-Path (Join-Path $ScriptDir "../..")             # repo root
 $SrcTauriDir = Resolve-Path (Join-Path $ScriptDir "src-tauri")         # .../desktop/tauri/src-tauri
 $SidecarDir  = Resolve-Path (Join-Path $ScriptDir "sidecar")           # .../desktop/tauri/sidecar
@@ -46,12 +53,12 @@ try { Run "taskkill /F /IM runicorn-viewer*.exe" $null } catch {}
 try { Run "taskkill /F /IM runicorn-desktop*.exe" $null } catch {}
 
 
-if (-not $SkipFrontend) {
+if (-not $SkipFrontendBuild) {
   Write-Step "Frontend build (npm run build)"
   
   Run "npm run build" $FrontendDir
 }
-if ($SkipFrontend) {
+if ($SkipFrontendBuild) {
   Write-Step "Skip frontend build (user requested)"
 }
 $FrontendDist = Join-Path $FrontendDir "dist"
@@ -73,7 +80,7 @@ Write-Ok "Webui synced: $PkgWebui"
 Write-Step "Build sidecar (PyInstaller onefile)"
 $SidecarScript = Join-Path $SidecarDir "build_sidecar.ps1"
 if (-not (Test-Path $SidecarScript)) { throw "Sidecar script not found: $SidecarScript" }
-Run "`"$SidecarScript`" -PythonExe `"$PythonExe`" -UseLocal" $RepoRoot
+Run "`"$SidecarScript`" -PythonExe `"$EffectivePythonExe`"" $RepoRoot
 
 $HostTriple = (& rustc -Vv | Select-String "host:").Line.Split()[1]
 $SidecarExe = Join-Path $SidecarDir "dist/runicorn-viewer-$HostTriple.exe"
@@ -114,16 +121,19 @@ Write-Ok "Icon: $IconIco"
 $env:RUNICORN_FRONTEND_DIST = (Resolve-Path $FrontendDist)
 
 Write-Step "Cargo tauri build ($Bundles)"
-if ($Bundles -notin @('nsis','msi')) { throw "Invalid Bundles: $Bundles (use nsis or msi)" }
-Run "cargo tauri build --bundles $Bundles" $SrcTauriDir
+if ($EffectiveBundles -notin @('nsis','msi')) { throw "Invalid Bundles: $EffectiveBundles (use nsis or msi)" }
+Run "cargo tauri build --bundles $EffectiveBundles" $SrcTauriDir
 
 $BundleDir = Join-Path $SrcTauriDir "target/release/bundle"
-if ($Bundles -eq 'nsis') {
+if ($EffectiveBundles -eq 'nsis') {
   $Installer = Get-ChildItem -Path (Join-Path $BundleDir 'nsis') -Filter '*_x64-setup.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if ($Installer) { Write-Ok "Installer: $($Installer.FullName)" } else { Write-Warn "NSIS installer not found under $BundleDir\nsis" }
-} elseif ($Bundles -eq 'msi') {
+} elseif ($EffectiveBundles -eq 'msi') {
   $Msi = Get-ChildItem -Path (Join-Path $BundleDir 'msi') -Filter '*.msi' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if ($Msi) { Write-Ok "Installer: $($Msi.FullName)" } else { Write-Warn "MSI not found under $BundleDir\msi" }
 }
 
 Write-Host "Done." -ForegroundColor Green
+} finally {
+  Pop-RunicornProxyEnv $proxyBackup
+}

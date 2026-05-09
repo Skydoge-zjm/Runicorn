@@ -1,0 +1,65 @@
+{
+  "common": {
+    "pythonExe": "python",
+    "httpProxy": null,
+    "httpsProxy": null,
+    "noProxy": "127.0.0.1,localhost"
+  },
+  "sidecar": {
+    "useLocal": true,
+    "runicornVersion": "0.2.0",
+    "pyInstaller": {
+      "name": "runicorn-viewer",
+      "collectAll": [
+        "runicorn",
+        "uvicorn",
+        "paramiko",
+        "cryptography",
+        "multipart",
+        "python_multipart"
+      ],
+      "collectSubmodules": [
+        "multipart"
+      ],
+      "hiddenImports": [
+        "ssl",
+        "_ssl",
+        "_hashlib",
+        "_bz2",
+        "_lzma",
+        "multipart",
+        "python_multipart",
+        "python_multipart.multipart"
+      ],
+      "dllPatterns": [
+        "libmpdec*.dll",
+        "mpdecimal*.dll",
+        "libexpat*.dll",
+        "libssl*.dll",
+        "libcrypto*.dll",
+        "liblzma*.dll",
+        "libbz2*.dll",
+        "zlib*.dll",
+        "ffi*.dll",
+        "sqlite*.dll",
+        "vcruntime*.dll"
+      ],
+      "dllSearchSubdirs": [
+        "DLLs",
+        "Library/bin"
+      ]
+    },
+    "runtimeProbe": {
+      "host": "127.0.0.1",
+      "healthPath": "/api/health",
+      "statusPattern": "\"status\"\\s*:\\s*\"ok\"",
+      "attempts": 50,
+      "intervalMs": 500,
+      "timeoutSec": 2
+    }
+  },
+  "release": {
+    "bundles": "nsis",
+    "skipFrontend": false
+  }
+}
