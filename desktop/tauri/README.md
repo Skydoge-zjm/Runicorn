@@ -1,109 +1,216 @@
+[English](README.md) | [简体中文](README_zh.md)
+
 # Runicorn Desktop (Tauri)
 
-This is a lightweight desktop wrapper around the Runicorn viewer using Tauri (system WebView). It spawns the backend (uvicorn + FastAPI) and opens a native window to the UI.
+This directory contains the desktop wrapper for the Runicorn viewer. It is a developer-facing build and maintenance note for the Windows Tauri packaging path, not end-user usage documentation.
+
+The desktop app consists of two build surfaces:
+
+- the frontend bundle from `web/frontend`
+- the packaged Python sidecar built under `desktop/tauri/sidecar`
+
+The Rust/Tauri app loads the built frontend assets and launches the packaged sidecar executable.
 
 ## Prerequisites (Windows)
 
-Install once, reuse forever:
+Install once:
 
-1) Rust toolchain (rustup)
+1. Rust toolchain (`rustup`)
 
 ```powershell
 winget install --id Rustlang.Rustup -e
 ```
 
-2) MSVC build tools (C++ workload)
+2. MSVC build tools with Windows SDK
 
 ```powershell
 winget install --id Microsoft.VisualStudio.2022.BuildTools -e
-# In the installer, select "Desktop development with C++" (MSVC & Windows 10/11 SDK)
 ```
 
-3) WebView2 Runtime (if not already installed)
+Select `Desktop development with C++` in the installer.
+
+3. WebView2 Runtime
 
 ```powershell
 winget install --id Microsoft.EdgeWebView2Runtime -e
 ```
 
-4) Node.js LTS (for building the frontend)
+4. Node.js LTS
 
 ```powershell
 winget install OpenJS.NodeJS.LTS -e
 ```
 
-5) Tauri CLI (choose one)
+5. Tauri CLI
 
 ```powershell
-# via cargo
 cargo install tauri-cli
-# or via npm	npm i -g @tauri-apps/cli
 ```
 
-## Develop
+6. A Python interpreter suitable for the sidecar build
 
-From the repo root:
+The current local build scripts are designed to read this from configuration. On this repository, Python build/test commands are expected to use the `runicorn_dev` Conda environment.
+
+## Build Configuration
+
+Desktop build parameters are configuration-driven.
+
+- shared defaults: `desktop/tauri/build_config.json`
+- personal machine override: `desktop/tauri/build_config.local.json`
+- sample local override: `desktop/tauri/build_config.local.example.json`
+
+`build_config.local.json` is intentionally git-ignored. Use it for machine-specific values such as:
+
+- `common.pythonExe`
+- `common.httpProxy`
+- `common.httpsProxy`
+- `common.noProxy`
+
+Important behavior:
+
+- local overrides replace shared defaults recursively
+- desktop build scripts print the merged effective config at startup
+- all desktop build scripts support `-DryRun`
+- non-local sidecar builds do not have a default package version; if `sidecar.useLocal` is `false`, pass `-RunicornVersion` explicitly
+
+Key configuration sections:
+
+- `common`
+  - shared process-level settings such as Python path and proxy values
+- `sidecar`
+  - sidecar build mode and runtime probe settings
+- `sidecar.pyInstaller`
+  - PyInstaller collection and DLL inclusion settings
+- `release`
+  - desktop bundle defaults such as `bundles` and `skipFrontend`
+
+## Script Roles
+
+### `build_release_clean.ps1`
+
+Primary desktop build entry point.
+
+Use this when frontend or sidecar-related code may have changed and you want a full rebuild from a clean-enough state.
+
+It will:
+
+- stop leftover desktop/sidecar processes
+- rebuild the frontend bundle
+- rebuild the sidecar executable
+- run `cargo tauri build`
+
+Typical usage:
 
 ```powershell
-# Build frontend once (Tauri is configured to load the built dist)
-cd web/frontend
-npm install
-npm run build
-
-# Run the desktop app (spawns backend automatically)
-cd ../../desktop/tauri/src-tauri
-cargo tauri dev
+./desktop/tauri/build_release_clean.ps1
 ```
 
-Notes:
-- The app will auto-pick a free port (prefers 8000) and open the UI.
-- If Python is not on PATH or you prefer a specific interpreter, set env:
+Dry-run:
 
 ```powershell
-# Example: point to your Anaconda/venv Python
-$env:RUNICORN_DESKTOP_PY = "E:\\Anaconda\\envs\\pytorch\\python.exe"
+./desktop/tauri/build_release_clean.ps1 -DryRun
 ```
 
-The launcher tries to locate the repo's `src/` and appends it to `PYTHONPATH` automatically in dev, so the `runicorn` module resolves even without installation.
+### `build_release.ps1`
 
-## Build (Release)
+Regular desktop release build entry point.
+
+This is similar to `build_release_clean.ps1`, but is better suited when you already know the frontend build state and want a less aggressive path. If you are unsure, use `build_release_clean.ps1`.
+
+### `sidecar/build_sidecar.ps1`
+
+Sidecar-only build entry point.
+
+It will:
+
+- prepare or refresh the sidecar virtual environment
+- install sidecar dependencies
+- build `runicorn-viewer.exe` with PyInstaller
+- inject required runtime DLLs for the selected Python base environment
+- create the target-triple suffixed executable required by Tauri
+- run a runtime health probe against `/api/health`
+
+Use this when you only changed Python viewer/backend packaging behavior or when debugging sidecar failures.
+
+Typical usage:
 
 ```powershell
-# Ensure frontend is built
-npm --prefix ../../../web/frontend run build
-
-# Build desktop bundle (.msi/.exe depending on config)
-cd ../../desktop/tauri/src-tauri
-cargo tauri build
+./desktop/tauri/sidecar/build_sidecar.ps1
 ```
 
-The current build starts the backend by invoking `python -m uvicorn runicorn.viewer:create_app --factory`. For end-user distribution without Python, package the backend as a sidecar (see below).
+Non-local package build:
+
+```powershell
+./desktop/tauri/sidecar/build_sidecar.ps1 -RunicornVersion 0.7.0
+```
+
+### `build_config.ps1`
+
+Helper layer shared by the build scripts.
+
+It is not a standalone entry point. It loads and merges configuration, applies proxy-related environment variables in process scope, and provides the config-printing / dry-run helpers used by the other scripts.
+
+## Recommended Workflows
+
+### Frontend and desktop both changed
+
+Use:
+
+```powershell
+./desktop/tauri/build_release_clean.ps1
+```
+
+### Only the sidecar path changed
+
+Use:
+
+```powershell
+./desktop/tauri/sidecar/build_sidecar.ps1
+```
+
+### Only inspect resolved parameters
+
+Use:
+
+```powershell
+./desktop/tauri/build_release_clean.ps1 -DryRun
+```
+
+## Current Build Output
+
+The local Windows packaging flow currently targets NSIS by default through the desktop build configuration.
+
+The expected successful release output is:
+
+- `desktop/tauri/src-tauri/target/release/runicorn-desktop.exe`
+- `desktop/tauri/src-tauri/target/release/bundle/nsis/Runicorn Desktop_<version>_x64-setup.exe`
+
+The sidecar output is expected at:
+
+- `desktop/tauri/sidecar/dist/runicorn-viewer.exe`
+- `desktop/tauri/sidecar/dist/runicorn-viewer-<target-triple>.exe`
 
 ## CI Validation Boundary
 
-The repository now treats desktop validation as a separate automation surface from the main CI:
+The repository treats desktop validation as a separate automation surface from the main CI.
 
-- Main CI keeps running Python/frontend checks plus frontend mocked browser smoke.
-- The Python CI job still relies on the default `pytest -q` run, which includes the current integration-marked suite. Key delivery-surface cases include:
-  - `tests/integration/test_viewer_remote_api.py` for the active `/api/remote/*` viewer API path
-  - `tests/integration/test_config_migration.py` for legacy `config.json` -> `connections.json` credential migration
-- Desktop validation lives in `.github/workflows/desktop-build.yml`.
-- The desktop workflow currently performs a lightweight validation pass:
-  - build frontend assets
-  - run `desktop/tauri/sidecar/build_sidecar.ps1`
-  - run `cargo check` in `desktop/tauri/src-tauri`
-- The sidecar build script now also performs a basic runtime probe by starting the produced executable and requiring a healthy `/api/health` response before the workflow can pass.
-- Desktop build parameters are now configuration-driven:
-  - shared defaults live in `desktop/tauri/build_config.json`
-  - personal overrides live in `desktop/tauri/build_config.local.json`
-  - a sample local override lives in `desktop/tauri/build_config.local.example.json`
-  - the local override file is intentionally git-ignored and can hold machine-specific values such as `pythonExe`, `httpProxy`, and `httpsProxy`
-  - sidecar version is no longer defaulted for non-local builds; if `useLocal` is false, pass `-RunicornVersion` explicitly
-  - all desktop build scripts also support `-DryRun` to print the merged effective configuration and planned commands without executing the build
+- main CI continues to run Python/frontend checks plus frontend mocked browser smoke
+- the current Python CI path still relies on the default `pytest -q` run, which includes the current integration-marked suite
+- desktop validation lives in `.github/workflows/desktop-build.yml`
 
-This is intentionally narrower than a full Windows release bundle. It is meant to catch script drift and Rust-side compile breakage without turning every PR into a packaging job.
+The desktop workflow currently performs a narrower validation pass than a full installer build:
 
-## Roadmap: Sidecar Backend (no Python requirement)
+- build frontend assets
+- run `desktop/tauri/sidecar/build_sidecar.ps1`
+- run `cargo check` in `desktop/tauri/src-tauri`
 
-- Use PyInstaller to create a `runicorn-viewer.exe` from a small launcher that imports `runicorn.viewer:create_app`.
-- Add it as a Tauri sidecar in `tauri.conf.json` and spawn it from Rust instead of `python`.
-- This removes the Python dependency for end users, while keeping the same local/readonly design.
+Important limitation:
+
+- CI currently validates the sidecar packaging/runtime probe and Rust compile surface
+- CI does not currently build the full Windows installer on every run
+
+## Development Notes
+
+- The desktop scripts are the supported packaging entry points; do not treat raw `cargo tauri build` as the canonical top-level workflow when sidecar/frontend rebuilds are required.
+- The checked-in `runicorn-viewer.spec` is intentionally generic. The sidecar build script generates a temporary spec during packaging so machine-specific DLL paths are not persisted in the repository.
+- If a local machine needs proxies or a non-default Python interpreter, put that in `build_config.local.json` instead of editing tracked scripts.
