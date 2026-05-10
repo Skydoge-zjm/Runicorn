@@ -1,0 +1,313 @@
+/* ==========================================================
+   Runicorn — Custom Styles for Material for MkDocs (Free)
+   Monochromatic indigo · No gradients · Professional
+   ========================================================== */
+
+/* ── Colour tokens ───────────────────────────────────────── */
+:root {
+  --md-primary-fg-color:        #4f46e5;
+  --md-primary-fg-color--light: #6366f1;
+  --md-primary-fg-color--dark:  #4338ca;
+  --md-accent-fg-color:         #4f46e5;
+}
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color:        #818cf8;
+  --md-primary-fg-color--light: #a5b4fc;
+  --md-primary-fg-color--dark:  #6366f1;
+  --md-accent-fg-color:         #818cf8;
+}
+
+/* ── Nav tab bar ─────────────────────────────────────────── */
+.md-tabs { background: transparent; }
+
+/* ── Hero ─────────────────────────────────────────────────── */
+.rn-hero {
+  text-align: center;
+  padding: 3.5rem 1.5rem 1rem;
+}
+.rn-hero img {
+  max-width: 88px;
+  margin-bottom: .75rem;
+}
+.rn-hero h1 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: -.025em;
+  margin: 0;
+}
+.rn-hero .rn-tagline {
+  font-size: 1.1rem;
+  color: var(--md-default-fg-color--light);
+  margin: .6rem auto 1.2rem;
+  max-width: 520px;
+  line-height: 1.6;
+}
+.rn-hero .rn-install-inline {
+  margin: 1rem 0 .6rem;
+}
+.rn-hero .rn-install-inline code {
+  font-size: .95rem;
+  padding: .4rem 1.1rem;
+  border-radius: .35rem;
+  background: var(--md-code-bg-color);
+}
+.rn-hero .rn-install-meta {
+  font-size: .8rem;
+  color: var(--md-default-fg-color--light);
+  margin: .25rem 0 0;
+}
+.rn-hero .rn-badges {
+  margin-top: .8rem;
+}
+.rn-hero .rn-badges img {
+  vertical-align: middle;
+  margin: 0 4px;
+}
+
+/* ── Screenshot ──────────────────────────────────────────── */
+.rn-screenshot {
+  text-align: center;
+  margin: 2rem auto 0;
+  max-width: 960px;
+}
+.rn-screenshot img {
+  width: 100%;
+  border-radius: .5rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,.08);
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+[data-md-color-scheme="slate"] .rn-screenshot img {
+  box-shadow: 0 4px 24px rgba(0,0,0,.28);
+}
+
+/* ── Feature pills (left-accent, no emoji) ───────────────── */
+.rn-features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .7rem;
+  margin: 1.25rem 0;
+}
+@media (max-width: 960px)  { .rn-features { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px)  { .rn-features { grid-template-columns: 1fr; } }
+.rn-feat {
+  padding: .7rem 1rem;
+  border-left: 3px solid var(--md-primary-fg-color);
+  background: var(--md-code-bg-color);
+  border-radius: 0 .35rem .35rem 0;
+}
+.rn-feat strong {
+  display: block;
+  font-size: .88rem;
+  margin-bottom: .2rem;
+}
+.rn-feat span {
+  font-size: .82rem;
+  color: var(--md-default-fg-color--light);
+  line-height: 1.5;
+}
+
+/* ── Grid cards ──────────────────────────────────────────── */
+.rn-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin: 1.25rem 0;
+}
+@media (max-width: 600px) { .rn-grid { grid-template-columns: 1fr; } }
+.rn-card {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: .45rem;
+  padding: 1rem 1.15rem;
+  transition: border-color .2s;
+  background: var(--md-default-bg-color);
+}
+.rn-card:hover {
+  border-color: var(--md-primary-fg-color);
+}
+.rn-card h3 {
+  font-size: .95rem;
+  margin: 0 0 .3rem;
+}
+.rn-card p {
+  font-size: .85rem;
+  color: var(--md-default-fg-color--light);
+  margin: 0;
+  line-height: 1.55;
+}
+.rn-card a.rn-card-link {
+  display: inline-block;
+  margin-top: .6rem;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--md-primary-fg-color);
+  text-decoration: none;
+}
+.rn-card a.rn-card-link:hover { text-decoration: underline; }
+
+/* ── Code blocks ─────────────────────────────────────────── */
+.md-typeset code {
+  border-radius: .25rem;
+  font-size: .82em;
+}
+.md-typeset pre {
+  border-radius: .45rem;
+}
+
+/* ── Footer CTA ──────────────────────────────────────────── */
+.rn-cta {
+  text-align: center;
+  padding: 2rem 0 1rem;
+}
+.rn-cta a {
+  display: inline-block;
+  padding: .55rem 1.5rem;
+  border-radius: .35rem;
+  background: var(--md-primary-fg-color);
+  color: #fff !important;
+  font-weight: 600;
+  font-size: .9rem;
+  text-decoration: none;
+  transition: background .15s;
+}
+.rn-cta a:hover {
+  background: var(--md-primary-fg-color--dark);
+}
+.rn-cta-secondary {
+  display: inline-block;
+  margin-left: .6rem;
+  padding: .55rem 1.5rem;
+  border-radius: .35rem;
+  border: 2px solid var(--md-primary-fg-color);
+  color: var(--md-primary-fg-color) !important;
+  font-weight: 600;
+  font-size: .9rem;
+  text-decoration: none;
+  transition: background .15s, color .15s;
+}
+.rn-cta-secondary:hover {
+  background: var(--md-primary-fg-color);
+  color: #fff !important;
+}
+
+/* ── Global refinements ──────────────────────────────────── */
+html { scroll-behavior: smooth; }
+
+.md-typeset hr {
+  border: none;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+  margin: 1.8rem 0;
+}
+
+.md-content a:not(.md-button):not(.rn-card-link):not(.rn-cta a):not(.headerlink):hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Tables ──────────────────────────────────────────────── */
+.md-typeset table:not([class]) {
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: .45rem;
+  overflow: hidden;
+}
+.md-typeset table:not([class]) thead {
+  background: var(--md-primary-fg-color);
+}
+.md-typeset table:not([class]) th {
+  color: #fff;
+  font-weight: 600;
+  font-size: .82rem;
+  padding: .55rem .75rem;
+  border-bottom: none;
+}
+.md-typeset table:not([class]) td {
+  font-size: .82rem;
+  padding: .5rem .75rem;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+}
+.md-typeset table:not([class]) tbody tr:nth-child(even) {
+  background: var(--md-code-bg-color);
+}
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) thead {
+  background: var(--md-primary-fg-color--dark);
+}
+
+/* ── Version badge pill ──────────────────────────────────── */
+.rn-badge {
+  display: inline-block;
+  font-size: .7rem;
+  font-weight: 600;
+  padding: .12rem .5rem;
+  border-radius: 999px;
+  background: var(--md-primary-fg-color);
+  color: #fff;
+  vertical-align: middle;
+  letter-spacing: .01em;
+}
+
+/* ── Figure / screenshot (inner pages) ───────────────────── */
+.md-typeset figure {
+  margin: 1.5rem auto;
+  text-align: center;
+}
+.md-typeset figcaption {
+  font-size: .8rem;
+  color: var(--md-default-fg-color--light);
+  margin-top: .5rem;
+}
+.md-typeset figure img {
+  border-radius: .45rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  max-width: 100%;
+}
+[data-md-color-scheme="slate"] .md-typeset figure img {
+  box-shadow: 0 2px 12px rgba(0,0,0,.22);
+}
+
+/* ── Admonition tint to match indigo ─────────────────────── */
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-color: var(--md-primary-fg-color);
+}
+.md-typeset .tip > .admonition-title,
+.md-typeset .tip > summary {
+  background-color: rgba(79,70,229,.08);
+}
+.md-typeset .tip > .admonition-title::before,
+.md-typeset .tip > summary::before {
+  color: var(--md-primary-fg-color);
+}
+
+/* ── Stats row (index hero) ──────────────────────────────── */
+.rn-stats {
+  text-align: center;
+  font-size: .78rem;
+  color: var(--md-default-fg-color--light);
+  margin: .8rem 0 0;
+  letter-spacing: .01em;
+}
+
+/* ── API signature block ─────────────────────────────────── */
+.rn-sig {
+  border-left: 3px solid var(--md-primary-fg-color);
+  border-radius: 0 .4rem .4rem 0;
+  margin: .8rem 0;
+}
+.rn-sig pre { margin: 0 !important; }
+
+/* ── Unified page-bottom nav ─────────────────────────────── */
+.rn-page-nav {
+  text-align: center;
+  padding: 1.5rem 0 .5rem;
+  border-top: 1px solid var(--md-default-fg-color--lightest);
+  margin-top: 2rem;
+}
+.rn-page-nav a {
+  font-weight: 600;
+  font-size: .9rem;
+  color: var(--md-primary-fg-color);
+  text-decoration: none;
+}
+.rn-page-nav a:hover { text-decoration: underline; }
