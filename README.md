@@ -130,13 +130,13 @@ runicorn viewer  # → Click "Remote" → SSH credentials → Done!
 
 ---
 
-## 🆕 v0.7.0 (Latest)
+## 🆕 v0.7.1 (Latest)
 
-- 🌐 **Remote Viewer Hardening** — Saved connections, health monitoring, reconnect states, and OpenSSH password support
-- 🎨 **Web UI Productization** — Cleaner navigation, better compare flow, ZIP import/export preview, and unified recycle bin
-- 📈 **Logs & Monitoring** — Virtualized logs, stronger dark-mode consistency, and backend-collected GPU telemetry history
-- 🔌 **Logging Compatibility** — Better support for ImageNet meters, TensorBoard, and tensorboardX
-- 🖥️ **Desktop Improvements** — Native remote-session windows in the current desktop workflow
+- 🛡️ **Reliability Hardening** — Tighter API/documentation alignment, clearer remote API boundaries, and stronger legacy-path cleanup
+- 🔐 **Security Tightening** — Safer handling around legacy XOR credential migration and saved-credential compatibility
+- ✅ **Test & CI Coverage** — Expanded smoke and baseline coverage, with more consistent frontend and desktop validation
+- 🖥️ **Desktop Build Hardening** — Reproducible build controls, layered build configuration, and stronger sidecar packaging workflow
+- 📚 **Release Cleanup** — Current-version docs and release metadata aligned to the shipped API surface
 
 ---
 
@@ -146,4 +146,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-**Version**: v0.7.0 | **Last Updated**: 2026-04-27
+**Version**: v0.7.1 | **Last Updated**: 2026-05-10

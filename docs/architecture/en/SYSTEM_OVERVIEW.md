@@ -5,7 +5,7 @@
 # Runicorn System Overview
 
 **Document Type**: Architecture
-**Version**: v0.7.0
+**Version**: v0.7.1
 **Last Updated**: 2026-03-28
 
 ---
@@ -623,7 +623,7 @@ user_root_dir/
 
 ## Architecture Evolution Achieved
 
-### v0.7.0 (Current) ✅
+### v0.7.1 (Current) ✅
 
 - **Remote Viewer hardening**: saved connections, health monitoring, reconnect states, and OpenSSH password support
 - **Web UI productization**: cleaner navigation, ZIP import/export preview, unified recycle bin, and improved compare flow

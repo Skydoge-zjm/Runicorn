@@ -43,7 +43,7 @@ test('remote page renders saved connections and quick start session', async ({ p
     }
 
     if (path === '/api/health') {
-      return route.fulfill({ json: { status: 'ok', version: '0.7.0' } })
+      return route.fulfill({ json: { status: 'ok', version: '0.7.1' } })
     }
     if (path === '/api/config') {
       return route.fulfill({

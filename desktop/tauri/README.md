@@ -141,7 +141,7 @@ Typical usage:
 Non-local package build:
 
 ```powershell
-./desktop/tauri/sidecar/build_sidecar.ps1 -RunicornVersion 0.7.0
+./desktop/tauri/sidecar/build_sidecar.ps1 -RunicornVersion 0.7.1
 ```
 
 ### `build_config.ps1`

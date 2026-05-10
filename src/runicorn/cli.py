@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 from typing import Optional
 
 import uvicorn
 
+from ._version import __version__
 from .cli_commands.export_import import handle_export, handle_import
 from .cli_commands.manage_delete import handle_delete, handle_manage
 from .cli_commands.rate_limit import handle_rate_limit
@@ -15,27 +15,12 @@ from .config import get_config_file_path, load_user_config, set_user_root_dir
 from .sdk import _default_storage_dir
 from .storage.file_utils import iter_all_runs, find_run_dir_by_id
 
-
-def _read_version() -> str:
-    candidates = [
-        Path(__file__).parent.parent.parent / "VERSION.txt",
-        Path(__file__).with_name("VERSION.txt"),
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            try:
-                return candidate.read_text(encoding="utf-8").strip()
-            except OSError:
-                continue
-    return "0.7.0"
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="runicorn", description="Runicorn CLI")
     parser.add_argument(
         "--version",
         action="version",
-        version=f"%(prog)s {_read_version()}",
+        version=f"%(prog)s {__version__}",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 

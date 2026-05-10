@@ -7,7 +7,7 @@
 **Module**: Python API Client
 **Package**: `runicorn.client`
 **Utility Module**: `runicorn.client.utils`
-**Version**: v0.7.0
+**Version**: v0.7.1
 **Last Updated**: 2026-03-28
 **Description**: Programmatic access to the Runicorn Viewer REST API from Python.
 

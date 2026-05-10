@@ -4,7 +4,7 @@
 
 # Path Hierarchy API
 
-**Version**: v0.7.0
+**Version**: v0.7.1
 **Router**: `projects.py` (exported as `projects_router`)
 **Prefix**: `/api`
 

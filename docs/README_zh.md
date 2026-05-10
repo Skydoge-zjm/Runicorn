@@ -4,7 +4,7 @@
 
 # Runicorn 文档
 
-**版本**: v0.7.0  
+**版本**: v0.7.1  
 **最后更新**: 2026-05-10
 
 ---
@@ -103,6 +103,7 @@ docs/
 
 | 文档 | 描述 |
 |------|------|
+| [RELEASE_NOTES_v0.7.1.md](releases/zh/RELEASE_NOTES_v0.7.1.md) | ⭐ v0.7.1 发布说明（稳定性、安全边界、桌面构建加固）|
 | [RELEASE_NOTES_v0.6.0.md](releases/zh/RELEASE_NOTES_v0.6.0.md) | ⭐ v0.6.0 发布说明（Assets、增强日志、路径层级、SSH 后端）|
 | [RELEASE_NOTES_v0.5.0.md](releases/zh/RELEASE_NOTES_v0.5.0.md) | v0.5.0 发布说明（Remote Viewer）|
 | [RELEASE_NOTES_v0.4.1.md](releases/zh/RELEASE_NOTES_v0.4.1.md) | v0.4.1 发布说明 |
@@ -127,7 +128,7 @@ docs/
 | **用户指南** | guides/ | 7 | 快速开始, Remote Viewer, Assets, 增强日志, 迁移指南 |
 | **技术参考** | reference/ | 4 | 配置, CLI, FAQ, 速率限制 |
 | **架构文档** | architecture/ | 10 | 系统设计, Remote Viewer, SSH 后端架构 |
-| **发布信息** | releases/ | 4 | 版本历史, 变更日志 |
+| **发布信息** | releases/ | 5 | 版本历史, 变更日志 |
 | **API 文档** | api/ | 15 | REST API 参考（含 Remote, Paths, Logging API）|
 | **用户指南网站** | user-guide/ | 7+ | MkDocs 网站源文件 |
 | **资源** | assets/ | 3+ | 图片和截图 |
@@ -214,5 +215,5 @@ docs/
 
 **最后更新**: 2026-05-10  
 **维护者**: Runicorn 文档团队  
-**v0.7.0 亮点**: Remote Viewer 强化、Web UI 产品化改进、日志兼容增强、GPU 遥测历史、桌面端远程会话窗口
+**v0.7.1 亮点**: 稳定性强化、Remote API 与文档对齐、安全边界收紧、CI/Smoke 补强、桌面构建加固
 

@@ -1,10 +1,10 @@
 # Runicorn Documentation System Overview
 
-- **Version**: v0.7.0
-- **Last Updated**: 2026-03-28
+- **Version**: v0.7.1
+- **Last Updated**: 2026-05-10
 - **Purpose**: Complete overview of all documentation in the Runicorn project
 
-**v0.7.0 Highlights**: Remote Viewer hardening, web UI productization, backend-collected GPU telemetry history, stronger logging compatibility, and desktop workflow improvements
+**v0.7.1 Highlights**: Reliability hardening, remote API/documentation alignment, tighter credential migration boundaries, stronger CI/smoke coverage, and more reproducible desktop builds
 
 ---
 

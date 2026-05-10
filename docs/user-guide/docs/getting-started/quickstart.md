@@ -1,6 +1,6 @@
 # Quick Start
 
-Get Runicorn running quickly with the current 0.7.0 workflow.
+Get Runicorn running quickly with the current 0.7.1 workflow.
 
 This page intentionally focuses on the shortest path from installation to your first visible run.
 

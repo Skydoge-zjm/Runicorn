@@ -13,7 +13,7 @@ test('viewer main flow loads runs and opens run detail', async ({ page }) => {
     }
 
     if (path === '/api/health') {
-      return route.fulfill({ json: { status: 'ok', version: '0.7.0' } })
+      return route.fulfill({ json: { status: 'ok', version: '0.7.1' } })
     }
     if (path === '/api/config') {
       return route.fulfill({

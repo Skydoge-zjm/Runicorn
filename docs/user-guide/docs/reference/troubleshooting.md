@@ -12,7 +12,7 @@ Check the installed package version first:
 runicorn --version
 ```
 
-If your environment is not actually on 0.7.0 yet, some pages and controls will differ.
+If your environment is not actually on 0.7.1 yet, some pages and controls will differ.
 
 ---
 
