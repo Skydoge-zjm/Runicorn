@@ -4,8 +4,8 @@
 
 # Runicorn 文档
 
-**版本**: v0.7.1  
-**最后更新**: 2026-05-10
+**版本**: v0.7.2  
+**最后更新**: 2026-05-11
 
 ---
 
@@ -103,7 +103,7 @@ docs/
 
 | 文档 | 描述 |
 |------|------|
-| [RELEASE_NOTES_v0.7.1.md](releases/zh/RELEASE_NOTES_v0.7.1.md) | ⭐ v0.7.1 发布说明（稳定性、安全边界、桌面构建加固）|
+| [RELEASE_NOTES_v0.7.2.md](releases/zh/RELEASE_NOTES_v0.7.2.md) | ⭐ v0.7.2 发布说明（0.7.1 发布后的补丁修复）|
 | [RELEASE_NOTES_v0.6.0.md](releases/zh/RELEASE_NOTES_v0.6.0.md) | ⭐ v0.6.0 发布说明（Assets、增强日志、路径层级、SSH 后端）|
 | [RELEASE_NOTES_v0.5.0.md](releases/zh/RELEASE_NOTES_v0.5.0.md) | v0.5.0 发布说明（Remote Viewer）|
 | [RELEASE_NOTES_v0.4.1.md](releases/zh/RELEASE_NOTES_v0.4.1.md) | v0.4.1 发布说明 |
@@ -213,7 +213,7 @@ docs/
 
 ---
 
-**最后更新**: 2026-05-10  
+**最后更新**: 2026-05-11  
 **维护者**: Runicorn 文档团队  
-**v0.7.1 亮点**: 稳定性强化、Remote API 与文档对齐、安全边界收紧、CI/Smoke 补强、桌面构建加固
+**当前版本说明**: v0.7.2 是对 v0.7.1 的补丁修复版本。用户可见的主要功能变化仍以 v0.7.1 为主，v0.7.2 主要修复发布后的 CI、依赖声明和跨平台测试问题。
 

@@ -6,7 +6,7 @@
 
 **Document Type**: Architecture
 **Purpose**: React application design and patterns
-**Version**: v0.7.1
+**Version**: v0.7.2
 **Last Updated**: 2026-03-28
 
 ---

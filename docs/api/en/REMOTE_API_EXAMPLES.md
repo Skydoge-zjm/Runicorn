@@ -1,6 +1,6 @@
 # Remote Viewer API Code Examples
 
-> **Version**: v0.7.1
+> **Version**: v0.7.2
 > **Last Updated**: 2026-03-28
 
 [English](REMOTE_API_EXAMPLES.md) | [简体中文](../zh/REMOTE_API_EXAMPLES.md)
@@ -724,7 +724,7 @@ except Exception as e:
 ---
 
 **Author**: Runicorn Development Team
-**Version**: v0.7.1
+**Version**: v0.7.2
 **Last Updated**: 2026-03-28
 
 **[Back to API Docs](README.md)** | **[View API Reference](remote_api.md)**

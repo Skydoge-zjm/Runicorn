@@ -4,7 +4,7 @@
 
 # 增强日志 API 参考文档
 
-> **版本**: v0.7.1
+> **版本**: v0.7.2
 > **最后更新**: 2026-03-28
 > **模块**: `runicorn.console`, `runicorn.log_compat`
 
@@ -476,7 +476,7 @@ run = runicorn.init(path="exp", capture_console=True, tqdm_mode="none")
 ---
 
 **作者**: Runicorn Development Team
-**版本**: v0.7.1
+**版本**: v0.7.2
 **最后更新**: 2026-03-28
 
 **[返回 API 索引](API_INDEX.md)**

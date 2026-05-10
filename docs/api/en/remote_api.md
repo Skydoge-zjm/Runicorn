@@ -4,7 +4,7 @@
 
 # Remote Viewer API Reference
 
-> **Version**: v0.7.1  
+> **Version**: v0.7.2  
 > **Last Updated**: 2026-05-10  
 > **Base URL**: `http://127.0.0.1:23300`
 
@@ -217,7 +217,7 @@ Success response:
   "configs": {
     "base": {
       "pythonVersion": "3.11.9",
-      "runicornVersion": "0.7.1"
+      "runicornVersion": "0.7.2"
     }
   }
 }
@@ -237,7 +237,7 @@ Verified response fields:
   "ok": true,
   "condaEnv": "system",
   "pythonVersion": "Python 3.11.9",
-  "runicornVersion": "0.7.1",
+  "runicornVersion": "0.7.2",
   "defaultStorageRoot": "/home/user/runicorn_data",
   "storageRootExists": true,
   "suggestedRemotePort": 23300,

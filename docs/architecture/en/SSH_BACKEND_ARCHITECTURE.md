@@ -5,7 +5,7 @@
 # SSH Backend Architecture
 
 **Document Type**: Architecture
-**Version**: v0.7.1
+**Version**: v0.7.2
 **Last Updated**: 2026-03-28
 
 ---

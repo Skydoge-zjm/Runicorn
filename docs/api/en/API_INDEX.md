@@ -4,7 +4,7 @@
 
 # Complete API Index
 
-**Version**: v0.7.1
+**Version**: v0.7.2
 **Total Endpoints**: REST API + Python Client
 **Last Updated**: 2026-05-10
 
@@ -359,7 +359,7 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ## 📝 API Changelog
 
-### v0.7.1 (Current) 🚀
+### v0.7.2 (Current) 🚀
 **Current Release Highlights**
 - ✅ **Remote Viewer hardening**: saved connections, health monitoring, reconnect states, and OpenSSH password support
 - ✅ **Web UI productization**: cleaner navigation, ZIP import/export preview, unified recycle bin, and improved compare flow

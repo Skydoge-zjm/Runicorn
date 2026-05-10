@@ -1,6 +1,6 @@
 ---
 title: Runicorn User Guide
-description: User guide for Runicorn 0.7.1.
+description: User guide for Runicorn 0.7.2.
 hide:
   - toc
 ---

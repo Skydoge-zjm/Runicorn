@@ -4,7 +4,7 @@
 
 # Remote Viewer API 参考文档
 
-> **版本**: v0.7.1  
+> **版本**: v0.7.2  
 > **最后更新**: 2026-05-10  
 > **Base URL**: `http://127.0.0.1:23300`
 
@@ -217,7 +217,7 @@ Remote Viewer 的 SSH 隧道不是单一路径实现。当前代码会优先尝�
   "configs": {
     "base": {
       "pythonVersion": "3.11.9",
-      "runicornVersion": "0.7.1"
+      "runicornVersion": "0.7.2"
     }
   }
 }
@@ -237,7 +237,7 @@ Remote Viewer 的 SSH 隧道不是单一路径实现。当前代码会优先尝�
   "ok": true,
   "condaEnv": "system",
   "pythonVersion": "Python 3.11.9",
-  "runicornVersion": "0.7.1",
+  "runicornVersion": "0.7.2",
   "defaultStorageRoot": "/home/user/runicorn_data",
   "storageRootExists": true,
   "suggestedRemotePort": 23300,

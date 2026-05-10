@@ -4,7 +4,7 @@
 
 # Enhanced Logging API Reference
 
-> **Version**: v0.7.1
+> **Version**: v0.7.2
 > **Last Updated**: 2026-03-28
 > **Module**: `runicorn.console`, `runicorn.log_compat`
 
@@ -476,7 +476,7 @@ run = runicorn.init(path="exp", capture_console=True, tqdm_mode="none")
 ---
 
 **Author**: Runicorn Development Team
-**Version**: v0.7.1
+**Version**: v0.7.2
 **Last Updated**: 2026-03-28
 
 **[Back to API Index](API_INDEX.md)**

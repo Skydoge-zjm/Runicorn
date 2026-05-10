@@ -1,10 +1,10 @@
 # Runicorn Documentation System Overview
 
-- **Version**: v0.7.1
-- **Last Updated**: 2026-05-10
+- **Version**: v0.7.2
+- **Last Updated**: 2026-05-11
 - **Purpose**: Complete overview of all documentation in the Runicorn project
 
-**v0.7.1 Highlights**: Reliability hardening, remote API/documentation alignment, tighter credential migration boundaries, stronger CI/smoke coverage, and more reproducible desktop builds
+**Current release context**: v0.7.2 is a patch follow-up to the v0.7.1 stabilization release. The main product-facing changes are still the v0.7.1 reliability, remote API/documentation alignment, credential-boundary tightening, stronger CI/smoke coverage, and more reproducible desktop builds. v0.7.2 focuses on post-release packaging, CI, and cross-platform test fixes.
 
 ---
 

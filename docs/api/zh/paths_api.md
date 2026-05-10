@@ -4,7 +4,7 @@
 
 # 路径层级 API
 
-**版本**: v0.7.1
+**版本**: v0.7.2
 **路由文件**: `projects.py`（导出为 `projects_router`）
 **前缀**: `/api`
 

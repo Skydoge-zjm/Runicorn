@@ -7,7 +7,7 @@
 **模块**: Python API Client
 **包路径**: `runicorn.client`
 **工具模块**: `runicorn.client.utils`
-**版本**: v0.7.1
+**版本**: v0.7.2
 **最后更新**: 2026-03-28
 **说明**: 通过 Python 代码访问 Runicorn Viewer REST API。
 

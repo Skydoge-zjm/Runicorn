@@ -4,7 +4,7 @@
 
 # Runicorn API Quick Reference
 
-**Version**: v0.7.1
+**Version**: v0.7.2
 **Base URL**: `http://127.0.0.1:23300/api`
 
 ---

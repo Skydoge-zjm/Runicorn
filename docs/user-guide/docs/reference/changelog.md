@@ -2,6 +2,18 @@
 
 All notable changes to Runicorn.
 
+## <span class="rn-badge">v0.7.2</span> — 2026-05-11
+
+### Post-release fixes for v0.7.1
+
+- publish script updated to follow the centralized version source
+- Python client dependency metadata fixed for `requests`
+- test dependency metadata fixed for `pandas`
+- CLI export path fixed after missing `Path` import surfaced in CI
+- OpenSSH askpass test corrected for non-Windows runners
+
+---
+
 ## <span class="rn-badge">v0.7.1</span> — 2026-05-10
 
 ### Reliability and API alignment

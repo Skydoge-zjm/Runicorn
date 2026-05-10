@@ -145,7 +145,7 @@ Desktop 构建参数现在统一走配置文件。
 非本地包构建示例：
 
 ```powershell
-./desktop/tauri/sidecar/build_sidecar.ps1 -RunicornVersion 0.7.1
+./desktop/tauri/sidecar/build_sidecar.ps1 -RunicornVersion 0.7.2
 ```
 
 ### `build_config.ps1`

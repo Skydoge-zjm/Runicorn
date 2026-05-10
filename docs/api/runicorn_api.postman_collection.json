@@ -2,7 +2,7 @@
   "info": {
     "name": "Runicorn API",
     "description": "Complete API collection for Runicorn experiment tracking platform",
-    "version": "0.7.1",
+    "version": "0.7.2",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

@@ -1,6 +1,6 @@
 # Remote Viewer API 代码示例
 
-> **版本**: v0.7.1
+> **版本**: v0.7.2
 > **最后更新**: 2026-03-28
 
 [English](../en/REMOTE_API_EXAMPLES.md) | [简体中文](REMOTE_API_EXAMPLES.md)
@@ -718,7 +718,7 @@ except Exception as e:
 ---
 
 **作者**: Runicorn Development Team
-**版本**: v0.7.1
+**版本**: v0.7.2
 **最后更新**: 2026-03-28
 
 **[返回 API 文档](README.md)** | **[查看 API 参考](remote_api.md)**
