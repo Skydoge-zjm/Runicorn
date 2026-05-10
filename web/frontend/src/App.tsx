@@ -1,17 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Layout, Tag, Button, ConfigProvider, theme, Select, App as AntApp } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
 import { Routes, Route, NavLink } from 'react-router-dom'
 import { SettingOutlined, ExperimentOutlined, CloudServerOutlined, DashboardOutlined, AppstoreOutlined } from '@ant-design/icons'
-import RunDetailPage from './pages/RunDetailPage'
-import ExperimentPage from './pages/ExperimentPage'
-import AssetsPage from './pages/AssetsPage'
-import AssetDetailPage from './pages/AssetDetailPage'
-import RemoteViewerPage from './pages/RemoteViewerPage'
-import PerformanceMonitorPage from './pages/PerformanceMonitorPage'
 import { PageTransition } from './components/animations/PageTransition'
+import { GenericLoadingSkeleton } from './components/LoadingSkeleton'
 import { health, getConfig } from './api'
 import SettingsDrawer from './components/SettingsDrawer'
 import type { UiSettings } from './components/settings/themePresets'
@@ -20,6 +15,14 @@ import { GpuTelemetryProvider } from './contexts/GpuTelemetryContext'
 import { useTranslation } from 'react-i18next'
 
 const { Content } = Layout
+
+const ExperimentPage = lazy(() => import('./pages/ExperimentPage'))
+const RunDetailPage = lazy(() => import('./pages/RunDetailPage'))
+const AssetsPage = lazy(() => import('./pages/AssetsPage'))
+const AssetDetailPage = lazy(() => import('./pages/AssetDetailPage'))
+const RemoteViewerPage = lazy(() => import('./pages/RemoteViewerPage'))
+const PerformanceMonitorPage = lazy(() => import('./pages/PerformanceMonitorPage'))
+const DiagnosticsPage = lazy(() => import('./pages/DiagnosticsPage'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -332,14 +335,17 @@ export default function App() {
               minHeight: 0,
             }}>
               <PageTransition>
-                <Routes>
-                  <Route path="/" element={<ExperimentPage />} />
-                  <Route path="/runs/:id" element={<RunDetailPage />} />
-                  <Route path="/assets" element={<AssetsPage />} />
-                  <Route path="/assets/:id" element={<AssetDetailPage />} />
-                  <Route path="/performance" element={<PerformanceMonitorPage />} />
-                  <Route path="/remote" element={<RemoteViewerPage />} />
-                </Routes>
+                <Suspense fallback={<GenericLoadingSkeleton rows={6} />}>
+                  <Routes>
+                    <Route path="/" element={<ExperimentPage />} />
+                    <Route path="/runs/:id" element={<RunDetailPage />} />
+                    <Route path="/assets" element={<AssetsPage />} />
+                    <Route path="/assets/:id" element={<AssetDetailPage />} />
+                    <Route path="/performance" element={<PerformanceMonitorPage />} />
+                    <Route path="/remote" element={<RemoteViewerPage />} />
+                    <Route path="/diagnostics" element={<DiagnosticsPage />} />
+                  </Routes>
+                </Suspense>
               </PageTransition>
             </div>
           </Content>

@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Request, Body, Query
+from fastapi import APIRouter, Body, Query
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)

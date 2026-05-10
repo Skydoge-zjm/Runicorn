@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import json
 import logging
 import os
@@ -21,11 +20,30 @@ from filelock import FileLock
 from .config import get_user_root_dir
 from .enabled import NoOpRun, is_enabled
 from .workspace import get_workspace_root
-from .assets.assets_json import ensure_assets_file, read_assets, update_assets_atomic
+from .assets.assets_json import ensure_assets_file, update_assets_atomic
 from .assets.archive import archive_dir, archive_file
 from .assets.fingerprint import dir_stat_fingerprint, stat_fingerprint
 from .assets.snapshot import snapshot_workspace
 from .assets.outputs_scan import scan_outputs_once
+from ._sdk.run_assets import (
+    log_config_impl,
+    log_dataset_impl,
+    log_pretrained_impl,
+    scan_outputs_once_impl,
+    stop_outputs_watch_impl,
+    watch_outputs_impl,
+)
+from ._sdk.run_finish import exit_impl, finish_impl
+from ._sdk.run_logging import (
+    apply_summary_update,
+    get_logging_handler as get_run_logging_handler,
+    log_image as log_run_image,
+    log_metrics,
+    log_text as log_run_text,
+    set_primary_metric as set_run_primary_metric,
+    summary as update_summary,
+    update_best_metric,
+)
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -442,75 +460,18 @@ class Run:
         log_snapshot_interval_sec: float = 60.0,
         state_gc_after_sec: float = 7 * 24 * 3600,
     ) -> Dict[str, Any]:
-        if self._finished:
-            logger.warning("scan_outputs_once called after finish(); ignoring")
-            return {}
-        res = scan_outputs_once(
-            run_id=self.id,
-            run_dir=self.run_dir,
-            storage_root=self.storage_root,
-            workspace_root=self.workspace_root,
+        return scan_outputs_once_impl(
+            self,
             output_dirs=output_dirs,
-            assets_path=self._assets_path,
-            assets_lock=self._assets_lock,
-            state_path=self._outputs_state_path,
-            state_lock=self._outputs_state_lock,
             patterns=patterns,
             stable_required=stable_required,
             min_age_sec=min_age_sec,
             mode=mode,
             log_snapshot_interval_sec=log_snapshot_interval_sec,
             state_gc_after_sec=state_gc_after_sec,
-            should_stop=lambda: self._finished or self._outputs_watch_stop.is_set(),
+            scan_outputs_once_fn=scan_outputs_once,
+            logger=logger,
         )
-
-        if self._finished or self._outputs_watch_stop.is_set():
-            return res
-
-        # BUG-30: When rolling output is updated (same key, new version), unlink old
-        # asset before linking the new one to avoid stale SQLite relations
-        if self.storage_backend:
-            try:
-                for e in res.get("archived_entries") or []:
-                    key = e.get("key")
-                    if key and hasattr(
-                        self.storage_backend, "unlink_run_asset"
-                    ):
-                        assets = self.storage_backend.get_assets_for_run(self.id)
-                        for a in assets:
-                            if a.get("role") != "output":
-                                continue
-                            meta = a.get("metadata_json")
-                            if isinstance(meta, str):
-                                meta = json.loads(meta) if meta else {}
-                            elif meta is None:
-                                meta = {}
-                            if meta.get("key") == key:
-                                self.storage_backend.unlink_run_asset(
-                                    self.id, a["asset_id"]
-                                )
-                                break
-                    self.storage_backend.record_asset_for_run(
-                        run_id=self.id,
-                        role="output",
-                        asset_type="output",
-                        name=e.get("name"),
-                        source_uri=e.get("path"),
-                        archive_uri=e.get("archive_path"),
-                        is_archived=True,
-                        fingerprint_kind=e.get("fingerprint_kind"),
-                        fingerprint=e.get("fingerprint"),
-                        created_at=float(e.get("archived_at") or 0),
-                        metadata={
-                            "key": e.get("key"),
-                            "kind": e.get("kind"),
-                            "mode": e.get("mode"),
-                        },
-                    )
-            except Exception:
-                pass
-
-        return res
 
     def watch_outputs(
         self,
@@ -524,35 +485,87 @@ class Run:
         log_snapshot_interval_sec: float = 60.0,
         state_gc_after_sec: float = 7 * 24 * 3600,
     ) -> None:
-        if self._outputs_watch_thread and self._outputs_watch_thread.is_alive():
-            return
-        self._outputs_watch_stop.clear()
-
-        def _loop() -> None:
-            while not self._outputs_watch_stop.is_set():
-                try:
-                    self.scan_outputs_once(
-                        output_dirs=output_dirs,
-                        patterns=patterns,
-                        stable_required=stable_required,
-                        min_age_sec=min_age_sec,
-                        mode=mode,
-                        log_snapshot_interval_sec=log_snapshot_interval_sec,
-                        state_gc_after_sec=state_gc_after_sec,
-                    )
-                except Exception:
-                    pass
-                self._outputs_watch_stop.wait(interval_sec)
-
-        t = threading.Thread(target=_loop, daemon=True)
-        self._outputs_watch_thread = t
-        t.start()
+        watch_outputs_impl(
+            self,
+            output_dirs=output_dirs,
+            interval_sec=interval_sec,
+            patterns=patterns,
+            stable_required=stable_required,
+            min_age_sec=min_age_sec,
+            mode=mode,
+            log_snapshot_interval_sec=log_snapshot_interval_sec,
+            state_gc_after_sec=state_gc_after_sec,
+        )
 
     def stop_outputs_watch(self) -> None:
+        stop_outputs_watch_impl(self)
+
+    @property
+    def is_finished(self) -> bool:
+        return self._finished
+
+    def append_event(self, event: Dict[str, Any]) -> None:
+        self._append_jsonl(self._events_path, event, self._events_lock)
+
+    def update_assets_manifest(self, updater) -> None:
+        update_assets_atomic(self._assets_path, self._assets_lock, updater)
+
+    def should_stop_output_watch(self) -> bool:
+        return self._finished or self._outputs_watch_stop.is_set()
+
+    def clear_output_watch_stop(self) -> None:
+        self._outputs_watch_stop.clear()
+
+    def request_output_watch_stop(self) -> None:
         self._outputs_watch_stop.set()
-        t = self._outputs_watch_thread
-        if t and t.is_alive():
-            t.join(timeout=2.0)
+
+    def get_output_watch_thread(self) -> Optional[threading.Thread]:
+        return self._outputs_watch_thread
+
+    def set_output_watch_thread(self, thread: Optional[threading.Thread]) -> None:
+        self._outputs_watch_thread = thread
+
+    def list_storage_assets(self) -> List[Dict[str, Any]]:
+        if not self.storage_backend:
+            return []
+        return self.storage_backend.get_assets_for_run(self.id)
+
+    def unlink_storage_asset(self, asset_id: str) -> None:
+        if self.storage_backend and hasattr(self.storage_backend, "unlink_run_asset"):
+            self.storage_backend.unlink_run_asset(self.id, asset_id)
+
+    def record_storage_asset(self, **kwargs: Any) -> None:
+        if self.storage_backend:
+            self.storage_backend.record_asset_for_run(run_id=self.id, **kwargs)
+
+    def read_summary_data(self) -> Dict[str, Any]:
+        if not self._summary_path.exists():
+            return {}
+        try:
+            data = json.loads(self._summary_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, IOError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def write_summary_data(self, data: Dict[str, Any]) -> None:
+        self._summary_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def read_status_data(self) -> Dict[str, Any]:
+        if not self._status_path.exists():
+            return {}
+        try:
+            data = json.loads(self._status_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, IOError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def write_status_data(self, data: Dict[str, Any]) -> None:
+        self._status_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def close_storage_backend(self) -> None:
+        if self.storage_backend and hasattr(self.storage_backend, "close"):
+            self.storage_backend.close()
+            self.storage_backend = None
 
     def _init_modern_storage(self) -> None:
         """Initialize modern storage backend."""
@@ -594,154 +607,29 @@ class Run:
 
     # ---------------- public API -----------------
     def set_primary_metric(self, metric_name: str, mode: str = "max") -> None:
-        """Set the primary metric to track for best value display.
-        
-        Args:
-            metric_name: Name of the metric to track (e.g., "accuracy", "loss")
-            mode: Optimization direction, either "max" or "min"
-        """
-        if self._finished:
-            logger.warning("set_primary_metric called after finish(); ignoring")
-            return
-        if mode not in ["max", "min"]:
-            raise ValueError(f"Mode must be 'max' or 'min', got '{mode}'")
-        
-        self._primary_metric_name = metric_name
-        self._primary_metric_mode = mode
-        self._best_metric_value = None  # Reset when changing metric
-        self._best_metric_step = None
-        
-        logger.info(f"Set primary metric: {metric_name} (mode: {mode})")
+        set_run_primary_metric(self, metric_name, mode, logger=logger)
     
     def log(self, data: Optional[Dict[str, Any]] = None, *, step: Optional[int] = None, stage: Optional[Any] = None, **kwargs: Any) -> None:
-        """Log arbitrary scalar metrics.
-
-        Usage:
-            rn.log({"loss": 0.1, "acc": 98.1}, step=10, stage="train")
-
-        Behavior:
-        - Maintains a global step counter. If 'step' is provided in a call,
-          the counter is set to that value for this record; otherwise it auto-increments.
-        - Always records 'global_step' and 'time' into the event data.
-        - If 'stage' is provided (or present in data), records it for UI separators.
-        """
-        if self._finished:
-            logger.warning("Run already finished, ignoring %s call", "log")
-            return
-        ts = _now_ts()
-        payload: Dict[str, Any] = {}
-        if data:
-            payload.update(data)
-        if kwargs:
-            payload.update(kwargs)
-
-        # Normalize and prioritize explicit params over payload
-        # Remove any user-provided 'step' keys to avoid ambiguity; we always store 'global_step'
-        payload.pop("global_step", None)
-        payload.pop("step", None)
-
-        # Determine step value
-        if step is not None:
-            try:
-                self._global_step = int(step)
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid step value '{step}': {e}, auto-incrementing instead")
-                self._global_step += 1
-        else:
-            self._global_step += 1
-
-        # Determine stage value (explicit arg has priority)
-        stage_in_payload = payload.pop("stage", None)
-        stage_val = stage if stage is not None else stage_in_payload
-
-        # Inject normalized tracking fields
-        payload["global_step"] = self._global_step
-        payload["time"] = ts
-        if stage_val is not None:
-            payload["stage"] = stage_val
-
-        # Write to traditional events.jsonl (always for compatibility)
-        evt = {"ts": ts, "type": "metrics", "data": payload}
-        self._append_jsonl(self._events_path, evt, self._events_lock)
-        
-        # Also write to modern storage if available
-        if self.storage_backend:
-            try:
-                # Convert metrics to MetricRecord format
-                metrics = []
-                for metric_name, metric_value in payload.items():
-                    if metric_name in ("global_step", "time", "stage"):
-                        continue
-                    if isinstance(metric_value, (int, float)):
-                        metrics.append(MetricRecord(
-                            experiment_id=self.id,
-                            timestamp=ts,
-                            metric_name=metric_name,
-                            metric_value=metric_value,
-                            step=self._global_step,
-                            stage=stage_val
-                        ))
-                
-                if metrics:
-                    self.storage_backend.log_metrics(self.id, metrics)
-                        
-            except Exception as e:
-                logger.debug(f"Failed to log to modern storage: {e}")
-        
-        # Update primary metric best value if configured
-        self._update_best_metric(payload)
-        
-        # Check for anomalies if monitoring is enabled
-        if self.monitor:
-            try:
-                alerts = self.monitor.check_metrics(payload)
-                for alert in alerts:
-                    self.log_text(alert)
-            except Exception as e:
-                logger.debug(f"Monitoring check failed: {e}")
+        log_metrics(
+            self,
+            data=data,
+            step=step,
+            stage=stage,
+            extra_kwargs=kwargs,
+            now_ts=_now_ts,
+            metric_record_cls=MetricRecord if HAS_MODERN_STORAGE else None,
+            logger=logger,
+        )
 
     def log_text(self, text: str) -> None:
-        if self._finished:
-            logger.warning("Run already finished, ignoring %s call", "log_text")
-            return
-        # Write to logs.txt to support Live Logs viewer
-        # Prepend timestamp to each non-empty line; preserve empty lines (BUG-44)
-        timestamp = time.strftime("%H:%M:%S")
-        lines = text.split("\n")
-        prefixed_lines = []
-        for line in lines:
-            if line.strip():
-                prefixed_lines.append(f"{timestamp} | {line}")
-            else:
-                prefixed_lines.append("")
-        formatted_text = "\n".join(prefixed_lines) + "\n"
-        with self._logs_lock:
-            with open(self._logs_txt_path, "a", encoding="utf-8", errors="ignore") as f:
-                f.write(formatted_text)
+        log_run_text(self, text, logger=logger)
 
     def get_logging_handler(
         self,
         level: int = logging.INFO,
         fmt: Optional[str] = None,
     ):
-        """
-        Get a logging handler that writes to this run's log file.
-        
-        Usage:
-            run = runicorn.init(capture_console=True)
-            logger = logging.getLogger(__name__)
-            logger.addHandler(run.get_logging_handler())
-            logger.info("This goes to logs.txt")
-        
-        Args:
-            level: Minimum log level (default: logging.INFO)
-            fmt: Custom format string (optional)
-        
-        Returns:
-            A configured RunicornLoggingHandler instance.
-        """
-        from .console import RunicornLoggingHandler
-        return RunicornLoggingHandler(run=self, level=level, fmt=fmt)
+        return get_run_logging_handler(self, level=level, fmt=fmt)
 
     def log_image(
         self,
@@ -752,47 +640,20 @@ class Run:
         format: str = "png",
         quality: int = 90,
     ) -> str:
-        """Save an image under media/ and record an event.
-
-        Returns the relative path of the saved image.
-        """
-        if self._finished:
-            logger.warning("Run already finished, ignoring %s call", "log_image")
-            return ""
-        rel_name = f"{int(_now_ts()*1000)}_{uuid.uuid4().hex[:6]}_{key}.{format.lower()}"
-        path = self.media_dir / rel_name
-
-        # Accept PIL.Image, numpy array, bytes, path-like
-        try:
-            if HAS_PIL and hasattr(image, 'save'):  # PIL.Image
-                image.save(path, format=format.upper(), quality=quality)
-            elif HAS_NUMPY and hasattr(image, "shape"):  # numpy array
-                if not HAS_PIL:
-                    raise RuntimeError("Pillow is required to save numpy arrays. Install with: pip install pillow")
-                img = Image.fromarray(image)
-                img.save(path, format=format.upper(), quality=quality)
-            elif isinstance(image, (bytes, bytearray)):
-                with open(path, "wb") as f:
-                    f.write(image)
-            else:
-                # Try as path-like
-                p = Path(str(image))
-                if not p.exists():
-                    raise FileNotFoundError(f"Image file not found: {image}")
-                data = p.read_bytes()
-                with open(path, "wb") as f:
-                    f.write(data)
-        except Exception as e:
-            logger.error(f"Failed to save image '{key}': {e}")
-            raise
-
-        evt = {
-            "ts": _now_ts(),
-            "type": "image",
-            "data": {"key": key, "path": f"media/{rel_name}", "step": step, "caption": caption},
-        }
-        self._append_jsonl(self._events_path, evt, self._events_lock)
-        return f"media/{rel_name}"
+        return log_run_image(
+            self,
+            key=key,
+            image=image,
+            step=step,
+            caption=caption,
+            format=format,
+            quality=quality,
+            now_ts=_now_ts,
+            has_pil=HAS_PIL,
+            has_numpy=HAS_NUMPY,
+            image_module=Image,
+            logger=logger,
+        )
 
     def log_config(
         self,
@@ -801,44 +662,15 @@ class Run:
         extra: Optional[Dict[str, Any]] = None,
         config_files: Optional[List[Union[str, Path]]] = None,
     ) -> None:
-        if self._finished:
-            logger.warning("Run already finished, ignoring %s call", "log_config")
-            return
-        cfg_holder: Dict[str, Any] = {}
-
-        def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
-            cfg: Dict[str, Any] = dict((a.get("config") or {}))
-            if args is not None:
-                raw_args = args if isinstance(args, dict) else vars(args)
-                cfg["args"] = _make_json_safe(raw_args)
-            if extra is not None:
-                cfg["extra"] = _make_json_safe(extra)
-            if config_files is not None:
-                cfg["config_files"] = [str(Path(p)) for p in config_files]
-            a["config"] = cfg
-            cfg_holder.clear()
-            cfg_holder.update(cfg)
-            return a
-
-        update_assets_atomic(self._assets_path, self._assets_lock, _upd)
-
-        if self.storage_backend:
-            try:
-                self.storage_backend.record_asset_for_run(
-                    run_id=self.id,
-                    role="config",
-                    asset_type="config",
-                    name=None,
-                    source_uri=None,
-                    archive_uri=None,
-                    is_archived=False,
-                    fingerprint_kind=None,
-                    fingerprint=None,
-                    created_at=_now_ts(),
-                    metadata=cfg_holder,
-                )
-            except Exception:
-                pass
+        log_config_impl(
+            self,
+            args=args,
+            extra=extra,
+            config_files=config_files,
+            make_json_safe=_make_json_safe,
+            now_ts=_now_ts,
+            logger=logger,
+        )
 
     def log_dataset(
         self,
@@ -852,77 +684,19 @@ class Run:
         max_archive_bytes: int = 5 * 1024 * 1024 * 1024,
         max_archive_files: int = 2_000_000,
     ) -> None:
-        if self._finished:
-            logger.warning("log_dataset called after finish(); ignoring")
-            return
-        uri: Any = root_or_uri
-        fp: Optional[Dict[str, Any]] = None
-        archived: Optional[Dict[str, Any]] = None
-
-        if isinstance(root_or_uri, (str, Path)):
-            p = Path(root_or_uri).expanduser()
-            uri = str(p)
-            try:
-                if p.is_dir():
-                    fp = dir_stat_fingerprint(p)
-                    if save:
-                        if (fp.get("total_size_bytes") or 0) > max_archive_bytes or (fp.get("file_count") or 0) > max_archive_files:
-                            if not force_save:
-                                raise ValueError("dataset too large to archive; set force_save=True or use save=False")
-                        archived = archive_dir(p, self.storage_root / "archive", category="datasets")
-                elif p.is_file():
-                    fp = stat_fingerprint(p)
-                    if save:
-                        if (fp.get("size_bytes") or 0) > max_archive_bytes:
-                            if not force_save:
-                                raise ValueError("dataset file too large to archive; set force_save=True or use save=False")
-                        archived = archive_file(p, self.storage_root / "archive", category="datasets")
-            except OSError:
-                fp = None
-
-        entry: Dict[str, Any] = {
-            "name": name,
-            "context": context,
-            "uri": uri,
-            "description": description,
-            "saved": bool(save and archived),
-            "fingerprint": fp,
-        }
-        if archived:
-            entry.update(archived)
-
-        def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
-            a.setdefault("datasets", [])
-            a["datasets"].append(entry)
-            return a
-
-        update_assets_atomic(self._assets_path, self._assets_lock, _upd)
-
-        if self.storage_backend:
-            try:
-                fp_kind = entry.get("fingerprint_kind")
-                fp_val = entry.get("fingerprint")
-                if isinstance(fp_val, dict):
-                    fp_val = json.dumps(fp_val, ensure_ascii=False, sort_keys=True)
-                    fp_kind = fp_kind or "stat"
-                self.storage_backend.record_asset_for_run(
-                    run_id=self.id,
-                    role="dataset",
-                    asset_type="dataset",
-                    name=name,
-                    source_uri=str(entry.get("uri")) if entry.get("uri") is not None else None,
-                    archive_uri=entry.get("archive_path"),
-                    is_archived=bool(entry.get("saved")),
-                    fingerprint_kind=fp_kind,
-                    fingerprint=fp_val,
-                    created_at=_now_ts(),
-                    metadata={
-                        "context": context,
-                        "description": description,
-                    },
-                )
-            except Exception:
-                pass
+        log_dataset_impl(
+            self,
+            name=name,
+            root_or_uri=root_or_uri,
+            context=context,
+            save=save,
+            description=description,
+            force_save=force_save,
+            max_archive_bytes=max_archive_bytes,
+            max_archive_files=max_archive_files,
+            now_ts=_now_ts,
+            logger=logger,
+        )
 
     def log_pretrained(
         self,
@@ -936,244 +710,49 @@ class Run:
         max_archive_bytes: int = 5 * 1024 * 1024 * 1024,
         max_archive_files: int = 2_000_000,
     ) -> None:
-        if self._finished:
-            logger.warning("log_pretrained called after finish(); ignoring")
-            return
-        archived: Optional[Dict[str, Any]] = None
-
-        if save and path_or_uri is None:
-            raise ValueError("save=True requires path_or_uri")
-
-        if save and isinstance(path_or_uri, (str, Path)):
-            p = Path(path_or_uri).expanduser()
-            if p.is_dir():
-                fp = dir_stat_fingerprint(p)
-                if (fp.get("total_size_bytes") or 0) > max_archive_bytes or (fp.get("file_count") or 0) > max_archive_files:
-                    if not force_save:
-                        raise ValueError("pretrained dir too large to archive; set force_save=True or use save=False")
-                archived = archive_dir(p, self.storage_root / "archive", category="pretrained")
-            elif p.is_file():
-                fp2 = stat_fingerprint(p)
-                if (fp2.get("size_bytes") or 0) > max_archive_bytes:
-                    if not force_save:
-                        raise ValueError("pretrained file too large to archive; set force_save=True or use save=False")
-                archived = archive_file(p, self.storage_root / "archive", category="pretrained")
-
-        entry: Dict[str, Any] = {
-            "name": name,
-            "source_type": source_type,
-            "path_or_uri": None if path_or_uri is None else (str(path_or_uri) if isinstance(path_or_uri, (str, Path)) else path_or_uri),
-            "description": description,
-            "saved": bool(save and archived),
-        }
-        if archived:
-            entry.update(archived)
-
-        def _upd(a: Dict[str, Any]) -> Dict[str, Any]:
-            a.setdefault("pretrained", [])
-            a["pretrained"].append(entry)
-            return a
-
-        update_assets_atomic(self._assets_path, self._assets_lock, _upd)
-
-        if self.storage_backend:
-            try:
-                self.storage_backend.record_asset_for_run(
-                    run_id=self.id,
-                    role="pretrained",
-                    asset_type="pretrained",
-                    name=name,
-                    source_uri=str(entry.get("path_or_uri")) if entry.get("path_or_uri") is not None else None,
-                    archive_uri=entry.get("archive_path"),
-                    is_archived=bool(entry.get("saved")),
-                    fingerprint_kind=entry.get("fingerprint_kind"),
-                    fingerprint=entry.get("fingerprint"),
-                    created_at=_now_ts(),
-                    metadata={
-                        "source_type": source_type,
-                        "description": description,
-                    },
-                )
-            except Exception:
-                pass
+        log_pretrained_impl(
+            self,
+            name=name,
+            path_or_uri=path_or_uri,
+            save=save,
+            source_type=source_type,
+            description=description,
+            force_save=force_save,
+            max_archive_bytes=max_archive_bytes,
+            max_archive_files=max_archive_files,
+            now_ts=_now_ts,
+            logger=logger,
+        )
 
     def _apply_summary_update(self, update: Dict[str, Any]) -> None:
-        """Internal: apply summary update without _finished check (used by finish())."""
-        with self._summary_lock:
-            cur: Dict[str, Any] = {}
-            if self._summary_path.exists():
-                try:
-                    cur = json.loads(self._summary_path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, IOError) as e:
-                    logger.warning(f"Failed to read summary file: {e}, starting fresh")
-                    cur = {}
-            cur.update(update or {})
-            self._summary_path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        if self.storage_backend:
-            try:
-                storage_updates = {}
-                if "best_metric_value" in update:
-                    storage_updates["best_metric_value"] = update["best_metric_value"]
-                if "best_metric_name" in update:
-                    storage_updates["best_metric_name"] = update["best_metric_name"]
-                if "best_metric_step" in update:
-                    storage_updates["best_metric_step"] = update["best_metric_step"]
-                if "best_metric_mode" in update:
-                    storage_updates["best_metric_mode"] = update["best_metric_mode"]
-                if storage_updates:
-                    self.storage_backend.update_experiment(self.id, storage_updates)
-            except Exception as e:
-                logger.debug(f"Failed to update summary in modern storage: {e}")
+        apply_summary_update(self, update, logger=logger)
 
     def summary(self, update: Dict[str, Any]) -> None:
-        if self._finished:
-            logger.warning("Run already finished, ignoring %s call", "summary")
-            return
-        self._apply_summary_update(update)
+        update_summary(self, update, logger=logger)
 
     def _update_best_metric(self, payload: Dict[str, Any]) -> None:
-        """Update the best metric value if primary metric is configured."""
-        if not self._primary_metric_name or self._primary_metric_name not in payload:
-            return
-        
-        current_value = payload[self._primary_metric_name]
-        if not isinstance(current_value, (int, float)):
-            return
-        
-        # Check if this is a new best value
-        is_new_best = False
-        if self._best_metric_value is None:
-            is_new_best = True
-        elif self._primary_metric_mode == "max" and current_value > self._best_metric_value:
-            is_new_best = True
-        elif self._primary_metric_mode == "min" and current_value < self._best_metric_value:
-            is_new_best = True
-        
-        if is_new_best:
-            self._best_metric_value = current_value
-            self._best_metric_step = payload.get("global_step", payload.get("step"))
-            logger.debug(f"New best {self._primary_metric_name}: {current_value} at step {self._best_metric_step}")
-            
-            # Update modern storage with new best metric
-            if self.storage_backend:
-                try:
-                    updates = {
-                        "best_metric_value": self._best_metric_value,
-                        "best_metric_name": self._primary_metric_name,
-                        "best_metric_step": self._best_metric_step,
-                        "best_metric_mode": self._primary_metric_mode
-                    }
-                    self.storage_backend.update_experiment(self.id, updates)
-                except Exception as e:
-                    logger.debug(f"Failed to update best metric in modern storage: {e}")
+        update_best_metric(self, payload, logger=logger)
     
     def finish(self, status: str = "finished") -> None:
-        """Mark the run as finished and ensure all data is written."""
-        # Normalize status to valid SQLite values (avoids file/SQLite state tear)
-        status = _normalize_status(status)
-
-        # Block further writes immediately (BUG-36) - before any cleanup
-        self._finished = True
-        self._outputs_watch_stop.set()
-
-        # Stop console capture before finishing
-        if self._console_capture is not None:
-            try:
-                self._console_capture.stop()
-                logger.debug(f"Console capture stopped for run {self.id}")
-            except Exception as e:
-                logger.debug(f"Failed to stop console capture: {e}")
-            self._console_capture = None
-
-        self.stop_outputs_watch()
-
-        # Save best metric to summary (use internal method since _finished is already True)
-        if self._best_metric_value is not None:
-            best_metric_summary = {
-                "best_metric_value": self._best_metric_value,
-                "best_metric_name": self._primary_metric_name,
-                "best_metric_step": self._best_metric_step,
-                "best_metric_mode": self._primary_metric_mode
-            }
-            self._apply_summary_update(best_metric_summary)
-
-        # Update status file (always for compatibility)
-        with self._status_lock:
-            cur: Dict[str, Any] = {}
-            if self._status_path.exists():
-                try:
-                    cur = json.loads(self._status_path.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, IOError) as e:
-                    logger.warning(f"Failed to read status file: {e}, starting fresh")
-                    cur = {}
-            cur.update({"status": status, "ended_at": _now_ts()})
-            self._status_path.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
-        
-        # Also update modern storage if available
-        if self.storage_backend:
-            try:
-                updates = {
-                    "status": status,
-                    "ended_at": _now_ts()
-                }
-                
-                self.storage_backend.update_experiment(self.id, updates)
-                    
-            except Exception as e:
-                logger.debug(f"Failed to update status in modern storage: {e}")
-            
-            # Close storage backend connections (critical for Windows)
-            try:
-                if hasattr(self.storage_backend, 'close'):
-                    self.storage_backend.close()
-                    self.storage_backend = None
-                    logger.debug("Closed storage backend connections")
-                    
-                    # Additional: Force close all file handles
-                    import gc
-                    gc.collect()  # Force garbage collection to release handles
-                    
-                    # Small delay for Windows to release file locks
-                    import time as time_module
-                    time_module.sleep(0.05)
-                    
-            except Exception as e:
-                logger.debug(f"Failed to close storage backend: {e}")
-        
-        # Force flush to ensure data is written to disk
-        try:
-            import os
-            os.sync()  # Unix/Linux
-        except (AttributeError, OSError):
-            try:
-                import ctypes
-                # Windows fallback
-                kernel32 = ctypes.windll.kernel32
-                kernel32.FlushFileBuffers.argtypes = [ctypes.c_void_p]
-                kernel32.FlushFileBuffers.restype = ctypes.c_bool
-            except:
-                pass  # Best effort
-                
-        # Small delay to ensure file system catches up
-        import time
-        time.sleep(0.1)
-
-        # Clear _active_run so get_active_run() does not return a finished run (BUG-36)
-        global _active_run
-        with _active_run_lock:
-            if _active_run is self:
-                _active_run = None
+        finish_impl(
+            self,
+            status=status,
+            normalize_status=_normalize_status,
+            now_ts=_now_ts,
+            active_run_state={
+                "lock": _active_run_lock,
+                "get": lambda: _active_run,
+                "set": lambda value: globals().__setitem__("_active_run", value),
+            },
+            logger=logger,
+        )
 
     # ---------------- context manager -----------------
     def __enter__(self) -> "Run":
-        """Enter context manager."""
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Exit context manager, finishing the run."""
-        status = "failed" if exc_type is not None else "finished"
-        self.finish(status=status)
+        exit_impl(self, exc_type)
 
     # ---------------- helpers -----------------
     @staticmethod

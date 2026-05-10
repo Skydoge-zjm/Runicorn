@@ -46,7 +46,7 @@ const FilterToolbar: React.FC<FilterToolbarProps> = ({
 
   return (
     <Card
-      bordered={false}
+      variant="borderless"
       size="small"
       style={{ borderRadius: 8, marginBottom: 12, flexShrink: 0 }}
       styles={{ body: { padding: '12px 16px' } }}

@@ -4,9 +4,9 @@
 
 # 完整 API 索引
 
-**版本**: v0.6.0  
-**总端点数**: 35+ REST + Python Client  
-**最后更新**: 2026-01-15
+**版本**: v0.7.1
+**总端点数**: REST API + Python Client
+**最后更新**: 2026-05-10
 
 ---
 
@@ -24,11 +24,11 @@
 
 **快速示例**:
 ```python
-import runicorn.api as api
+import runicorn.client as client_mod
 
-with api.connect() as client:
-    experiments = client.list_experiments(project="vision")
-    metrics = client.get_metrics(experiments[0]["id"])
+with client_mod.connect() as client:
+    runs = client.list_runs_by_path(path="vision")
+    metrics = client.get_metrics(runs[0]["id"])
 ```
 
 ---
@@ -68,7 +68,8 @@ with api.connect() as client:
 
 ### Remote Viewer API (远程访问) 🆕
 
-**v0.5.4**: VSCode Remote 风格的远程服务器访问
+**当前主入口**: [remote_api.md](./remote_api.md)  
+**历史接口说明**: [ssh_api.md](./ssh_api.md)
 
 #### 连接管理
 
@@ -79,12 +80,24 @@ with api.connect() as client:
 | POST | `/api/remote/disconnect` | 断开会话 | [📖](./remote_api.md#post-apiremotedisconnect) |
 | GET | `/api/remote/status` | 远程状态 | [📖](./remote_api.md#get-apiremotestatus) |
 
+#### Host Key 与已保存连接
+
+| 方法 | 端点 | 描述 | 文档 |
+|------|------|------|------|
+| POST | `/api/remote/known-hosts/accept` | 接受 host key | [📖](./remote_api.md) |
+| GET | `/api/remote/known-hosts/list` | 列出 known_hosts 条目 | [📖](./remote_api.md) |
+| POST | `/api/remote/known-hosts/remove` | 删除 known_hosts 条目 | [📖](./remote_api.md) |
+| GET | `/api/remote/connections/saved` | 读取脱敏后的保存连接 | [📖](./remote_api.md) |
+| POST | `/api/remote/connections/saved` | 保存连接配置列表 | [📖](./remote_api.md) |
+
 #### 环境检测
 
 | 方法 | 端点 | 描述 | 文档 |
 |------|------|------|------|
 | GET | `/api/remote/conda-envs` | 列出 Python 环境 | [📖](./remote_api.md#get-apiremoteconda-envs) |
+| GET | `/api/remote/env-configs` | 批量读取环境版本摘要 | [📖](./remote_api.md) |
 | GET | `/api/remote/config` | 获取远程配置 | [📖](./remote_api.md#get-apiremoteconfig) |
+| GET | `/api/remote/storage-candidates` | 探测远端存储候选目录 | [📖](./remote_api.md) |
 
 #### Remote Viewer 管理
 
@@ -95,9 +108,9 @@ with api.connect() as client:
 | GET | `/api/remote/viewer/sessions` | 列出 Viewer 会话 | [📖](./remote_api.md#get-apiremoteviewersessions) |
 | GET | `/api/remote/viewer/status/{session_id}` | 按 session_id 获取 Viewer 状态 | [📖](./remote_api.md#get-apiremoteviewerstatussession_id) |
 
-### 增强日志 API 🆕 (v0.6.0)
+### 增强日志 API（引入于 v0.6.0）
 
-**新增**: 控制台捕获和 Python logging 集成
+**当前范围**: 控制台捕获和 Python logging 集成
 
 | 组件 | 描述 | 文档 |
 |------|------|------|
@@ -106,9 +119,9 @@ with api.connect() as client:
 | `get_logging_handler()` | Python logging.Handler 集成 | [📖](./logging_api.md#日志处理器) |
 | `MetricLogger` | torchvision 兼容的指标记录器 | [📖](./logging_api.md#metriclogger-兼容层) |
 
-### 路径层级 API 🆕 (v0.6.0)
+### 路径层级 API（引入于 v0.6.0）
 
-**新增**: 灵活的基于路径的实验组织
+**当前范围**: 灵活的基于路径的实验组织
 
 | 方法 | 端点 | 描述 | 文档 |
 |------|------|------|------|
@@ -188,7 +201,8 @@ GET /api/runs
 GET /api/projects/{project}/names/{name}/runs
 
 # 3. 导出数据
-GET /api/export?format=json
+POST /api/runs/export
+GET /api/paths/export?path={path}&format=json
 ```
 
 ---
@@ -243,10 +257,10 @@ X-RateLimit-Reset: 15
 ### SSH 安全
 
 - 永远不要记录凭据
-- 使用 SSH 密钥 > 密码
-- 尽可能使用 SSH agent
-- 连接不会持久化
-- 每分钟最多 5 次连接尝试
+- 优先使用 SSH 密钥或 SSH agent
+- host key 校验失败会返回 `409`，需要显式确认
+- 当前远程接口主路径是 `/api/remote/*`
+- `/api/unified/*` 与 `/api/ssh/*` 只保留为历史说明
 
 ---
 
@@ -302,7 +316,7 @@ http --pretty=all GET http://127.0.0.1:23300/api/config
 import runicorn as rn
 
 # 创建实验
-run = rn.init(project="demo", name="exp1")
+run = rn.init(path="demo/exp1")
 
 # 记录指标
 run.log({"loss": 0.1, "accuracy": 0.95}, step=100)
@@ -340,8 +354,16 @@ run.finish()
 
 ## API 变更日志
 
-### v0.6.0 (当前) 🚀
-**重大新功能**
+### v0.7.1 (当前) 🚀
+**当前版本重点**
+- ✅ **Remote Viewer 强化**: 保存连接、健康监控、重连状态与 OpenSSH 密码支持
+- ✅ **Web UI 产品化**: 更清晰的导航、ZIP 导入导出预览、统一回收站与更顺手的对比流程
+- ✅ **日志与监控**: 虚拟滚动日志、更一致的暗色模式、后端采集 GPU 遥测历史
+- ✅ **日志兼容增强**: 更好支持 ImageNet meters、TensorBoard 与 tensorboardX
+- ✅ **桌面工作流改进**: 当前桌面流程支持原生远程会话处理
+
+### v0.6.0
+**基础能力建设**
 - ✅ **增强日志 API**: 控制台捕获、Python logging 处理器、MetricLogger 兼容
 - ✅ **资产系统**: SHA256 内容寻址工作区快照，支持去重
 - ✅ **路径层级 API**: 灵活的基于路径的实验组织，支持树形导航
@@ -368,7 +390,7 @@ run.finish()
 - ✅ 图表渲染的 Bug 修复
 
 ### v0.5.0
-- ✅ **新增 Remote Viewer API**（12个端点）
+- ✅ **新增 Remote Viewer API**（当前已演化为 `/api/remote/*` 远程接口族）
 - ✅ 弃用旧的 SSH 文件同步 API
 - ✅ 支持 SSH 密钥和密码认证
 - ✅ 自动 Python 环境检测
@@ -385,9 +407,8 @@ run.finish()
 - 指标查询
 - SSH 镜像支持
 
-### 未来版本
+### 可能的后续方向（未承诺）
 
-**v0.7.0**（计划中）:
 - Windows 远程服务器支持
 - GraphQL API 支持
 - Webhook 通知

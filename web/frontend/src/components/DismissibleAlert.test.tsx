@@ -64,8 +64,8 @@ describe('DismissibleAlert', () => {
       <DismissibleAlert alertId="already-dismissed" message="Should not show" type="info" />,
     )
 
-    // Wait for the check to complete
-    await new Promise((r) => setTimeout(r, 100))
-    expect(screen.queryByText('Should not show')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('Should not show')).not.toBeInTheDocument()
+    })
   })
 })

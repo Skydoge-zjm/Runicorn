@@ -1,4 +1,5 @@
 import React from 'react'
+import { render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { SettingsProvider } from '../contexts/SettingsContext'
@@ -59,11 +60,18 @@ export function createWrapper(opts?: {
 }) {
   const qc = createTestQueryClient()
   const settings = opts?.settings ?? defaultSettings
+  const routerFuture = {
+    v7_startTransition: true,
+    v7_relativeSplatPath: true,
+  } as const
 
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <QueryClientProvider client={qc}>
-        <MemoryRouter initialEntries={opts?.initialEntries ?? ['/']}>
+        <MemoryRouter
+          initialEntries={opts?.initialEntries ?? ['/']}
+          future={routerFuture}
+        >
           <SettingsProvider value={{ settings, setSettings: vi.fn() }}>
             {children}
           </SettingsProvider>
@@ -71,4 +79,14 @@ export function createWrapper(opts?: {
       </QueryClientProvider>
     )
   }
+}
+
+export function renderWithProviders(
+  ui: React.ReactElement,
+  opts?: {
+    initialEntries?: string[]
+    settings?: UiSettings
+  },
+) {
+  return render(ui, { wrapper: createWrapper(opts) })
 }

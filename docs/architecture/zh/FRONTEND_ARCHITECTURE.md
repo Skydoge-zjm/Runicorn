@@ -4,10 +4,10 @@
 
 # 前端架构
 
-**文档类型**: 架构  
-**目的**: React 应用设计和模式  
-**版本**: v0.6.0  
-**最后更新**: 2025-01-XX
+**文档类型**: 架构
+**目的**: React 应用设计和模式
+**版本**: v0.7.1
+**最后更新**: 2026-03-28
 
 ---
 
@@ -23,17 +23,21 @@ src/
 ├── pages/                 # 页面组件
 │   ├── ExperimentPage.tsx
 │   ├── RunDetailPage.tsx
-│   ├── ArtifactsPage.tsx
-│   └── UnifiedRemotePage.tsx
+│   ├── AssetsPage.tsx
+│   ├── AssetDetailPage.tsx
+│   ├── PerformanceMonitorPage.tsx
+│   ├── DiagnosticsPage.tsx
+│   └── RemoteViewerPage.tsx
 │
 ├── components/            # 可复用组件
 │   ├── MetricChart.tsx
 │   ├── LogsViewer.tsx
-│   ├── LineageGraph.tsx
+│   ├── RunAssets.tsx
 │   ├── SettingsDrawer.tsx
 │   ├── PathTreePanel.tsx      # v0.6.0 - 路径树导航
 │   ├── CompareChartsView.tsx  # v0.6.0 - 多运行比较
-│   └── CompareRunsPanel.tsx   # v0.6.0 - 比较模式面板
+│   ├── CompareRunsPanel.tsx   # v0.6.0 - 比较模式面板
+│   └── assets/AssetPreview.tsx
 │
 ├── contexts/              # React Context
 │   └── SettingsContext.tsx
@@ -99,11 +103,11 @@ const [settings, setSettings] = useState(() => {
 function RunDetailPage() {
   const [run, setRun] = useState(null)
   const [loading, setLoading] = useState(true)
-  
+
   useEffect(() => {
     fetchRunDetail(id).then(setRun).finally(() => setLoading(false))
   }, [id])
-  
+
   return <RunDetailView run={run} loading={loading} />
 }
 ```
@@ -257,19 +261,19 @@ interface MetricChartProps {
 }
 
 // 使用方式 - 单实验
-<MetricChart 
-  runs={[{ id: runId, metrics: stepMetrics }]} 
-  xKey="global_step" 
-  yKey="loss" 
-  title="训练损失" 
+<MetricChart
+  runs={[{ id: runId, metrics: stepMetrics }]}
+  xKey="global_step"
+  yKey="loss"
+  title="训练损失"
 />
 
 // 使用方式 - 多实验对比
-<MetricChart 
+<MetricChart
   runs={selectedRuns.map(r => ({ id: r.id, label: r.name, metrics: r.metrics }))}
-  xKey="global_step" 
-  yKey="loss" 
-  title="损失对比" 
+  xKey="global_step"
+  yKey="loss"
+  title="损失对比"
 />
 ```
 
@@ -290,7 +294,7 @@ function LazyChartWrapper({ children, height = 320, threshold = 0.1 }) {
 
   useEffect(() => {
     if (hasLoaded) return
-    
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -328,26 +332,26 @@ const MetricChart = memo(function MetricChart({ runs, xKey, yKey, ... }) {
 }, (prevProps, nextProps) => {
   // 通过指纹比较 runs 数组，而非引用
   if (prevProps.runs.length !== nextProps.runs.length) return false
-  
+
   for (let i = 0; i < prevProps.runs.length; i++) {
     const prevRun = prevProps.runs[i]
     const nextRun = nextProps.runs[i]
-    
+
     if (prevRun.id !== nextRun.id) return false
     if (prevRun.label !== nextRun.label) return false
-    
+
     // 通过行数和最后步数比较（指纹）
     const prevRowCount = prevRun.metrics?.rows?.length ?? 0
     const nextRowCount = nextRun.metrics?.rows?.length ?? 0
     if (prevRowCount !== nextRowCount) return false
-    
+
     if (prevRowCount > 0) {
       const prevLastStep = prevRun.metrics.rows[prevRowCount - 1]?.global_step
       const nextLastStep = nextRun.metrics.rows[nextRowCount - 1]?.global_step
       if (prevLastStep !== nextLastStep) return false
     }
   }
-  
+
   return prevProps.xKey === nextProps.xKey && prevProps.yKey === nextProps.yKey
 })
 ```
@@ -384,7 +388,7 @@ const metrics = await getStepMetrics(runId, settings.maxDataPoints)
 
 ---
 
-## 新前端功能（v0.6.0）🆕
+## v0.6.0+ 引入的前端能力 🆕
 
 ### 路径树导航
 
@@ -490,7 +494,7 @@ const ansiConverter = new AnsiToHtml({
 
 ---
 
-## Remote Viewer 前端（v0.5.0）
+## Remote Viewer 前端
 
 ### 新增页面和组件
 
@@ -531,7 +535,7 @@ useEffect(() => {
       updateConnectionHealth(conn.connection_id, health)
     }
   }, 30000)  // 每30秒
-  
+
   return () => clearInterval(interval)
 }, [connections])
 ```
@@ -543,7 +547,7 @@ useEffect(() => {
 function ConnectionForm({ onConnect }) {
   const [form] = Form.useForm()
   const [connecting, setConnecting] = useState(false)
-  
+
   const handleSubmit = async (values) => {
     setConnecting(true)
     try {
@@ -555,7 +559,7 @@ function ConnectionForm({ onConnect }) {
         private_key_path: values.keyPath,
         password: values.password  // 仅在内存中
       })
-      
+
       message.success('连接成功！')
       onConnect(result.connection_id)
     } catch (error) {
@@ -564,7 +568,7 @@ function ConnectionForm({ onConnect }) {
       setConnecting(false)
     }
   }
-  
+
   return (
     <Form form={form} onFinish={handleSubmit}>
       <Form.Item name="host" label="主机" rules={[{ required: true }]}>
@@ -584,7 +588,7 @@ function ConnectionForm({ onConnect }) {
 function EnvironmentSelector({ connectionId, onSelect }) {
   const [environments, setEnvironments] = useState([])
   const [loading, setLoading] = useState(true)
-  
+
   useEffect(() => {
     detectEnvironments(connectionId)
       .then(envs => {
@@ -592,7 +596,7 @@ function EnvironmentSelector({ connectionId, onSelect }) {
         setLoading(false)
       })
   }, [connectionId])
-  
+
   return (
     <List
       loading={loading}
@@ -600,8 +604,8 @@ function EnvironmentSelector({ connectionId, onSelect }) {
       renderItem={env => (
         <List.Item
           actions={[
-            <Button 
-              type="primary" 
+            <Button
+              type="primary"
               onClick={() => onSelect(env.name)}
             >
               选择
@@ -629,16 +633,16 @@ function EnvironmentSelector({ connectionId, onSelect }) {
 async function startRemoteViewer(connectionId: string, envName: string) {
   // 显示启动进度
   const hide = message.loading('正在启动 Remote Viewer...', 0)
-  
+
   try {
     const result = await startViewer({
       connection_id: connectionId,
       env_name: envName,
       auto_open: false  // 手动控制打开
     })
-    
+
     hide()
-    
+
     // 显示成功，提供打开链接
     Modal.success({
       title: 'Remote Viewer 已启动',
@@ -677,19 +681,19 @@ function ViewerStatusIndicator({ connection }: { connection: RemoteConnection })
       default: return 'red'
     }
   }
-  
+
   return (
     <Space>
-      <Badge 
-        status={getStatusColor(connection.status)} 
+      <Badge
+        status={getStatusColor(connection.status)}
         text={connection.status}
       />
       {connection.has_viewer && (
         <>
           <Divider type="vertical" />
           <Tag color="success">Viewer 运行中</Tag>
-          <Button 
-            type="link" 
+          <Button
+            type="link"
             size="small"
             onClick={() => window.open(connection.viewer_url, '_blank')}
           >
@@ -714,30 +718,30 @@ function ViewerStatusIndicator({ connection }: { connection: RemoteConnection })
 ```typescript
 function useConnectionHealth(connectionId: string, interval = 30000) {
   const [health, setHealth] = useState<HealthStatus | null>(null)
-  
+
   useEffect(() => {
     if (!connectionId) return
-    
+
     // 立即检查一次
     checkHealth(connectionId).then(setHealth)
-    
+
     // 定期检查
     const timer = setInterval(() => {
       checkHealth(connectionId).then(setHealth)
     }, interval)
-    
+
     return () => clearInterval(timer)
   }, [connectionId, interval])
-  
+
   return health
 }
 
 // 使用
 function RemoteViewerControl({ connectionId }) {
   const health = useConnectionHealth(connectionId)
-  
+
   if (!health) return <Spin />
-  
+
   return (
     <Card>
       <Statistic
@@ -763,7 +767,7 @@ function RemoteViewerControl({ connectionId }) {
 async function handleRemoteError(error: any) {
   // 解析错误
   const errorData = await error.json().catch(() => ({}))
-  
+
   switch (errorData.error) {
     case 'ssh_auth_failed':
       Modal.error({
@@ -780,7 +784,7 @@ async function handleRemoteError(error: any) {
         )
       })
       break
-    
+
     case 'environment_not_found':
       notification.warning({
         message: '未找到兼容环境',
@@ -788,7 +792,7 @@ async function handleRemoteError(error: any) {
         duration: 10
       })
       break
-    
+
     case 'viewer_start_failed':
       Modal.error({
         title: 'Viewer 启动失败',
@@ -800,7 +804,7 @@ async function handleRemoteError(error: any) {
         }
       })
       break
-    
+
     default:
       message.error(`操作失败: ${errorData.message || '未知错误'}`)
   }

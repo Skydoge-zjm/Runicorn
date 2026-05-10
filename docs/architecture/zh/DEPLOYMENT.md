@@ -4,7 +4,7 @@
 
 # 部署架构
 
-**文档类型**: 架构  
+**文档类型**: 架构
 **目的**: 记录部署选项和生产考虑
 
 ---
@@ -195,7 +195,7 @@ http://服务器IP:23300
 **前置要求**:
 - Node.js 18+
 - Rust (稳定版)
-- Python 3.8+
+- Python 3.10+
 - NSIS（用于安装程序）
 
 **构建**:
@@ -204,7 +204,7 @@ cd desktop/tauri
 .\build_release.ps1 -Bundles nsis
 ```
 
-**输出**: 
+**输出**:
 ```
 desktop/tauri/src-tauri/target/release/bundle/nsis/
 └── Runicorn_Desktop_0.4.0_x64-setup.exe
@@ -220,7 +220,7 @@ desktop/tauri/src-tauri/target/release/bundle/nsis/
 
 ---
 
-## Remote Viewer 部署（v0.5.0）
+## Remote Viewer 部署
 
 ### 架构
 
@@ -260,7 +260,7 @@ pip install runicorn
 import runicorn as rn
 
 run = rn.init(
-    project="training",
+    path="training/remote-demo",
     storage="~/RunicornData"  # 或任意路径
 )
 
@@ -284,7 +284,7 @@ runicorn viewer
 #      * 端口: 22
 #      * 用户名: researcher
 #      * 认证: SSH 密钥或密码
-#    
+#
 # 4. 系统自动:
 #    ✓ 检测远程 Python 环境
 #    ✓ 选择包含 Runicorn 的环境
@@ -300,7 +300,7 @@ runicorn viewer
 
 ### 对比旧方案（SSH 文件同步）
 
-| 特性 | 旧方案（SSH 同步）| Remote Viewer (v0.5.0) |
+| 特性 | 旧方案（SSH 同步）| Remote Viewer |
 |------|------------------|------------------------|
 | **数据传输** | 需要同步大量文件 | 无需同步，直接访问 |
 | **等待时间** | 首次同步几分钟 | 即时连接（5-10秒）|
@@ -339,7 +339,7 @@ runicorn viewer
   - 使用 VPN 进行远程访问
   - 使用 SSH 隧道: `ssh -L 23300:localhost:23300 server`
 
-**未来**: v0.5+ 计划支持 API 密钥认证
+**当前状态**: API 密钥认证不属于当前部署模型；只有在后续版本真正落地后，才应在这里补充说明。
 
 ---
 
@@ -347,9 +347,9 @@ runicorn viewer
 
 **对于大型部署（10,000+ 实验）**:
 
-1. **专门使用 V2 API**
-   - 前端: 始终查询 `/api/v2/experiments`
-   - 避免 V1 文件扫描端点
+1. **优先使用 SQLite 支撑的列表接口**
+   - 前端: 使用 `/api/runs`、`/api/paths/runs` 和 `/api/runs/{run_id}`
+   - 大规模部署时避免自定义文件扫描式列表逻辑
 
 2. **调整 SQLite 设置**:
 ```python
@@ -432,7 +432,7 @@ runicorn artifacts --action stats
 **性能**:
 ```bash
 # 检查查询时间（应 <100毫秒）
-curl http://localhost:23300/api/v2/experiments?per_page=50
+curl http://localhost:23300/api/runs
 
 # 在浏览器 DevTools → Network 标签中监控
 ```
@@ -448,7 +448,7 @@ lsof -i :23300  # Linux/Mac
 netstat -ano | findstr :23300  # Windows
 
 # 检查 Python 版本
-python --version  # 必须是 3.8+
+python --version  # 必须是 3.10+
 
 # 检查安装
 pip list | grep runicorn
@@ -468,8 +468,8 @@ runicorn viewer
 
 **查询慢**:
 ```bash
-# 检查是否使用 V1 API（慢）
-# 解决方案: 确保前端使用 V2 API
+# 检查自定义工具是否绕过了 SQLite 支撑的列表接口
+# 解决方案: 优先使用 /api/runs 或 /api/paths/runs，而不是临时文件扫描
 
 # 或: 重建索引
 sqlite3 runicorn.db "REINDEX;"
@@ -481,7 +481,7 @@ sqlite3 runicorn.db "REINDEX;"
 
 ### 部署前
 
-- [ ] 已安装 Python 3.8+
+- [ ] 已安装 Python 3.10+
 - [ ] 足够的磁盘空间（估算: 实验数 × 10MB + 模型）
 - [ ] 网络可访问（如果共享部署）
 - [ ] 防火墙已配置（如适用）

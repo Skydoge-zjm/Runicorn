@@ -9,7 +9,6 @@ import collections
 import logging
 import os
 import shutil
-import subprocess
 import threading
 import time
 from typing import Any, Dict, List, Optional

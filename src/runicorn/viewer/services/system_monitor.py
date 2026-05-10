@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import platform
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 try:
     import psutil

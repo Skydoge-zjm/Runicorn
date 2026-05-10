@@ -7,13 +7,24 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request
 from ...storage.file_utils import iter_all_runs, read_json, update_status_if_process_dead
 from ...sdk import _normalize_status
 from ..utils.incremental_cache import get_incremental_metrics_cache
 from ..services.db_reader import get_backend
 
 router = APIRouter()
+
+
+def _storage_backend_payload(request: Request) -> Dict[str, Any]:
+    backend = getattr(request.app.state, "storage_backend", None)
+    using_sqlite = backend is not None
+    return {
+        "mode": "sqlite" if using_sqlite else "file",
+        "label": "SQLite-backed" if using_sqlite else "File-based fallback",
+        "available": using_sqlite,
+        "backend_class": backend.__class__.__name__ if backend is not None else None,
+    }
 
 
 @router.get("/health")
@@ -35,6 +46,7 @@ async def health(request: Request) -> Dict[str, Any]:
         "status": "ok", 
         "storage": str(storage_root),
         "version": __version__,
+        "storage_backend": _storage_backend_payload(request),
         "cache": {
             "enabled": True,
             "type": "incremental",

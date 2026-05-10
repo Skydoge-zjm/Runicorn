@@ -6,7 +6,7 @@ Handles advanced experiment operations like tagging, search, and batch delete.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request, Body
 

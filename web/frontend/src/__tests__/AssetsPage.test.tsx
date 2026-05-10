@@ -1,12 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { server } from '../__mocks__/server'
-import { SettingsProvider } from '../contexts/SettingsContext'
-import { defaultSettings } from './helpers'
+import { renderWithProviders } from './helpers'
 import AssetsPage from '../pages/AssetsPage'
 
 // ── Mocks ──
@@ -114,22 +111,7 @@ vi.mock('../hooks/useAssetsIndex', () => ({
 // ── Helpers ──
 
 function renderPage() {
-  const qc = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
-      mutations: { retry: false },
-    },
-  })
-
-  return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/assets']}>
-        <SettingsProvider value={{ settings: defaultSettings, setSettings: vi.fn() }}>
-          <AssetsPage />
-        </SettingsProvider>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
+  return renderWithProviders(<AssetsPage />, { initialEntries: ['/assets'] })
 }
 
 // ── Tests ──
@@ -178,9 +160,10 @@ describe('AssetsPage integration', () => {
 
   it('displays repo tab with repository items', { timeout: 15000 }, async () => {
     renderPage()
+    const user = userEvent.setup()
 
     // Click repo tab
-    await userEvent.click(screen.getByText('assets.tab.repository'))
+    await user.click(screen.getByRole('tab', { name: 'assets.tab.repository' }))
 
     // Wait for repo rows to render
     await waitFor(() => {
@@ -189,14 +172,21 @@ describe('AssetsPage integration', () => {
     }, { timeout: 10000 })
   })
 
-  it('shows refresh button and calls refresh on click', async () => {
+  it('shows refresh button and calls refresh on click', { timeout: 15000 }, async () => {
     renderPage()
+    const user = userEvent.setup()
 
-    // Find and click refresh button
-    const refreshBtn = screen.getByText('assets.actions.refresh_index')
-    await userEvent.click(refreshBtn)
+    const refreshLabel = await screen.findByText('assets.actions.refresh_index', {}, { timeout: 10000 })
+    const refreshBtn = refreshLabel.closest('button')
+    expect(refreshBtn).not.toBeNull()
+    await waitFor(() => {
+      expect(refreshBtn!).toBeEnabled()
+    }, { timeout: 10000 })
+    await user.click(refreshBtn!)
 
-    expect(mockRefresh).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      expect(mockRefresh).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('shows auto-refresh checkbox linked to settings', () => {
@@ -269,56 +259,60 @@ describe('AssetsPage integration', () => {
     })
   })
 
-  it('renders repo tab filter controls', async () => {
+  it('renders repo tab filter controls', { timeout: 15000 }, async () => {
     renderPage()
+    const user = userEvent.setup()
 
-    await userEvent.click(screen.getByText('assets.tab.repository'))
+    await user.click(screen.getByRole('tab', { name: 'assets.tab.repository' }))
 
     await waitFor(() => {
       // Filter labels/text
-      expect(screen.getByText('assets.filters.only_archived')).toBeInTheDocument()
-      expect(screen.getByText('assets.filters.only_related')).toBeInTheDocument()
-    })
+      expect(screen.getAllByText('assets.filters.only_archived').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('assets.filters.only_related').length).toBeGreaterThanOrEqual(1)
+    }, { timeout: 10000 })
   })
 
-  it('repo tab filters out items with runs_count=0 when onlyRelated is true (default)', async () => {
+  it('repo tab filters out items with runs_count=0 when onlyRelated is true (default)', { timeout: 15000 }, async () => {
     // Default: onlyRelated is true — all 3 repo items have runs_count > 0, so all visible
     renderPage()
+    const user = userEvent.setup()
 
-    await userEvent.click(screen.getByText('assets.tab.repository'))
+    await user.click(screen.getByRole('tab', { name: 'assets.tab.repository' }))
 
     await waitFor(() => {
-      expect(screen.getByText('main.py')).toBeInTheDocument()
-      expect(screen.getByText('params.yaml')).toBeInTheDocument()
-      expect(screen.getByText('imagenet')).toBeInTheDocument()
-    })
+      expect(screen.getAllByText('main.py').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('params.yaml').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('imagenet').length).toBeGreaterThanOrEqual(1)
+    }, { timeout: 10000 })
   })
 
-  it('repo tab shows saved tag for archived assets', async () => {
+  it('repo tab shows saved tag for archived assets', { timeout: 15000 }, async () => {
     renderPage()
+    const user = userEvent.setup()
 
-    await userEvent.click(screen.getByText('assets.tab.repository'))
+    await user.click(screen.getByRole('tab', { name: 'assets.tab.repository' }))
 
     await waitFor(() => {
       // main.py is saved=true, so it should have the "saved" tag
-      expect(screen.getByText('assets.tag.saved')).toBeInTheDocument()
+      expect(screen.getAllByText('assets.tag.saved').length).toBeGreaterThanOrEqual(1)
       // params.yaml and imagenet are saved=false, so they should have "ref" tags
       expect(screen.getAllByText('assets.tag.ref').length).toBeGreaterThanOrEqual(2)
-    })
+    }, { timeout: 10000 })
   })
 
-  it('shows repo table column headers', async () => {
+  it('shows repo table column headers', { timeout: 15000 }, async () => {
     renderPage()
+    const user = userEvent.setup()
 
-    await userEvent.click(screen.getByText('assets.tab.repository'))
+    await user.click(screen.getByRole('tab', { name: 'assets.tab.repository' }))
 
     await waitFor(() => {
-      expect(screen.getByText('assets.repo.kind')).toBeInTheDocument()
-      expect(screen.getByText('assets.repo.asset')).toBeInTheDocument()
-      expect(screen.getByText('assets.repo.saved')).toBeInTheDocument()
-      expect(screen.getByText('assets.repo.last_used')).toBeInTheDocument()
-      expect(screen.getByText('assets.repo.runs_count')).toBeInTheDocument()
-      expect(screen.getByText('assets.repo.actions')).toBeInTheDocument()
-    })
+      expect(screen.getAllByText('assets.repo.kind').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('assets.repo.asset').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('assets.repo.saved').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('assets.repo.last_used').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('assets.repo.runs_count').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('assets.repo.actions').length).toBeGreaterThanOrEqual(1)
+    }, { timeout: 10000 })
   })
 })

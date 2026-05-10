@@ -105,6 +105,7 @@ class TestLegacyProjects:
         assert resp.status_code == 200
         runs = resp.json()
         assert len(runs) >= 2
+        assert all("id" in r for r in runs)
         assert all(r["path"].startswith("cv/yolo") for r in runs)
 
 

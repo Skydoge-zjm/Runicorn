@@ -11,10 +11,11 @@ import logging
 import os
 import signal
 import time as _time
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.staticfiles import StaticFiles
@@ -26,6 +27,7 @@ from .api import (
     health_router,
     runs_router, 
     metrics_router,
+    diagnostics_router,
     config_router,
     experiments_router,
     export_router,
@@ -40,8 +42,199 @@ from .api import (
 
 # Import version from main package
 from .. import __version__
+from .utils.diagnostics import build_diagnostics_context
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_LOCAL_CORS_ORIGIN_REGEX = (
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+)
+_DEFAULT_DESKTOP_CORS_ORIGINS = [
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+]
+
+
+def _parse_csv_env(name: str) -> list[str]:
+    raw = os.environ.get(name, "")
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _get_cors_settings(*, remote_mode: bool) -> dict[str, Any]:
+    """
+    Resolve a maintainable CORS policy for three common cases:
+    1. Local dev: localhost/127.0.0.1 on arbitrary ports
+    2. Desktop/Tauri: tauri localhost origins
+    3. Remote access: explicit allow-list/regex via environment
+    """
+    explicit_origins = _parse_csv_env("RUNICORN_CORS_ALLOW_ORIGINS")
+    explicit_origin_regex = os.environ.get("RUNICORN_CORS_ALLOW_ORIGIN_REGEX", "").strip() or None
+
+    if explicit_origins or explicit_origin_regex:
+        return {
+            "allow_origins": explicit_origins,
+            "allow_origin_regex": explicit_origin_regex,
+            "allow_credentials": True,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
+
+    allow_origins = list(_DEFAULT_DESKTOP_CORS_ORIGINS)
+    allow_origin_regex = _DEFAULT_LOCAL_CORS_ORIGIN_REGEX
+
+    # In remote mode, default to the same local/desktop origins until the user
+    # explicitly opts into remote browser access with RUNICORN_CORS_ALLOW_*.
+    return {
+        "allow_origins": allow_origins,
+        "allow_origin_regex": allow_origin_regex,
+        "allow_credentials": True,
+        "allow_methods": ["*"],
+        "allow_headers": ["*"],
+    }
+
+
+async def _start_viewer_runtime(app: FastAPI, root: Path) -> None:
+    import threading
+
+    status_check_task = asyncio.create_task(
+        periodic_status_check(root, backend=app.state.storage_backend)
+    )
+    app.state.status_check_task = status_check_task
+    logger.info("Started background process status checker")
+
+    from .services.gpu import GpuCollector
+    from ..config import load_user_config
+
+    ucfg = load_user_config()
+    app.state.gpu_collector = GpuCollector(
+        enabled=bool(ucfg.get("gpu_background_collect", True)),
+        interval_sec=float(ucfg.get("gpu_interval_sec", 2)),
+        max_duration_h=float(ucfg.get("gpu_max_duration_h", 24)),
+    )
+    app.state.gpu_collector.start()
+
+    if app.state.storage_backend is not None:
+        def _run_sync():
+            try:
+                from .services.db_reader import sync_filesystem_to_db
+                sync_filesystem_to_db(root, app.state.storage_backend)
+            except Exception as e:
+                logger.warning(f"Filesystem-to-SQLite sync failed: {e}")
+
+        sync_thread = threading.Thread(target=_run_sync, daemon=True)
+        sync_thread.start()
+        app.state.sync_thread = sync_thread
+
+    if app.state.idle_timeout > 0:
+        async def _idle_shutdown_check():
+            timeout = app.state.idle_timeout
+            logger.info(f"Idle shutdown enabled: timeout={timeout}s")
+            while True:
+                try:
+                    await asyncio.sleep(60)
+                    elapsed = _time.time() - app.state.last_request_time
+                    if elapsed >= timeout:
+                        logger.warning(
+                            f"No requests for {elapsed:.0f}s (timeout={timeout}s). "
+                            "Shutting down remote-mode viewer."
+                        )
+                        os._exit(0)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"Idle shutdown check error: {e}")
+                    await asyncio.sleep(30)
+
+        app.state.idle_shutdown_task = asyncio.create_task(_idle_shutdown_check())
+        logger.info("Started idle shutdown checker")
+
+    async def _periodic_session_cleanup():
+        while True:
+            try:
+                await asyncio.sleep(60)
+                mgr = getattr(app.state, "viewer_manager", None)
+                if mgr is not None:
+                    cleaned = mgr.cleanup_dead_sessions()
+                    if cleaned > 0:
+                        logger.info(f"Periodic cleanup: removed {cleaned} dead session(s)")
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Session cleanup error: {e}")
+                await asyncio.sleep(30)
+
+    app.state.session_cleanup_task = asyncio.create_task(_periodic_session_cleanup())
+    logger.info("Started periodic session cleanup task")
+
+    try:
+        original_sigint = signal.getsignal(signal.SIGINT)
+
+        def _on_sigint(signum, frame):
+            app.state.shutdown_event.set()
+            if callable(original_sigint) and original_sigint is not signal.SIG_DFL:
+                original_sigint(signum, frame)
+            else:
+                raise KeyboardInterrupt
+
+        signal.signal(signal.SIGINT, _on_sigint)
+        app.state.original_sigint_handler = original_sigint
+    except (OSError, ValueError):
+        logger.debug("Could not install SIGINT wrapper (not main thread)")
+        app.state.original_sigint_handler = None
+
+
+async def _stop_viewer_runtime(app: FastAPI) -> None:
+    app.state.shutdown_event.set()
+
+    sync_thread = getattr(app.state, "sync_thread", None)
+    if sync_thread is not None and sync_thread.is_alive():
+        await asyncio.get_event_loop().run_in_executor(
+            None, lambda: sync_thread.join(timeout=5)
+        )
+        if sync_thread.is_alive():
+            logger.warning("Sync thread did not finish within timeout")
+
+    for task_name, log_message in (
+        ("session_cleanup_task", "Stopped periodic session cleanup task"),
+        ("idle_shutdown_task", "Stopped idle shutdown checker"),
+        ("status_check_task", "Stopped background process status checker"),
+    ):
+        task = getattr(app.state, task_name, None)
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            setattr(app.state, task_name, None)
+            logger.info(log_message)
+
+    if hasattr(app.state, "gpu_collector"):
+        app.state.gpu_collector.stop()
+
+    if hasattr(app.state, "viewer_manager"):
+        try:
+            sessions = app.state.viewer_manager.list_sessions()
+            for session in sessions:
+                app.state.viewer_manager.stop_remote_viewer(session.session_id)
+            logger.info("Closed all Remote Viewer sessions")
+        except Exception as e:
+            logger.warning(f"Failed to close Remote Viewer sessions: {e}")
+
+    if hasattr(app.state, "connection_pool"):
+        try:
+            app.state.connection_pool.close_all()
+            logger.info("Closed all SSH connections")
+        except Exception as e:
+            logger.warning(f"Failed to close SSH connections: {e}")
+
+    if getattr(app.state, "storage_backend", None) is not None:
+        try:
+            app.state.storage_backend.close()
+            logger.info("Closed SQLite storage backend")
+        except Exception as e:
+            logger.warning(f"Failed to close SQLite storage backend: {e}")
 
 
 async def reinitialize_storage(app: FastAPI, new_root: Path) -> None:
@@ -126,24 +319,35 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     """
     # Initialize storage root
     root = get_storage_root(storage)
-    
+
+    remote_mode = str(os.environ.get("RUNICORN_REMOTE_MODE", "")).lower() in ("1", "true", "yes")
+    log_context = build_diagnostics_context(remote_mode=remote_mode)
+
     # Setup logging
-    setup_logging()
+    log_context = setup_logging(session_context=log_context)
     
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        await _start_viewer_runtime(app, root)
+        try:
+            yield
+        finally:
+            await _stop_viewer_runtime(app)
+
     # Create FastAPI app
     app = FastAPI(
         title="Runicorn Viewer",
         version=__version__,
-        description="Local experiment tracking and visualization platform"
+        description="Local experiment tracking and visualization platform",
+        lifespan=lifespan,
     )
+    app.state.log_context = log_context
+    app.state.remote_mode = remote_mode
     
     # Configure CORS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*", "http://localhost:5173", "http://127.0.0.1:5173"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        **_get_cors_settings(remote_mode=remote_mode),
     )
     
     # Add rate limiting middleware
@@ -167,170 +371,11 @@ def create_app(storage: Optional[str] = None) -> FastAPI:
     # Shutdown signal for WebSocket handlers
     app.state.shutdown_event = asyncio.Event()
     
-    # Background task for status checking
-    _status_check_task = None
-
-    @app.on_event("startup")
-    async def startup_event():
-        """Initialize background tasks on app startup."""
-        nonlocal _status_check_task
-        _status_check_task = asyncio.create_task(
-            periodic_status_check(root, backend=app.state.storage_backend)
-        )
-        app.state.status_check_task = _status_check_task
-        logger.info("Started background process status checker")
-        
-        # Start GPU background collector
-        from .services.gpu import GpuCollector
-        from ..config import load_user_config
-        ucfg = load_user_config()
-        app.state.gpu_collector = GpuCollector(
-            enabled=bool(ucfg.get("gpu_background_collect", True)),
-            interval_sec=float(ucfg.get("gpu_interval_sec", 2)),
-            max_duration_h=float(ucfg.get("gpu_max_duration_h", 24)),
-        )
-        app.state.gpu_collector.start()
-        
-        # Sync filesystem runs into SQLite (background, non-blocking)
-        if app.state.storage_backend is not None:
-            def _run_sync():
-                try:
-                    from .services.db_reader import sync_filesystem_to_db
-                    sync_filesystem_to_db(root, app.state.storage_backend)
-                except Exception as e:
-                    logger.warning(f"Filesystem-to-SQLite sync failed: {e}")
-            import threading
-            sync_thread = threading.Thread(target=_run_sync, daemon=True)
-            sync_thread.start()
-            app.state.sync_thread = sync_thread
-        
-        # Start idle shutdown checker (remote-mode only).
-        if app.state.idle_timeout > 0:
-            async def _idle_shutdown_check():
-                timeout = app.state.idle_timeout
-                logger.info(f"Idle shutdown enabled: timeout={timeout}s")
-                while True:
-                    try:
-                        await asyncio.sleep(60)
-                        elapsed = _time.time() - app.state.last_request_time
-                        if elapsed >= timeout:
-                            logger.warning(
-                                f"No requests for {elapsed:.0f}s (timeout={timeout}s). "
-                                "Shutting down remote-mode viewer."
-                            )
-                            # os._exit bypasses atexit / finally, which is
-                            # appropriate for a nohup-launched remote viewer.
-                            os._exit(0)
-                    except asyncio.CancelledError:
-                        break
-                    except Exception as e:
-                        logger.error(f"Idle shutdown check error: {e}")
-                        await asyncio.sleep(30)
-            
-            asyncio.create_task(_idle_shutdown_check())
-            logger.info("Started idle shutdown checker")
-        
-        # Start periodic dead session cleanup.
-        # (viewer_manager is created lazily on the first remote viewer
-        # request, so we always start this task and check inside the loop.)
-        async def _periodic_session_cleanup():
-            while True:
-                try:
-                    await asyncio.sleep(60)
-                    mgr = getattr(app.state, 'viewer_manager', None)
-                    if mgr is not None:
-                        cleaned = mgr.cleanup_dead_sessions()
-                        if cleaned > 0:
-                            logger.info(f"Periodic cleanup: removed {cleaned} dead session(s)")
-                except asyncio.CancelledError:
-                    break
-                except Exception as e:
-                    logger.error(f"Session cleanup error: {e}")
-                    await asyncio.sleep(30)
-        
-        asyncio.create_task(_periodic_session_cleanup())
-        logger.info("Started periodic session cleanup task")
-        
-        # Install a SIGINT wrapper so that shutdown_event is set BEFORE
-        # uvicorn starts waiting for connections to close.  This lets
-        # WebSocket handlers exit their loops promptly on Ctrl+C.
-        try:
-            original_sigint = signal.getsignal(signal.SIGINT)
-            
-            def _on_sigint(signum, frame):
-                app.state.shutdown_event.set()
-                # Chain to uvicorn's original handler so it proceeds with shutdown
-                if callable(original_sigint) and original_sigint is not signal.SIG_DFL:
-                    original_sigint(signum, frame)
-                else:
-                    raise KeyboardInterrupt
-            
-            signal.signal(signal.SIGINT, _on_sigint)
-        except (OSError, ValueError):
-            # signal.signal() can only be called from the main thread;
-            # if we're not there, fall back to on_event("shutdown") only.
-            logger.debug("Could not install SIGINT wrapper (not main thread)")
-    
-    @app.on_event("shutdown") 
-    async def shutdown_event():
-        """Cleanup background tasks and connections on app shutdown."""
-        # Ensure the event is set (covers the case where signal handler
-        # was not installed, e.g. non-main thread or SIGTERM shutdown).
-        app.state.shutdown_event.set()
-        
-        # Wait for sync thread to finish before closing the backend,
-        # so we don't close SQLite while sync is still writing.
-        sync_thread = getattr(app.state, "sync_thread", None)
-        if sync_thread is not None and sync_thread.is_alive():
-            await asyncio.get_event_loop().run_in_executor(
-                None, lambda: sync_thread.join(timeout=5)
-            )
-            if sync_thread.is_alive():
-                logger.warning("Sync thread did not finish within timeout")
-        
-        # Stop background status checker
-        if _status_check_task:
-            _status_check_task.cancel()
-            try:
-                await _status_check_task
-            except asyncio.CancelledError:
-                pass
-            logger.info("Stopped background process status checker")
-        
-        # Stop GPU background collector
-        if hasattr(app.state, 'gpu_collector'):
-            app.state.gpu_collector.stop()
-        
-        # Close Remote Viewer sessions
-        if hasattr(app.state, 'viewer_manager'):
-            try:
-                sessions = app.state.viewer_manager.list_sessions()
-                for session in sessions:
-                    app.state.viewer_manager.stop_remote_viewer(session.session_id)
-                logger.info("Closed all Remote Viewer sessions")
-            except Exception as e:
-                logger.warning(f"Failed to close Remote Viewer sessions: {e}")
-        
-        # Close SSH connection pool
-        if hasattr(app.state, 'connection_pool'):
-            try:
-                app.state.connection_pool.close_all()
-                logger.info("Closed all SSH connections")
-            except Exception as e:
-                logger.warning(f"Failed to close SSH connections: {e}")
-        
-        # Close SQLite storage backend
-        if getattr(app.state, 'storage_backend', None) is not None:
-            try:
-                app.state.storage_backend.close()
-                logger.info("Closed SQLite storage backend")
-            except Exception as e:
-                logger.warning(f"Failed to close SQLite storage backend: {e}")
-    
     # Register v1 API routers (backward compatibility)
     app.include_router(health_router, prefix="/api", tags=["health"])
     app.include_router(runs_router, prefix="/api", tags=["runs"])
     app.include_router(metrics_router, prefix="/api", tags=["metrics"])
+    app.include_router(diagnostics_router, prefix="/api", tags=["diagnostics"])
     app.include_router(config_router, prefix="/api", tags=["config"])
     app.include_router(experiments_router, prefix="/api", tags=["experiments"])
     app.include_router(export_router, prefix="/api", tags=["export"])

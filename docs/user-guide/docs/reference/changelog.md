@@ -2,6 +2,22 @@
 
 All notable changes to Runicorn.
 
+## <span class="rn-badge">v0.7.1</span> — 2026-05-10
+
+### Reliability and API alignment
+
+- Metrics identity handling tightened to avoid overwrite risk in rapid-write cases
+- Remote API surface and legacy path cleanup aligned to the current unified Remote Viewer model
+- Remote API, architecture, and desktop build docs brought back into sync with the shipped implementation
+
+### Security, CI, and desktop build hardening
+
+- Legacy XOR credential migration boundary tightened
+- Frontend smoke/baseline coverage expanded
+- Desktop build configuration and sidecar packaging workflow made more reproducible
+
+---
+
 ## <span class="rn-badge">v0.7.0</span> — 2026-03
 
 ### Remote Viewer hardening
@@ -264,6 +280,6 @@ All notable changes to Runicorn.
 ---
 
 <div align="center">
-  <p><strong>Latest version: <span class="rn-badge">v0.7.0</span></strong></p>
+  <p><strong>Latest version: <span class="rn-badge">v0.7.1</span></strong></p>
   <p><code>pip install -U runicorn</code></p>
 </div>

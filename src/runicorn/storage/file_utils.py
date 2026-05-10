@@ -14,7 +14,7 @@ import time
 import psutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def get_storage_root(storage: Optional[str] = None) -> Path:
     Returns:
         Path to storage root directory
     """
-    from ..sdk import _default_storage_dir, _normalize_status
+    from ..sdk import _default_storage_dir
     root = _default_storage_dir(storage)
     root.mkdir(parents=True, exist_ok=True)
     (root / "runs").mkdir(parents=True, exist_ok=True)
@@ -481,6 +481,8 @@ async def periodic_status_check(root: Path, backend=None) -> None:
         root: Storage root directory
         backend: Optional SQLiteStorageBackend for targeted queries
     """
+    from ..sdk import _normalize_status
+
     while True:
         try:
             if backend is not None:

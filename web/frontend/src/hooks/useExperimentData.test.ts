@@ -5,15 +5,6 @@ import { server } from '../__mocks__/server'
 import { createWrapper } from '../__tests__/helpers'
 import { useExperimentData } from './useExperimentData'
 
-// Mock antd message
-vi.mock('antd', async () => {
-  const actual = await vi.importActual('antd')
-  return {
-    ...actual,
-    message: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-  }
-})
-
 describe('useExperimentData', () => {
   beforeEach(() => {
     vi.clearAllMocks()

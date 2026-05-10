@@ -116,7 +116,17 @@ export async function listRunsByName(project: string, name: string) {
 
 // ----- Config helpers -----
 export async function getConfig() {
-  return apiFetch<{ user_root_dir: string; storage: string; home_directory?: string }>('/config')
+  return apiFetch<{
+    user_root_dir: string
+    storage: string
+    home_directory?: string
+    storage_backend?: {
+      mode: 'sqlite' | 'file'
+      label: string
+      available: boolean
+      backend_class?: string | null
+    }
+  }>('/config')
 }
 
 export async function setUserRootDir(path: string) {
@@ -252,82 +262,6 @@ export async function importArchive(file: File) {
   fd.append('file', file)
   fd.append('mode', 'merge')
   return apiFetch<ImportArchiveResult>('/import/archive', { method: 'POST', body: fd })
-}
-
-// ----- Unified SSH helpers -----
-export async function unifiedConnect(payload: {
-  host: string; port?: number; username: string; password?: string;
-  private_key?: string; private_key_path?: string; passphrase?: string; use_agent?: boolean;
-}) {
-  return apiFetch('/unified/connect', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload) })
-}
-
-export async function unifiedDisconnect() {
-  return apiFetch('/unified/disconnect', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({}) })
-}
-
-export async function unifiedStatus() {
-  return apiFetch('/unified/status')
-}
-
-export async function unifiedConfigureMode(payload: {
-  mode: 'smart' | 'mirror'; remote_root?: string; auto_sync?: boolean;
-  sync_interval_seconds?: number; mirror_interval?: number;
-}) {
-  return apiFetch('/unified/configure_mode', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload) })
-}
-
-export async function unifiedDeactivateMode(mode: 'smart' | 'mirror') {
-  return apiFetch('/unified/deactivate_mode', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ mode }) })
-}
-
-export async function unifiedListdir(path?: string) {
-  const q = new URLSearchParams({ path: path || '' })
-  return apiFetch<{
-    items: Array<{ name: string; path: string; type: 'dir'|'file'|'unknown'; size: number; mtime: number }>;
-    current_path: string; ok: boolean;
-  }>(`/unified/listdir?${q.toString()}`)
-}
-
-// ----- SSH live sync helpers -----
-export async function sshConnect(payload: {
-  host: string; port?: number; username: string; password?: string;
-  pkey?: string; pkey_path?: string; passphrase?: string; use_agent?: boolean;
-}) {
-  return apiFetch<{ ok: boolean; session_id: string }>('/ssh/connect', {
-    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload),
-  })
-}
-
-export async function sshSessions() {
-  return apiFetch<{ sessions: Array<{ id: string; host: string; port: number; username: string }> }>('/ssh/sessions')
-}
-
-export async function sshClose(session_id: string) {
-  return apiFetch<{ ok: boolean }>('/ssh/close', {
-    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ session_id }),
-  })
-}
-
-export async function sshListdir(session_id: string, path?: string) {
-  const q = new URLSearchParams({ session_id, path: path || '' })
-  return apiFetch<{ items: Array<{ name: string; path: string; type: 'dir'|'file'; size: number; mtime: number }> }>(`/ssh/listdir?${q.toString()}`)
-}
-
-export async function sshMirrorStart(payload: { session_id: string; remote_root: string; interval?: number }) {
-  return apiFetch<{ ok: boolean; task: any }>('/ssh/mirror/start', {
-    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload),
-  })
-}
-
-export async function sshMirrorStop(task_id: string) {
-  return apiFetch<{ ok: boolean }>('/ssh/mirror/stop', {
-    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ task_id }),
-  })
-}
-
-export async function sshMirrorList() {
-  return apiFetch<{ mirrors: any[]; storage: string }>('/ssh/mirror/list')
 }
 
 // ----- Status management -----

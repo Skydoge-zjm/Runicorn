@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from runicorn.security import rate_limiter as rate_limiter_module
 from runicorn.security.rate_limiter import EndpointRateLimiter, RateLimiter
 
 
@@ -235,3 +236,24 @@ class TestRateLimiterThreadSafety:
         # Each client should have all 5 requests allowed
         for client_id, client_results in results.items():
             assert all(client_results), f"{client_id} had denied requests"
+
+
+class TestGlobalRateLimiterDefaults:
+    """Regression coverage for endpoint defaults shipped with the viewer."""
+
+    def test_fallback_defaults_exclude_removed_legacy_remote_endpoints(self):
+        with patch("runicorn.config.get_rate_limit_config", side_effect=RuntimeError("boom")):
+            original = rate_limiter_module._endpoint_limiter
+            rate_limiter_module._endpoint_limiter = None
+            try:
+                limiter = rate_limiter_module.get_rate_limiter()
+            finally:
+                rate_limiter_module._endpoint_limiter = original
+
+        assert "/api/remote/connect" in limiter._limiters
+        assert "/api/remote/status" in limiter._limiters
+        assert "/api/unified/connect" not in limiter._limiters
+        assert "/api/ssh/connect" not in limiter._limiters
+        assert "/api/unified/status" not in limiter._limiters
+        assert "/api/ssh/sessions" not in limiter._limiters
+        assert "/api/ssh/mirror/list" not in limiter._limiters

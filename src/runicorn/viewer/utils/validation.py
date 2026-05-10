@@ -9,6 +9,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from ...security.path_validation import validate_path as validate_relative_path
+
 
 def validate_run_id(run_id: str) -> bool:
     """
@@ -43,22 +45,12 @@ def validate_path(path: str, base_dir: Optional[Path] = None) -> bool:
     """
     if not path or not isinstance(path, str):
         return False
-    
-    # Check for path traversal attempts
-    if '..' in path:
-        return False
-    
-    # If base_dir provided, ensure path is within it
-    if base_dir:
-        try:
-            full_path = (base_dir / path).resolve()
-            base_resolved = base_dir.resolve()
-            # Check if the path starts with base_dir
-            return str(full_path).startswith(str(base_resolved))
-        except Exception:
-            return False
-    
-    return True
+
+    if base_dir is None:
+        return '..' not in path
+
+    ok, _, _ = validate_relative_path(path, base_dir)
+    return ok
 
 
 def sanitize_filename(filename: str) -> str:

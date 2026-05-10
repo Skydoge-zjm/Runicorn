@@ -1,11 +1,15 @@
-import { useMemo } from 'react'
-import { Alert, Space, Typography, theme } from 'antd'
+import { lazy, Suspense, useMemo } from 'react'
+import { Alert, Skeleton, Space, Typography, theme } from 'antd'
 import { useTranslation } from 'react-i18next'
-import CodeArchivePreview from './code/CodeArchivePreview'
-import TextFilePreview from './TextFilePreview'
 import { isProbablyTextFilename, suggestAssetDownloadFilename } from '../../utils/assetDownload'
 
 const { Text } = Typography
+const CodeArchivePreview = lazy(() => import('./code/CodeArchivePreview'))
+const TextFilePreview = lazy(() => import('./TextFilePreview'))
+
+function AssetPreviewFallback() {
+  return <Skeleton active paragraph={{ rows: 6 }} />
+}
 
 export default function AssetPreview(props: { runId?: string; asset: any; archivePath?: string }) {
   const { t } = useTranslation()
@@ -36,12 +40,20 @@ export default function AssetPreview(props: { runId?: string; asset: any; archiv
   }
 
   if (kind === 'code') {
-    return <CodeArchivePreview runId={props.runId} archivePath={props.archivePath} />
+    return (
+      <Suspense fallback={<AssetPreviewFallback />}>
+        <CodeArchivePreview runId={props.runId} archivePath={props.archivePath} />
+      </Suspense>
+    )
   }
 
   const filename = suggestAssetDownloadFilename(props.asset)
   if (isProbablyTextFilename(filename)) {
-    return <TextFilePreview runId={props.runId} archivePath={props.archivePath} filename={filename} />
+    return (
+      <Suspense fallback={<AssetPreviewFallback />}>
+        <TextFilePreview runId={props.runId} archivePath={props.archivePath} filename={filename} />
+      </Suspense>
+    )
   }
 
   return (

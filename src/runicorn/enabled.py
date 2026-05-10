@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 
 _ENABLED_OVERRIDE: Optional[bool] = None
@@ -53,6 +53,14 @@ class NoOpRun:
         self.path = path or "default"
         self.alias = alias
         self.id = "disabled"
+        self._assets_manifest: Dict[str, Any] = {}
+        self._events: List[Dict[str, Any]] = []
+        self._output_watch_stop = False
+        self._output_watch_thread: Optional[Any] = None
+        self._storage_assets: List[Dict[str, Any]] = []
+        self._summary_data: Dict[str, Any] = {}
+        self._status_data: Dict[str, Any] = {}
+        self._finished = False
 
     def __enter__(self) -> "NoOpRun":
         return self
@@ -99,6 +107,61 @@ class NoOpRun:
         return None
 
     def stop_outputs_watch(self) -> None:
+        self.request_output_watch_stop()
+        return None
+
+    def append_event(self, event: Dict[str, Any]) -> None:
+        self._events.append(dict(event))
+
+    def update_assets_manifest(self, updater) -> None:
+        current = dict(self._assets_manifest)
+        updated = updater(current)
+        if isinstance(updated, dict):
+            self._assets_manifest = updated
+        else:
+            self._assets_manifest = current
+
+    def should_stop_output_watch(self) -> bool:
+        return self._finished or self._output_watch_stop
+
+    def clear_output_watch_stop(self) -> None:
+        self._output_watch_stop = False
+
+    def request_output_watch_stop(self) -> None:
+        self._output_watch_stop = True
+
+    def get_output_watch_thread(self) -> Optional[Any]:
+        return self._output_watch_thread
+
+    def set_output_watch_thread(self, thread: Optional[Any]) -> None:
+        self._output_watch_thread = thread
+
+    def list_storage_assets(self) -> List[Dict[str, Any]]:
+        return [dict(asset) for asset in self._storage_assets]
+
+    def unlink_storage_asset(self, asset_id: str) -> None:
+        self._storage_assets = [
+            dict(asset)
+            for asset in self._storage_assets
+            if asset.get("asset_id") != asset_id and asset.get("id") != asset_id
+        ]
+
+    def record_storage_asset(self, **kwargs: Any) -> None:
+        self._storage_assets.append(dict(kwargs))
+
+    def read_summary_data(self) -> Dict[str, Any]:
+        return dict(self._summary_data)
+
+    def write_summary_data(self, data: Dict[str, Any]) -> None:
+        self._summary_data = dict(data)
+
+    def read_status_data(self) -> Dict[str, Any]:
+        return dict(self._status_data)
+
+    def write_status_data(self, data: Dict[str, Any]) -> None:
+        self._status_data = dict(data)
+
+    def close_storage_backend(self) -> None:
         return None
 
     def log_dataset(
@@ -133,4 +196,6 @@ class NoOpRun:
         return None
 
     def finish(self, status: str = "finished") -> None:
+        self._finished = True
+        self.request_output_watch_stop()
         return None

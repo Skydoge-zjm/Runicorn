@@ -359,8 +359,6 @@ def _delete_asset_blobs(
     
     archive_uri = asset.get("archive_uri")
     fingerprint = asset.get("fingerprint")
-    asset_type = asset.get("asset_type")
-    
     if not archive_uri:
         return 0, 0, []
     

@@ -4,8 +4,8 @@
 
 # 增强日志 API 参考文档
 
-> **版本**: v0.6.0  
-> **最后更新**: 2025-01-XX  
+> **版本**: v0.7.1
+> **最后更新**: 2026-03-28
 > **模块**: `runicorn.console`, `runicorn.log_compat`
 
 ---
@@ -24,7 +24,7 @@
 
 ## 概述
 
-Runicorn v0.6.0 引入了增强日志系统，提供以下功能：
+Runicorn 当前提供增强日志系统，提供以下功能：
 
 - **控制台捕获**: 自动捕获 `stdout`/`stderr` 到日志文件
 - **Python Logging 集成**: 标准 `logging.Handler` 无缝集成
@@ -220,7 +220,7 @@ metric_logger = MetricLogger(delimiter="  ")
 for epoch in range(10):
     for batch in metric_logger.log_every(dataloader, print_freq=10, header=f"Epoch {epoch}"):
         loss = model(batch)
-        
+
         # 指标自动记录到 Runicorn
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]['lr'])
 
@@ -363,11 +363,11 @@ for epoch in range(100):
     for batch in metric_logger.log_every(train_loader, 50, header=f"Epoch {epoch}"):
         loss = train_step(batch)
         metric_logger.update(loss=loss)
-    
+
     # 验证
     val_loss, val_acc = validate(model, val_loader)
     logger.info(f"Epoch {epoch}: val_loss={val_loss:.4f}, val_acc={val_acc:.4f}")
-    
+
     # 记录到 Runicorn 指标
     run.log({"val_loss": val_loss, "val_acc": val_acc}, step=epoch)
 
@@ -475,8 +475,8 @@ run = runicorn.init(path="exp", capture_console=True, tqdm_mode="none")
 
 ---
 
-**作者**: Runicorn Development Team  
-**版本**: v0.6.0  
-**最后更新**: 2025-01-XX
+**作者**: Runicorn Development Team
+**版本**: v0.7.1
+**最后更新**: 2026-03-28
 
 **[返回 API 索引](API_INDEX.md)**

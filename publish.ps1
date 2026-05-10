@@ -39,14 +39,12 @@ if (-not $NoBuildFrontend) {
   Copy-Item -Recurse -Force (Join-Path $Root "web/frontend/dist/*") $uiDir
 }
 
-# 2) Bump version in pyproject.toml
-$pyproj = Join-Path $Root "pyproject.toml"
-if (-not (Test-Path $pyproj)) { throw "pyproject.toml not found at $pyproj" }
+# 2) Resolve version from the authoritative version source
+$versionFile = Join-Path $Root "VERSION.txt"
+if (-not (Test-Path $versionFile)) { throw "VERSION.txt not found at $versionFile" }
 
-$content = Get-Content $pyproj -Raw -Encoding UTF8
-$verMatch = [regex]::Match($content, '(?ms)^\s*version\s*=\s*"(?<v>\d+\.\d+\.\d+)"')
-if (-not $verMatch.Success) { throw "Cannot find version in pyproject.toml" }
-$cur = $verMatch.Groups["v"].Value
+$cur = (Get-Content $versionFile -Raw -Encoding UTF8).Trim()
+if (-not $cur) { throw "VERSION.txt is empty" }
 
 if ($NewVersion) {
   $next = $NewVersion
@@ -61,9 +59,15 @@ if ($NewVersion) {
   $next = "$maj.$min.$pat"
 }
 
-$content = [regex]::Replace($content, '(?ms)^\s*version\s*=\s*"(\d+\.\d+\.\d+)"', "version = `"$next`"")
-Set-FileUtf8NoBom -Path $pyproj -Text $content
-Write-Host "Version bumped: $cur -> $next"
+if ($cur -ne $next) {
+  $bumpScript = Join-Path $Root "scripts/bump_version.py"
+  if (-not (Test-Path $bumpScript)) { throw "bump_version.py not found at $bumpScript" }
+  & $PythonExe $bumpScript $next
+  if ($LASTEXITCODE -ne 0) { throw "Version bump failed. See errors above." }
+  Write-Host "Version bumped: $cur -> $next"
+} else {
+  Write-Host "Version already set to $next"
+}
 
 # 3) Clean outputs
 Remove-Item -Recurse -Force (Join-Path $Root "dist") -ErrorAction Ignore

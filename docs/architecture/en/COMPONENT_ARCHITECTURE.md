@@ -4,7 +4,7 @@
 
 # Component Architecture
 
-**Document Type**: Architecture  
+**Document Type**: Architecture
 **Purpose**: Detailed breakdown of Runicorn's component structure and interactions
 
 ---
@@ -16,8 +16,8 @@
 │                        SDK Layer                             │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │ Run class - Experiment context and lifecycle        │   │
-│  │ Artifact class - Versioned asset management         │   │
-│  │ Module functions - Convenience API (init, log, etc) │   │
+│  │ Run asset helpers - config/dataset/pretrained/code │   │
+│  │ Module functions - Convenience API (init, snapshot)│   │
 │  └─────────────────────────────────────────────────────┘   │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -25,18 +25,18 @@
 │                    Viewer/API Layer                          │
 │  ┌──────────────┬──────────────┬─────────────────────────┐ │
 │  │ API Routes   │ Services     │ Middleware              │ │
-│  │ - runs.py    │ - storage.py │ - CORS                  │ │
-│  │ - artifacts  │ - gpu.py     │ - Rate limiting         │ │
-│  │ - metrics    │ - modern_st  │ - Logging               │ │
+│  │ - runs.py    │ - db_reader  │ - CORS                  │ │
+│  │ - remote.py  │ - storage.py │ - Rate limiting         │ │
+│  │ - metrics.py │ - monitor.py │ - Logging               │ │
 │  └──────────────┴──────────────┴─────────────────────────┘ │
 └────────────────────────┬────────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────────┐
 │                  Business Logic Layer                        │
 │  ┌──────────────┬──────────────┬─────────────────────────┐ │
-│  │ Experiment   │ Artifact     │ Environment             │ │
-│  │ Manager      │ Storage      │ Capture                 │ │
-│  │ Lineage      │ Dedup Pool   │ SSH Client              │ │
+│  │ Experiment   │ Asset        │ Environment             │ │
+│  │ Manager      │ Archive      │ Capture                 │ │
+│  │ Path ops     │ Ref counts   │ SSH Client              │ │
 │  └──────────────┴──────────────┴─────────────────────────┘ │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -62,14 +62,15 @@
 **Key Methods**:
 ```python
 class Run:
-    def __init__(project, name, storage, run_id, capture_env)
+    def __init__(path, storage, run_id, alias, capture_env)
     def log(data, step, stage)
     def log_text(text)
     def log_image(key, image, step)
     def set_primary_metric(name, mode)
     def summary(update)
-    def log_artifact(artifact)
-    def use_artifact(spec)
+    def log_config(...)
+    def log_dataset(name, root_or_uri, ...)
+    def log_pretrained(name, path_or_uri=None, ...)
     def finish(status)
 ```
 
@@ -80,27 +81,26 @@ class Run:
 
 ---
 
-### Artifact Class
+### Run Asset Helpers
 
-**Responsibility**: Version-controlled asset management
+**Responsibility**: Attach reusable training context and archived files to a run
 
-**Key Methods**:
+**Key Entry Points**:
 ```python
-class Artifact:
-    def __init__(name, type, description, metadata)
-    def add_file(path, name)
-    def add_dir(path, exclude_patterns)
-    def add_reference(uri, checksum)
-    def add_metadata(metadata)
-    def add_tags(*tags)
-    def download(target_dir)
-    def get_manifest()
+class Run:
+    def log_config(...)
+    def log_dataset(name, root_or_uri, ...)
+    def log_pretrained(name, path_or_uri=None, ...)
+    def scan_outputs_once(...)
+    def watch_outputs(...)
+
+def snapshot_workspace(root, out_zip, ...)
 ```
 
 **Design Patterns**:
-- Builder: Chainable methods
-- Immutable: Version snapshots never change
-- Content-addressable: Files identified by hash
+- Per-run manifest updates via `assets.json`
+- Optional archival: metadata-only reference or saved archive entry
+- Shared index: one asset can be referenced by multiple runs
 
 ---
 
@@ -111,15 +111,13 @@ class Artifact:
 **Modular Structure**:
 ```
 viewer/api/
-├── runs.py           # Experiment CRUD
-├── artifacts.py      # Artifact version control
+├── runs.py           # Run list/detail, assets, recycle bin
 ├── metrics.py        # Metrics queries
-├── config.py         # Configuration
-├── ssh.py            # SSH connections
-├── experiments.py    # Advanced experiment operations
-├── v2/               # V2 high-performance API
-│   ├── experiments.py
-│   └── analytics.py
+├── projects.py       # Path tree and path-scoped operations
+├── config.py         # Configuration and saved SSH connections
+├── remote.py         # Remote Viewer lifecycle
+├── import_.py        # Offline import
+├── export.py         # Export/report routes
 └── __init__.py       # Route registration
 ```
 
@@ -141,9 +139,9 @@ async def list_runs(request: Request):
 **Structure**:
 ```
 viewer/services/
-├── storage.py         # File system operations
-├── modern_storage.py  # SQLite operations
-└── gpu.py             # GPU telemetry
+├── db_reader.py       # Run / asset reads from files + SQLite
+├── storage_utils.py   # Storage root helpers
+└── system_monitor.py  # CPU / memory / disk telemetry
 ```
 
 **Pattern**: Services are stateless functions
@@ -152,7 +150,7 @@ viewer/services/
 # Service function
 async def list_experiments(
     storage_root: Path,
-    project: str = None,
+    path: str = None,
     status: str = None
 ) -> List[ExperimentRecord]:
     # Business logic here
@@ -186,10 +184,10 @@ class ConnectionPool:
         for _ in range(pool_size):
             conn = create_connection()
             self.pool.put(conn)
-    
+
     def get_connection():
         return self.pool.get()  # Blocks if all in use
-    
+
     def return_connection(conn):
         self.pool.put(conn)
 ```
@@ -220,77 +218,52 @@ def get_run_detail(run_id):
 
 ---
 
-## Artifacts System Components
+## Run Asset Index Components
 
-### Artifact Storage
+### Asset Archive
 
 **Components**:
-- **Version Manager**: Sequential version assignment
-- **File Hasher**: SHA256 computation
-- **Dedup Manager**: Hard link creation
-- **Manifest Builder**: File inventory
+- **Archive helpers**: Save files/directories into `archive/`
+- **File Hasher**: SHA256 / fingerprint computation
+- **Manifest Builder**: File inventory for archived directories
+- **Assets JSON updater**: Atomic nested manifest updates per run
 
 **Component Interaction**:
 ```
-ArtifactStorage
-    ├── _store_file()
+Run Asset Helpers
+    ├── archive_file() / archive_dir()
     │   ├── compute_hash()
-    │   ├── check_dedup_pool()
-    │   └── create_link_or_copy()
-    ├── save_artifact()
-    │   ├── validate()
-    │   ├── assign_version()
-    │   ├── store_files()
-    │   ├── create_manifest()
-    │   └── update_index()
-    └── load_artifact()
-        ├── find_version()
-        ├── load_metadata()
-        └── load_manifest()
+    │   ├── reuse_or_store_blob()
+    │   └── write_manifest_if_needed()
+    ├── update_assets_json()
+    └── record_asset_for_run()
+        ├── upsert assets row
+        └── link run_assets row
 ```
 
 ---
 
-### Lineage Tracker
+### Asset Reference Tracking
 
 **Components**:
-- **Graph Builder**: Constructs dependency graph
-- **Traverser**: BFS/DFS traversal with depth limit
-- **Node Creator**: Converts runs/artifacts to nodes
+- **Run-asset link index**: `run_assets` table
+- **Reference counter**: Shared vs unique asset lookup
+- **Cleanup helpers**: Decide what permanent delete can safely remove
 
 **Algorithm**:
 ```python
-def build_lineage(artifact_id, max_depth=3):
-    graph = Graph()
-    queue = [(artifact_id, 0)]  # (id, depth)
-    visited = set()
-    
-    while queue:
-        id, depth = queue.pop(0)
-        if depth > max_depth or id in visited:
-            continue
-        
-        visited.add(id)
-        node = create_node(id)
-        graph.add_node(node)
-        
-        # Find dependencies
-        if is_artifact(id):
-            creator_run = find_creator(id)
-            graph.add_edge(creator_run, id, "produces")
-            queue.append((creator_run, depth + 1))
-        else:  # is run
-            used_artifacts = find_used_artifacts(id)
-            for art in used_artifacts:
-                graph.add_edge(art, id, "uses")
-                queue.append((art, depth + 1))
-    
-    return graph
+def classify_asset_refs(run_id):
+    assets = backend.get_assets_for_run(run_id)
+    orphaned, shared = [], []
+    for asset in assets:
+        ref_count = backend.get_asset_ref_count(asset["asset_id"])
+        (orphaned if ref_count <= 1 else shared).append(asset)
+    return orphaned, shared
 ```
 
 ---
 
-## Remote Viewer Components (v0.5.0)
+## Remote Viewer Components
 
 ### Connection Manager
 
@@ -428,12 +401,9 @@ App
 │   │       │   ├── MetricChart (multiple)
 │   │       │   ├── LogsViewer (WebSocket, ANSI)
 │   │       │   └── RunArtifacts
-│   │       ├── ArtifactsPage
-│   │       │   └── ArtifactTable
-│   │       └── ArtifactDetailPage
-│   │           ├── ArtifactInfo
-│   │           ├── VersionHistory
-│   │           └── LineageGraph
+│   │       ├── AssetsPage
+│   │       └── AssetDetailPage
+│   │           └── AssetPreview
 │   └── Footer
 └── SettingsDrawer
 ```
@@ -453,7 +423,7 @@ App
 
 ---
 
-## New Frontend Components (v0.6.0)
+## Frontend Components Introduced in v0.6.0
 
 ### PathTreePanel
 
@@ -567,7 +537,7 @@ interface CompareRunInfo {
 
 **Responsibility**: Real-time log viewing with ANSI color support
 
-**v0.6.0 Enhancements**:
+**Enhancements introduced in v0.6.0**:
 - **ANSI Color Support**: Full terminal color rendering via `ansi-to-html`
 - **Line Numbers**: Numbered lines for easy reference
 - **Search Functionality**: Keyword search with highlighting

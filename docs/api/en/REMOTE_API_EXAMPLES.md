@@ -1,7 +1,7 @@
 # Remote Viewer API Code Examples
 
-> **Version**: v0.6.0  
-> **Last Updated**: 2026-01-15
+> **Version**: v0.7.1
+> **Last Updated**: 2026-03-28
 
 [English](REMOTE_API_EXAMPLES.md) | [简体中文](../zh/REMOTE_API_EXAMPLES.md)
 
@@ -27,11 +27,11 @@ from typing import Optional, Dict, List, Any
 
 class RunicornRemoteClient:
     """Runicorn Remote Viewer API Client"""
-    
+
     def __init__(self, base_url: str = "http://127.0.0.1:23300"):
         self.base_url = base_url
         self.session = requests.Session()
-    
+
     def connect(
         self,
         host: str,
@@ -152,14 +152,14 @@ class RunicornRemoteClient:
         response = self.session.get(f"{self.base_url}/api/remote/viewer/status/{session_id}")
         response.raise_for_status()
         return response.json()
-    
+
     def close(self):
         """Close session"""
         self.session.close()
-    
+
     def __enter__(self):
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 ```
@@ -173,10 +173,10 @@ from runicorn_remote_client import RunicornRemoteClient
 with RunicornRemoteClient() as client:
     # 1. Connect to remote server
     result = client.connect(host="gpu-server.com", username="mluser", private_key_path="~/.ssh/id_rsa")
-    
+
     connection_id = result["connection_id"]
     print(f"✓ Connected: {connection_id}")
-    
+
     # 2. (optional) List Python environments
     envs = client.list_conda_envs(connection_id=connection_id)
     print(f"✓ Found {len(envs)} env(s)")
@@ -257,7 +257,7 @@ class RunicornRemoteClient {
    */
   async listSessions() {
     const response = await fetch(`${this.baseUrl}/api/remote/sessions`);
-    
+
     if (!response.ok) {
       throw new Error(`Failed to list sessions: ${response.statusText}`);
     }
@@ -401,7 +401,7 @@ const client = new RunicornRemoteClient();
 
     // 2. List environments
     const envs = await client.listCondaEnvs(connection_id);
-    
+
     console.log(`✓ Found ${envs.length} env(s)`);
     envs.forEach(env => {
       console.log(`  - ${env.name}: Python ${env.python_version} (${env.type})`);
@@ -448,11 +448,11 @@ from runicorn_remote_client import RunicornRemoteClient
 
 def monitor_training(host, username, key_path, env_name):
     """Automatically connect and monitor remote training"""
-    
+
     with RunicornRemoteClient() as client:
         # Connect
         result = client.connect(host=host, username=username, private_key_path=key_path)
-        
+
         viewer = client.start_viewer(
             host=host,
             username=username,
@@ -462,7 +462,7 @@ def monitor_training(host, username, key_path, env_name):
         )
         session_id = viewer["session"]["sessionId"]
         print(f"Viewer URL: {viewer['session']['url']}")
-        
+
         # Monitoring loop
         while True:
             status = client.get_viewer_session(session_id=session_id)
@@ -485,38 +485,38 @@ from runicorn_remote_client import RunicornRemoteClient
 
 def manage_multiple_servers(servers):
     """Connect and manage multiple servers"""
-    
+
     client = RunicornRemoteClient()
     connections = []
-    
+
     try:
         # Connect to all servers
         for server in servers:
             result = client.connect(**server)
             conn_id = result["connection_id"]
             connections.append(conn_id)
-            
+
             print(f"✓ Connected to {server['host']}: {conn_id}")
-        
+
         # List all sessions
         all_sessions = client.list_sessions()
         print(f"\nTotal {len(all_sessions)} active session(s):")
-        
+
         for sess in all_sessions:
             print(f"  - {sess['key']}: connected={sess['connected']}")
-        
+
         # Interactive management
         while True:
             print("\nOptions: (l)ist, (q)uit")
             choice = input("> ").lower()
-            
+
             if choice == 'l':
                 for sess in client.list_sessions():
                     print(f"{sess['key']}: connected={sess['connected']}")
-            
+
             elif choice == 'q':
                 break
-    
+
     finally:
         # Cleanup all connections
         for server in servers:
@@ -525,7 +525,7 @@ def manage_multiple_servers(servers):
                 print(f"✓ Disconnected: {server['host']}")
             except Exception as e:
                 print(f"✗ Failed to disconnect: {server['host']} - {e}")
-        
+
         client.close()
 
 # Usage
@@ -552,14 +552,14 @@ from runicorn_remote_client import RunicornRemoteClient
 
 def select_best_environment(host, username, key_path):
     """Automatically select best environment"""
-    
+
     with RunicornRemoteClient() as client:
         # Connect
         result = client.connect(host=host, username=username, private_key_path=key_path)
         conn_id = result["connection_id"]
-        
+
         envs = client.list_conda_envs(connection_id=conn_id)
-        
+
         if not envs:
             print("Error: No environments with Runicorn found")
             return None
@@ -568,7 +568,7 @@ def select_best_environment(host, username, key_path):
         print(f"Selected environment: {best_env['name']}")
         print(f"  Python: {best_env['python_version']}")
         print(f"  Type: {best_env['type']}")
-        
+
         # Start Viewer
         viewer = client.start_viewer(
             host=host,
@@ -577,7 +577,7 @@ def select_best_environment(host, username, key_path):
             private_key_path=key_path,
             conda_env=best_env["name"],
         )
-        
+
         return viewer["session"]["url"]
 
 # Usage
@@ -603,19 +603,19 @@ import requests
 
 def safe_connect_and_start():
     """Connect with complete error handling"""
-    
+
     client = RunicornRemoteClient()
     conn_id = None
-    
+
     try:
         # Connect
         result = client.connect(host="gpu-server.com", username="mluser", private_key_path="~/.ssh/id_rsa")
         conn_id = result["connection_id"]
-        
+
     except requests.exceptions.Timeout:
         print("Error: Connection timeout, check if server is reachable")
         return
-    
+
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 409:
             print("Error: Host key confirmation required")
@@ -624,11 +624,11 @@ def safe_connect_and_start():
         else:
             print(f"Error: HTTP {e.response.status_code} - {e}")
         return
-    
+
     except Exception as e:
         print(f"Error: Connection failed - {e}")
         return
-    
+
     try:
         viewer = client.start_viewer(
             host="gpu-server.com",
@@ -638,15 +638,15 @@ def safe_connect_and_start():
             conda_env=None,
         )
         print(f"✓ Success: {viewer['session']['url']}")
-        
+
     except requests.exceptions.HTTPError as e:
         error_data = e.response.json()
-        
+
         print(f"Error: {error_data.get('detail', str(e))}")
-    
+
     except Exception as e:
         print(f"Error: Start failed - {e}")
-    
+
     finally:
         # Ensure cleanup
         if conn_id:
@@ -654,7 +654,7 @@ def safe_connect_and_start():
                 client.disconnect(host="gpu-server.com", port=22, username="mluser")
             except:
                 pass
-        
+
         client.close()
 
 safe_connect_and_start()
@@ -723,8 +723,8 @@ except Exception as e:
 
 ---
 
-**Author**: Runicorn Development Team  
-**Version**: v0.5.4  
-**Last Updated**: 2025-12-22
+**Author**: Runicorn Development Team
+**Version**: v0.7.1
+**Last Updated**: 2026-03-28
 
 **[Back to API Docs](README.md)** | **[View API Reference](remote_api.md)**

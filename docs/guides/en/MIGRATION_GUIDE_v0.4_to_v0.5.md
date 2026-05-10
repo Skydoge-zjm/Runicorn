@@ -87,7 +87,7 @@ runicorn --version >> config_before_upgrade.txt
 
 If you have auto-sync tasks in 0.4.x:
 1. Open Viewer
-2. Go to "Remote Storage" or "SSH" page
+2. Go to the legacy remote-sync entry point (historically labeled "Remote Storage" or "SSH")
 3. Stop all active sync tasks
 4. Wait for current syncs to complete
 
@@ -219,7 +219,7 @@ runicorn export --format json --output test_export.json
 | Get status | `GET /api/ssh/status` | `GET /api/remote/viewer/status` | Old API deprecated |
 | Start sync | `POST /api/ssh/sync` | Removed | No sync needed |
 | Query tasks | `GET /api/ssh/tasks` | Removed | No sync tasks |
-| List envs | N/A | `GET /api/remote/environments` | New |
+| List envs | N/A | `GET /api/remote/conda-envs` | New |
 | Start viewer | N/A | `POST /api/remote/viewer/start` | New |
 
 ### Code Migration Example
@@ -280,7 +280,7 @@ connection_id = response.json()["connection_id"]
 
 # List environments
 envs = requests.get(
-    "http://localhost:23300/api/remote/environments",
+    "http://localhost:23300/api/remote/conda-envs",
     params={"connection_id": connection_id}
 ).json()
 

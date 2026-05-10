@@ -4,8 +4,8 @@
 
 # Runicorn 文档
 
-**版本**: v0.7.0  
-**最后更新**: 2026-03-15
+**版本**: v0.7.1  
+**最后更新**: 2026-05-10
 
 ---
 
@@ -103,6 +103,7 @@ docs/
 
 | 文档 | 描述 |
 |------|------|
+| [RELEASE_NOTES_v0.7.1.md](releases/zh/RELEASE_NOTES_v0.7.1.md) | ⭐ v0.7.1 发布说明（稳定性、安全边界、桌面构建加固）|
 | [RELEASE_NOTES_v0.6.0.md](releases/zh/RELEASE_NOTES_v0.6.0.md) | ⭐ v0.6.0 发布说明（Assets、增强日志、路径层级、SSH 后端）|
 | [RELEASE_NOTES_v0.5.0.md](releases/zh/RELEASE_NOTES_v0.5.0.md) | v0.5.0 发布说明（Remote Viewer）|
 | [RELEASE_NOTES_v0.4.1.md](releases/zh/RELEASE_NOTES_v0.4.1.md) | v0.4.1 发布说明 |
@@ -127,7 +128,7 @@ docs/
 | **用户指南** | guides/ | 7 | 快速开始, Remote Viewer, Assets, 增强日志, 迁移指南 |
 | **技术参考** | reference/ | 4 | 配置, CLI, FAQ, 速率限制 |
 | **架构文档** | architecture/ | 10 | 系统设计, Remote Viewer, SSH 后端架构 |
-| **发布信息** | releases/ | 4 | 版本历史, 变更日志 |
+| **发布信息** | releases/ | 5 | 版本历史, 变更日志 |
 | **API 文档** | api/ | 15 | REST API 参考（含 Remote, Paths, Logging API）|
 | **用户指南网站** | user-guide/ | 7+ | MkDocs 网站源文件 |
 | **资源** | assets/ | 3+ | 图片和截图 |
@@ -199,7 +200,20 @@ docs/
 
 ---
 
-**最后更新**: 2026-03-15  
+## 🔧 文档同步规则
+
+当代码发生用户可见变化时，至少同步检查以下文档：
+
+1. 新增、删除或修改 API endpoint 时，更新 `docs/api/`
+2. 调整 Remote Viewer 主流程时，同时更新 `docs/api/*/remote_api.md` 和 `docs/architecture/*/REMOTE_VIEWER_ARCHITECTURE.md`
+3. 修改 session 状态、409 host key 协议或保存连接结构时，同步更新对应 API/架构文档
+4. 修改 CLI、配置文件或默认值时，同步更新 `docs/reference/`
+
+当前仓库不要求引入额外的重型 docs-lint；最低要求是让实现改动和文档改动在同一轮变更里出现。
+
+---
+
+**最后更新**: 2026-05-10  
 **维护者**: Runicorn 文档团队  
-**v0.7.0 亮点**: Remote Viewer 强化、Web UI 产品化改进、日志兼容增强、GPU 遥测历史、桌面端远程会话窗口
+**v0.7.1 亮点**: 稳定性强化、Remote API 与文档对齐、安全边界收紧、CI/Smoke 补强、桌面构建加固
 

@@ -4,7 +4,7 @@
 
 # Runicorn API 快速参考
 
-**版本**: v0.6.0  
+**版本**: v0.7.1
 **基础 URL**: `http://127.0.0.1:23300/api`
 
 ---
@@ -14,16 +14,16 @@
 **最简单的方式**：使用 Python 客户端
 
 ```python
-import runicorn.api as api
+import runicorn.client as client_mod
 
 # 连接
-with api.connect() as client:
-    # 列出实验
-    experiments = client.list_experiments(project="vision")
-    
+with client_mod.connect() as client:
+    # 按路径前缀列出运行
+    runs = client.list_runs_by_path(path="vision")
+
     # 获取指标
-    metrics = client.get_metrics(experiments[0]["id"])
-    
+    metrics = client.get_metrics(runs[0]["id"])
+
     # Remote Viewer
     client.remote.connect(host="gpu-server.com", username="user")
 ```
@@ -102,7 +102,7 @@ POST /api/remote/disconnect
 Body: {"host": "gpu-server.com", "port": 22, "username": "user"}
 ```
 
-### 增强日志 API 🆕 (v0.6.0)
+### 增强日志 API 🆕
 
 ```python
 import runicorn
@@ -146,6 +146,27 @@ Body: {"path": "old_experiments", "exact": false}
 # 按路径导出运行
 GET /api/paths/export?path=cv/yolo&format=zip
 ```
+
+### 归档导入 API
+
+```bash
+# 导入前先预览归档内容
+POST /api/import/preview
+Form-Data: file=@export.zip
+
+# 直接导入上传的归档
+POST /api/import/archive
+Form-Data: file=@export.zip
+Form-Data: mode=merge    # 或 isolate
+
+# 使用预览 token 导入之前上传的归档
+POST /api/import/archive
+Form-Data: preview_token=<token>
+Form-Data: mode=merge
+```
+
+归档上传端点属于标准运行时能力，依赖已随默认安装一起声明的
+`python-multipart`。常规 Runicorn 安装应默认提供这些端点。
 
 ---
 
@@ -293,7 +314,7 @@ from datetime import datetime
 ts = time.time()  # 1704067200.5
 
 # 转换为 datetime
-dt = datetime.fromtimestamp(ts)  # 2025-10-14 15:30:45
+dt = datetime.fromtimestamp(ts)  # 示例: 2026-03-28 15:30:45
 
 # 从 datetime 转换
 ts = dt.timestamp()  # 1704067200.5
@@ -377,14 +398,13 @@ response = requests.get(
 
 - **[README.md](./README.md)** - API 概览和快速开始
 - **[runs_api.md](./runs_api.md)** - 实验管理
-- **[artifacts_api.md](./artifacts_api.md)** - 模型版本控制
-- **[v2_api.md](./v2_api.md)** - 高性能查询
+- **[python_client_api.md](./python_client_api.md)** - Python 客户端用法
 - **[metrics_api.md](./metrics_api.md)** - 指标和日志
 - **[config_api.md](./config_api.md)** - 配置
 - **[remote_api.md](./remote_api.md)** - Remote Viewer API
+- **[REMOTE_API_EXAMPLES.md](./REMOTE_API_EXAMPLES.md)** - Remote Viewer 示例
 - **[logging_api.md](./logging_api.md)** - 增强日志 API 🆕
 - **[paths_api.md](./paths_api.md)** - 路径层级 API 🆕
-- **[manifest_api.md](./manifest_api.md)** - Manifest-based 同步 🚀
 
 ---
 
@@ -392,6 +412,6 @@ response = requests.get(
 
 ---
 
-**最后更新**: 2025-01-XX
+**最后更新**: 2026-03-28
 
 

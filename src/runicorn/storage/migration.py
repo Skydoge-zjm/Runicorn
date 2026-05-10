@@ -11,9 +11,9 @@ import logging
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Iterator
+from typing import Any, Dict, List, Optional
 
-from .models import ExperimentRecord, MetricRecord, EnvironmentRecord, MigrationStatus, QueryParams
+from .models import ExperimentRecord, MetricRecord, MigrationStatus, QueryParams
 from .backends import StorageBackend, SQLiteStorageBackend
 
 logger = logging.getLogger(__name__)

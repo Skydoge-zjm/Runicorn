@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "runicorn"
-version = "0.7.0"
+dynamic = ["version"]
 description = "Local experiment tracking with model versioning - self-hosted W&B alternative with Artifacts"
 readme = "README.md"
 authors = [{ name = "Runicorn Authors" }]
@@ -37,11 +37,16 @@ dependencies = [
   "paramiko>=3.3,<4",
   "psutil>=5.8.0",
   "httpx",
+  "python-multipart>=0.0.9,<1",
   "cryptography>=41.0.0",
   "tomli>=2.0.1",
 ]
 
 [project.optional-dependencies]
+dev = [
+  "pytest>=8,<9",
+  "ruff>=0.6,<1",
+]
 images = [
   "pillow>=9",
   "numpy>=1.22",
@@ -54,9 +59,9 @@ runicorn = "runicorn.cli:main"
 [project.urls]
 Homepage = "https://pypi.org/project/runicorn/"
 Changelog = "https://pypi.org/project/runicorn/#history"
-# TODO: After creating GitHub repo, add:
-# Source = "https://github.com/<user>/runicorn"
-# Issues = "https://github.com/<user>/runicorn/issues"
+Documentation = "https://Skydoge-zjm.github.io/runicorn"
+Source = "https://github.com/Skydoge-zjm/Runicorn"
+Issues = "https://github.com/Skydoge-zjm/Runicorn/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -65,16 +70,30 @@ package-dir = {"" = "src"}
 where = ["src"]
 include = ["runicorn*"]
 
+[tool.setuptools.dynamic]
+version = {attr = "runicorn._version.__version__"}
+
 [tool.setuptools.package-data]
 # Include prebuilt frontend if present
 runicorn = [
   "VERSION.txt",
+  "config/_defaults/*.json",
+  "storage/*.sql",
   "webui/**",
 ]
 
 [tool.ruff]
 line-length = 100
-select = ["E","F","W","I"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501", "I001", "W291", "W293"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/**/__init__.py" = ["F401"]
+"src/runicorn/extensions/exporters.py" = ["F401"]
+"src/runicorn/sdk.py" = ["F401"]
+"tests/**/*.py" = ["E401", "F401"]
 
 [tool.mypy]
 python_version = "3.10"

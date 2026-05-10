@@ -4,9 +4,9 @@
 
 # Runicorn System Overview
 
-**Document Type**: Architecture  
-**Version**: v0.6.0  
-**Last Updated**: 2025-01-XX
+**Document Type**: Architecture
+**Version**: v0.7.1
+**Last Updated**: 2026-03-28
 
 ---
 
@@ -18,7 +18,7 @@ This document provides a high-level overview of the Runicorn system architecture
 
 ## System Architecture Diagram
 
-### Overall Architecture (v0.5.0)
+### Overall Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -32,16 +32,16 @@ This document provides a high-level overview of the Runicorn system architecture
 ┌───────▼───────────▼───────────▼──────────────────▼────────────┐
 │                     API Layer (FastAPI)                         │
 │  ┌──────────┬──────────┬──────────┬──────────┬──────────────┐│
-│  │ Runs API │ Artifacts│ Metrics  │ Config   │ Remote       ││
-│  │ (V1/V2)  │ API      │ API      │ API      │ Viewer API   ││
+│  │ Runs API │ Assets   │ Metrics  │ Config   │ Remote       ││
+│  │          │ API      │ API      │ API      │ Viewer API   ││
 │  └────┬─────┴─────┬────┴────┬─────┴────┬─────┴──────┬───────┘│
 └───────┼───────────┼─────────┼──────────┼────────────┼────────┘
         │           │         │          │            │
 ┌───────▼───────────▼─────────▼──────────▼────────────▼────────┐
 │                   Business Logic Layer                          │
 │  ┌──────────────┬──────────────┬──────────────────────────┐  │
-│  │ Experiment   │ Artifact     │ Environment             │  │
-│  │ Manager      │ Storage      │ Capture                 │  │
+│  │ Experiment   │ Asset        │ Environment             │  │
+│  │ Manager      │ Archive      │ Capture                 │  │
 │  └──────┬───────┴──────┬───────┴──────────────┬──────────┘  │
 └─────────┼──────────────┼────────────────────────┼───────────┘
           │              │                        │
@@ -50,13 +50,13 @@ This document provides a high-level overview of the Runicorn system architecture
 │  ┌────────────────────┬─────────────────────────────────┐   │
 │  │ SQLite Backend     │ File System                     │   │
 │  │ - experiments tbl  │ - runs/ (metadata, logs)        │   │
-│  │ - metrics table    │ - artifacts/ (models, datasets) │   │
-│  │ - indexes          │ - .dedup/ (deduplication pool)  │   │
+│  │ - metrics table    │ - archive/ (saved assets)       │   │
+│  │ - asset indexes    │ - runs/ (meta, logs, assets)    │   │
 │  └────────────────────┴─────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### Remote Viewer Architecture (v0.5.0 New)
+### Remote Viewer Architecture
 
 ```
 Local Machine                           Remote Server
@@ -101,7 +101,7 @@ Workflow:
 
 | Technology | Version | Purpose | Why Chosen |
 |------------|---------|---------|------------|
-| **Python** | 3.8+ | Core language | Ecosystem, ML community standard |
+| **Python** | 3.10+ | Core language | Ecosystem, ML community standard |
 | **FastAPI** | 0.110+ | API framework | Modern, async, auto-docs, performance |
 | **SQLite** | 3.x | Metadata storage | Zero-config, portable, ACID |
 | **Paramiko** | 3.3+ | SSH client | Pure Python, well-maintained |
@@ -161,7 +161,7 @@ Workflow:
 
 **Implementation**:
 - Hybrid storage: Files for large data, SQLite for queries
-- V2 API: 100x faster for 10,000+ experiments
+- SQLite-backed run queries: 100x faster for 10,000+ experiments
 - Connection pooling and caching
 - Efficient indexing
 
@@ -206,10 +206,10 @@ Workflow:
 - Organize experiments hierarchically
 - Compare multiple runs
 
-✅ **Model version control**
-- Automatic versioning
-- Content deduplication
-- Lineage tracking
+✅ **Local asset tracking**
+- Workspace snapshots
+- Dataset / config / pretrained references
+- Shared archive cleanup and reference counting
 
 ✅ **Local-first collaboration**
 - SSH-based remote sync
@@ -219,7 +219,7 @@ Workflow:
 ✅ **Visualization**
 - Real-time metric charts
 - Log streaming
-- Artifact lineage graphs
+- Asset previews and run asset summaries
 
 ### Out of Scope
 
@@ -237,10 +237,10 @@ Workflow:
 
 **Responsibility**: User-facing Python API
 
-**Key Classes**:
+**Key Classes / Helpers**:
 - `Run`: Experiment context and lifecycle
-- `Artifact`: Version-controlled assets
-- Module-level functions: `init()`, `log()`, `finish()`
+- `snapshot_workspace()`: Create workspace snapshot archives
+- Run helpers: `log_config()`, `log_dataset()`, `log_pretrained()`
 
 **Design Pattern**: Singleton active run, thread-safe
 
@@ -264,7 +264,7 @@ Workflow:
 **Responsibility**: HTTP interface to storage
 
 **Components**:
-- **Route Modules**: Organized by feature (runs, artifacts, etc.)
+- **Route Modules**: Organized by feature (runs, metrics, assets, remote, import/export)
 - **Service Layer**: Business logic abstraction
 - **Middleware**: CORS, rate limiting, logging
 
@@ -286,21 +286,21 @@ Workflow:
 
 ---
 
-### 5. Artifacts System
+### 5. Run Asset & Snapshot System
 
-**Responsibility**: Version control for ML assets
+**Responsibility**: Record reusable run context and archived files without a separate public artifact registry
 
 **Components**:
-- **Artifact Storage**: Physical file management
-- **Version Index**: Metadata and versioning
-- **Dedup Pool**: Content-addressed storage
-- **Lineage Tracker**: Dependency graph builder
+- **Run manifest** (`assets.json`): Nested per-run asset metadata
+- **Archive store** (`archive/`): Saved files, manifests, and blob storage
+- **SQLite asset index** (`assets`, `run_assets`): Cross-run lookup and reference counts
+- **Cleanup helpers** (`cleanup.py`): Orphan detection and permanent-delete support
 
-**Design Pattern**: Content-addressable storage, immutable versions
+**Design Pattern**: Per-run manifest plus shared archive/index
 
 ---
 
-### 6. Assets System (v0.6.0 New)
+### 6. Assets System (introduced in v0.6.0)
 
 **Responsibility**: Workspace snapshots and content-addressed blob storage
 
@@ -322,7 +322,7 @@ Workflow:
 
 ---
 
-### 7. Console Capture System (v0.6.0 New)
+### 7. Console Capture System (introduced in v0.6.0)
 
 **Responsibility**: Capture stdout/stderr and Python logging output
 
@@ -341,7 +341,7 @@ Workflow:
 
 ---
 
-### 8. Log Compatibility Layer (v0.6.0 New)
+### 8. Log Compatibility Layer (introduced in v0.6.0)
 
 **Responsibility**: Drop-in replacement for common ML logging libraries
 
@@ -357,7 +357,7 @@ Workflow:
 
 ---
 
-### 9. Index System (v0.6.0 New)
+### 9. Index System (introduced in v0.6.0)
 
 **Responsibility**: Fast experiment and run indexing
 
@@ -371,7 +371,7 @@ Workflow:
 
 ---
 
-### 10. Workspace Management (v0.6.0 New)
+### 10. Workspace Management (introduced in v0.6.0)
 
 **Responsibility**: Workspace root detection and configuration
 
@@ -384,7 +384,7 @@ Workflow:
 
 ---
 
-### 11. Runtime Configuration (v0.6.0 New)
+### 11. Runtime Configuration (introduced in v0.6.0)
 
 **Responsibility**: Load and manage runtime configuration
 
@@ -525,8 +525,8 @@ user_root_dir/
 
 | Metric | Tested | Practical Limit | Notes |
 |--------|--------|-----------------|-------|
-| Experiments | 100,000 | ~500,000 | V2 API required |
-| Artifacts | 10,000 | ~50,000 | Dedup pool size |
+| Experiments | 100,000 | ~500,000 | SQLite-backed list path required |
+| Archived assets | 10,000 | ~50,000 | Archive index / dedup pool size |
 | Metrics points | 10M | ~100M | Per experiment |
 | Concurrent users | 100 | ~500 | SQLite WAL mode |
 
@@ -562,7 +562,7 @@ user_root_dir/
 
 ### For Developers
 
-**Plugin System** (planned):
+**Plugin System** (possible future extension, not currently implemented):
 - Custom storage backends
 - Custom exporters
 - Custom visualizations
@@ -583,7 +583,7 @@ user_root_dir/
 | **Privacy** | Data on W&B servers | 100% local |
 | **Cost** | $50+/user/month | Free, open-source |
 | **Setup** | Account required | `pip install` |
-| **Performance** | Excellent | Excellent (V2 API) |
+| **Performance** | Excellent | Excellent (SQLite-backed queries) |
 | **Collaboration** | Built-in | SSH sync |
 
 ### vs. MLflow
@@ -592,7 +592,7 @@ user_root_dir/
 |--------|--------|----------|
 | **Setup** | Moderate (server) | Easy (no server) |
 | **Storage** | Various backends | SQLite + Files |
-| **Version Control** | Model registry | Artifacts system |
+| **Run asset context** | Model registry | Assets + snapshots |
 | **Performance** | Good | Excellent (100x faster) |
 | **Deduplication** | No | Yes (50-90% savings) |
 
@@ -610,20 +610,28 @@ user_root_dir/
 
 ## Design Goals Achieved
 
-✅ **Privacy**: Zero external calls, all data local  
-✅ **Performance**: 100x faster queries (V2 API)  
-✅ **Simplicity**: `pip install`, zero config  
-✅ **Scalability**: Tested to 100,000 experiments  
-✅ **Efficiency**: 50-90% storage savings  
-✅ **Compatibility**: Python 3.8-3.13, Windows/Linux/macOS  
-✅ **Extensibility**: Modular architecture  
-✅ **Offline**: Fully functional without network  
+- ✅ **Privacy**: Zero external calls, all data local
+- ✅ **Performance**: 100x faster SQLite-backed queries
+- ✅ **Simplicity**: `pip install`, zero config
+- ✅ **Scalability**: Tested to 100,000 experiments
+- ✅ **Efficiency**: 50-90% storage savings
+- ✅ **Compatibility**: Python 3.10+, Windows/Linux/macOS
+- ✅ **Extensibility**: Modular architecture
+- ✅ **Offline**: Fully functional without network
 
 ---
 
 ## Architecture Evolution Achieved
 
-### v0.6.0 (Current) ✅
+### v0.7.1 (Current) ✅
+
+- **Remote Viewer hardening**: saved connections, health monitoring, reconnect states, and OpenSSH password support
+- **Web UI productization**: cleaner navigation, ZIP import/export preview, unified recycle bin, and improved compare flow
+- **Logs & monitoring**: virtualized logs, stronger dark-mode consistency, and backend-collected GPU telemetry history
+- **Logging compatibility**: better support for ImageNet meters, TensorBoard, and tensorboardX
+- **Desktop workflow improvements**: current desktop flow supports native remote-session handling
+
+### v0.6.0 ✅
 
 - **Assets System**: SHA256 content-addressed storage with deduplication
   - Workspace snapshots with fingerprinting
@@ -665,7 +673,7 @@ user_root_dir/
 - **[STORAGE_DESIGN.md](STORAGE_DESIGN.md)** - Storage layer deep dive
 - **[DATA_FLOW.md](DATA_FLOW.md)** - How data flows through system
 - **[DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)** - Why we made these choices
-- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - SSH backend design (v0.6.0)
+- **[SSH_BACKEND_ARCHITECTURE.md](SSH_BACKEND_ARCHITECTURE.md)** - SSH backend design
 
 ---
 

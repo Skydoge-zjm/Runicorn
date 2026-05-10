@@ -4,9 +4,9 @@
 
 # Runs API - Experiment Management
 
-**Module**: Runs API  
-**Base Path**: `/api/runs`  
-**Version**: v1.0  
+**Module**: Runs API
+**Base Path**: `/api/runs`
+**Version**: v1.0
 **Description**: Create, read, update, and manage experiment runs with soft delete and restore capabilities.
 
 ---
@@ -51,10 +51,10 @@ GET /api/runs
     "pid": 12345,
     "best_metric_value": 0.9542,
     "best_metric_name": "accuracy",
-    "project": "image_classification",
-    "name": "resnet_baseline",
-    "artifacts_created_count": 2,
-    "artifacts_used_count": 1
+    "path": "image_classification/resnet_baseline",
+    "alias": "baseline",
+    "tags": ["imagenet", "resnet50"],
+    "assets_count": 3
   },
   {
     "id": "20250114_120000_d4e5f6",
@@ -64,10 +64,10 @@ GET /api/runs
     "pid": 23456,
     "best_metric_value": null,
     "best_metric_name": null,
-    "project": "nlp",
-    "name": "bert_finetune",
-    "artifacts_created_count": 0,
-    "artifacts_used_count": 0
+    "path": "nlp/bert_finetune",
+    "alias": null,
+    "tags": [],
+    "assets_count": 0
   }
 ]
 ```
@@ -83,10 +83,10 @@ GET /api/runs
 | `pid` | number\|null | Process ID (null if process ended) |
 | `best_metric_value` | number\|null | Best metric value (if primary metric configured) |
 | `best_metric_name` | string\|null | Name of the primary metric |
-| `project` | string | Project name |
-| `name` | string | Experiment name |
-| `artifacts_created_count` | number | Number of artifacts created by this run |
-| `artifacts_used_count` | number | Number of artifacts used by this run |
+| `path` | string\|null | Hierarchical run path |
+| `alias` | string\|null | Optional user-friendly alias |
+| `tags` | string[] | User-defined tags |
+| `assets_count` | number | Number of recorded assets for this run |
 
 ### Example
 
@@ -145,13 +145,31 @@ GET /api/runs/{run_id}
   "status": "finished",
   "pid": 12345,
   "run_dir": "E:\\RunicornData\\image_classification\\resnet_baseline\\runs\\20250114_153045_a1b2c3",
-  "project": "image_classification",
-  "name": "resnet_baseline",
+  "path": "image_classification/resnet_baseline",
+  "alias": "baseline",
+  "start_time": 1704067200.5,
+  "duration": 3600.25,
   "logs": "E:\\RunicornData\\image_classification\\resnet_baseline\\runs\\20250114_153045_a1b2c3\\logs.txt",
   "metrics": "E:\\RunicornData\\image_classification\\resnet_baseline\\runs\\20250114_153045_a1b2c3\\events.jsonl",
   "metrics_step": "E:\\RunicornData\\image_classification\\resnet_baseline\\runs\\20250114_153045_a1b2c3\\events.jsonl",
-  "artifacts_created_count": 2,
-  "artifacts_used_count": 1
+  "assets": {
+    "config": {
+      "args": {
+        "epochs": 100
+      }
+    },
+    "datasets": [
+      {
+        "name": "imagenet",
+        "context": "train"
+      }
+    ]
+  },
+  "assets_count": 2,
+  "summary": {
+    "best_metric_name": "accuracy",
+    "best_metric_value": 0.9542
+  }
 }
 ```
 
@@ -182,7 +200,8 @@ if response.status_code == 200:
     detail = response.json()
     print(f"Run {detail['id']}")
     print(f"Status: {detail['status']}")
-    print(f"Project: {detail['project']}/{detail['name']}")
+    print(f"Path: {detail['path']}")
+    print(f"Assets: {detail['assets_count']}")
 elif response.status_code == 404:
     print("Run not found")
 ```
@@ -314,8 +333,8 @@ GET /api/recycle-bin
   "deleted_runs": [
     {
       "id": "20250114_153045_a1b2c3",
-      "project": "image_classification",
-      "name": "resnet_baseline",
+      "path": "image_classification/resnet_baseline",
+      "alias": "baseline",
       "created_time": 1704067200.5,
       "deleted_at": 1704070800.2,
       "delete_reason": "user_deleted",
@@ -331,8 +350,8 @@ GET /api/recycle-bin
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | Run identifier |
-| `project` | string | Project name |
-| `name` | string | Experiment name |
+| `path` | string\|null | Run path before deletion |
+| `alias` | string\|null | Optional alias before deletion |
 | `created_time` | number | Original creation timestamp |
 | `deleted_at` | number | Deletion timestamp |
 | `delete_reason` | string | Reason for deletion |
@@ -463,7 +482,7 @@ if confirm.lower() == 'yes':
         'http://127.0.0.1:23300/api/recycle-bin/empty',
         json={"confirm": True}
     )
-    
+
     result = response.json()
     print(result['message'])
 else:
@@ -485,10 +504,10 @@ interface RunListItem {
   pid: number | null                // Process ID
   best_metric_value: number | null  // Best metric value
   best_metric_name: string | null   // Primary metric name
-  project: string | null            // Project name
-  name: string | null               // Experiment name
-  artifacts_created_count: number   // Number of artifacts created
-  artifacts_used_count: number      // Number of artifacts used
+  path: string | null               // Hierarchical run path
+  alias: string | null              // Optional alias
+  tags: string[]                    // User-defined tags
+  assets_count: number              // Number of recorded assets
 }
 ```
 
@@ -497,8 +516,8 @@ interface RunListItem {
 ```typescript
 interface DeletedRun {
   id: string              // Run ID
-  project: string         // Project name
-  name: string            // Experiment name
+  path: string | null     // Run path before deletion
+  alias: string | null    // Alias before deletion
   created_time: number    // Original creation timestamp
   deleted_at: number      // Deletion timestamp
   delete_reason: string   // Deletion reason
@@ -536,8 +555,7 @@ all_runs = requests.get('http://127.0.0.1:23300/api/runs').json()
 # Filter client-side for V1 API
 running_runs = [r for r in all_runs if r['status'] == 'running']
 
-# Recommendation: Use V2 API for server-side filtering
-# See docs/api/v2_api.md
+# Recommendation: Prefer server-side query parameters instead of filtering the full list client-side
 ```
 
 ### Status Management
@@ -612,10 +630,10 @@ runs/20250114_153045_a1b2c3/
 ## Related APIs
 
 - **Metrics API**: Get run metrics data - [metrics_api.md](./metrics_api.md)
-- **V2 Experiments API**: High-performance queries - [v2_api.md](./v2_api.md)
-- **Artifacts API**: Manage run artifacts - [artifacts_api.md](./artifacts_api.md)
+- **Paths API**: Browse run hierarchies by path - [paths_api.md](./paths_api.md)
+- **Python Client API**: Query runs programmatically - [python_client_api.md](./python_client_api.md)
 
 ---
 
-**Last Updated**: 2025-10-14
+**Last Updated**: 2026-03-28
 

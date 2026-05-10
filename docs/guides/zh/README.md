@@ -11,7 +11,7 @@ Runicorn 用户的快速开始指南和教程。
 ## 可用指南
 
 - **[QUICKSTART.md](QUICKSTART.md)** - 5分钟快速开始指南
-- ~~**[REMOTE_STORAGE_USER_GUIDE.md](REMOTE_STORAGE_USER_GUIDE.md)**~~ - 远程服务器同步（⚠️ 已在 v0.5.0 弃用，请使用 Remote Viewer）
+- ~~**[REMOTE_STORAGE_USER_GUIDE.md](REMOTE_STORAGE_USER_GUIDE.md)**~~ - 远程服务器同步历史参考页（⚠️ 已在 v0.5.0 弃用，请使用 Remote Viewer）
 - **[DEMO_EXAMPLES_GUIDE.md](DEMO_EXAMPLES_GUIDE.md)** - 示例代码讲解
 - **[REMOTE_VIEWER_GUIDE.md](REMOTE_VIEWER_GUIDE.md)** - ⭐ Remote Viewer 使用指南 (v0.5.0)
 - **[ENHANCED_LOGGING_GUIDE.md](ENHANCED_LOGGING_GUIDE.md)** - ⭐ 增强日志指南 (v0.6.0)

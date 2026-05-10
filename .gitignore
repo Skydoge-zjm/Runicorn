@@ -9,6 +9,7 @@ __pycache__/
 .build/
 build/
 dist/
+.wheel_check/
 .eggs/
 *.egg-info/
 pip-wheel-metadata/
@@ -47,6 +48,8 @@ web/frontend/*.tsbuildinfo
 # --- IDE / OS ---
 .idea/
 .vscode/
+.claude/
+.codex/
 .cursor/
 .windsurf/
 .kiro/
@@ -72,6 +75,7 @@ desktop/tauri/src-tauri/target/debug/
 # --- Sidecar outputs ---
 desktop/tauri/sidecar/build/
 desktop/tauri/sidecar/dist/
+desktop/tauri/build_config.local.json
 
 # --- Local run data (legacy) ---
 .runicorn/

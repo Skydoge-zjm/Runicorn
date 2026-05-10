@@ -4,15 +4,15 @@
 
 # SSH Backend Architecture
 
-**Document Type**: Architecture  
-**Version**: v0.6.0  
-**Last Updated**: 2025-01-XX
+**Document Type**: Architecture
+**Version**: v0.7.1
+**Last Updated**: 2026-03-28
 
 ---
 
 ## Overview
 
-Runicorn v0.6.0 introduces a new multi-backend SSH architecture designed for maximum compatibility and reliability. The architecture separates **connection management** from **tunnel transport**, allowing different implementations to be used for each layer.
+Current Runicorn releases use a multi-backend SSH architecture designed for maximum compatibility and reliability. The architecture separates **connection management** from **tunnel transport**, allowing different implementations to be used for each layer.
 
 ### Design Principles
 
@@ -150,7 +150,7 @@ class AutoBackend(SshBackend):
     def connect(self, config: SSHConfig) -> SshConnection:
         # Always uses Paramiko
         return self._paramiko.connect(config)
-    
+
     def create_tunnel(self, *, connection, local_port, remote_host, remote_port, stop_event) -> SshTunnel:
         # Fallback chain: OpenSSH → AsyncSSH → Paramiko
         try:
@@ -159,14 +159,14 @@ class AutoBackend(SshBackend):
             if isinstance(e, HostKeyConfirmationRequiredError):
                 raise  # Don't fallback on host key issues
             logger.info(f"Falling back from OpenSSH: {e}")
-        
+
         try:
             return self._asyncssh.create_tunnel(...)
         except Exception as e:
             if isinstance(e, HostKeyConfirmationRequiredError):
                 raise
             logger.info(f"Falling back from AsyncSSH: {e}")
-        
+
         return self._paramiko.create_tunnel(...)
 ```
 
@@ -242,7 +242,7 @@ class AsyncSSHTunnel:
                 # Returns False to trigger HostKeyNotVerifiable
                 # Stores HostKeyProblem for 409 flow
                 ...
-        
+
         self._conn = await asyncssh.connect(
             host,
             port=port,
@@ -251,7 +251,7 @@ class AsyncSSHTunnel:
             client_factory=_RunicornSSHClient,
             ...
         )
-        
+
         self._listener = await self._conn.forward_local_port(
             "127.0.0.1", local_port, remote_host, remote_port
         )

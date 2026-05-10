@@ -115,6 +115,28 @@ class TestSSHConnectionsCRUD:
         assert resp.status_code == 200
         assert resp.json()["ok"] is True
 
+    def test_get_connection_details_masks_credentials(
+        self, viewer_client: TestClient, mock_config_root
+    ) -> None:
+        conn = {
+            "host": "detail-host",
+            "port": 22,
+            "username": "admin",
+            "remember_password": True,
+            "password": "secret",
+            "passphrase": "phrase",
+        }
+        viewer_client.post("/api/config/ssh_connections", json=conn)
+
+        resp = viewer_client.get("/api/config/ssh_connections/detail-host:22@admin/details")
+        assert resp.status_code == 200
+        connection = resp.json()["connection"]
+        assert connection["host"] == "detail-host"
+        assert "password" not in connection
+        assert "passphrase" not in connection
+        assert connection["has_password"] is True
+        assert connection["has_passphrase"] is True
+
 
 class TestUIPreferences:
 

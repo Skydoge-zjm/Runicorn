@@ -4,7 +4,7 @@
 
 # Storage Architecture Design
 
-**Document Type**: Architecture  
+**Document Type**: Architecture
 **Purpose**: Detailed design of Runicorn's hybrid storage system
 
 ---
@@ -45,8 +45,8 @@ Runicorn uses a **hybrid storage architecture** combining SQLite for metadata/me
 ```sql
 CREATE TABLE experiments (
     id TEXT PRIMARY KEY,
-    project TEXT NOT NULL,
-    name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    alias TEXT,
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL,
     status TEXT DEFAULT 'running',
@@ -55,7 +55,8 @@ CREATE TABLE experiments (
     best_metric_step INTEGER,
     deleted_at REAL,
     run_dir TEXT NOT NULL,
-    INDEX idx_project (project),
+    workspace_root TEXT,
+    INDEX idx_path (path),
     INDEX idx_status (status),
     INDEX idx_created (created_at),
     INDEX idx_deleted (deleted_at)
@@ -65,13 +66,13 @@ CREATE TABLE experiments (
 **metrics table**:
 ```sql
 CREATE TABLE metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     experiment_id TEXT,
     timestamp REAL NOT NULL,
     metric_name TEXT NOT NULL,
     metric_value REAL,
     step INTEGER,
     stage TEXT,
-    PRIMARY KEY (experiment_id, timestamp, metric_name),
     FOREIGN KEY (experiment_id) REFERENCES experiments(id),
     INDEX idx_exp_id (experiment_id),
     INDEX idx_metric_name (metric_name)
@@ -132,8 +133,7 @@ user_root_dir/
                 ├── events.jsonl         # Metrics stream
                 ├── logs.txt             # Text logs
                 ├── environment.json     # Environment snapshot
-                ├── artifacts_created.json   # Created artifacts
-                ├── artifacts_used.json      # Used artifacts
+                ├── assets.json          # Run asset manifest
                 └── media/               # Images, files
                     └── {timestamp}_{hash}_{key}.{ext}
 ```
@@ -224,7 +224,7 @@ except:
 ```python
 def detect_storage_type(root_dir):
     db_path = root_dir / "runicorn.db"
-    
+
     if db_path.exists():
         return "v2_hybrid"
     elif (root_dir / "runs").exists():
@@ -282,7 +282,7 @@ def detect_storage_type(root_dir):
 |--------|-------|-------------|
 | Experiments | 100,000 | Excellent |
 | Metrics points (total) | 100,000,000 | Good |
-| Artifacts | 10,000 | Excellent |
+| Archived assets | 10,000 | Excellent |
 | Dedup pool files | 50,000 | Good |
 | SQLite file size | 500MB | Acceptable |
 
@@ -290,7 +290,7 @@ def detect_storage_type(root_dir):
 
 **At 100k+ experiments**:
 - SQLite queries still fast (<100ms)
-- File listing slow if needed (use V2 API)
+- File listing slow if needed (prefer SQLite-backed list endpoints)
 - Database file size manageable
 
 **At 1M experiments** (theoretical):
@@ -318,7 +318,7 @@ temp_path.replace(target_path)  # Atomic on POSIX
 
 **Checksums**: All artifact files have SHA256 digest
 
-**Validation**: Periodic integrity checks (planned)
+**Validation**: The current storage layer relies on schema constraints, migration logic, and on-demand inspection; no periodic integrity-check job is implemented today.
 
 ---
 
@@ -368,9 +368,9 @@ runicorn import --archive backup.tar.gz
 
 ---
 
-## Future Enhancements
+## Potential Future Directions
 
-### Planned
+### Not Committed
 
 - [ ] Compression for old experiments
 - [ ] Automatic cleanup of deleted artifacts

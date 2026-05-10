@@ -1,6 +1,6 @@
 ---
 title: Runicorn User Guide
-description: User guide for Runicorn 0.7.0.
+description: User guide for Runicorn 0.7.1.
 hide:
   - toc
 ---
@@ -23,7 +23,7 @@ hide:
 </div>
 
 <div class="rn-screenshot">
-  <img src="assets/hero-screenshot.png" alt="Runicorn Web UI">
+  <img src="assets/main_page/experiment_list.png" alt="Runicorn Web UI">
 </div>
 
 ## What Runicorn is good at
