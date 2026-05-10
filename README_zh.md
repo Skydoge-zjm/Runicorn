@@ -7,143 +7,167 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/assets/icon.jpg" alt="Runicorn logo" width="300" />
+  <img src="docs/assets/icon.jpg" alt="Runicorn logo" width="280" />
 </p>
 
-**本地、开源的 ML 实验追踪工具。** 100% 离线，零遥测。现代化的 W&B 自托管替代方案。
+**面向自有机器和 GPU 服务器的本地优先实验追踪工具。**
+
+Runicorn 把 Python SDK、Web UI、Remote Viewer 和可选的 Windows 桌面端整合进同一套工作流。它适合那些不想把实验记录推到 SaaS 平台、不想先把远程 run 目录同步回本地、也不想为了接入实验追踪重写整套训练代码的人。
+
+如果你的实验运行在远程 Linux 机器上，Runicorn 可以直接在远端启动一个轻量 Viewer，并通过 SSH 隧道映射到本地浏览器或桌面端，让你在数据实际所在的位置查看实验。
+
+[文档站首页](https://skydoge-zjm.github.io/Runicorn/)
+
+<p align="center">
+  <img src="docs/user-guide/docs/assets/main_page/experiment_list.png" alt="Runicorn 实验列表页面" width="100%" />
+</p>
 
 ---
 
-## ✨ 核心特性
+## 为什么用 Runicorn
 
-| 特性 | 描述 |
-|------|------|
-| 🏠 **100% 本地** | 数据永远不离开你的机器 |
-| 📊 **实时可视化** | 实时指标、日志和 GPU 监控 |
-| 📦 **资产与快照** | 工作区快照，以及数据集/配置/预训练模型引用 |
-| 🌐 **Remote Viewer** | 通过 SSH 访问远程 GPU 服务器（类似 VSCode Remote） |
-| 🖥️ **桌面应用** | Windows 原生应用，自动后端 |
-
-<table>
-  <tr>
-    <td><img src="docs/assets/p1.png" alt="实验列表" width="100%" /></td>
-    <td><img src="docs/assets/p2.png" alt="实验详情" width="100%" /></td>
-  </tr>
-</table>
+- **数据边界可控**：runs、logs、assets、settings 都保留在你自己控制的存储中
+- **远程查看不依赖文件同步**：通过 SSH 直接查看远程 GPU 服务器上的实验，无需先复制 run 文件夹
+- **迁移成本低**：从 `rn.init(...)` 和 `run.log(...)` 开始接入，同时兼容 `print()`、Python `logging`、torchvision `MetricLogger`、ImageNet meters、TensorBoard、tensorboardX
+- **实验上下文完整**：除了标量指标，还能把配置、数据集、预训练来源、代码快照和输出归档统一关联到 run
+- **本地 UI 足够完整**：路径树、对比模式、资产仓库、回收站、导入导出、GPU 遥测、远程会话管理都在同一套界面里
 
 ---
 
-## 🚀 快速开始
-
-```bash
-pip install runicorn
-runicorn viewer  # 打开 http://127.0.0.1:23300
-```
-
-```python
-import runicorn as rn
-
-run = rn.init(path="my_project/exp_1", alias="baseline")
-
-for epoch in range(100):
-    loss = train_one_epoch()
-    run.log({"loss": loss}, step=epoch + 1)
-
-run.finish()
-```
-
----
-
-## 🎯 适合谁 / 不适合谁
+## 适合谁
 
 **适合**
 
 - 训练主要发生在本地或自有服务器，希望避免 SaaS 绑定
-- 希望把指标、日志、资产和代码上下文放在同一个实验视图里
 - 经常在本地工作站和远程 GPU 机器之间切换
+- 希望把指标、日志、代码上下文、实验资产绑定到同一个 run
+- 已经有现成训练代码，希望渐进式接入，而不是大规模重构
 
-**不适合**
+**不太适合**
 
-- 你需要开箱即用的托管协作平台、团队权限或云端仪表盘
-- 你只需要最简单的 CSV 日志，不关心后续浏览和回看实验
+- 你需要开箱即用的托管协作平台、云端仪表盘或团队权限系统
+- 你只想要一个极简 CSV 记录器，不关心后续浏览和回看实验
 - 你的工作流本来就依赖托管在线生态，而不是本地或自控基础设施
 
 ---
 
-## ✅ 推荐工作流
+## 快速开始
 
-1. 在训练入口接入 `runicorn.init(...)`，训练过程中持续记录指标
-2. 本地打开 `runicorn viewer` 查看实验、对比指标、检查日志和资产
-3. 对重要实验补充配置、数据集、预训练输入的快照或引用
-4. 如果训练跑在远程 GPU 服务器上，直接用 `Remote` 页面查看，不先走手工拷文件回本地的流程
+安装：
+
+```bash
+pip install -U runicorn
+```
+
+记录第一个 run：
+
+```python
+import runicorn as rn
+
+run = rn.init(
+    path="cv/resnet50/baseline",
+    alias="trial-01",
+    capture_console=True,
+)
+
+for epoch in range(1, 11):
+    train_loss = 1.0 / epoch
+    val_acc = 0.70 + epoch * 0.02
+    run.log({"train_loss": train_loss, "val_acc": val_acc})
+
+run.summary({"notes": "first stable run"})
+run.finish()
+```
+
+打开 Viewer：
+
+```bash
+runicorn viewer
+```
+
+然后访问 [http://127.0.0.1:23300](http://127.0.0.1:23300)。
 
 ---
 
-## 🔍 它比手工流程好在哪里
+## 它和常见工作流的区别
 
 | 工作方式 | 常见问题 | Runicorn |
 |---|---|---|
 | 手工维护本地目录和脚本 | 指标、日志、配置、输出容易散开 | 把实验历史、summary、日志和资产绑定到同一个 run |
 | SSH 登录远程机器 + tail 日志 + 临时画图 | 查看慢、对比难、上下文容易丢 | Remote Viewer 通过 SSH 提供结构化界面，不要求先同步 |
-| 托管式实验追踪平台 | 需要依赖外网、服务方和外部存储 | 保持本地、离线、数据边界可控 |
+| 托管式实验追踪平台 | 依赖外网、服务方和外部存储 | 实验数据保留在本地和自有存储边界内 |
 
 ---
 
-## 📦 资产与工作区快照
+## Remote Viewer
 
-```python
-from pathlib import Path
+如果训练主要运行在远程 GPU 服务器上，Runicorn 的价值会更明显。
 
-snapshot = rn.snapshot_workspace(Path.cwd(), Path("workspace_snapshot.zip"))
+你可以通过 SSH 连接远程机器、选择远程 Python 环境、启动远程 Viewer，并在本地浏览器或桌面端里直接查看远程实验。
 
-print(snapshot["archive_path"])
-print(snapshot["file_count"])
-```
-
-在 run 内可以使用 `run.log_config(...)`、`run.log_dataset(...)` 和 `run.log_pretrained(...)` 记录可复用的训练上下文；旧的 `Artifact` API 已不再公开。
-
----
-
-## 🌐 Remote Viewer
-
-无需文件同步，直接访问远程 GPU 服务器：
+不需要本地副本。  
+不需要手工同步。  
+不需要等待大体积 run 文件夹复制回本地。
 
 ```bash
-runicorn viewer  # → 点击 "Remote" → 输入 SSH 信息 → 完成！
+runicorn viewer
+# 打开 Remote 页面 -> 通过 SSH 连接 -> 选择环境 -> 启动会话
 ```
 
-| | 旧版同步 (v0.4) | Remote Viewer (v0.5+) |
+| | 传统同步式流程 | Remote Viewer |
 |---|---|---|
-| **等待时间** | 分钟~小时 | 秒级 |
-| **本地存储** | 需要 | 零占用 |
-| **实时性** | ❌ | ✅ |
+| 等待时间 | 分钟到小时 | 秒级 |
+| 本地存储拷贝 | 需要 | 不需要 |
+| 实验查看方式 | 延迟查看 | 直接通过 SSH 查看 |
 
 ---
 
-## 📚 文档
+## 日志兼容性
 
-| 资源 | 链接 |
-|------|------|
-| 用户指南 | [docs/user-guide/](docs/user-guide/) |
-| API 参考 | [docs/api/](docs/api/) |
-| 更新日志 | [CHANGELOG.md](CHANGELOG.md) |
+Runicorn 的设计目标之一，是尽量贴近现有训练代码。
+
+如果你的训练循环已经在用 torchvision 风格的 metric logging，很多时候只需要替换一个 import：
+
+```python
+from runicorn.log_compat.torchvision import MetricLogger as MetricLogger
+```
+
+另外也提供这些兼容层：
+
+- `runicorn.log_compat.imagenet`
+- `runicorn.log_compat.tensorboard`
+- `runicorn.log_compat.tensorboardX`
+
+Runicorn 也支持采集 `print()` 输出和 Python `logging` 日志，但更重要的价值在于：它能把现有训练过程中的指标信号纳入结构化实验曲线，而不强迫你重写整套 logging。
 
 ---
 
-## 🆕 v0.7.1（最新）
+## 资产与实验上下文
 
-- 🛡️ **稳定性强化** — API 与文档表面对齐，Remote 相关边界更清晰，旧路径兼容面进一步收紧
-- 🔐 **安全收口** — 历史 XOR 凭据迁移链路更安全，已保存凭据兼容处理更稳妥
-- ✅ **测试与 CI 补强** — 扩充 smoke / baseline 覆盖，并统一前端与桌面验证基线
-- 🖥️ **桌面构建加固** — 可复现构建控制、分层构建配置与 sidecar 打包流程更完整
-- 📚 **发版清理** — 当前版本文档与实际 API / 构建表面重新对齐
+Runicorn 不只记录标量指标。它也能把让实验“之后还能看懂”的上下文一起记下来：
+
+- 配置元数据
+- 数据集引用
+- 预训练模型引用
+- 代码快照
+- 输出文件归档
+- 跨 run 资产浏览与预览
+
+你可以在 run 内直接用 `run.log_config(...)`、`run.log_dataset(...)`、`run.log_pretrained(...)` 把这些上下文关联到实验记录中。
+
+---
+
+## 文档
+
+- [Quick Start](docs/user-guide/docs/getting-started/quickstart.md)
+- [Remote Viewer Guide](docs/user-guide/docs/getting-started/remote-viewer.md)
+- [Python SDK Overview](docs/user-guide/docs/sdk/overview.md)
+- [Web UI Overview](docs/user-guide/docs/ui/overview.md)
+- [CLI Overview](docs/user-guide/docs/cli/overview.md)
+- [更新日志](CHANGELOG.md)
 
 ---
 
 ## 许可证
 
-MIT — 详见 [LICENSE](LICENSE)
-
----
-
-**版本**: v0.7.1 | **更新日期**: 2026-05-10
+MIT。详见 [LICENSE](LICENSE)。
