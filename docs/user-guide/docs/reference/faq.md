@@ -87,7 +87,7 @@ Minimal changes required:
 import runicorn as rn
 
 run = rn.init(path="demo")              # Line 1: Initialize
-run.log({"loss": 0.1}, step=1)          # Line 2: Log metrics
+run.log({"loss": 0.1})                  # Line 2: Log metrics
 run.finish()                            # Line 3: Finish
 ```
 
@@ -112,7 +112,7 @@ for epoch in range(10):
     run.log({
         "loss": history.history['loss'][0],
         "accuracy": history.history['accuracy'][0]
-    }, step=epoch)
+    })
 
 run.finish()
 ```

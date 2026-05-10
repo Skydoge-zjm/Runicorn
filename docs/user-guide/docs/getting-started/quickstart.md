@@ -74,7 +74,7 @@ for step in range(1, 51):
         "loss": round(loss, 4),
         "accuracy": round(accuracy, 4),
         "learning_rate": 0.001,
-    }, step=step)
+    })
 
     time.sleep(0.1)
     if step % 10 == 0:
