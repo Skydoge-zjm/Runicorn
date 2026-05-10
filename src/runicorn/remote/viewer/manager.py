@@ -513,11 +513,10 @@ for port in range({start_port}, {end_port}):
         remote_log_dir = f"{_REMOTE_VIEWER_LOG_ROOT}/sessions/{session_id}"
         bootstrap_log_path = f"{remote_log_dir}/bootstrap.log"
         viewer_log_path = f"{remote_log_dir}/viewer.log"
+        pid_path = f"{remote_log_dir}/viewer.pid"
 
-        # Build command
-        cmd = (
-            f"mkdir -p {shlex.quote(remote_log_dir)} && "
-            f"nohup env "
+        process_cmd = (
+            f"setsid env "
             f"RUNICORN_REMOTE_MODE=1 "
             f"RUNICORN_REMOTE_SESSION_ID={shlex.quote(session_id)} "
             f"RUNICORN_REMOTE_LOG_ROOT={shlex.quote(_REMOTE_VIEWER_LOG_ROOT)} "
@@ -528,8 +527,18 @@ for port in range({start_port}, {end_port}):
             f"--host 127.0.0.1 "
             f"--port {remote_port} "
             f"--remote-mode "
-            f"--log-level INFO "
-            f"> {shlex.quote(bootstrap_log_path)} 2>&1 & echo $!"
+            f"--log-level INFO"
+        )
+        launcher_script = (
+            f"{process_cmd} "
+            f"< /dev/null "
+            f"> {shlex.quote(bootstrap_log_path)} 2>&1 "
+            f"& printf '%s\\n' \"$!\" > {shlex.quote(pid_path)}"
+        )
+        cmd = (
+            f"mkdir -p {shlex.quote(remote_log_dir)} && "
+            f"sh -c {shlex.quote(launcher_script)} && "
+            f"cat {shlex.quote(pid_path)}"
         )
         
         logger.info(f"Starting remote viewer with command: {cmd}")

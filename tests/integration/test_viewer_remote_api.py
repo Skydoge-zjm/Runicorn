@@ -110,6 +110,74 @@ class TestRemoteStorageCandidates:
 
 class TestSavedServerCredentialFlow:
 
+    def test_get_saved_connections_migrates_legacy_flat_entries_in_mixed_file(
+        self,
+        viewer_client: TestClient,
+        mock_config_root,
+    ) -> None:
+        connections_path = mock_config_root / "connections.json"
+        connections_path.write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "legacy_wsl",
+                        "name": "WSL",
+                        "host": "127.0.0.1",
+                        "port": 2222,
+                        "username": "lenovo",
+                        "authMethod": "key",
+                        "privateKeyPath": "~/.ssh/id_ed25519",
+                        "remoteRoot": "/home/lenovo/runicorn",
+                        "createdAt": 10,
+                    },
+                    {
+                        "id": "legacy_gpu",
+                        "name": "GPU Box",
+                        "host": "10.0.0.8",
+                        "port": 22,
+                        "username": "ubuntu",
+                        "authMethod": "password",
+                        "password": "secret",
+                        "remoteRoot": "/data/runicorn",
+                        "createdAt": 20,
+                    },
+                    {
+                        "kind": "server",
+                        "id": "srv_u_h_22",
+                        "name": "SSH u@h:22",
+                        "host": "h",
+                        "port": 22,
+                        "username": "u",
+                        "authMethod": "key",
+                        "privateKeyPath": "~/.ssh/id_ed25519",
+                        "createdAt": 30,
+                    },
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        resp = viewer_client.get("/api/remote/connections/saved")
+
+        assert resp.status_code == 200
+        payload = resp.json()["connections"]
+        servers = [item for item in payload if item["kind"] == "server"]
+        profiles = [item for item in payload if item["kind"] == "connection"]
+        assert {server["id"] for server in servers} == {
+            "srv_lenovo_127_0_0_1_2222",
+            "srv_ubuntu_10_0_0_8_22",
+            "srv_u_h_22",
+        }
+        assert {profile["id"] for profile in profiles} == {"legacy_wsl", "legacy_gpu"}
+        assert {profile["serverId"] for profile in profiles} == {
+            "srv_lenovo_127_0_0_1_2222",
+            "srv_ubuntu_10_0_0_8_22",
+        }
+
+        persisted = json.loads(connections_path.read_text(encoding="utf-8"))
+        assert all(item.get("kind") in {"server", "connection"} for item in persisted)
+        assert len(persisted) == 5
+
     def test_saved_connections_endpoint_masks_server_credentials(
         self,
         viewer_client: TestClient,

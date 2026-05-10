@@ -258,6 +258,28 @@ class TestRemoteViewerStartup:
         assert remote_pid == 43210
         assert connection.exec_command.call_args.kwargs["timeout"] > connection.config.timeout
 
+    def test_start_remote_viewer_process_uses_detached_inner_shell_launcher(self):
+        from runicorn.remote.viewer.manager import RemoteViewerManager
+
+        manager = RemoteViewerManager()
+        connection = _make_connection(timeout=8)
+        connection.exec_command.return_value = ("43210\n", "", 0)
+
+        manager._start_remote_viewer_process(
+            connection=connection,
+            python_cmd="/opt/miniconda3/envs/torch/bin/python",
+            remote_root="/data/runicorn",
+            remote_port=23300,
+            session_id="detach01",
+        )
+
+        command = connection.exec_command.call_args.args[0]
+        assert "sh -c" in command
+        assert "viewer.pid" in command
+        assert "cat " in command
+        assert '"$!"' in command
+        assert "printf " in command
+
 
 # ===================================================================
 # Tunnel Reconnect (state transitions)
