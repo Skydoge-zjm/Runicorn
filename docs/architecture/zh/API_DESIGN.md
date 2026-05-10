@@ -198,54 +198,62 @@ async def logs_websocket(websocket: WebSocket, run_id: str):
 
 **1. 连接作为资源**:
 ```python
-# 创建连接
+# 创建或复用 SSH 连接
 POST /api/remote/connect
 → 返回: {"connection_id": "conn_123", ...}
 
-# 查询连接
-GET /api/remote/connections/{connection_id}
+# 列出活动 SSH session
+GET /api/remote/sessions
 
-# 删除连接（断开）
-DELETE /api/remote/connections/{connection_id}
+# 按连接标识断开
+POST /api/remote/disconnect
+{"host": "...", "port": 22, "username": "..."}
 ```
 
 **2. 子资源嵌套**:
 ```python
-# Viewer 是连接的子资源
+# Viewer 启动可直接接收 SSH 凭据，或通过 saved_server_id 取服务端保存配置
 POST /api/remote/viewer/start
 {
-  "connection_id": "conn_123",  # 关联到父资源
-  "env_name": "pytorch-env"
+  "host": "gpu-server.example.com",
+  "port": 22,
+  "username": "user",
+  "remote_root": "/data/Runicorn",
+  "conda_env": "pytorch-env",
+  "saved_server_id": "server_123"  # 可选；服务端凭据查找
 }
 ```
 
 ### 异步操作设计
 
-**长时间操作**（如启动 Viewer）:
+当前实现说明：Remote Viewer 启动会在 session 创建完成后返回，客户端随后按 `session_id` 轮询。
+
+**基于 session 的操作**:
 ```python
 @router.post("/viewer/start")
 async def start_viewer(request: StartViewerRequest):
-    # 1. 立即返回接受状态
-    task_id = uuid.uuid4().hex
-
-    # 2. 后台异步执行
-    background_tasks.add_task(
-        _start_viewer_task,
-        connection_id=request.connection_id,
-        env_name=request.env_name,
-        task_id=task_id
-    )
-
-    # 3. 返回任务 ID 供轮询
+    # 启动 Viewer 并返回具体 session 数据
     return {
-        "status": "starting",
-        "task_id": task_id,
-        "estimated_time_ms": 5000
+        "ok": True,
+        "session": {
+            "sessionId": "session_123",
+            "host": "gpu-server.example.com",
+            "sshPort": 22,
+            "username": "user",
+            "status": "running",
+            "localPort": 23301,
+            "remotePort": 23300,
+            "remoteRoot": "/data/Runicorn",
+            "startedAt": 1760000000000,
+            "uptimeSeconds": 12.4,
+            "isActive": True,
+            "url": "http://localhost:23301"
+        }
     }
 
-# 客户端轮询状态
-GET /api/remote/viewer/status?connection_id={id}
-→ {"status": "running", "viewer_url": "http://localhost:8081"}
+# 客户端轮询 session 状态
+GET /api/remote/viewer/status/{session_id}
+→ {"status": "running", "url": "http://localhost:23301", "sessionId": "session_123"}
 ```
 
 ### 错误处理（Remote 特定）
@@ -272,34 +280,19 @@ class RemoteErrorCode(str, Enum):
 }
 ```
 
-### 健康检查设计
+### 状态聚合设计
 
-**分层健康检查**:
+当前 API 面没有单独暴露独立的 health 端点。现有实现提供的是：
+
 ```python
-GET /api/remote/health?connection_id={id}
+# Remote 子系统聚合状态
+GET /api/remote/status
 
-返回:
-{
-  "is_healthy": true,
-  "checks": {
-    "ssh_connection": {
-      "status": "healthy",
-      "latency_ms": 45.3,
-      "last_check": "2025-10-25T10:30:00Z"
-    },
-    "viewer_process": {
-      "status": "healthy",
-      "pid": 12345,
-      "uptime_seconds": 3600
-    },
-    "ssh_tunnel": {
-      "status": "healthy",
-      "local_port": 8081,
-      "remote_port": 23300,
-      "bytes_transferred": 1048576
-    }
-  }
-}
+# 指定 Viewer session 的状态
+GET /api/remote/viewer/status/{session_id}
+
+# 活跃 SSH 连接的环境发现
+GET /api/remote/conda-envs?connection_id={connection_id}
 ```
 
 ### 安全设计考虑

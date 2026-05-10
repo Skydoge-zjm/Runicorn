@@ -364,54 +364,62 @@ function connectWebSocket(url, onReconnect) {
 
 **1. Connection as Resource**:
 ```python
-# Create connection
+# Create or reuse SSH connection
 POST /api/remote/connect
 → Returns: {"connection_id": "conn_123", ...}
 
-# Query connection
-GET /api/remote/connections/{connection_id}
+# List active SSH sessions
+GET /api/remote/sessions
 
-# Delete connection (disconnect)
-DELETE /api/remote/connections/{connection_id}
+# Disconnect by connection identity
+POST /api/remote/disconnect
+{"host": "...", "port": 22, "username": "..."}
 ```
 
 **2. Sub-resource Nesting**:
 ```python
-# Viewer is sub-resource of connection
+# Viewer startup accepts SSH credentials directly or via saved_server_id
 POST /api/remote/viewer/start
 {
-  "connection_id": "conn_123",  # Links to parent resource
-  "env_name": "pytorch-env"
+  "host": "gpu-server.example.com",
+  "port": 22,
+  "username": "user",
+  "remote_root": "/data/Runicorn",
+  "conda_env": "pytorch-env",
+  "saved_server_id": "server_123"  # Optional; server-side credential lookup
 }
 ```
 
 ### Async Operation Design
 
-**Long-running operations** (like starting Viewer):
+Current implementation note: remote Viewer startup returns only after the session is created, and clients poll by `session_id`.
+
+**Session-oriented operations**:
 ```python
 @router.post("/viewer/start")
 async def start_viewer(request: StartViewerRequest):
-    # 1. Immediately return accepted status
-    task_id = uuid.uuid4().hex
-
-    # 2. Execute asynchronously in background
-    background_tasks.add_task(
-        _start_viewer_task,
-        connection_id=request.connection_id,
-        env_name=request.env_name,
-        task_id=task_id
-    )
-
-    # 3. Return task ID for polling
+    # Start viewer and return concrete session data
     return {
-        "status": "starting",
-        "task_id": task_id,
-        "estimated_time_ms": 5000
+        "ok": True,
+        "session": {
+            "sessionId": "session_123",
+            "host": "gpu-server.example.com",
+            "sshPort": 22,
+            "username": "user",
+            "status": "running",
+            "localPort": 23301,
+            "remotePort": 23300,
+            "remoteRoot": "/data/Runicorn",
+            "startedAt": 1760000000000,
+            "uptimeSeconds": 12.4,
+            "isActive": True,
+            "url": "http://localhost:23301"
+        }
     }
 
-# Client polls status
-GET /api/remote/viewer/status?connection_id={id}
-→ {"status": "running", "viewer_url": "http://localhost:8081"}
+# Client polls session status
+GET /api/remote/viewer/status/{session_id}
+→ {"status": "running", "url": "http://localhost:23301", "sessionId": "session_123"}
 ```
 
 ### Error Handling (Remote-specific)
@@ -438,34 +446,19 @@ class RemoteErrorCode(str, Enum):
 }
 ```
 
-### Health Check Design
+### Status Aggregation Design
 
-**Layered health checks**:
+The current API surface does not expose a dedicated health endpoint. Instead it provides:
+
 ```python
-GET /api/remote/health?connection_id={id}
+# Aggregate overview for the remote subsystem
+GET /api/remote/status
 
-Returns:
-{
-  "is_healthy": true,
-  "checks": {
-    "ssh_connection": {
-      "status": "healthy",
-      "latency_ms": 45.3,
-      "last_check": "2025-10-25T10:30:00Z"
-    },
-    "viewer_process": {
-      "status": "healthy",
-      "pid": 12345,
-      "uptime_seconds": 3600
-    },
-    "ssh_tunnel": {
-      "status": "healthy",
-      "local_port": 8081,
-      "remote_port": 23300,
-      "bytes_transferred": 1048576
-    }
-  }
-}
+# Session-specific Viewer status
+GET /api/remote/viewer/status/{session_id}
+
+# Environment discovery for an active SSH connection
+GET /api/remote/conda-envs?connection_id={connection_id}
 ```
 
 ### Security Design Considerations

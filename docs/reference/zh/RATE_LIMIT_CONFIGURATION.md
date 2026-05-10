@@ -4,154 +4,136 @@
 
 # 速率限制配置指南
 
+**最后更新**: 2026-05-10
+
 ## 概述
 
-Runicorn 中的速率限制系统现在可以通过 JSON 配置文件进行配置，无需修改代码即可轻松调整限制。
+当前速率限制实现分成两层：
 
-## 配置文件位置
+1. 配置读取与保存  
+   `src/runicorn/config/rate_limits.py`
+2. 运行时应用  
+   `src/runicorn/security/rate_limiter.py`
 
-速率限制配置存储在：
-- 主要位置: `src/runicorn/config/rate_limits.json`
-- 备用位置: `src/runicorn/rate_limits.json`
+文档中的路径、示例端点和行为均以这两处实现为准。
 
-## 配置结构
+## 配置加载优先级
+
+`get_rate_limit_config()` 当前按以下顺序加载：
+
+1. 用户配置目录中的 `rate_limits.json`
+2. 包内默认文件 `src/runicorn/config/_defaults/rate_limits.json`
+3. 读取失败时使用 `rate_limiter.py` 中的 fallback 默认值
+
+包内默认文件会在首次加载时复制到用户配置目录，供后续修改。
+
+## 当前默认文件
+
+仓库中的默认配置文件：
+
+```text
+src/runicorn/config/_defaults/rate_limits.json
+```
+
+当前默认文件中可核实的特殊配置 bucket 包括：
+
+- `/api/remote/connect`
+- `/api/remote/status`
+- `/api/metrics/gpu`
+- `/api/remote/download`
+- `/api/remote/sync`
+- `/api/runs`
+
+示例片段：
 
 ```json
 {
-  "_comment": "速率限制很高，因为这是本地API，无互联网暴露",
   "default": {
     "max_requests": 6000,
     "window_seconds": 60,
-    "burst_size": null,
-    "description": "默认速率限制 - 本地使用非常宽松"
+    "burst_size": null
   },
   "endpoints": {
-    "/api/endpoint/path": {
-      "max_requests": 100,
-      "window_seconds": 60,
-      "burst_size": 20,
-      "description": "端点特定配置"
+    "/api/remote/connect": {
+      "max_requests": 10,
+      "window_seconds": 60
+    },
+    "/api/remote/status": {
+      "max_requests": 20000,
+      "window_seconds": 60
     }
   },
   "settings": {
-    "enable_rate_limiting": true,
+    "enable_rate_limiting": false,
     "log_violations": true,
-    "whitelist_localhost": false,
-    "custom_headers": {
-      "rate_limit_header": "X-RateLimit-Limit",
-      "rate_limit_remaining_header": "X-RateLimit-Remaining",
-      "rate_limit_reset_header": "X-RateLimit-Reset"
-    }
+    "whitelist_localhost": false
   }
 }
 ```
 
-## 配置参数
+## 运行时 fallback
 
-### Default 部分
-- `max_requests`: 时间窗口内允许的最大请求数
-- `window_seconds`: 时间窗口（秒）
-- `burst_size`: 可选的突发大小限制（如为 null 则默认为 max_requests）
-- `description`: 限制的人类可读描述
+如果配置读取失败，`src/runicorn/security/rate_limiter.py` 会回退到硬编码默认值。当前代码中可确认的 fallback bucket 为：
 
-### Endpoints 部分
-每个端点可以有自己的特定配置，参数与 default 部分相同。
+- `/api/remote/connect`
+- `/api/remote/status`
+- `/api/remote/download`
+- `/api/remote/sync`
+- `/api/runs`
 
-### Settings 部分
-- `enable_rate_limiting`: 启用/禁用速率限制的主开关
-- `log_violations`: 是否记录速率限制违规
-- `whitelist_localhost`: 是否对 localhost 请求绕过速率限制
-- `custom_headers`: 速率限制信息的自定义头部名称
+需要特别区分两件事：
 
-## 常见配置
+1. 这些路径当前真实存在于限流配置与 fallback 里
+2. 它们不等于当前一定公开注册了对应 API 路由
 
-### 1. 连接端点（限制性）
-```json
-"/api/remote/connect": {
-  "max_requests": 10,
-  "window_seconds": 60,
-  "description": "SSH 连接操作 - 防止暴力破解"
+其中 `/api/remote/download`、`/api/remote/sync` 在本次文档更新时只在 rate-limit 配置与 fallback 中核实到，未在当前 `/api/remote/*` 路由注册表中核实到对应公开接口。因此它们在本页只能作为“限流配置项示例”出现，不能当作当前 API 参考。
+
+## 配置结构
+
+### `default`
+
+- `max_requests`
+- `window_seconds`
+- `burst_size`
+- `description`
+
+### `endpoints`
+
+按端点路径覆盖默认限制，字段与 `default` 一致。
+
+### `settings`
+
+- `enable_rate_limiting`
+- `log_violations`
+- `whitelist_localhost`
+- `custom_headers`
+
+## 当前已确认的读写 API
+
+当前仓库中已确认的配置函数：
+
+- `runicorn.config.get_rate_limit_config`
+- `runicorn.config.save_rate_limit_config`
+
+示例：
+
+```python
+from runicorn.config import get_rate_limit_config, save_rate_limit_config
+
+config = get_rate_limit_config()
+config["endpoints"]["/api/remote/connect"] = {
+    "max_requests": 5,
+    "window_seconds": 60,
+    "burst_size": None,
+    "description": "Tighter SSH connection limit"
 }
+save_rate_limit_config(config)
 ```
 
-### 2. 状态轮询端点（非常宽松）
-```json
-"/api/remote/status": {
-  "max_requests": 20000,
-  "window_seconds": 60,
-  "description": "Remote 状态轮询 - UI 更新非常宽松"
-}
-```
+## 适合保留在文档中的示例
 
-### 3. 下载端点（适中）
-```json
-"/api/remote/download": {
-  "max_requests": 3000,
-  "window_seconds": 60,
-  "description": "文件下载 - 适度限制"
-}
-```
+### 严格限制连接类端点
 
-## 修改速率限制
-
-### 1. 编辑配置文件
-```bash
-# 编辑配置
-nano src/runicorn/config/rate_limits.json
-```
-
-### 2. 重启应用程序
-配置在速率限制器首次初始化时加载。重启 Runicorn viewer 以应用更改：
-```bash
-runicorn viewer
-```
-
-## CLI 管理
-
-### 查看当前配置
-```bash
-runicorn rate-limit --action show
-```
-
-### 列出所有限制
-```bash
-runicorn rate-limit --action list
-```
-
-### 设置端点限制
-```bash
-runicorn rate-limit --action set \
-  --endpoint "/api/remote/connect" \
-  --max-requests 5 \
-  --window 60 \
-  --description "Remote SSH 连接尝试限制"
-```
-
-### 移除端点限制
-```bash
-runicorn rate-limit --action remove --endpoint "/api/remote/connect"
-```
-
-### 修改全局设置
-```bash
-# 启用速率限制
-runicorn rate-limit --action settings --enable
-
-# 禁用速率限制
-runicorn rate-limit --action settings --disable
-
-# 启用违规日志
-runicorn rate-limit --action settings --log-violations
-
-# 白名单 localhost
-runicorn rate-limit --action settings --whitelist-localhost
-```
-
-## 最佳实践
-
-### 1. 为敏感端点设置严格限制
-
-**SSH 连接**（防止暴力破解）:
 ```json
 "/api/remote/connect": {
   "max_requests": 5,
@@ -159,25 +141,16 @@ runicorn rate-limit --action settings --whitelist-localhost
 }
 ```
 
-**批量删除**（防止误操作）:
+### 放宽高频轮询端点
+
 ```json
-"/api/runs/soft-delete": {
-  "max_requests": 10,
+"/api/remote/status": {
+  "max_requests": 20000,
   "window_seconds": 60
 }
 ```
 
-### 2. 为查询端点设置宽松限制
-
-**V2 实验查询**（高性能API）:
-```json
-"/api/v2/experiments": {
-  "max_requests": 200,
-  "window_seconds": 60
-}
-```
-
-### 3. 开发环境禁用限制
+### 调整全局开关
 
 ```json
 {
@@ -188,13 +161,18 @@ runicorn rate-limit --action settings --whitelist-localhost
 }
 ```
 
-## 速率限制响应
+## 响应头
 
-当超过限制时，API 返回：
+当前响应头名称由 `custom_headers` 控制，默认值为：
 
-**状态码**: `429 Too Many Requests`
+```text
+X-RateLimit-Limit
+X-RateLimit-Remaining
+X-RateLimit-Reset
+```
 
-**响应体**:
+超限时仍返回：
+
 ```json
 {
   "detail": "Rate limit exceeded",
@@ -202,33 +180,18 @@ runicorn rate-limit --action settings --whitelist-localhost
 }
 ```
 
-**响应头**:
-```
-Retry-After: 45
-X-RateLimit-Limit: 60
-X-RateLimit-Remaining: 0
-X-RateLimit-Reset: 45
-```
+## 文档维护要求
 
-## 客户端处理
+当以下内容变化时，应同步更新本文档：
 
-```python
-import requests
-import time
+1. `src/runicorn/config/_defaults/rate_limits.json` 中的默认端点集合
+2. `get_rate_limit_config()` 的加载优先级
+3. `rate_limiter.py` 的 fallback 端点
+4. 对外暴露的配置函数名
 
-def api_call_with_retry(url):
-    response = requests.get(url)
-    
-    if response.status_code == 429:
-        retry_after = int(response.headers.get('Retry-After', 60))
-        print(f"速率限制。等待 {retry_after} 秒...")
-        time.sleep(retry_after)
-        return api_call_with_retry(url)
-    
-    return response.json()
-```
+如果某个路径只存在于 rate-limit 配置中、但没有对应公开路由，文档必须显式标注它是“配置 bucket”，不能写成当前 API 能力。
 
 ---
 
-**最后更新**: 2025-10-14
-
+- **[参考文档索引](README.md)**
+- **[API 文档概览](../../api/zh/README.md)**

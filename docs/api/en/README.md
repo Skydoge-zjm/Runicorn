@@ -96,12 +96,12 @@ HTTP REST API endpoints for Web UI and third-party integrations.
 | **Runs API** | Experiment run management (CRUD, soft delete, restore) | [runs_api.md](./runs_api.md) | 6 endpoints |
 | **Metrics API** | Real-time metrics queries and visualization data | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |
 | **Config API** | Configuration and preferences management | [config_api.md](./config_api.md) | 6 endpoints |
-| **Remote Viewer API** 🆕 | VSCode Remote-style remote access | [remote_api.md](./remote_api.md) | 12 endpoints |
+| **Remote Viewer API** 🆕 | Current `/api/remote/*` remote-access surface | [remote_api.md](./remote_api.md) | connection / runtime / known-hosts / viewer / saved-connections |
 | **Logging API** 🆕 | Enhanced logging with console capture | [logging_api.md](./logging_api.md) | SDK |
 | **Paths API** 🆕 | Path-based hierarchy navigation | [paths_api.md](./paths_api.md) | 5+3 endpoints |
 | **SSH API** | Historical deprecation note | [ssh_api.md](./ssh_api.md) | Historical note |
 
-> ⚠️ **Current remote surface**: use `Remote Viewer API` and the `/api/remote/*` routes. `/api/unified/*` and `/api/ssh/*` are retained only as historical migration context in [ssh_api.md](./ssh_api.md).
+> ⚠️ **Current remote surface**: use `Remote Viewer API` and the `/api/remote/*` routes. `/api/unified/*` and `/api/ssh/*` are retained only as historical migration context in [ssh_api.md](./ssh_api.md). If remote routes, the 409 host-key contract, saved-connection payloads, or viewer session states change, update [remote_api.md](./remote_api.md) in the same change.
 
 **Quick Reference**: See [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) for common operations
 
@@ -252,6 +252,6 @@ ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 
 ---
 
-**Last Updated**: 2026-03-28
+**Last Updated**: 2026-05-10
 **Maintained By**: Runicorn Development Team
 

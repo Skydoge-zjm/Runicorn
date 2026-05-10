@@ -491,7 +491,12 @@ Health Checker 执行检查
 ```
 用户点击断开 / 关闭标签页
     ↓
-DELETE /api/remote/connections/{id}?cleanup_viewer=true
+POST /api/remote/viewer/stop
+{"session_id": "{session_id}"}
+    ↓
+若该 SSH 连接下已无其它 Viewer session:
+POST /api/remote/disconnect
+{"host": "...", "port": 22, "username": "..."}
     ↓
 清理步骤:
     ├─ 1. Tunnel Manager: 关闭 SSH 隧道

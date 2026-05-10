@@ -491,7 +491,12 @@ Frontend displays connection status indicator
 ```
 User clicks disconnect / closes tab
     ↓
-DELETE /api/remote/connections/{id}?cleanup_viewer=true
+POST /api/remote/viewer/stop
+{"session_id": "{session_id}"}
+    ↓
+If no sessions remain on that SSH connection:
+POST /api/remote/disconnect
+{"host": "...", "port": 22, "username": "..."}
     ↓
 Cleanup steps:
     ├─ 1. Tunnel Manager: Close SSH tunnel

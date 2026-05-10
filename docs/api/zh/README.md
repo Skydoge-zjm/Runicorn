@@ -96,12 +96,12 @@ HTTP REST API 端点，用于 Web UI 和第三方集成。
 | **Runs API** | 实验运行管理（CRUD、软删除、恢复）| [runs_api.md](./runs_api.md) | 6个端点 |
 | **Metrics API** | 实时指标查询和可视化数据 | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |
 | **Config API** | 配置和偏好设置管理 | [config_api.md](./config_api.md) | 6个端点 |
-| **Remote Viewer API** 🆕 | VSCode Remote 风格的远程访问 | [remote_api.md](./remote_api.md) | 12个端点 |
+| **Remote Viewer API** 🆕 | 当前 `/api/remote/*` 远程访问主接口 | [remote_api.md](./remote_api.md) | 连接 / 环境 / known hosts / viewer / 保存连接 |
 | **Logging API** 🆕 | 增强日志与控制台捕获 | [logging_api.md](./logging_api.md) | SDK |
 | **Paths API** 🆕 | 路径层级导航 | [paths_api.md](./paths_api.md) | 5+3个端点 |
 | **SSH API** | 历史弃用说明页 | [ssh_api.md](./ssh_api.md) | 历史说明 |
 
-> ⚠️ **当前有效 remote 路线**: 使用 `Remote Viewer API` 下的 `/api/remote/*`。`/api/unified/*` 与 `/api/ssh/*` 仅作为历史迁移信息保留在 [ssh_api.md](./ssh_api.md)。
+> ⚠️ **当前有效 remote 路线**: 使用 `Remote Viewer API` 下的 `/api/remote/*`。`/api/unified/*` 与 `/api/ssh/*` 仅作为历史迁移信息保留在 [ssh_api.md](./ssh_api.md)。如果调整了 remote 路由、409 host key 协议、保存连接结构或 viewer session 状态，请同步更新 [remote_api.md](./remote_api.md)。
 
 **快速参考**: 查看 [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) 获取常用操作
 
@@ -252,7 +252,7 @@ ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 
 ---
 
-**最后更新**: 2026-03-28
+**最后更新**: 2026-05-10
 **维护者**: Runicorn 开发团队
 
 

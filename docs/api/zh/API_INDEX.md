@@ -6,7 +6,7 @@
 
 **版本**: v0.7.0
 **总端点数**: REST API + Python Client
-**最后更新**: 2026-03-28
+**最后更新**: 2026-05-10
 
 ---
 
@@ -68,7 +68,8 @@ with client_mod.connect() as client:
 
 ### Remote Viewer API (远程访问) 🆕
 
-**v0.5.4**: VSCode Remote 风格的远程服务器访问
+**当前主入口**: [remote_api.md](./remote_api.md)  
+**历史接口说明**: [ssh_api.md](./ssh_api.md)
 
 #### 连接管理
 
@@ -79,12 +80,24 @@ with client_mod.connect() as client:
 | POST | `/api/remote/disconnect` | 断开会话 | [📖](./remote_api.md#post-apiremotedisconnect) |
 | GET | `/api/remote/status` | 远程状态 | [📖](./remote_api.md#get-apiremotestatus) |
 
+#### Host Key 与已保存连接
+
+| 方法 | 端点 | 描述 | 文档 |
+|------|------|------|------|
+| POST | `/api/remote/known-hosts/accept` | 接受 host key | [📖](./remote_api.md) |
+| GET | `/api/remote/known-hosts/list` | 列出 known_hosts 条目 | [📖](./remote_api.md) |
+| POST | `/api/remote/known-hosts/remove` | 删除 known_hosts 条目 | [📖](./remote_api.md) |
+| GET | `/api/remote/connections/saved` | 读取脱敏后的保存连接 | [📖](./remote_api.md) |
+| POST | `/api/remote/connections/saved` | 保存连接配置列表 | [📖](./remote_api.md) |
+
 #### 环境检测
 
 | 方法 | 端点 | 描述 | 文档 |
 |------|------|------|------|
 | GET | `/api/remote/conda-envs` | 列出 Python 环境 | [📖](./remote_api.md#get-apiremoteconda-envs) |
+| GET | `/api/remote/env-configs` | 批量读取环境版本摘要 | [📖](./remote_api.md) |
 | GET | `/api/remote/config` | 获取远程配置 | [📖](./remote_api.md#get-apiremoteconfig) |
+| GET | `/api/remote/storage-candidates` | 探测远端存储候选目录 | [📖](./remote_api.md) |
 
 #### Remote Viewer 管理
 
@@ -188,7 +201,8 @@ GET /api/runs
 GET /api/projects/{project}/names/{name}/runs
 
 # 3. 导出数据
-GET /api/export?format=json
+POST /api/runs/export
+GET /api/paths/export?path={path}&format=json
 ```
 
 ---
@@ -243,10 +257,10 @@ X-RateLimit-Reset: 15
 ### SSH 安全
 
 - 永远不要记录凭据
-- 使用 SSH 密钥 > 密码
-- 尽可能使用 SSH agent
-- 连接不会持久化
-- 每分钟最多 5 次连接尝试
+- 优先使用 SSH 密钥或 SSH agent
+- host key 校验失败会返回 `409`，需要显式确认
+- 当前远程接口主路径是 `/api/remote/*`
+- `/api/unified/*` 与 `/api/ssh/*` 只保留为历史说明
 
 ---
 
@@ -376,7 +390,7 @@ run.finish()
 - ✅ 图表渲染的 Bug 修复
 
 ### v0.5.0
-- ✅ **新增 Remote Viewer API**（12个端点）
+- ✅ **新增 Remote Viewer API**（当前已演化为 `/api/remote/*` 远程接口族）
 - ✅ 弃用旧的 SSH 文件同步 API
 - ✅ 支持 SSH 密钥和密码认证
 - ✅ 自动 Python 环境检测

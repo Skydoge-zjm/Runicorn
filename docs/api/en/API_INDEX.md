@@ -6,7 +6,7 @@
 
 **Version**: v0.7.0
 **Total Endpoints**: REST API + Python Client
-**Last Updated**: 2026-03-28
+**Last Updated**: 2026-05-10
 
 ---
 
@@ -68,7 +68,8 @@ with client_mod.connect() as client:
 
 ### Remote Viewer API (Remote Access) 🆕
 
-**v0.5.4**: VSCode Remote-style remote server access
+**Current entry point**: [remote_api.md](./remote_api.md)  
+**Historical note**: [ssh_api.md](./ssh_api.md)
 
 #### Connection Management
 
@@ -79,12 +80,24 @@ with client_mod.connect() as client:
 | POST | `/api/remote/disconnect` | Disconnect session | [📖](./remote_api.md#post-apiremotedisconnect) |
 | GET | `/api/remote/status` | Remote status | [📖](./remote_api.md#get-apiremotestatus) |
 
+#### Host key and saved connections
+
+| Method | Endpoint | Description | Docs |
+|--------|----------|-------------|------|
+| POST | `/api/remote/known-hosts/accept` | Accept host key | [📖](./remote_api.md) |
+| GET | `/api/remote/known-hosts/list` | List known_hosts entries | [📖](./remote_api.md) |
+| POST | `/api/remote/known-hosts/remove` | Remove known_hosts entry | [📖](./remote_api.md) |
+| GET | `/api/remote/connections/saved` | Load masked saved connections | [📖](./remote_api.md) |
+| POST | `/api/remote/connections/saved` | Save the connection list | [📖](./remote_api.md) |
+
 #### Environment Detection
 
 | Method | Endpoint | Description | Docs |
 |--------|----------|-------------|------|
 | GET | `/api/remote/conda-envs` | List Python environments | [📖](./remote_api.md#get-apiremoteconda-envs) |
+| GET | `/api/remote/env-configs` | Batch-read environment version summaries | [📖](./remote_api.md) |
 | GET | `/api/remote/config` | Get remote config | [📖](./remote_api.md#get-apiremoteconfig) |
+| GET | `/api/remote/storage-candidates` | Detect candidate remote storage roots | [📖](./remote_api.md) |
 
 #### Remote Viewer Management
 
@@ -188,7 +201,8 @@ GET /api/runs
 GET /api/projects/{project}/names/{name}/runs
 
 # 3. Export data
-GET /api/export?format=json
+POST /api/runs/export
+GET /api/paths/export?path={path}&format=json
 ```
 
 ---
@@ -243,10 +257,10 @@ X-RateLimit-Reset: 15
 ### SSH Security
 
 - Never log credentials
-- Use SSH keys > passwords
-- Use SSH agent when possible
-- Connections are not persisted
-- Max 5 connection attempts per minute
+- Prefer SSH keys or SSH agent
+- Host-key validation failures return `409` and require explicit confirmation
+- The active remote route family is `/api/remote/*`
+- `/api/unified/*` and `/api/ssh/*` remain only as historical context
 
 ---
 
@@ -382,7 +396,7 @@ See main [README.md](../../README.md) for full SDK documentation.
 - ✅ Bug fixes for chart rendering
 
 ### v0.5.0
-- ✅ **Added Remote Viewer API** (12 endpoints)
+- ✅ **Added Remote Viewer API** (now evolved into the `/api/remote/*` route family)
 - ✅ Deprecated old SSH file sync API
 - ✅ SSH key and password authentication support
 - ✅ Automatic Python environment detection
