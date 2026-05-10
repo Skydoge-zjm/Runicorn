@@ -1,6 +1,7 @@
 """Unit tests for runicorn.remote.ssh_backend (migrated from tests_legacy)."""
 from __future__ import annotations
 
+import os
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -383,9 +384,14 @@ class TestOpenSSHCommandConnection:
         assert kwargs["env"]["SSH_ASKPASS_REQUIRE"] == "force"
         assert kwargs["env"]["RUNICORN_SSH_ASKPASS_SECRET"] == "pw"
         askpass_path = Path(kwargs["env"]["SSH_ASKPASS"])
-        assert askpass_path.name == "askpass.cmd"
-        assert "RUNICORN_SSH_ASKPASS_SECRET" in askpass_path.read_text(encoding="utf-8")
-        assert "powershell" in askpass_path.read_text(encoding="utf-8").lower()
+        content = askpass_path.read_text(encoding="utf-8")
+        if os.name == "nt":
+            assert askpass_path.name == "askpass.cmd"
+            assert "powershell" in content.lower()
+        else:
+            assert askpass_path.name == "askpass.sh"
+            assert "#!/bin/sh" in content
+        assert "RUNICORN_SSH_ASKPASS_SECRET" in content
 
 
 class TestSSHConnectionPool:
