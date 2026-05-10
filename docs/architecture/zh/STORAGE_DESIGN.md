@@ -4,7 +4,7 @@
 
 # 存储架构设计
 
-**文档类型**: 架构  
+**文档类型**: 架构
 **目的**: Runicorn 混合存储系统的详细设计
 
 ---
@@ -45,8 +45,8 @@ Runicorn 使用**混合存储架构**，结合 SQLite 用于元数据/指标查�
 ```sql
 CREATE TABLE experiments (
     id TEXT PRIMARY KEY,
-    project TEXT NOT NULL,
-    name TEXT NOT NULL,
+    path TEXT NOT NULL,
+    alias TEXT,
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL,
     status TEXT DEFAULT 'running',
@@ -55,7 +55,8 @@ CREATE TABLE experiments (
     best_metric_step INTEGER,
     deleted_at REAL,
     run_dir TEXT NOT NULL,
-    INDEX idx_project (project),
+    workspace_root TEXT,
+    INDEX idx_path (path),
     INDEX idx_status (status),
     INDEX idx_created (created_at),
     INDEX idx_deleted (deleted_at)
@@ -65,13 +66,13 @@ CREATE TABLE experiments (
 **metrics 表**:
 ```sql
 CREATE TABLE metrics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     experiment_id TEXT,
     timestamp REAL NOT NULL,
     metric_name TEXT NOT NULL,
     metric_value REAL,
     step INTEGER,
     stage TEXT,
-    PRIMARY KEY (experiment_id, timestamp, metric_name),
     FOREIGN KEY (experiment_id) REFERENCES experiments(id),
     INDEX idx_exp_id (experiment_id),
     INDEX idx_metric_name (metric_name)
@@ -127,6 +128,7 @@ user_root_dir/
                 ├── summary.json
                 ├── events.jsonl
                 ├── logs.txt
+                ├── assets.json
                 └── media/
 ```
 
@@ -216,7 +218,7 @@ except:
 ```python
 def detect_storage_type(root_dir):
     db_path = root_dir / "runicorn.db"
-    
+
     if db_path.exists():
         return "v2_hybrid"
     elif (root_dir / "runs").exists():
@@ -274,7 +276,7 @@ def detect_storage_type(root_dir):
 |------|---|------|
 | 实验数 | 100,000 | 优秀 |
 | 总指标点 | 100,000,000 | 良好 |
-| Artifacts | 10,000 | 优秀 |
+| 已归档资产 | 10,000 | 优秀 |
 | 去重池文件 | 50,000 | 良好 |
 | SQLite 文件大小 | 500MB | 可接受 |
 
@@ -282,7 +284,7 @@ def detect_storage_type(root_dir):
 
 **在 10万+ 实验时**:
 - SQLite 查询仍然快（<100毫秒）
-- 如需文件列表则慢（使用 V2 API）
+- 如需文件列表则会变慢（优先使用 SQLite 支撑的列表接口）
 - 数据库文件大小可管理
 
 **在 100万 实验时**（理论）:
@@ -310,7 +312,7 @@ temp_path.replace(target_path)  # POSIX 上原子
 
 **校验和**: 所有 artifact 文件都有 SHA256 摘要
 
-**验证**: 定期完整性检查（计划中）
+**验证**: 当前存储层主要依赖 schema 约束、迁移逻辑和按需排查；目前并没有周期性完整性检查任务。
 
 ---
 
@@ -360,9 +362,9 @@ runicorn import --archive backup.tar.gz
 
 ---
 
-## 未来增强
+## 可选的后续方向
 
-### 计划中
+### 未承诺
 
 - [ ] 旧实验压缩
 - [ ] 自动清理已删除的 artifacts

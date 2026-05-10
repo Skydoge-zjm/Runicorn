@@ -6,9 +6,8 @@ Provides secure path validation to prevent directory traversal attacks.
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Iterable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +70,62 @@ def validate_path(
     except Exception as e:
         logger.error(f"Path validation error: {e}")
         return False, None, f"Path validation failed: {e}"
+
+
+def validate_resolved_path(target_path: Path, base_dir: Path) -> Tuple[bool, Optional[str]]:
+    """
+    Validate an already-resolved absolute/relative Path object against a base dir.
+
+    This is the companion to ``validate_path()``:
+    - ``validate_path()`` handles raw user-provided relative path strings
+    - ``validate_resolved_path()`` handles ``Path`` objects that were already built
+    """
+    try:
+        base_resolved = Path(base_dir).resolve()
+        target_resolved = Path(target_path).resolve()
+        target_resolved.relative_to(base_resolved)
+        return True, None
+    except Exception as e:
+        logger.debug(f"Resolved path validation failed: {e}")
+        return False, str(e)
+
+
+def validate_resolved_path_against_roots(
+    target_path: Path,
+    allowed_roots: Iterable[Path],
+) -> Tuple[bool, Optional[str]]:
+    """
+    Validate an already-resolved path against one or more allowed absolute roots.
+
+    This is intended for cases where the caller already has a ``Path`` object and
+    wants to authorize it against a set of run-owned locations. Exact matches are
+    allowed for files and directories; descendant matches are allowed when the
+    authorized root is a directory.
+    """
+    try:
+        target_resolved = Path(target_path).resolve()
+    except Exception as e:
+        logger.debug(f"Resolved path validation failed for target {target_path}: {e}")
+        return False, str(e)
+
+    for root in allowed_roots:
+        try:
+            root_resolved = Path(root).resolve()
+        except Exception as e:
+            logger.debug(f"Resolved path validation failed for root {root}: {e}")
+            continue
+
+        if target_resolved == root_resolved:
+            return True, None
+
+        try:
+            if root_resolved.is_dir():
+                target_resolved.relative_to(root_resolved)
+                return True, None
+        except Exception:
+            continue
+
+    return False, "Path does not belong to an allowed root"
 
 
 def sanitize_filename(filename: str, max_length: int = 200) -> str:

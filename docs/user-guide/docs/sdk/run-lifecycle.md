@@ -126,8 +126,8 @@ def log(
 - `**kwargs`: Additional metrics. Useful when you prefer `run.log(loss=..., acc=...)`.
 
 ```python
-run.log({"loss": 0.42, "acc": 0.88}, step=1, stage="epoch_1")
-run.log(val_loss=0.39, val_acc=0.90, step=2, stage="epoch_2")
+run.log({"loss": 0.42, "acc": 0.88}, stage="epoch_1")
+run.log(val_loss=0.39, val_acc=0.90, stage="epoch_2")
 ```
 
 ### What `run.log()` does
@@ -146,20 +146,16 @@ run.log({"loss": 0.5})  # global_step = 1
 run.log({"loss": 0.4})  # global_step = 2
 ```
 
-If you do pass `step`, Runicorn uses that explicit value:
-
-```python
-run.log({"loss": 0.5}, step=100)
-```
+If you do pass `step`, Runicorn uses that explicit value. Most users do not need that in everyday training loops, so the examples in this guide stick to auto-incremented steps.
 
 ### Stage behavior
 
 Use `stage` when you want the UI to separate metric records into coarse buckets. In many training scripts, people simply use epoch-style labels:
 
 ```python
-run.log({"loss": 0.8}, step=50, stage="epoch_1")
-run.log({"loss": 0.4}, step=100, stage="epoch_2")
-run.log({"val_loss": 0.35}, step=150, stage="epoch_3")
+run.log({"loss": 0.8}, stage="epoch_1")
+run.log({"loss": 0.4}, stage="epoch_2")
+run.log({"val_loss": 0.35}, stage="epoch_3")
 ```
 
 ### How to handle train vs eval without step misalignment
@@ -187,7 +183,7 @@ for step in range(1, total_steps + 1):
         "train_loss": train_loss,
         "train_acc": train_acc,
         "val_acc": last_val_acc,
-    }, step=step, stage=f"epoch_{current_epoch}")
+    }, stage=f"epoch_{current_epoch}")
 ```
 
 Why people do this:
@@ -410,7 +406,7 @@ This is a common and safer pattern when you want automatic cleanup:
 import runicorn as rn
 
 with rn.init(path="training/safe") as run:
-    run.log({"loss": 0.1}, step=1)
+    run.log({"loss": 0.1})
 ```
 
 Benefits:

@@ -410,3 +410,25 @@ class TestRunSQLite:
             assert len(events) == 1
         finally:
             run.finish()
+
+    def test_run_sqlite_keeps_duplicate_metric_names_when_timestamp_collides(
+        self, storage_root: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Same-name metrics logged with the same timestamp should append, not replace."""
+        monkeypatch.setattr("runicorn.sdk._now_ts", lambda: 1700000000.0)
+        run = _make_run(storage_root, monkeypatch, run_id="test_dup_ts_001")
+        try:
+            assert run.storage_backend is not None, "Modern storage should be initialized"
+
+            run.log({"loss": 0.5}, step=1)
+            run.log({"loss": 0.4}, step=2)
+
+            metrics = run.storage_backend.get_metrics(run.id, metric_names=["loss"])
+            assert [m.metric_value for m in metrics] == [0.5, 0.4]
+            assert [m.step for m in metrics] == [1, 2]
+
+            events = [json.loads(line) for line in run._events_path.read_text(encoding="utf-8").splitlines()]
+            assert len(events) == 2
+            assert all(evt["ts"] == 1700000000.0 for evt in events)
+        finally:
+            run.finish()

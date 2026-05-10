@@ -1,12 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { server } from '../__mocks__/server'
-import { SettingsProvider } from '../contexts/SettingsContext'
-import { defaultSettings } from './helpers'
+import { renderWithProviders } from './helpers'
 import ExperimentPage from '../pages/ExperimentPage'
 
 // ── Mocks ──
@@ -92,22 +89,7 @@ const sampleRuns = [
 // ── Helpers ──
 
 function renderPage() {
-  const qc = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false, gcTime: 0 },
-      mutations: { retry: false },
-    },
-  })
-
-  return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/']}>
-        <SettingsProvider value={{ settings: defaultSettings, setSettings: vi.fn() }}>
-          <ExperimentPage />
-        </SettingsProvider>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
+  return renderWithProviders(<ExperimentPage />, { initialEntries: ['/'] })
 }
 
 // ── Tests ──

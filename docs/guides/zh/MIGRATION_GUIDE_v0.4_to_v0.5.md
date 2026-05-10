@@ -113,7 +113,7 @@ runicorn --version >> config_before_upgrade.txt
 如果你在 0.4.x 中设置了自动同步任务：
 
 1. 打开 Viewer
-2. 导航到"远程存储"或"SSH"页面
+2. 导航到旧版远程同步入口（历史上可能显示为"远程存储"或"SSH"页面）
 3. 停止所有活动的同步任务
 4. 等待当前同步完成
 
@@ -362,7 +362,7 @@ runicorn export --format json --output test_export.json
 | 获取状态 | `GET /api/ssh/status` | `GET /api/remote/viewer/status` | 旧 API 已弃用 |
 | 启动同步 | `POST /api/ssh/sync` | 已移除 | 不再需要同步 |
 | 查询任务 | `GET /api/ssh/tasks` | 已移除 | 不再有同步任务 |
-| 列出环境 | N/A | `GET /api/remote/environments` | 新增 |
+| 列出环境 | N/A | `GET /api/remote/conda-envs` | 新增 |
 | 启动 Viewer | N/A | `POST /api/remote/viewer/start` | 新增 |
 
 ### 代码迁移示例
@@ -427,7 +427,7 @@ connection_id = response.json()["connection_id"]
 
 # 列出环境
 envs = requests.get(
-    "http://localhost:23300/api/remote/environments",
+    "http://localhost:23300/api/remote/conda-envs",
     params={"connection_id": connection_id}
 ).json()
 

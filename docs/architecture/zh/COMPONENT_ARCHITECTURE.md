@@ -4,7 +4,7 @@
 
 # 组件架构
 
-**文档类型**: 架构  
+**文档类型**: 架构
 **目的**: Runicorn 组件结构和交互的详细分解
 
 ---
@@ -16,8 +16,8 @@
 │                        SDK 层                                │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │ Run 类 - 实验上下文和生命周期                       │   │
-│  │ Artifact 类 - 版本化资产管理                        │   │
-│  │ 模块函数 - 便捷 API（init, log 等）                │   │
+│  │ 运行资产辅助能力 - 配置/数据集/预训练/代码          │   │
+│  │ 模块函数 - 便捷 API（init, snapshot 等）           │   │
 │  └─────────────────────────────────────────────────────┘   │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -25,18 +25,18 @@
 │                    Viewer/API 层                             │
 │  ┌──────────────┬──────────────┬─────────────────────────┐ │
 │  │ API 路由     │ 服务         │ 中间件                  │ │
-│  │ - runs.py    │ - storage.py │ - CORS                  │ │
-│  │ - artifacts  │ - gpu.py     │ - 速率限制              │ │
-│  │ - metrics    │ - modern_st  │ - 日志                  │ │
+│  │ - runs.py    │ - db_reader  │ - CORS                  │ │
+│  │ - remote.py  │ - storage.py │ - 速率限制              │ │
+│  │ - metrics.py │ - monitor.py │ - 日志                  │ │
 │  └──────────────┴──────────────┴─────────────────────────┘ │
 └────────────────────────┬────────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────────┐
 │                  业务逻辑层                                  │
 │  ┌──────────────┬──────────────┬─────────────────────────┐ │
-│  │ 实验         │ Artifact     │ 环境                    │ │
-│  │ 管理器       │ 存储         │ 捕获                    │ │
-│  │ 血缘         │ 去重池       │ SSH 客户端              │ │
+│  │ 实验         │ 资产归档     │ 环境                    │ │
+│  │ 管理器       │ 与索引       │ 捕获                    │ │
+│  │ 路径操作     │ 引用计数     │ SSH 客户端              │ │
 │  └──────────────┴──────────────┴─────────────────────────┘ │
 └────────────────────────┬────────────────────────────────────┘
                          │
@@ -62,14 +62,15 @@
 **关键方法**:
 ```python
 class Run:
-    def __init__(project, name, storage, run_id, capture_env)
+    def __init__(path, storage, run_id, alias, capture_env)
     def log(data, step, stage)
     def log_text(text)
     def log_image(key, image, step)
     def set_primary_metric(name, mode)
     def summary(update)
-    def log_artifact(artifact)
-    def use_artifact(spec)
+    def log_config(...)
+    def log_dataset(name, root_or_uri, ...)
+    def log_pretrained(name, path_or_uri=None, ...)
     def finish(status)
 ```
 
@@ -80,27 +81,26 @@ class Run:
 
 ---
 
-### Artifact 类
+### 运行资产辅助能力
 
-**职责**: 版本控制的资产管理
+**职责**: 把可复用的训练上下文和归档文件挂到某个运行上
 
-**关键方法**:
+**关键入口**:
 ```python
-class Artifact:
-    def __init__(name, type, description, metadata)
-    def add_file(path, name)
-    def add_dir(path, exclude_patterns)
-    def add_reference(uri, checksum)
-    def add_metadata(metadata)
-    def add_tags(*tags)
-    def download(target_dir)
-    def get_manifest()
+class Run:
+    def log_config(...)
+    def log_dataset(name, root_or_uri, ...)
+    def log_pretrained(name, path_or_uri=None, ...)
+    def scan_outputs_once(...)
+    def watch_outputs(...)
+
+def snapshot_workspace(root, out_zip, ...)
 ```
 
 **设计模式**:
-- 构建器: 可链式方法
-- 不可变: 版本快照永不改变
-- 内容寻址: 文件通过哈希识别
+- 通过 `assets.json` 维护每个运行自己的清单
+- 可选归档：既支持仅引用元数据，也支持写入归档
+- 共享索引：同一资产可被多个运行引用
 
 ---
 
@@ -111,15 +111,13 @@ class Artifact:
 **模块化结构**:
 ```
 viewer/api/
-├── runs.py           # 实验 CRUD
-├── artifacts.py      # Artifact 版本控制
+├── runs.py           # 运行列表/详情、资产、回收站
 ├── metrics.py        # 指标查询
-├── config.py         # 配置
-├── ssh.py            # SSH 连接
-├── experiments.py    # 高级实验操作
-├── v2/               # V2 高性能 API
-│   ├── experiments.py
-│   └── analytics.py
+├── projects.py       # 路径树与路径范围操作
+├── config.py         # 配置与已保存 SSH 连接
+├── remote.py         # Remote Viewer 生命周期
+├── import_.py        # 离线导入
+├── export.py         # 导出/报告接口
 └── __init__.py       # 路由注册
 ```
 
@@ -141,9 +139,9 @@ async def list_runs(request: Request):
 **结构**:
 ```
 viewer/services/
-├── storage.py         # 文件系统操作
-├── modern_storage.py  # SQLite 操作
-└── gpu.py             # GPU 遥测
+├── db_reader.py       # 从文件 + SQLite 读取运行/资产
+├── storage_utils.py   # 存储根目录辅助函数
+└── system_monitor.py  # CPU / 内存 / 磁盘遥测
 ```
 
 **模式**: 服务是无状态函数
@@ -152,7 +150,7 @@ viewer/services/
 # 服务函数
 async def list_experiments(
     storage_root: Path,
-    project: str = None,
+    path: str = None,
     status: str = None
 ) -> List[ExperimentRecord]:
     # 业务逻辑在这里
@@ -186,10 +184,10 @@ class ConnectionPool:
         for _ in range(pool_size):
             conn = create_connection()
             self.pool.put(conn)
-    
+
     def get_connection():
         return self.pool.get()  # 如果全部使用则阻塞
-    
+
     def return_connection(conn):
         self.pool.put(conn)
 ```
@@ -220,77 +218,52 @@ def get_run_detail(run_id):
 
 ---
 
-## Artifacts 系统组件
+## 运行资产索引组件
 
-### Artifact 存储
+### 资产归档
 
 **组件**:
-- **版本管理器**: 顺序版本分配
-- **文件哈希器**: SHA256 计算
-- **去重管理器**: 硬链接创建
-- **清单构建器**: 文件清单
+- **归档辅助函数**: 把文件/目录保存到 `archive/`
+- **文件哈希器**: SHA256 / 指纹计算
+- **清单构建器**: 为归档目录生成文件清单
+- **Assets JSON 更新器**: 原子更新每个运行的嵌套清单
 
 **组件交互**:
 ```
-ArtifactStorage
-    ├── _store_file()
+Run 资产辅助能力
+    ├── archive_file() / archive_dir()
     │   ├── compute_hash()
-    │   ├── check_dedup_pool()
-    │   └── create_link_or_copy()
-    ├── save_artifact()
-    │   ├── validate()
-    │   ├── assign_version()
-    │   ├── store_files()
-    │   ├── create_manifest()
-    │   └── update_index()
-    └── load_artifact()
-        ├── find_version()
-        ├── load_metadata()
-        └── load_manifest()
+    │   ├── reuse_or_store_blob()
+    │   └── write_manifest_if_needed()
+    ├── update_assets_json()
+    └── record_asset_for_run()
+        ├── upsert assets 行
+        └── 建立 run_assets 关联
 ```
 
 ---
 
-### 血缘追踪器
+### 资产引用跟踪
 
 **组件**:
-- **图构建器**: 构建依赖图
-- **遍历器**: BFS/DFS 遍历带深度限制
-- **节点创建器**: 将运行/artifacts 转换为节点
+- **运行-资产关联索引**: `run_assets` 表
+- **引用计数器**: 查询共享资产与唯一资产
+- **清理辅助工具**: 计算永久删除可以安全移除哪些内容
 
 **算法**:
 ```python
-def build_lineage(artifact_id, max_depth=3):
-    graph = Graph()
-    queue = [(artifact_id, 0)]  # (id, depth)
-    visited = set()
-    
-    while queue:
-        id, depth = queue.pop(0)
-        if depth > max_depth or id in visited:
-            continue
-        
-        visited.add(id)
-        node = create_node(id)
-        graph.add_node(node)
-        
-        # 查找依赖
-        if is_artifact(id):
-            creator_run = find_creator(id)
-            graph.add_edge(creator_run, id, "produces")
-            queue.append((creator_run, depth + 1))
-        else:  # is run
-            used_artifacts = find_used_artifacts(id)
-            for art in used_artifacts:
-                graph.add_edge(art, id, "uses")
-                queue.append((art, depth + 1))
-    
-    return graph
+def classify_asset_refs(run_id):
+    assets = backend.get_assets_for_run(run_id)
+    orphaned, shared = [], []
+    for asset in assets:
+        ref_count = backend.get_asset_ref_count(asset["asset_id"])
+        (orphaned if ref_count <= 1 else shared).append(asset)
+    return orphaned, shared
 ```
 
 ---
 
-## Remote Viewer 组件（v0.5.0）
+## Remote Viewer 组件
 
 ### Connection Manager
 
@@ -428,12 +401,9 @@ App
 │   │       │   ├── MetricChart（多个）
 │   │       │   ├── LogsViewer（WebSocket, ANSI）
 │   │       │   └── RunArtifacts
-│   │       ├── ArtifactsPage
-│   │       │   └── ArtifactTable
-│   │       └── ArtifactDetailPage
-│   │           ├── ArtifactInfo
-│   │           ├── VersionHistory
-│   │           └── LineageGraph
+│   │       ├── AssetsPage
+│   │       └── AssetDetailPage
+│   │           └── AssetPreview
 │   └── Footer
 └── SettingsDrawer
 ```
@@ -453,7 +423,7 @@ App
 
 ---
 
-## 新前端组件（v0.6.0）
+## 引入于 v0.6.0 的前端组件
 
 ### PathTreePanel
 
@@ -567,7 +537,7 @@ interface CompareRunInfo {
 
 **职责**: 带 ANSI 颜色支持的实时日志查看
 
-**v0.6.0 增强**:
+**引入于 v0.6.0 的增强**:
 - **ANSI 颜色支持**: 通过 `ansi-to-html` 完整终端颜色渲染
 - **行号**: 编号行便于参考
 - **搜索功能**: 关键词搜索带高亮

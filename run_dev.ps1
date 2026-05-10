@@ -1,5 +1,5 @@
 param(
-  [string]$PythonExe = "E:\Anaconda\envs\pytorch\python.exe",
+  [string]$PythonExe = "python",
   [int]$BackendPort = 8000,
   [int]$FrontendPort = 5173,
   [switch]$NoBrowser
@@ -42,7 +42,8 @@ $backendCmd = @"
 Set-Location '$Root'
 `$env:PYTHONUTF8 = '1'
 `$env:PYTHONIOENCODING = 'utf-8:backslashreplace'
-& '$PythonExe' -m pip install -r 'web/backend/requirements.txt'
+# Install the local package in editable mode so backend imports match the repo.
+& '$PythonExe' -m pip install -e .
 # Ensure src-based package imports work for uvicorn
 `$env:PYTHONPATH = "$Root/src;`$env:PYTHONPATH"
 & '$PythonExe' -X utf8 -m uvicorn runicorn.viewer:create_app --factory --host 127.0.0.1 --port $BackendPort --reload
@@ -62,7 +63,7 @@ $frontendCmd = @"
 `$ErrorActionPreference = 'Stop'
 Push-Location '$Root/web/frontend'
 try {
-  if (-Not (Test-Path 'node_modules')) { npm install }
+  if (-Not (Test-Path 'node_modules')) { npm ci }
   `$env:PORT = '$FrontendPort'
   # Force Vite to bind to IPv4 and the specified port for reliable health-checks
   npm run dev -- --port $FrontendPort --host 127.0.0.1

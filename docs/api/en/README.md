@@ -4,10 +4,10 @@
 
 # Runicorn API Documentation
 
-**Version**: v0.6.0  
-**Base URL**: `http://127.0.0.1:23300/api`  
-**Protocol**: HTTP/1.1  
-**Format**: JSON  
+**Version**: v0.7.1
+**Base URL**: `http://127.0.0.1:23300/api`
+**Protocol**: HTTP/1.1
+**Format**: JSON
 **Character Encoding**: UTF-8
 
 ---
@@ -43,7 +43,7 @@ GET /api/health
 Response:
 {
   "status": "ok",
-  "version": "0.6.0",
+  "version": "0.7.1",
   "timestamp": 1704067200.0
 }
 ```
@@ -56,7 +56,7 @@ Response:
 
 > ⚠️ **Security Note**: The API is designed for local use only. Do not expose it to the internet without proper authentication and encryption.
 
-**Future Versions**: May support API keys for multi-user scenarios.
+**Current scope**: This API documentation assumes a local-first deployment model and does not define an API-key authentication scheme.
 
 ---
 
@@ -69,11 +69,11 @@ Runicorn provides two ways to access the API:
 **New**: Programmatic access interface for simplified Python integration
 
 ```python
-import runicorn.api as api
+import runicorn.client as client_mod
 
-with api.connect() as client:
-    experiments = client.list_experiments(project="vision")
-    metrics = client.get_metrics(experiments[0]["id"])
+with client_mod.connect() as client:
+    runs = client.list_runs_by_path(path="vision")
+    metrics = client.get_metrics(runs[0]["id"])
 ```
 
 **Features**:
@@ -96,12 +96,12 @@ HTTP REST API endpoints for Web UI and third-party integrations.
 | **Runs API** | Experiment run management (CRUD, soft delete, restore) | [runs_api.md](./runs_api.md) | 6 endpoints |
 | **Metrics API** | Real-time metrics queries and visualization data | [metrics_api.md](./metrics_api.md) | 3 HTTP + 1 WebSocket |
 | **Config API** | Configuration and preferences management | [config_api.md](./config_api.md) | 6 endpoints |
-| **Remote Viewer API** 🆕 | VSCode Remote-style remote access | [remote_api.md](./remote_api.md) | 12 endpoints |
-| **Logging API** 🆕 | Enhanced logging with console capture (v0.6.0) | [logging_api.md](./logging_api.md) | SDK |
-| **Paths API** 🆕 | Path-based hierarchy navigation (v0.6.0) | [paths_api.md](./paths_api.md) | 5+3 endpoints |
-| **SSH API** | SSH connection management (deprecated) | [ssh_api.md](./ssh_api.md) | 12 endpoints |
+| **Remote Viewer API** 🆕 | Current `/api/remote/*` remote-access surface | [remote_api.md](./remote_api.md) | connection / runtime / known-hosts / viewer / saved-connections |
+| **Logging API** 🆕 | Enhanced logging with console capture | [logging_api.md](./logging_api.md) | SDK |
+| **Paths API** 🆕 | Path-based hierarchy navigation | [paths_api.md](./paths_api.md) | 5+3 endpoints |
+| **SSH API** | Historical deprecation note | [ssh_api.md](./ssh_api.md) | Historical note |
 
-> ⚠️ **Deprecated**: Old SSH file sync API (`/api/unified/*`) has been replaced by Remote Viewer API. See [Migration Guide](../../guides/en/MIGRATION_GUIDE_v0.4_to_v0.5.md)
+> ⚠️ **Current remote surface**: use `Remote Viewer API` and the `/api/remote/*` routes. `/api/unified/*` and `/api/ssh/*` are retained only as historical migration context in [ssh_api.md](./ssh_api.md). If remote routes, the 409 host-key contract, saved-connection payloads, or viewer session states change, update [remote_api.md](./remote_api.md) in the same change.
 
 **Quick Reference**: See [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) for common operations
 
@@ -184,13 +184,13 @@ import time
 
 def api_call_with_retry(url):
     response = requests.get(url)
-    
+
     if response.status_code == 429:
         retry_after = int(response.headers.get('Retry-After', 60))
         print(f"Rate limited. Waiting {retry_after} seconds...")
         time.sleep(retry_after)
         return api_call_with_retry(url)
-    
+
     return response.json()
 ```
 
@@ -252,6 +252,6 @@ ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 
 ---
 
-**Last Updated**: 2026-01-15  
+**Last Updated**: 2026-05-10
 **Maintained By**: Runicorn Development Team
 

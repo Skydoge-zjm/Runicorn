@@ -50,7 +50,7 @@ class TestFullWorkflow:
         # Verify events.jsonl has metric entries
         events_path = run_dir / "events.jsonl"
         assert events_path.exists()
-        lines = [l for l in events_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        lines = [line for line in events_path.read_text(encoding="utf-8").splitlines() if line.strip()]
         assert len(lines) >= 5
 
     def test_context_manager_auto_finish(self, isolated_env: Path):

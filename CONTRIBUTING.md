@@ -9,7 +9,7 @@ Thanks for your interest in contributing! This project aims to provide a lightwe
 
 ## Development setup
 Prerequisites:
-- Python 3.8+
+- Python 3.10+
 - Node.js 18+ and npm (for frontend)
 
 Steps (Windows PowerShell examples):
@@ -18,22 +18,34 @@ Steps (Windows PowerShell examples):
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# 2) Backend deps (for dev server)
-pip install -r web/backend/requirements.txt
+# 2) Install Runicorn in editable mode
+pip install -e .
 
-# 3) Frontend deps
+# 3) Dev tools used in this repo
+pip install pytest ruff mypy
+
+# 4) Frontend deps
 cd web/frontend
-npm install
+npm ci
 cd ../..
 
-# 4) One-click dev (backend + frontend with proxy)
+# 5) Optional: one-click dev (backend + frontend with proxy)
 ./run_dev.ps1 -PythonExe "python"
 # Open http://127.0.0.1:5173 (proxies /api/* to 127.0.0.1:8000)
 ```
 
+If you prefer to run services manually:
+```powershell
+# Backend
+python -m uvicorn runicorn.viewer:create_app --factory --host 127.0.0.1 --port 8000 --reload
+
+# Frontend (new terminal)
+cd web/frontend
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
 Optional static checks:
 ```powershell
-pip install ruff mypy
 # Lint
 ruff check .
 # (Optional) Format
@@ -43,10 +55,10 @@ mypy src
 ```
 
 ## Project layout
-- Python package under `src/runicorn/` with a read-only FastAPI viewer (`viewer.py`) and CLI (`cli.py`).
+- Python package under `src/runicorn/` with a FastAPI viewer in `src/runicorn/viewer/` and CLI entrypoint in `src/runicorn/cli.py`.
 - **Remote Viewer** (v0.5.0): SSH-based remote access under `src/runicorn/remote/` with connection management, environment detection, and viewer lifecycle.
 - Web UI under `web/frontend/` (React + Vite + Ant Design + ECharts). Built files are bundled into wheels under `src/runicorn/webui/`.
-- Remote UI components: `web/frontend/src/pages/RemoteViewerPage.tsx` and `web/frontend/src/components/remote/`.
+- Remote UI components: `web/frontend/src/pages/RemoteViewerPage.tsx`, `web/frontend/src/components/remote/`, and the shared frontend API client in `web/frontend/src/api.ts`.
 - Example script: `examples/create_test_run.py` (generates a synthetic run in `./.runicorn/`).
 
 ## Commit style and branching
@@ -73,18 +85,18 @@ Remote Viewer requires a test environment with SSH access:
 2. **Remote test server** (Linux/WSL):
    - Install Runicorn on the remote server: `pip install runicorn`
    - Configure SSH key-based authentication
-   - Ensure remote Python 3.8+ is accessible
+   - Ensure remote Python 3.10+ is accessible
 
 ### Testing Remote Features
 
 ```bash
-# Unit tests (local only)
-pytest tests/remote/
+# Local SSH backend coverage
+pytest tests/unit/remote/test_ssh_backend.py -q
 
-# Integration tests (requires test server)
-pytest tests/integration/test_remote_viewer.py --remote-host=test-server
+# Integration suite
+pytest tests/integration -q
 
-# Manual testing
+# Manual remote smoke test
 runicorn viewer
 # Navigate to Remote page in browser
 # Connect to test server and start Remote Viewer
@@ -108,10 +120,11 @@ web/frontend/src/
 ├── pages/
 │   └── RemoteViewerPage.tsx # Remote main page
 ├── components/remote/       # Remote-specific components
-│   ├── ConnectionForm.tsx
-│   ├── EnvironmentSelector.tsx
-│   └── ViewerStatus.tsx
-└── api/remote.ts            # Remote API client
+│   ├── CondaEnvSelector.tsx
+│   ├── HostKeyModal.tsx
+│   ├── RemoteConfigCard.tsx
+│   └── RemoteSessionCard.tsx
+└── api.ts                   # Shared frontend API client
 ```
 
 ### Guidelines for Remote Features
@@ -132,11 +145,14 @@ web/frontend/src/
 ---
 
 ## Tests
-There is no formal test suite yet. For now, validate by:
-- Running `examples/create_test_run.py`
-- Launching the viewer via `runicorn viewer` or `./run_dev.ps1`
-- Checking metrics tables, charts, logs websocket, and GPU panel (if `nvidia-smi` is available)
-- **Remote Viewer**: Connect to a test server and verify all Remote features work
+For routine changes, run the suites that match your surface area:
+- `pytest tests/unit -q`
+- `pytest tests/integration -q`
+- `cd web/frontend && npm test`
+- `cd web/frontend && npm run build`
+- `ruff check .`
+
+When touching SSH flows or full-stack behavior, add a manual smoke test with `runicorn viewer` (or `./run_dev.ps1`) and verify the affected UI/API path end to end.
 
 ## Releasing (maintainers)
 - Bump version via the release script (also builds frontend):

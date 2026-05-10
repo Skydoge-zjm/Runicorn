@@ -13,41 +13,11 @@
       "burst_size": null,
       "description": "SSH connection operations - more restrictive to prevent brute force"
     },
-    "/api/unified/connect": {
-      "max_requests": 10,
-      "window_seconds": 60,
-      "burst_size": null,
-      "description": "Unified SSH connection operations"
-    },
-    "/api/ssh/connect": {
-      "max_requests": 10,
-      "window_seconds": 60,
-      "burst_size": null,
-      "description": "Legacy SSH connection operations"
-    },
-    "/api/unified/status": {
-      "max_requests": 20000,
-      "window_seconds": 60,
-      "burst_size": null,
-      "description": "Status polling endpoint - very permissive for UI updates"
-    },
     "/api/remote/status": {
       "max_requests": 20000,
       "window_seconds": 60,
       "burst_size": null,
       "description": "Remote storage status polling"
-    },
-    "/api/ssh/sessions": {
-      "max_requests": 20000,
-      "window_seconds": 60,
-      "burst_size": null,
-      "description": "SSH session listing - used for UI polling"
-    },
-    "/api/ssh/mirror/list": {
-      "max_requests": 20000,
-      "window_seconds": 60,
-      "burst_size": null,
-      "description": "Mirror task listing - used for UI polling"
     },
     "/api/metrics/gpu": {
       "max_requests": 12000,

@@ -271,12 +271,7 @@ def get_rate_limiter() -> EndpointRateLimiter:
             logger.warning(f"Failed to load rate limit config, using defaults: {e}")
             # Fallback to hardcoded defaults (high limits for local-only API)
             _endpoint_limiter.configure_endpoint("/api/remote/connect", 10, 60)  # Keep low for security
-            _endpoint_limiter.configure_endpoint("/api/unified/connect", 10, 60)  # Keep low for security
-            _endpoint_limiter.configure_endpoint("/api/ssh/connect", 10, 60)  # Keep low for security
-            _endpoint_limiter.configure_endpoint("/api/unified/status", 20000, 60)
             _endpoint_limiter.configure_endpoint("/api/remote/status", 20000, 60)
-            _endpoint_limiter.configure_endpoint("/api/ssh/sessions", 20000, 60)
-            _endpoint_limiter.configure_endpoint("/api/ssh/mirror/list", 20000, 60)
             _endpoint_limiter.configure_endpoint("/api/remote/download", 3000, 60)
             _endpoint_limiter.configure_endpoint("/api/remote/sync", 2000, 60)
             _endpoint_limiter.configure_endpoint("/api/runs", 10000, 60)

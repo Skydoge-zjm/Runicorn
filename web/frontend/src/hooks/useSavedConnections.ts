@@ -14,6 +14,10 @@ import type {
 
 const API_BASE = '/api/remote/connections/saved'
 
+function hasOwn(obj: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(obj, key)
+}
+
 function generateId(): string {
   return `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
@@ -56,16 +60,26 @@ function migrateLegacyConnections(items: SavedConnection[]): SavedEntry[] {
         password: conn.password || undefined,
         privateKeyPath: conn.privateKeyPath,
         passphrase: (conn as unknown as { passphrase?: string }).passphrase,
+        hasSavedPassword: Boolean((conn as unknown as { hasSavedPassword?: boolean }).hasSavedPassword ?? conn.password),
+        hasSavedPrivateKey: Boolean((conn as unknown as { hasSavedPrivateKey?: boolean }).hasSavedPrivateKey),
+        hasSavedPassphrase: Boolean((conn as unknown as { hasSavedPassphrase?: boolean }).hasSavedPassphrase ?? (conn as unknown as { passphrase?: string }).passphrase),
         createdAt: conn.createdAt || Date.now()
       })
     } else {
       const merged: SavedServer = {
         ...existing,
         authMethod:
-          (existing.password ?? conn.password) ? 'password' : (existing.privateKeyPath ?? conn.privateKeyPath) ? 'key' : existing.authMethod,
+          (existing.password ?? conn.password ?? (existing.hasSavedPassword || (conn as unknown as { hasSavedPassword?: boolean }).hasSavedPassword))
+            ? 'password'
+            : (existing.privateKeyPath ?? conn.privateKeyPath ?? (existing.hasSavedPrivateKey || (conn as unknown as { hasSavedPrivateKey?: boolean }).hasSavedPrivateKey))
+              ? 'key'
+              : existing.authMethod,
         password: existing.password ?? conn.password ?? undefined,
         privateKeyPath: existing.privateKeyPath ?? conn.privateKeyPath,
         passphrase: existing.passphrase ?? (conn as unknown as { passphrase?: string }).passphrase,
+        hasSavedPassword: Boolean(existing.hasSavedPassword ?? (conn as unknown as { hasSavedPassword?: boolean }).hasSavedPassword ?? conn.password),
+        hasSavedPrivateKey: Boolean(existing.hasSavedPrivateKey ?? (conn as unknown as { hasSavedPrivateKey?: boolean }).hasSavedPrivateKey),
+        hasSavedPassphrase: Boolean(existing.hasSavedPassphrase ?? (conn as unknown as { hasSavedPassphrase?: boolean }).hasSavedPassphrase ?? (conn as unknown as { passphrase?: string }).passphrase),
         createdAt: Math.min(existing.createdAt || Date.now(), conn.createdAt || Date.now())
       }
       serverMap.set(serverId, merged)
@@ -115,11 +129,14 @@ function normalizeSavedEntries(list: SavedEntry[]): { entries: SavedEntry[]; cha
       password: existing.password ?? entry.password,
       privateKeyPath: existing.privateKeyPath ?? entry.privateKeyPath,
       passphrase: existing.passphrase ?? entry.passphrase,
+      hasSavedPassword: Boolean(existing.hasSavedPassword ?? entry.hasSavedPassword ?? entry.password),
+      hasSavedPrivateKey: Boolean(existing.hasSavedPrivateKey ?? entry.hasSavedPrivateKey),
+      hasSavedPassphrase: Boolean(existing.hasSavedPassphrase ?? entry.hasSavedPassphrase ?? entry.passphrase),
       createdAt: Math.min(existing.createdAt || Date.now(), entry.createdAt || Date.now()),
       authMethod:
-        (existing.password ?? entry.password)
+        (existing.password ?? entry.password ?? existing.hasSavedPassword ?? entry.hasSavedPassword)
           ? 'password'
-          : (existing.privateKeyPath ?? entry.privateKeyPath)
+          : (existing.privateKeyPath ?? entry.privateKeyPath ?? existing.hasSavedPrivateKey ?? entry.hasSavedPrivateKey)
             ? 'key'
             : existing.authMethod || entry.authMethod
     }
@@ -238,6 +255,9 @@ export function useSavedConnections() {
     const serverId = buildServerId({ host: payload.host, port: payload.port, username: payload.username })
 
     const existing = entries.find((e): e is SavedServer => e.kind === 'server' && e.id === serverId)
+    const hasPassword = hasOwn(payload, 'password')
+    const hasPrivateKeyPath = hasOwn(payload, 'privateKeyPath')
+    const hasPassphrase = hasOwn(payload, 'passphrase')
 
     const next: SavedServer = {
       kind: 'server',
@@ -247,9 +267,25 @@ export function useSavedConnections() {
       port: payload.port,
       username: payload.username,
       authMethod: payload.authMethod,
-      password: payload.password ?? existing?.password,
-      privateKeyPath: payload.privateKeyPath ?? existing?.privateKeyPath,
-      passphrase: payload.passphrase ?? existing?.passphrase,
+      password: hasPassword ? (payload.password ?? undefined) : existing?.password,
+      privateKeyPath: hasPrivateKeyPath ? (payload.privateKeyPath ?? undefined) : existing?.privateKeyPath,
+      passphrase: hasPassphrase ? (payload.passphrase ?? undefined) : existing?.passphrase,
+      hasSavedPassword:
+        payload.password === null
+          ? false
+          : payload.password !== undefined
+            ? true
+            : (payload.hasSavedPassword ?? existing?.hasSavedPassword ?? false),
+      hasSavedPrivateKey:
+        payload.privateKeyPath === null
+          ? false
+          : (payload.hasSavedPrivateKey ?? existing?.hasSavedPrivateKey ?? false),
+      hasSavedPassphrase:
+        payload.passphrase === null
+          ? false
+          : payload.passphrase !== undefined
+            ? true
+            : (payload.hasSavedPassphrase ?? existing?.hasSavedPassphrase ?? false),
       createdAt: existing?.createdAt || Date.now()
     }
 
@@ -261,7 +297,34 @@ export function useSavedConnections() {
   const updateServer = useCallback(async (id: string, updates: Partial<SavedServer>) => {
     const next = entries.map(e => {
       if (e.kind !== 'server' || e.id !== id) return e
-      return { ...e, ...updates, kind: 'server', id } as SavedServer
+      const hasPassword = hasOwn(updates, 'password')
+      const hasPrivateKeyPath = hasOwn(updates, 'privateKeyPath')
+      const hasPassphrase = hasOwn(updates, 'passphrase')
+      return {
+        ...e,
+        ...updates,
+        password: hasPassword ? (updates.password ?? undefined) : e.password,
+        privateKeyPath: hasPrivateKeyPath ? (updates.privateKeyPath ?? undefined) : e.privateKeyPath,
+        passphrase: hasPassphrase ? (updates.passphrase ?? undefined) : e.passphrase,
+        hasSavedPassword:
+          updates.password === null
+            ? false
+            : updates.password !== undefined
+              ? true
+              : (updates.hasSavedPassword ?? e.hasSavedPassword),
+        hasSavedPassphrase:
+          updates.passphrase === null
+            ? false
+            : updates.passphrase !== undefined
+              ? true
+              : (updates.hasSavedPassphrase ?? e.hasSavedPassphrase),
+        hasSavedPrivateKey:
+          updates.privateKeyPath === null
+            ? false
+            : (updates.hasSavedPrivateKey ?? e.hasSavedPrivateKey),
+        kind: 'server',
+        id,
+      } as SavedServer
     })
     await persist(next)
   }, [entries, persist])

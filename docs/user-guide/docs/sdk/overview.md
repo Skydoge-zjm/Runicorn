@@ -143,7 +143,7 @@ run = rn.init(
 
 run.set_primary_metric("val_acc", mode="max")
 run.log_config(extra={"lr": 1e-3, "epochs": 10, "batch_size": 64})
-run.log({"train_loss": 0.42, "val_acc": 0.88}, step=1, stage="epoch_1")
+run.log({"train_loss": 0.42, "val_acc": 0.88}, stage="epoch_1")
 run.log_text("finished warmup")
 run.summary({"notes": "first stable run"})
 run.finish()
@@ -208,7 +208,7 @@ with rn.init(
     )
 
     for step in range(1, 101):
-        run.log({"train/loss": 1.0 / step}, step=step, stage="epoch_1")
+        run.log({"train/loss": 1.0 / step}, stage="epoch_1")
 
     run.summary({"final_f1": 0.91})
 ```

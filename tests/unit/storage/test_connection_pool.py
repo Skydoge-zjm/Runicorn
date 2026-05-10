@@ -51,6 +51,15 @@ class TestConnectionPool:
         pool.return_connection(conn)
         pool.close_all()
 
+    def test_connections_enable_foreign_keys(self, tmp_path: Path) -> None:
+        db = tmp_path / "test.db"
+        pool = ConnectionPool(db, pool_size=1)
+
+        conn = pool.get_connection()
+        assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+        pool.return_connection(conn)
+        pool.close_all()
+
     def test_concurrent_access(self, tmp_path: Path) -> None:
         """Multiple threads can get/return connections without deadlock."""
         import threading

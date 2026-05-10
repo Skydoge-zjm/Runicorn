@@ -6,10 +6,9 @@ Defines data structures for the modern storage system.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass, fields as dataclass_fields
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
-from dataclasses import dataclass, asdict, fields as dataclass_fields
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass

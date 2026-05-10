@@ -4,9 +4,9 @@
 
 # Metrics API - 训练指标查询
 
-**模块**: Metrics API  
-**基础路径**: `/api/runs/{run_id}`  
-**版本**: v1.1 (更新于 v0.5.3)  
+**模块**: Metrics API
+**基础路径**: `/api/runs/{run_id}`
+**版本**: v1.1 (更新于 v0.5.3)
 **描述**: 查询训练指标、进度和通过 HTTP 和 WebSocket 获取实时日志。
 
 **v0.5.x 改进**:
@@ -226,9 +226,9 @@ ws.onmessage = (event) => {
 ## 相关 API
 
 - **Runs API**: 获取运行信息 - [runs_api.md](runs_api.md)
-- **V2 API**: 高性能指标查询 - [v2_api.md](v2_api.md)
+- **Python Client API**: 在 Python 中查询并转换指标结果 - [python_client_api.md](python_client_api.md)
 
 ---
 
-**最后更新**: 2025-11-28
+**最后更新**: 2026-03-28
 

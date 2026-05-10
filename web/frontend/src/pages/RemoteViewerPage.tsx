@@ -7,46 +7,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Card,
-  Space,
-  Typography,
   Row,
   Col,
-  Alert,
   Empty,
   App,
-  Spin,
-  Modal,
-  Input,
-  Table,
-  Button,
-  Popconfirm,
-  Drawer,
-  Collapse,
-  List,
-  Tag,
-  Tooltip,
   Form,
-  InputNumber,
-  Radio,
-  Checkbox,
-  Divider,
-  Statistic,
-  theme
 } from 'antd'
-import {
-  CloudServerOutlined,
-  ThunderboltOutlined,
-  SaveOutlined,
-  SafetyCertificateOutlined,
-  PlusOutlined
-} from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
 import RemoteSessionCard from '../components/remote/RemoteSessionCard'
-import RemoteConfigCard from '../components/remote/RemoteConfigCard'
-import CondaEnvSelector from '../components/remote/CondaEnvSelector'
 import HostKeyModal from '../components/remote/HostKeyModal'
-import DismissibleAlert from '../components/DismissibleAlert'
+import KnownHostsDrawer from './remote-viewer/KnownHostsDrawer'
+import PasswordPromptModal from './remote-viewer/PasswordPromptModal'
+import RemoteViewerOverview from './remote-viewer/RemoteViewerOverview'
+import RemoteWizardModal from './remote-viewer/RemoteWizardModal'
+import SavedServersPanel from './remote-viewer/SavedServersPanel'
 
 import { useRemoteSessions } from '../hooks/useRemoteSessions'
 import { useSavedConnections } from '../hooks/useSavedConnections'
@@ -76,11 +51,8 @@ import type {
   SavedServer
 } from '../types/remote'
 
-const { Title, Paragraph, Text } = Typography
-
 export default function RemoteViewerPage() {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
   const { message } = App.useApp()
   const [connecting, setConnecting] = useState(false)
   const [fetchingEnvs, setFetchingEnvs] = useState(false)
@@ -114,6 +86,8 @@ export default function RemoteViewerPage() {
   const [securityDrawerOpen, setSecurityDrawerOpen] = useState(false)
   const [wizardProgress, setWizardProgress] = useState<string | null>(null)
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wizardFlowIdRef = useRef(0)
+  const pendingWizardConnectionRef = useRef<Pick<SSHConnectionConfig, 'host' | 'port' | 'username'> | null>(null)
 
   // Hooks
   const { sessions, refetch: refetchSessions } = useRemoteSessions()
@@ -128,14 +102,12 @@ export default function RemoteViewerPage() {
     deleteProfile
   } = useSavedConnections()
 
-  const serverCount = servers.length
   const profileCount = useMemo(() => {
     return servers.reduce((acc, srv) => acc + getProfilesForServer(srv.id).length, 0)
   }, [getProfilesForServer, servers])
 
   const activeSessions = sessions.filter(s => s.status !== 'stopped')
   const connectedServers = new Set(sessions.map(s => s.host)).size
-  const isEnvironmentStep = Boolean(sshConnection && !sshConnection.remoteConfig)
 
   const isHostKeyConfirmationRequiredError = (
     error: unknown
@@ -262,10 +234,39 @@ export default function RemoteViewerPage() {
     }
   }
 
+  const clearWizardProgressTimer = () => {
+    if (progressTimerRef.current) {
+      clearTimeout(progressTimerRef.current)
+      progressTimerRef.current = null
+    }
+  }
+
+  const invalidateWizardFlow = () => {
+    wizardFlowIdRef.current += 1
+    clearWizardProgressTimer()
+    setWizardProgress(null)
+    return wizardFlowIdRef.current
+  }
+
+  const cleanupPendingWizardConnection = async () => {
+    const pending = pendingWizardConnectionRef.current
+    pendingWizardConnectionRef.current = null
+    if (!pending) {
+      return
+    }
+    await disconnectRemote(pending.host, pending.port, pending.username).catch(() => {})
+  }
+
   /**
    * Step 1: Connect to SSH server and list conda environments
    */
   const connectAndListEnvs = async (config: SSHConnectionConfig) => {
+    const flowId = invalidateWizardFlow()
+    pendingWizardConnectionRef.current = {
+      host: config.host,
+      port: config.port,
+      username: config.username,
+    }
     setConnecting(true)
     setWizardProgress(t('remote.wizard.progress_connecting'))
     
@@ -279,7 +280,11 @@ export default function RemoteViewerPage() {
 
       // 1. Connect via SSH (includes auth)
       await runWithHostKeyConfirmation(() => connectRemote(config), connectionId)
-      if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+      clearWizardProgressTimer()
+      if (wizardFlowIdRef.current !== flowId) {
+        await cleanupPendingWizardConnection()
+        return
+      }
       
       // 2. Finding conda
       setWizardProgress(t('remote.wizard.progress_finding_conda'))
@@ -291,9 +296,14 @@ export default function RemoteViewerPage() {
       
       // 3. List conda environments
       const envsResult = await listCondaEnvs(connectionId)
-      if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+      clearWizardProgressTimer()
+      if (wizardFlowIdRef.current !== flowId) {
+        await cleanupPendingWizardConnection()
+        return
+      }
       
       setWizardProgress(null)
+      pendingWizardConnectionRef.current = null
 
       // 4. Store connection state with environments
       setSSHConnection({
@@ -305,7 +315,8 @@ export default function RemoteViewerPage() {
       })
       
     } catch (error) {
-      if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+      clearWizardProgressTimer()
+      pendingWizardConnectionRef.current = null
       setWizardProgress(null)
       // Clean up on error
       await disconnectRemote(config.host, config.port, config.username).catch(() => {})
@@ -417,7 +428,7 @@ export default function RemoteViewerPage() {
         ? { ...wizardProfile, ...profileData } as SavedConnectionProfile
         : { ...profileData, id: savedProfileId, serverId: serverIdToStart } as SavedConnectionProfile
       if (server && profile.condaEnv && profile.remoteRoot) {
-        if (server.authMethod === 'password' && !server.password) {
+        if (server.authMethod === 'password' && !server.password && !server.hasSavedPassword) {
           setPasswordDialogServer(server)
           setPasswordDialogProfile(profile as SavedConnectionProfile)
           setPasswordDialogVisible(true)
@@ -437,6 +448,8 @@ export default function RemoteViewerPage() {
    * Cancel config confirmation (disconnect SSH)
    */
   const handleCancelConfig = async () => {
+    invalidateWizardFlow()
+    await cleanupPendingWizardConnection()
     if (!sshConnection) return
     
     // Disconnect SSH
@@ -461,6 +474,7 @@ export default function RemoteViewerPage() {
    * Handle connect only (without starting viewer)
    */
   const openNewServerWizard = () => {
+    invalidateWizardFlow()
     setWizardOpen(true)
     setWizardServerId(null)
     setWizardEditProfileId(null)
@@ -471,6 +485,7 @@ export default function RemoteViewerPage() {
   }
 
   const openNewProfileWizard = (serverId: string) => {
+    invalidateWizardFlow()
     setWizardOpen(true)
     setWizardServerId(serverId)
     setWizardEditProfileId(null)
@@ -481,6 +496,7 @@ export default function RemoteViewerPage() {
   }
 
   const openEditProfileWizard = (serverId: string, profileId: string) => {
+    invalidateWizardFlow()
     setWizardOpen(true)
     setWizardServerId(serverId)
     setWizardEditProfileId(profileId)
@@ -500,16 +516,18 @@ export default function RemoteViewerPage() {
 
     const authMethod = (values.authMethod as 'password' | 'key') || server?.authMethod || 'password'
 
-    const savePassword = Boolean(values.savePassword)
+    const savePassword = authMethod === 'password' ? Boolean(values.savePassword) : false
+    const savePassphrase = authMethod === 'key' ? Boolean(values.savePassphrase) : false
 
     const config: SSHConnectionConfig = {
       host: server?.host || values.host,
       port: server?.port || values.port || 22,
       username: server?.username || values.username,
       authMethod: authMethod,
-      password: authMethod === 'password' ? (values.password || server?.password) : undefined,
+      savedServerId: wizardServerId || undefined,
+      password: authMethod === 'password' ? (values.password || undefined) : undefined,
       privateKeyPath: authMethod === 'key' ? (values.privateKeyPath || server?.privateKeyPath) : undefined,
-      passphrase: authMethod === 'key' ? (values.passphrase || server?.passphrase) : undefined
+      passphrase: authMethod === 'key' ? (values.passphrase || undefined) : undefined
     }
 
     if (!wizardServerId) {
@@ -520,14 +538,33 @@ export default function RemoteViewerPage() {
         username: config.username,
         authMethod: config.authMethod,
         password: savePassword && config.authMethod === 'password' ? values.password : undefined,
-        privateKeyPath: config.privateKeyPath,
-        passphrase: config.passphrase
+        privateKeyPath: config.authMethod === 'key' ? config.privateKeyPath : undefined,
+        passphrase: savePassphrase && config.authMethod === 'key' ? values.passphrase : undefined,
+        hasSavedPassword: savePassword,
+        hasSavedPassphrase: savePassphrase,
+        hasSavedPrivateKey: config.authMethod === 'key' && Boolean(config.privateKeyPath),
       })
       setWizardServerId(serverId)
     } else {
-      if (savePassword && config.authMethod === 'password' && values.password) {
-        await updateServer(wizardServerId, { password: values.password })
+      const updates: Partial<SavedServer> = { authMethod: config.authMethod }
+
+      if (config.authMethod === 'password') {
+        updates.password = savePassword ? (values.password || undefined) : null
+        updates.hasSavedPassword = savePassword
+        updates.privateKeyPath = null
+        updates.passphrase = null
+        updates.hasSavedPrivateKey = false
+        updates.hasSavedPassphrase = false
+      } else {
+        updates.password = null
+        updates.hasSavedPassword = false
+        updates.privateKeyPath = config.privateKeyPath || null
+        updates.hasSavedPrivateKey = Boolean(config.privateKeyPath)
+        updates.passphrase = savePassphrase ? (values.passphrase || undefined) : null
+        updates.hasSavedPassphrase = savePassphrase
       }
+
+      await updateServer(wizardServerId, updates)
     }
 
     await connectAndListEnvs(config)
@@ -546,7 +583,7 @@ export default function RemoteViewerPage() {
       return
     }
 
-    if (server.authMethod === 'password' && !server.password) {
+    if (server.authMethod === 'password' && !server.password && !server.hasSavedPassword) {
       setPasswordDialogServer(server)
       setPasswordDialogProfile(profile)
       setPasswordDialogVisible(true)
@@ -573,9 +610,10 @@ export default function RemoteViewerPage() {
         port: server.port,
         username: server.username,
         authMethod: server.authMethod,
+        savedServerId: server.id,
         password: server.authMethod === 'password' ? (password || server.password) : undefined,
         privateKeyPath: server.authMethod === 'key' ? server.privateKeyPath : undefined,
-        passphrase: server.authMethod === 'key' ? server.passphrase : undefined,
+        passphrase: server.authMethod === 'key' ? (password ? undefined : server.passphrase) : undefined,
         condaEnv: profile.condaEnv,
         remoteRoot: profile.remoteRoot,
         localPort: profile.localPort,
@@ -682,6 +720,18 @@ export default function RemoteViewerPage() {
     return getProfilesForServer(wizardServerId).find(p => p.id === wizardEditProfileId) || null
   }, [getProfilesForServer, wizardEditProfileId, wizardServerId])
 
+  const closeWizardForm = () => {
+    invalidateWizardFlow()
+    void cleanupPendingWizardConnection()
+    setWizardOpen(false)
+    setWizardServerId(null)
+    setWizardEditProfileId(null)
+    setSSHConnection(null)
+    setStorageCandidates([])
+    setStorageCandidatesRequested(false)
+    serverForm.resetFields()
+  }
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -690,278 +740,51 @@ export default function RemoteViewerPage() {
       overflow: 'hidden',
       padding: 16,
     }}>
-      {/* Page Header - fixed height */}
-      <div style={{ flexShrink: 0, marginBottom: 16 }}>
-        <Title level={2} style={{ marginBottom: 8 }}>
-          <CloudServerOutlined /> {t('remote.title')}
-        </Title>
-        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          {t('remote.subtitle')}
-        </Paragraph>
-      </div>
-
-      {/* Architecture Introduction - fixed height */}
-      <div style={{ flexShrink: 0 }}>
-        <DismissibleAlert
-          alertId="remote.intro"
-          type="info"
-          message={t('remote.help.architecture')}
-          description={t('remote.help.advantages')}
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-
-        {/* Statistics */}
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={8}>
-            <Card size="small">
-              <Statistic
-                title={t('remote.stats.activeSessions')}
-                value={activeSessions.length}
-                prefix={<ThunderboltOutlined />}
-                valueStyle={{ color: token.colorPrimary }}
-              />
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card size="small">
-              <Statistic
-                title={t('remote.stats.savedConfigs')}
-                value={profileCount}
-                prefix={<SaveOutlined />}
-                valueStyle={{ color: token.colorInfo }}
-              />
-            </Card>
-          </Col>
-          <Col span={8}>
-            <Card size="small">
-              <Statistic
-                title={t('remote.stats.connectedServers')}
-                value={connectedServers}
-                prefix={<CloudServerOutlined />}
-                valueStyle={{ color: token.colorSuccess }}
-              />
-            </Card>
-          </Col>
-        </Row>
-
-        <Space style={{ marginBottom: 16 }}>
-          <Button icon={<SafetyCertificateOutlined />} onClick={() => setSecurityDrawerOpen(true)}>
-            {t('remote.security.advanced')}
-          </Button>
-        </Space>
-      </div>
+      <RemoteViewerOverview
+        activeSessionCount={activeSessions.length}
+        connectedServers={connectedServers}
+        profileCount={profileCount}
+        onOpenSecurity={() => setSecurityDrawerOpen(true)}
+      />
 
       {/* Main content: Two columns - fills remaining space */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden' }}>
         <Row gutter={24}>
-        {/* Left Column: Saved Servers */}
-        <Col xs={24} lg={12}>
-          <Card
-            title={t('remote.saved.title')}
-            extra={
-              <Button type="primary" icon={<PlusOutlined />} onClick={openNewServerWizard}>
-                {t('remote.saved.addServer')}
-              </Button>
-            }
-            style={{ minHeight: 520 }}
-          >
-            {serverCount === 0 ? (
-              <Empty description={t('remote.saved.noServers')} />
-            ) : (
-              <Collapse accordion>
-                {servers.map(server => (
-                  <Collapse.Panel
-                    header={
-                      <Space direction="vertical" size={0}>
-                        <Text strong>{server.name}</Text>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                          SSH {server.username}@{server.host}:{server.port}
-                        </Text>
-                      </Space>
-                    }
-                    key={server.id}
-                    extra={
-                      <Space>
-                        <Button
-                          size="small"
-                          icon={<PlusOutlined />}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openNewProfileWizard(server.id)
-                          }}
-                        >
-                          {t('remote.saved.addConnection')}
-                        </Button>
-                        <Popconfirm
-                          title={t('remote.message.confirmDelete')}
-                          onConfirm={() => deleteServer(server.id)}
-                          okButtonProps={{ danger: true }}
-                        >
-                          <Button
-                            size="small"
-                            danger
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {t('remote.saved.delete')}
-                          </Button>
-                        </Popconfirm>
-                      </Space>
-                    }
-                  >
-                    <List
-                      size="small"
-                      dataSource={getProfilesForServer(server.id)}
-                      locale={{ emptyText: t('remote.saved.noConnections') }}
-                      renderItem={(profile) => (
-                        <List.Item
-                          style={{ paddingTop: '0.375rem', paddingBottom: '0.375rem' }}
-                          actions={[
-                            <Button
-                              key="quickstart"
-                              type="primary"
-                              icon={<ThunderboltOutlined />}
-                              size="small"
-                              loading={quickStartingProfileId === profile.id}
-                              disabled={quickStartingProfileId !== null && quickStartingProfileId !== profile.id}
-                              onClick={() => handleQuickStartProfile(server.id, profile)}
-                            >
-                              {t('remote.saved.quickStart')}
-                            </Button>,
-                            <Button
-                              key="edit"
-                              size="small"
-                              onClick={() => openEditProfileWizard(server.id, profile.id)}
-                            >
-                              {t('remote.saved.edit')}
-                            </Button>,
-                            <Popconfirm
-                              key="delete"
-                              title={t('remote.message.confirmDelete')}
-                              onConfirm={() => deleteProfile(profile.id)}
-                              okButtonProps={{ danger: true }}
-                            >
-                              <Button danger size="small">
-                                {t('remote.saved.delete')}
-                              </Button>
-                            </Popconfirm>
-                          ]}
-                        >
-                          <List.Item.Meta
-                            title={
-                              <Text
-                                strong
-                                style={{ lineHeight: '20px', display: 'block', marginBottom: 2 }}
-                                ellipsis={{ tooltip: profile.name }}
-                              >
-                                {profile.name}
-                              </Text>
-                            }
-                            description={
-                              <div
-                                style={{
-                                  display: 'grid',
-                                  gridTemplateColumns: 'clamp(6.5rem, 28%, 12rem) minmax(0, 1fr) auto',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  minWidth: 0,
-                                  lineHeight: '18px'
-                                }}
-                              >
-                                <Tooltip title={profile.condaEnv || 'system'}>
-                                  <Tag
-                                    color="blue"
-                                    style={{
-                                      marginInlineEnd: 0,
-                                      fontSize: 11,
-                                      lineHeight: '16px',
-                                      paddingInline: 6,
-                                      maxWidth: '100%'
-                                    }}
-                                  >
-                                    <Text
-                                      style={{ maxWidth: '100%', display: 'inline-block', verticalAlign: 'top' }}
-                                      ellipsis
-                                    >
-                                      {profile.condaEnv || 'system'}
-                                    </Text>
-                                  </Tag>
-                                </Tooltip>
-
-                                <Text
-                                  type="secondary"
-                                  code
-                                  style={{
-                                    fontSize: 11,
-                                    lineHeight: '16px',
-                                    minWidth: 0,
-                                    display: 'inline-block'
-                                  }}
-                                  ellipsis={{ tooltip: profile.remoteRoot || '-' }}
-                                >
-                                  {profile.remoteRoot || '-'}
-                                </Text>
-
-                                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
-                                  {(profile.localPort !== undefined || profile.remotePort !== undefined) && (
-                                    <>
-                                      <Tag
-                                        style={{
-                                          marginInlineEnd: 0,
-                                          fontSize: 11,
-                                          lineHeight: '16px',
-                                          paddingInline: 6
-                                        }}
-                                      >
-                                        L:{profile.localPort ?? 'auto'}
-                                      </Tag>
-                                      <Tag
-                                        style={{
-                                          marginInlineEnd: 0,
-                                          fontSize: 11,
-                                          lineHeight: '16px',
-                                          paddingInline: 6
-                                        }}
-                                      >
-                                        R:{profile.remotePort ?? 'auto'}
-                                      </Tag>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            }
-                          />
-                        </List.Item>
-                      )}
-                    />
-                  </Collapse.Panel>
-                ))}
-              </Collapse>
-            )}
-          </Card>
-        </Col>
+          <Col xs={24} lg={12}>
+            <SavedServersPanel
+              servers={servers}
+              getProfilesForServer={getProfilesForServer}
+              quickStartingProfileId={quickStartingProfileId}
+              onAddServer={openNewServerWizard}
+              onAddConnection={openNewProfileWizard}
+              onQuickStartProfile={handleQuickStartProfile}
+              onEditProfile={openEditProfileWizard}
+              onDeleteServer={deleteServer}
+              onDeleteProfile={deleteProfile}
+            />
+          </Col>
 
         {/* Right Column: Active Sessions */}
         <Col xs={24} lg={12}>
           <Card 
             title={
-              <Space>
+              <span>
                 {t('remote.session.title')}
                 {activeSessions.length > 0 && (
-                  <Text type="secondary">({activeSessions.length})</Text>
+                  <span style={{ color: 'rgba(0,0,0,0.45)', marginLeft: 8 }}>({activeSessions.length})</span>
                 )}
-              </Space>
+              </span>
             }
           >
             {activeSessions.length === 0 ? (
               <Empty
                 description={
-                  <Space direction="vertical">
-                    <Text type="secondary">{t('remote.session.noActiveSessions')}</Text>
-                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span style={{ color: 'rgba(0,0,0,0.45)' }}>{t('remote.session.noActiveSessions')}</span>
+                    <span style={{ color: 'rgba(0,0,0,0.45)', fontSize: 12 }}>
                       {t('remote.session.startNewConnection')}
-                    </Text>
-                  </Space>
+                    </span>
+                  </div>
                 }
                 style={{ margin: '40px 0' }}
               />
@@ -979,7 +802,7 @@ export default function RemoteViewerPage() {
       </Row>
       </div>
 
-      <Modal
+      <RemoteWizardModal
         title={wizardTitle}
         open={wizardOpen}
         onCancel={() => {
@@ -987,350 +810,46 @@ export default function RemoteViewerPage() {
             void handleCancelConfig()
             return
           }
-          setWizardOpen(false)
-          setWizardServerId(null)
-          setWizardEditProfileId(null)
-          setSSHConnection(null)
-          serverForm.resetFields()
+          closeWizardForm()
         }}
-        width={720}
-        footer={null}
-        destroyOnClose
-        centered
-        styles={{ body: { display: 'flex', flexDirection: 'column', padding: '16px 24px 12px' } }}
-      >
-        {/* Step content */}
-        <div
-          style={
-            isEnvironmentStep
-              ? {
-                  flex: 1,
-                  height: 'calc(80vh - 180px)',
-                  minHeight: 420,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }
-              : {
-                  flex: 1,
-                  minHeight: 420,
-                  maxHeight: 'calc(80vh - 180px)',
-                  overflowY: 'auto',
-                  overflowX: 'hidden',
-                }
-          }
-        >
-          {!sshConnection ? (
-            wizardProgress ? (
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                minHeight: 320, gap: 24,
-              }}>
-                <Spin size="large" />
-                <Text style={{ fontSize: 16, color: token.colorTextSecondary }}>{wizardProgress}</Text>
-              </div>
-            ) : (
-            <>
-              {wizardServerId && wizardServer ? (
-                <Alert
-                  type="info"
-                  showIcon
-                  message={`${wizardServer.username}@${wizardServer.host}:${wizardServer.port}`}
-                  style={{ marginBottom: 16 }}
-                />
-              ) : null}
-              <Form
-                form={serverForm}
-                layout="vertical"
-                initialValues={{
-                  port: 22,
-                  authMethod: wizardServer?.authMethod || 'password',
-                  host: wizardServer?.host,
-                  username: wizardServer?.username,
-                  name: wizardServer?.name,
-                  privateKeyPath: wizardServer?.privateKeyPath,
-                  passphrase: wizardServer?.passphrase,
-                  savePassword: false
-                }}
-              >
-                {!wizardServerId && (
-                  <Form.Item label={t('remote.form.saveName')} name="name">
-                    <Input placeholder={t('remote.form.saveNamePlaceholder')} />
-                  </Form.Item>
-                )}
+        connecting={connecting}
+        fetchingConfig={fetchingConfig}
+        fetchingEnvs={fetchingEnvs}
+        fetchingStorageCandidates={fetchingStorageCandidates}
+        loading={starting}
+        profile={wizardProfile}
+        progressText={wizardProgress}
+        server={wizardServer}
+        serverForm={serverForm}
+        sshConnection={sshConnection}
+        storageCandidates={storageCandidates}
+        storageCandidatesRequested={storageCandidatesRequested}
+        onCloseForm={closeWizardForm}
+        onConfirmConfig={handleSaveProfile}
+        onConnect={() => void startWizardConnect()}
+        onDetectStorageCandidates={(scanRoot, maxDepth) => void handleDetectStorageCandidates(scanRoot, maxDepth)}
+        onSelectEnvironment={(envName) => void handleSelectEnvironment(envName)}
+      />
 
-                {!wizardServerId && (
-                  <>
-                    <Form.Item
-                      label={t('remote.form.host')}
-                      name="host"
-                      rules={[{ required: true, message: t('remote.form.required') }]}
-                    >
-                      <Input placeholder={t('remote.form.hostPlaceholder')} />
-                    </Form.Item>
-                    <Row gutter={16}>
-                      <Col span={12}>
-                        <Form.Item label={t('remote.form.port')} name="port">
-                          <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-                        </Form.Item>
-                      </Col>
-                      <Col span={12}>
-                        <Form.Item
-                          label={t('remote.form.username')}
-                          name="username"
-                          rules={[{ required: true, message: t('remote.form.required') }]}
-                        >
-                          <Input placeholder={t('remote.form.usernamePlaceholder')} />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                  </>
-                )}
-
-                <Form.Item label={t('remote.form.authMethod')} name="authMethod">
-                  <Radio.Group>
-                    <Radio value="password">{t('remote.form.passwordAuth')}</Radio>
-                    <Radio value="key">{t('remote.form.keyAuth')}</Radio>
-                  </Radio.Group>
-                </Form.Item>
-
-                <Form.Item noStyle shouldUpdate>
-                  {() => {
-                    const method = serverForm.getFieldValue('authMethod') as 'password' | 'key'
-                    return method === 'password' ? (
-                      <>
-                        <Form.Item
-                          label={t('remote.form.password')}
-                          name="password"
-                          rules={wizardServerId && wizardServer?.authMethod === 'password' && wizardServer.password ? [] : [{ required: true, message: t('remote.form.required') }]}
-                        >
-                          <Input.Password />
-                        </Form.Item>
-
-                        {(!wizardServerId || (wizardServerId && wizardServer && wizardServer.authMethod === 'password' && !wizardServer.password)) && (
-                          <Form.Item name="savePassword" valuePropName="checked">
-                            <Checkbox>{t('remote.form.savePassword')}</Checkbox>
-                          </Form.Item>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <Form.Item
-                          label={t('remote.form.privateKey')}
-                          name="privateKeyPath"
-                          rules={[{ required: true, message: t('remote.form.required') }]}
-                        >
-                          <Input placeholder={t('remote.form.privateKeyPlaceholder')} />
-                        </Form.Item>
-                        <Form.Item label={t('remote.form.passphrase')} name="passphrase">
-                          <Input.Password />
-                        </Form.Item>
-                      </>
-                    )
-                  }}
-                </Form.Item>
-
-                <Divider />
-                <Space>
-                  <Button type="primary" loading={connecting} onClick={() => void startWizardConnect()}>
-                    {t('remote.form.connectButton')}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setWizardOpen(false)
-                      setWizardServerId(null)
-                      setWizardEditProfileId(null)
-                      setSSHConnection(null)
-                      setStorageCandidates([])
-                      setStorageCandidatesRequested(false)
-                      serverForm.resetFields()
-                    }}
-                  >
-                    {t('remote.form.cancel')}
-                  </Button>
-                </Space>
-              </Form>
-            </>
-            )
-          ) : sshConnection.remoteConfig ? (
-            <Spin spinning={fetchingConfig} tip={t('remote.config.fetchingConfig')}>
-              <RemoteConfigCard
-                config={sshConnection.remoteConfig}
-                sshConfig={{
-                  ...sshConnection.config,
-                  saveName: wizardProfile?.name,
-                  remoteRoot: wizardProfile?.remoteRoot,
-                  localPort: wizardProfile?.localPort,
-                  remotePort: wizardProfile?.remotePort
-                }}
-                onConfirm={handleSaveProfile}
-                onCancel={handleCancelConfig}
-                onDetectStorageCandidates={handleDetectStorageCandidates}
-                storageCandidates={storageCandidates}
-                storageCandidatesLoading={fetchingStorageCandidates}
-                storageCandidatesRequested={storageCandidatesRequested}
-                loading={starting}
-              />
-            </Spin>
-          ) : (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <CondaEnvSelector
-                envs={sshConnection.condaEnvs || []}
-                connectionId={sshConnection.connectionId}
-                initialEnv={wizardProfile?.condaEnv}
-                onSelect={handleSelectEnvironment}
-                onCancel={handleCancelConfig}
-                loading={fetchingConfig || fetchingEnvs}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Step indicator dots */}
-        {(() => {
-          const step = !sshConnection ? 0 : sshConnection.remoteConfig ? 2 : 1
-          const steps = [
-            t('remote.wizard.step_connect'),
-            t('remote.wizard.step_environment'),
-            t('remote.wizard.step_config'),
-          ]
-          return (
-            <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-              paddingTop: 16, borderTop: `1px solid ${token.colorBorderSecondary}`, marginTop: 16,
-            }}>
-              {/* Dots + lines row */}
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                {steps.map((_, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
-                    {i > 0 && (
-                      <div style={{
-                        width: 48, height: 2,
-                        background: i <= step ? token.colorPrimary : token.colorBorderSecondary,
-                        transition: 'background 0.3s',
-                      }} />
-                    )}
-                    <div style={{
-                      width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                      background: i <= step ? token.colorPrimary : 'transparent',
-                      border: `2px solid ${i <= step ? token.colorPrimary : token.colorBorderSecondary}`,
-                      transition: 'all 0.3s',
-                    }} />
-                  </div>
-                ))}
-              </div>
-              {/* Labels row */}
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                {steps.map((label, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
-                    {i > 0 && <div style={{ width: 48 }} />}
-                    <span style={{
-                      width: 28, textAlign: 'center',
-                      fontSize: 13,
-                      color: i <= step ? token.colorPrimary : token.colorTextQuaternary,
-                      transition: 'color 0.3s',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        })()}
-      </Modal>
-
-      <Drawer
-        title={t('remote.knownHosts.title')}
+      <KnownHostsDrawer
         open={securityDrawerOpen}
+        knownHosts={knownHosts}
+        loading={knownHostsLoading}
         onClose={() => setSecurityDrawerOpen(false)}
-        width={860}
-      >
-        <Space style={{ marginBottom: 12 }}>
-          <Button onClick={() => void loadKnownHosts()} loading={knownHostsLoading}>
-            {t('remote.knownHosts.refresh')}
-          </Button>
-        </Space>
-        <Table
-          dataSource={knownHosts}
-          loading={knownHostsLoading}
-          rowKey={record => `${record.known_hosts_host}-${record.key_type}`}
-          pagination={false}
-          locale={{ emptyText: t('remote.knownHosts.empty') }}
-          columns={[
-            {
-              title: t('remote.form.host'),
-              dataIndex: 'host',
-              key: 'host',
-              render: (text: string, record: KnownHostsEntry) => (
-                <Text code>{record.known_hosts_host || `${text}:${record.port}`}</Text>
-              )
-            },
-            {
-              title: t('remote.hostKey.keyType'),
-              dataIndex: 'key_type',
-              key: 'key_type',
-              render: (text: string) => <Text code>{text}</Text>
-            },
-            {
-              title: t('remote.hostKey.fingerprint'),
-              dataIndex: 'fingerprint_sha256',
-              key: 'fingerprint_sha256',
-              render: (text: string) => (
-                <Text code copyable>
-                  {text}
-                </Text>
-              )
-            },
-            {
-              title: t('remote.knownHosts.actions'),
-              key: 'actions',
-              render: (_: unknown, record: KnownHostsEntry) => (
-                <Popconfirm
-                  title={t('remote.knownHosts.removeConfirm')}
-                  onConfirm={() => void handleRemoveKnownHost(record)}
-                  okButtonProps={{ danger: true }}
-                >
-                  <Button danger size="small">
-                    {t('remote.knownHosts.remove')}
-                  </Button>
-                </Popconfirm>
-              )
-            }
-          ]}
-        />
-      </Drawer>
+        onRefresh={() => void loadKnownHosts()}
+        onRemove={(entry) => void handleRemoveKnownHost(entry)}
+      />
 
-      {/* Password Input Dialog */}
-      <Modal
-        title={t('remote.form.enterPassword')}
+      <PasswordPromptModal
         open={passwordDialogVisible}
-        onOk={handlePasswordSubmit}
+        loading={starting}
+        profile={passwordDialogProfile}
+        server={passwordDialogServer}
+        password={tempPassword}
+        onChangePassword={setTempPassword}
+        onSubmit={() => void handlePasswordSubmit()}
         onCancel={handlePasswordCancel}
-        okText={t('remote.form.connectButton')}
-        cancelText={t('remote.form.cancel')}
-        confirmLoading={starting}
-        centered
-        width={400}
-      >
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          <Text>
-            {t('remote.form.connectionTo')}: <Text strong>{passwordDialogProfile?.name}</Text>
-          </Text>
-          <Text type="secondary">
-            {passwordDialogServer?.username}@{passwordDialogServer?.host}
-          </Text>
-          <Input.Password
-            placeholder={t('remote.form.password')}
-            value={tempPassword}
-            onChange={e => setTempPassword(e.target.value)}
-            onPressEnter={handlePasswordSubmit}
-            autoFocus
-            size="large"
-          />
-        </Space>
-      </Modal>
+      />
 
       <HostKeyModal
         open={hostKeyModalOpen}

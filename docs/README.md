@@ -47,7 +47,10 @@ When the code changes in a user-facing way:
 
 1. Update the relevant guide pages.
 2. Update any affected reference pages, including the CLI reference if command help changed.
-3. Build the site strictly:
+3. If the change adds, removes, or reshapes an API endpoint, update `docs/api/` in the same change.
+4. If the change alters the remote viewer flow, update both `docs/api/*/remote_api.md` and `docs/architecture/*/REMOTE_VIEWER_ARCHITECTURE.md`.
+5. If the change renames a user-visible session state or protocol payload, update the corresponding API and architecture docs before merging.
+6. Build the site strictly:
 
 ```bash
 conda run -n runicorn_dev mkdocs build --strict -f docs/user-guide/mkdocs.yml

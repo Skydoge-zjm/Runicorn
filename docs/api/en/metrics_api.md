@@ -4,9 +4,9 @@
 
 # Metrics API - Training Metrics Queries
 
-**Module**: Metrics API  
-**Base Path**: `/api/runs/{run_id}`  
-**Version**: v1.0 (Updated v0.5.3)  
+**Module**: Metrics API
+**Base Path**: `/api/runs/{run_id}`
+**Version**: v1.0 (Updated v0.5.3)
 **Description**: Query training metrics, progress, and real-time logs via HTTP and WebSocket.
 
 **v0.5.x Improvements**:
@@ -220,7 +220,7 @@ df = pd.DataFrame(data['rows'])
 # Analyze by stage
 for stage in df['stage'].unique():
     stage_data = df[df['stage'] == stage]
-    
+
     print(f"\nStage: {stage}")
     print(f"  Steps: {stage_data['global_step'].min()} - {stage_data['global_step'].max()}")
     print(f"  Final loss: {stage_data['loss'].iloc[-1]:.4f}")
@@ -245,7 +245,7 @@ Stream training logs in real-time via WebSocket.
 ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws
 ```
 
-**Protocol**: WebSocket  
+**Protocol**: WebSocket
 **Format**: Plain text (one line per message)
 
 ### Message Flow
@@ -267,17 +267,17 @@ import websockets
 
 async def stream_logs(run_id):
     """Stream logs in real-time"""
-    
+
     uri = f"ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws"
-    
+
     async with websockets.connect(uri) as websocket:
         print(f"Connected to {run_id} logs\n")
-        
+
         try:
             while True:
                 message = await websocket.recv()
                 print(message)
-                
+
         except websockets.exceptions.ConnectionClosed:
             print("\nConnection closed")
 
@@ -290,37 +290,37 @@ asyncio.run(stream_logs(run_id))
 ```javascript
 function streamLogs(runId) {
   const ws = new WebSocket(`ws://127.0.0.1:23300/api/runs/${runId}/logs/ws`)
-  
+
   ws.onopen = () => {
     console.log('Connected to log stream')
   }
-  
+
   ws.onmessage = (event) => {
     // Append log line to UI
     const logLine = event.data
     console.log(logLine)
-    
+
     // Or update DOM
     const logContainer = document.getElementById('logs')
     const line = document.createElement('div')
     line.textContent = logLine
     logContainer.appendChild(line)
-    
+
     // Auto-scroll
     logContainer.scrollTop = logContainer.scrollHeight
   }
-  
+
   ws.onerror = (error) => {
     console.error('WebSocket error:', error)
   }
-  
+
   ws.onclose = () => {
     console.log('Disconnected from log stream')
-    
+
     // Auto-reconnect with exponential backoff
     setTimeout(() => streamLogs(runId), 5000)
   }
-  
+
   return ws
 }
 
@@ -420,7 +420,7 @@ for row in data['rows']:
 # Analyze each stage
 for stage, rows in by_stage.items():
     losses = [r['loss'] for r in rows if 'loss' in r]
-    
+
     print(f"\nStage: {stage}")
     print(f"  Steps: {len(rows)}")
     print(f"  Avg loss: {sum(losses)/len(losses):.4f}")
@@ -463,7 +463,7 @@ df = pd.DataFrame(data['rows'])
 with pd.ExcelWriter(f'{run_id}_metrics.xlsx') as writer:
     # All metrics
     df.to_excel(writer, sheet_name='All Metrics', index=False)
-    
+
     # By stage
     if 'stage' in df.columns:
         for stage in df['stage'].unique():
@@ -505,14 +505,14 @@ def is_tqdm_line(text):
 
 async def stream_logs_filtered(run_id, filter_tqdm=True):
     uri = f"ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws"
-    
+
     async with websockets.connect(uri) as ws:
         while True:
             message = await ws.recv()
-            
+
             if filter_tqdm and is_tqdm_line(message):
                 continue  # Skip tqdm lines
-            
+
             print(message)
 
 # Usage
@@ -566,9 +566,9 @@ response = requests.get(
 data = response.json()
 print(f"Total points: {data['total']}, Sampled: {data['sampled']}")
 
-# Alternative: Use V2 API for even faster queries
+# Alternative: Use the same endpoint with more aggressive downsampling
 response = requests.get(
-    f'http://127.0.0.1:23300/api/v2/experiments/{run_id}/metrics/fast',
+    f'http://127.0.0.1:23300/api/runs/{run_id}/metrics_step',
     params={'downsample': 1000}
 )
 ```
@@ -681,10 +681,10 @@ data = response.json()
 for row in data['rows']:
     loss = row.get('loss', None)
     accuracy = row.get('accuracy', None)
-    
+
     if loss is not None:
         print(f"Step {row['global_step']}: loss={loss:.4f}")
-    
+
     # Or use default value
     lr = row.get('learning_rate', 0.001)
 ```
@@ -698,21 +698,21 @@ import re
 
 async def monitor_training(run_id):
     """Monitor training and extract key metrics"""
-    
+
     uri = f"ws://127.0.0.1:23300/api/runs/{run_id}/logs/ws"
-    
+
     async with websockets.connect(uri) as ws:
         while True:
             line = await ws.recv()
-            
+
             # Extract metrics from logs
             # Example: "Epoch 5/100, loss=0.234, acc=0.95"
             match = re.search(r'Epoch (\d+)/(\d+), loss=([\d.]+), acc=([\d.]+)', line)
-            
+
             if match:
                 epoch, total, loss, acc = match.groups()
                 print(f"Epoch {epoch}/{total}: loss={loss}, acc={acc}")
-                
+
                 # Check for early stopping
                 if float(acc) > 0.98:
                     print("🎉 Target accuracy reached!")
@@ -752,7 +752,7 @@ def get_metrics_safe(run_id):
             f'http://127.0.0.1:23300/api/runs/{run_id}/metrics_step',
             timeout=10
         )
-        
+
         if response.status_code == 200:
             return response.json()
         elif response.status_code == 404:
@@ -761,18 +761,18 @@ def get_metrics_safe(run_id):
         else:
             print(f"Error {response.status_code}: {response.json()['detail']}")
             return None
-            
+
     except requests.exceptions.Timeout:
         print("Request timeout - metrics file may be very large")
-        
-        # Retry with V2 API and downsampling
-        print("Retrying with V2 API...")
+
+        # Retry the same endpoint with more aggressive downsampling
+        print("Retrying with stronger downsampling...")
         response = requests.get(
-            f'http://127.0.0.1:23300/api/v2/experiments/{run_id}/metrics/fast',
+            f'http://127.0.0.1:23300/api/runs/{run_id}/metrics_step',
             params={'downsample': 1000}
         )
         return response.json()
-        
+
     except Exception as e:
         print(f"Unexpected error: {e}")
         return None
@@ -802,7 +802,7 @@ writer = SummaryWriter(f'tensorboard_logs/{run_id}')
 
 for row in data['rows']:
     step = row['global_step']
-    
+
     for metric_name, value in row.items():
         if metric_name not in ['global_step', 'time', 'stage']:
             writer.add_scalar(metric_name, value, step)
@@ -830,7 +830,7 @@ data = response.json()
 for row in data['rows']:
     step = row['global_step']
     metrics = {k: v for k, v in row.items() if k not in ['global_step', 'time', 'stage']}
-    
+
     wandb.log(metrics, step=step)
 
 wandb.finish()
@@ -852,9 +852,9 @@ print("Migration to W&B completed")
 ## Related APIs
 
 - **Runs API**: Get run information - [runs_api.md](./runs_api.md)
-- **V2 API**: High-performance metrics queries - [v2_api.md](./v2_api.md)
+- **Python Client API**: Query and transform metric payloads from Python - [python_client_api.md](./python_client_api.md)
 
 ---
 
-**Last Updated**: 2025-11-28
+**Last Updated**: 2026-03-28
 

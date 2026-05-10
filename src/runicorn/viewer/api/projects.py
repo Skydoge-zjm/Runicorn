@@ -391,7 +391,7 @@ async def list_runs_by_name(
     project: str,
     name: str,
     request: Request,
-) -> List[Dict[str, Any]]:
+) -> List[RunListItem]:
     """
     List runs for a given project/name combination (legacy compatibility).
     
@@ -412,24 +412,18 @@ async def list_runs_by_name(
     if backend is not None:
         db_rows = list_runs_from_db(backend)
         if db_rows is not None:
-            items: List[Dict[str, Any]] = []
+            items: List[RunListItem] = []
             for r in db_rows:
                 run_path = r.get("path")
                 if not run_path:
                     continue
                 if run_path != path_prefix and not run_path.startswith(f"{path_prefix}/"):
                     continue
-                items.append({
-                    "run_id": r["id"],
-                    "path": run_path,
-                    "alias": r.get("alias"),
-                    "status": r.get("status", "finished"),
-                    "start_time": r.get("created_time"),
-                })
+                items.append(RunListItem(**r))
             return items
     
     # --- File-system fallback ---
-    items = []
+    items: List[RunListItem] = []
     
     for entry in iter_all_runs(storage_root):
         meta = read_json(entry.dir / "meta.json")
@@ -452,13 +446,17 @@ async def list_runs_by_name(
             except Exception:
                 created = None
         
-        items.append({
-            "run_id": run_id,
-            "path": run_path,
-            "alias": meta.get("alias") if isinstance(meta, dict) else None,
-            "status": str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
-            "start_time": created,
-        })
+        items.append(
+            RunListItem(
+                id=run_id,
+                run_dir=str(run_dir),
+                created_time=created,
+                status=str((status.get("status") if isinstance(status, dict) else "finished") or "finished"),
+                pid=(meta.get("pid") if isinstance(meta, dict) else None),
+                path=run_path,
+                alias=meta.get("alias") if isinstance(meta, dict) else None,
+            )
+        )
     
     return items
 

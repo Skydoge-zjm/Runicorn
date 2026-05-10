@@ -4,9 +4,9 @@
 
 # Runs API - 实验管理
 
-**模块**: Runs API  
-**基础路径**: `/api/runs`  
-**版本**: v1.0  
+**模块**: Runs API
+**基础路径**: `/api/runs`
+**版本**: v1.0
 **描述**: 创建、读取、更新和管理实验运行，支持软删除和恢复功能。
 
 ---
@@ -51,10 +51,10 @@ GET /api/runs
     "pid": 12345,
     "best_metric_value": 0.9542,
     "best_metric_name": "accuracy",
-    "project": "image_classification",
-    "name": "resnet_baseline",
-    "artifacts_created_count": 2,
-    "artifacts_used_count": 1
+    "path": "image_classification/resnet_baseline",
+    "alias": "baseline",
+    "tags": ["imagenet", "resnet50"],
+    "assets_count": 3
   },
   {
     "id": "20250114_120000_d4e5f6",
@@ -64,10 +64,10 @@ GET /api/runs
     "pid": 23456,
     "best_metric_value": null,
     "best_metric_name": null,
-    "project": "nlp",
-    "name": "bert_finetune",
-    "artifacts_created_count": 0,
-    "artifacts_used_count": 0
+    "path": "nlp/bert_finetune",
+    "alias": null,
+    "tags": [],
+    "assets_count": 0
   }
 ]
 ```
@@ -83,10 +83,10 @@ GET /api/runs
 | `pid` | number\|null | 进程 ID（进程结束后为 null）|
 | `best_metric_value` | number\|null | 最佳指标值（如果配置了主要指标）|
 | `best_metric_name` | string\|null | 主要指标的名称 |
-| `project` | string | 项目名称 |
-| `name` | string | 实验名称 |
-| `artifacts_created_count` | number | 此运行创建的 artifacts 数量 |
-| `artifacts_used_count` | number | 此运行使用的 artifacts 数量 |
+| `path` | string\|null | 运行的层级路径 |
+| `alias` | string\|null | 可选的友好别名 |
+| `tags` | string[] | 用户定义的标签 |
+| `assets_count` | number | 此运行记录的资产数量 |
 
 ### 示例
 
@@ -145,13 +145,31 @@ GET /api/runs/{run_id}
   "status": "finished",
   "pid": 12345,
   "run_dir": "E:\\RunicornData\\image_classification\\resnet_baseline\\runs\\20250114_153045_a1b2c3",
-  "project": "image_classification",
-  "name": "resnet_baseline",
+  "path": "image_classification/resnet_baseline",
+  "alias": "baseline",
+  "start_time": 1704067200.5,
+  "duration": 3600.25,
   "logs": "E:\\RunicornData\\image_classification\\resnet_baseline\\runs\\20250114_153045_a1b2c3\\logs.txt",
   "metrics": "E:\\RunicornData\\image_classification\\resnet_baseline\\runs\\20250114_153045_a1b2c3\\events.jsonl",
   "metrics_step": "E:\\RunicornData\\image_classification\\resnet_baseline\\runs\\20250114_153045_a1b2c3\\events.jsonl",
-  "artifacts_created_count": 2,
-  "artifacts_used_count": 1
+  "assets": {
+    "config": {
+      "args": {
+        "epochs": 100
+      }
+    },
+    "datasets": [
+      {
+        "name": "imagenet",
+        "context": "train"
+      }
+    ]
+  },
+  "assets_count": 2,
+  "summary": {
+    "best_metric_name": "accuracy",
+    "best_metric_value": 0.9542
+  }
 }
 ```
 
@@ -182,7 +200,8 @@ if response.status_code == 200:
     detail = response.json()
     print(f"Run {detail['id']}")
     print(f"Status: {detail['status']}")
-    print(f"Project: {detail['project']}/{detail['name']}")
+    print(f"Path: {detail['path']}")
+    print(f"Assets: {detail['assets_count']}")
 elif response.status_code == 404:
     print("Run not found")
 ```
@@ -314,8 +333,8 @@ GET /api/recycle-bin
   "deleted_runs": [
     {
       "id": "20250114_153045_a1b2c3",
-      "project": "image_classification",
-      "name": "resnet_baseline",
+      "path": "image_classification/resnet_baseline",
+      "alias": "baseline",
       "created_time": 1704067200.5,
       "deleted_at": 1704070800.2,
       "delete_reason": "user_deleted",
@@ -331,8 +350,8 @@ GET /api/recycle-bin
 | 字段 | 类型 | 描述 |
 |------|------|------|
 | `id` | string | 运行标识符 |
-| `project` | string | 项目名称 |
-| `name` | string | 实验名称 |
+| `path` | string\|null | 删除前的运行路径 |
+| `alias` | string\|null | 删除前的可选别名 |
 | `created_time` | number | 原始创建时间戳 |
 | `deleted_at` | number | 删除时间戳 |
 | `delete_reason` | string | 删除原因 |
@@ -463,7 +482,7 @@ if confirm.lower() == 'yes':
         'http://127.0.0.1:23300/api/recycle-bin/empty',
         json={"confirm": True}
     )
-    
+
     result = response.json()
     print(result['message'])
 else:
@@ -485,10 +504,10 @@ interface RunListItem {
   pid: number | null                // 进程 ID
   best_metric_value: number | null  // 最佳指标值
   best_metric_name: string | null   // 主要指标名称
-  project: string | null            // 项目名称
-  name: string | null               // 实验名称
-  artifacts_created_count: number   // 创建的 artifacts 数量
-  artifacts_used_count: number      // 使用的 artifacts 数量
+  path: string | null               // 层级路径
+  alias: string | null              // 可选别名
+  tags: string[]                    // 用户定义标签
+  assets_count: number              // 记录的资产数量
 }
 ```
 
@@ -497,8 +516,8 @@ interface RunListItem {
 ```typescript
 interface DeletedRun {
   id: string              // Run ID
-  project: string         // 项目名称
-  name: string            // 实验名称
+  path: string | null     // 删除前的运行路径
+  alias: string | null    // 删除前的别名
   created_time: number    // 原始创建时间戳
   deleted_at: number      // 删除时间戳
   delete_reason: string   // 删除原因
@@ -536,8 +555,7 @@ all_runs = requests.get('http://127.0.0.1:23300/api/runs').json()
 # V1 API 客户端过滤
 running_runs = [r for r in all_runs if r['status'] == 'running']
 
-# 推荐: 使用 V2 API 进行服务端过滤
-# 查看 docs/api/zh/v2_api.md
+# 推荐: 优先使用服务端查询参数，而不是先取全量结果再做客户端过滤
 ```
 
 ### 状态管理
@@ -612,11 +630,11 @@ runs/20250114_153045_a1b2c3/
 ## 相关 API
 
 - **Metrics API**: 获取运行指标数据 - [metrics_api.md](./metrics_api.md)
-- **V2 Experiments API**: 高性能查询 - [v2_api.md](./v2_api.md)
-- **Artifacts API**: 管理运行 artifacts - [artifacts_api.md](./artifacts_api.md)
+- **Paths API**: 按路径浏览运行层级 - [paths_api.md](./paths_api.md)
+- **Python Client API**: 通过程序方式查询运行 - [python_client_api.md](./python_client_api.md)
 
 ---
 
-**最后更新**: 2025-10-14
+**最后更新**: 2026-03-28
 
 

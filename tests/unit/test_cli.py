@@ -1,6 +1,9 @@
 """Tests for runicorn.cli — smoke tests for each subcommand."""
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 
 import runicorn
@@ -77,8 +80,10 @@ class TestCLIExportImport:
     """Actual execution of export → import roundtrip."""
 
     @staticmethod
-    def _create_run(storage: "Path", run_id: str, path: str = "proj/exp"):
-        import json, os, time
+    def _create_run(storage: Path, run_id: str, path: str = "proj/exp"):
+        import json
+        import os
+        import time
         run_dir = storage / "runs" / path.replace("/", os.sep) / run_id
         run_dir.mkdir(parents=True)
         (run_dir / "meta.json").write_text(
@@ -114,10 +119,85 @@ class TestCLIExportImport:
         assert main(["import", "--storage", str(dst), "--archive", str(archive)]) == 0
 
         # Verify the run was imported
-        import os
         imported = list((dst / "runs").rglob("meta.json"))
         assert len(imported) >= 1
 
     def test_import_missing_archive(self, tmp_path):
         result = main(["import", "--storage", str(tmp_path), "--archive", str(tmp_path / "nope.zip")])
         assert result == 1
+
+
+class TestCLIExtractedHandlers:
+    def test_rate_limit_set_updates_config(self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        config = {"default": {"max_requests": 100, "window_seconds": 60}, "endpoints": {}}
+
+        monkeypatch.setattr("runicorn.config.get_rate_limit_config", lambda: config)
+        monkeypatch.setattr("runicorn.config.save_rate_limit_config", lambda updated: config.update(updated))
+
+        result = main([
+            "rate-limit",
+            "--action", "set",
+            "--endpoint", "/api/test",
+            "--max-requests", "42",
+            "--window", "30",
+        ])
+
+        assert result == 0
+        assert config["endpoints"]["/api/test"]["max_requests"] == 42
+        assert config["endpoints"]["/api/test"]["window_seconds"] == 30
+        assert "Updated rate limit for /api/test" in capsys.readouterr().out
+
+    def test_manage_search_uses_manager(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+        class FakeManager:
+            def __init__(self, root: Path):
+                self.root = root
+
+            def search_experiments(self, project=None, tags=None, text=None):
+                return [SimpleNamespace(id="r1", project=project or "proj", name="exp", tags=tags or ["demo"])]
+
+        monkeypatch.setattr("runicorn.extensions.experiment.ExperimentManager", FakeManager)
+
+        result = main([
+            "manage",
+            "--storage", str(tmp_path),
+            "--action", "search",
+            "--project", "proj",
+            "--tags", "demo",
+        ])
+
+        assert result == 0
+        output = capsys.readouterr().out
+        assert "Found 1 experiments" in output
+        assert "r1: proj/exp [demo]" in output
+
+    def test_delete_dry_run_uses_cleanup_handler(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        def fake_delete_run_completely(*, run_id: str, storage_root: Path, dry_run: bool):
+            assert storage_root == tmp_path
+            assert dry_run is True
+            return {
+                "success": True,
+                "orphaned_assets": [{"asset_type": "code", "name": "snapshot.zip"}],
+                "kept_assets": [],
+                "blobs_deleted": 2,
+                "bytes_freed": 2048,
+            }
+
+        monkeypatch.setattr("runicorn.assets.cleanup.delete_run_completely", fake_delete_run_completely)
+
+        result = main([
+            "delete",
+            "--storage", str(tmp_path),
+            "--run-id", "run-1",
+            "--dry-run",
+        ])
+
+        assert result == 0
+        output = capsys.readouterr().out
+        assert "DRY RUN - No files will be deleted" in output
+        assert "Deleting run: run-1" in output
+        assert "Space: 2.0 KB" in output

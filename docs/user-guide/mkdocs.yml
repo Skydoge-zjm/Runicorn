@@ -148,10 +148,6 @@ extra:
       link: https://github.com/Skydoge-zjm/Runicorn
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/runicorn/
-  
-  version:
-    provider: mike
-    default: stable
 
 # Custom CSS
 extra_css:

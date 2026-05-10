@@ -2,16 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { server } from '../__mocks__/server'
+import { createWrapper } from '../__tests__/helpers'
 import { useAssetsIndex, loadAssetsIndexFromCache } from './useAssetsIndex'
-
-// Mock antd message
-vi.mock('antd', async () => {
-  const actual = await vi.importActual('antd')
-  return {
-    ...actual,
-    message: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() },
-  }
-})
 
 beforeEach(() => {
   localStorage.clear()
@@ -60,7 +52,9 @@ describe('useAssetsIndex', () => {
       ),
     )
 
-    const { result } = renderHook(() => useAssetsIndex())
+    const { result } = renderHook(() => useAssetsIndex(), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false)
@@ -76,7 +70,9 @@ describe('useAssetsIndex', () => {
       http.get('/api/runs', () => HttpResponse.json([])),
     )
 
-    const { result } = renderHook(() => useAssetsIndex())
+    const { result } = renderHook(() => useAssetsIndex(), {
+      wrapper: createWrapper(),
+    })
 
     // Cancel immediately
     act(() => result.current.cancel())
@@ -103,7 +99,9 @@ describe('useAssetsIndex', () => {
       http.get('/api/runs', () => HttpResponse.json([])),
     )
 
-    const { result } = renderHook(() => useAssetsIndex())
+    const { result } = renderHook(() => useAssetsIndex(), {
+      wrapper: createWrapper(),
+    })
 
     expect(result.current.stats.totalRuns).toBe(1)
     expect(result.current.stats.totalAssets).toBe(2)

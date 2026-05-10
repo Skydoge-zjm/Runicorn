@@ -18,13 +18,11 @@ import {
 describe('apiFetch — core behavior', () => {
   it('GET request returns parsed JSON', async () => {
     server.use(
-      http.get('/api/runs', () =>
-        HttpResponse.json({ runs: [{ run_id: 'r1' }] }),
-      ),
+      http.get('/api/runs', () => HttpResponse.json([{ id: 'r1' }])),
     )
     const data = await listRuns()
-    expect(data.runs).toHaveLength(1)
-    expect(data.runs[0].run_id).toBe('r1')
+    expect(data).toHaveLength(1)
+    expect(data[0].id).toBe('r1')
   })
 
   it('GET with path param works', async () => {
@@ -202,19 +200,6 @@ import {
   permanentDeleteRun,
   permanentDeleteRunsBatch,
   downloadRunAssetUrl,
-  unifiedConnect,
-  unifiedDisconnect,
-  unifiedStatus,
-  unifiedConfigureMode,
-  unifiedDeactivateMode,
-  unifiedListdir,
-  sshConnect,
-  sshSessions,
-  sshClose,
-  sshListdir,
-  sshMirrorStart,
-  sshMirrorStop,
-  sshMirrorList,
 } from '../../api'
 
 describe('Run detail endpoints', () => {
@@ -407,12 +392,10 @@ describe('Project hierarchy endpoints', () => {
 
   it('listRunsByName', async () => {
     server.use(
-      http.get('/api/projects/:project/names/:name/runs', () =>
-        HttpResponse.json({ runs: [] }),
-      ),
+      http.get('/api/projects/:project/names/:name/runs', () => HttpResponse.json([])),
     )
     const data = await listRunsByName('projA', 'exp1')
-    expect(data.runs).toEqual([])
+    expect(data).toEqual([])
   })
 })
 
@@ -501,99 +484,3 @@ describe('importArchive (legacy)', () => {
   })
 })
 
-describe('Unified SSH helpers', () => {
-  beforeEach(() => {
-    server.use(
-      http.post('/api/unified/connect', () => HttpResponse.json({ ok: true, session_id: 's1' })),
-      http.post('/api/unified/disconnect', () => HttpResponse.json({ ok: true })),
-      http.get('/api/unified/status', () => HttpResponse.json({ connected: false })),
-      http.post('/api/unified/configure_mode', () => HttpResponse.json({ ok: true })),
-      http.post('/api/unified/deactivate_mode', () => HttpResponse.json({ ok: true })),
-      http.get('/api/unified/listdir', () => HttpResponse.json({ items: [], current_path: '/', ok: true })),
-    )
-  })
-
-  it('unifiedConnect', async () => {
-    const data = await unifiedConnect({ host: 'h', username: 'u' })
-    expect(data.ok).toBe(true)
-  })
-
-  it('unifiedDisconnect', async () => {
-    const data = await unifiedDisconnect()
-    expect(data.ok).toBe(true)
-  })
-
-  it('unifiedStatus', async () => {
-    const data = await unifiedStatus()
-    expect(data.connected).toBe(false)
-  })
-
-  it('unifiedConfigureMode', async () => {
-    const data = await unifiedConfigureMode({ mode: 'smart' })
-    expect(data.ok).toBe(true)
-  })
-
-  it('unifiedDeactivateMode', async () => {
-    const data = await unifiedDeactivateMode('mirror')
-    expect(data.ok).toBe(true)
-  })
-
-  it('unifiedListdir', async () => {
-    const data = await unifiedListdir('/home')
-    expect(data.ok).toBe(true)
-  })
-
-  it('unifiedListdir without path', async () => {
-    const data = await unifiedListdir()
-    expect(data.ok).toBe(true)
-  })
-})
-
-describe('SSH live sync helpers', () => {
-  beforeEach(() => {
-    server.use(
-      http.post('/api/ssh/connect', () => HttpResponse.json({ ok: true, session_id: 's1' })),
-      http.get('/api/ssh/sessions', () => HttpResponse.json({ sessions: [] })),
-      http.post('/api/ssh/close', () => HttpResponse.json({ ok: true })),
-      http.get('/api/ssh/listdir', () => HttpResponse.json({ items: [] })),
-      http.post('/api/ssh/mirror/start', () => HttpResponse.json({ ok: true, task: {} })),
-      http.post('/api/ssh/mirror/stop', () => HttpResponse.json({ ok: true })),
-      http.get('/api/ssh/mirror/list', () => HttpResponse.json({ mirrors: [], storage: '/tmp' })),
-    )
-  })
-
-  it('sshConnect', async () => {
-    const data = await sshConnect({ host: 'h', username: 'u' })
-    expect(data.ok).toBe(true)
-  })
-
-  it('sshSessions', async () => {
-    const data = await sshSessions()
-    expect(data.sessions).toEqual([])
-  })
-
-  it('sshClose', async () => {
-    const data = await sshClose('s1')
-    expect(data.ok).toBe(true)
-  })
-
-  it('sshListdir', async () => {
-    const data = await sshListdir('s1', '/home')
-    expect(data.items).toEqual([])
-  })
-
-  it('sshMirrorStart', async () => {
-    const data = await sshMirrorStart({ session_id: 's1', remote_root: '/data' })
-    expect(data.ok).toBe(true)
-  })
-
-  it('sshMirrorStop', async () => {
-    const data = await sshMirrorStop('t1')
-    expect(data.ok).toBe(true)
-  })
-
-  it('sshMirrorList', async () => {
-    const data = await sshMirrorList()
-    expect(data.mirrors).toEqual([])
-  })
-})

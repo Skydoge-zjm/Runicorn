@@ -1,0 +1,60 @@
+name: Desktop Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-build.yml"
+      - "desktop/tauri/**"
+      - "src/runicorn/**"
+      - "web/frontend/**"
+      - "pyproject.toml"
+  push:
+    branches:
+      - main
+    tags:
+      - "desktop-v*"
+    paths:
+      - ".github/workflows/desktop-build.yml"
+      - "desktop/tauri/**"
+      - "src/runicorn/**"
+      - "web/frontend/**"
+      - "pyproject.toml"
+
+jobs:
+  desktop-build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Frontend Dependencies
+        working-directory: web/frontend
+        run: npm ci
+
+      - name: Build Frontend
+        working-directory: web/frontend
+        run: npm run build
+
+      - name: Build Sidecar
+        run: .\desktop\tauri\sidecar\build_sidecar.ps1
+
+      - name: Cargo Check
+        working-directory: desktop/tauri/src-tauri
+        run: cargo check

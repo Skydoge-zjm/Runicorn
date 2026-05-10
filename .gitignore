@@ -49,6 +49,7 @@ web/frontend/*.tsbuildinfo
 .idea/
 .vscode/
 .claude/
+.codex/
 .cursor/
 .windsurf/
 .kiro/
@@ -74,6 +75,7 @@ desktop/tauri/src-tauri/target/debug/
 # --- Sidecar outputs ---
 desktop/tauri/sidecar/build/
 desktop/tauri/sidecar/dist/
+desktop/tauri/build_config.local.json
 
 # --- Local run data (legacy) ---
 .runicorn/

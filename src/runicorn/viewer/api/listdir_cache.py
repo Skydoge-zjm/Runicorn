@@ -326,7 +326,6 @@ async def rate_limited_listdir(
         Exception: If rate limited or listdir fails
     """
     import asyncio
-    from concurrent.futures import ThreadPoolExecutor
     
     if rate_limiter is None:
         rate_limiter = get_global_rate_limiter()

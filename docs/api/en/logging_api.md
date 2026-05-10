@@ -4,8 +4,8 @@
 
 # Enhanced Logging API Reference
 
-> **Version**: v0.6.0  
-> **Last Updated**: 2025-01-XX  
+> **Version**: v0.7.1
+> **Last Updated**: 2026-03-28
 > **Module**: `runicorn.console`, `runicorn.log_compat`
 
 ---
@@ -24,7 +24,7 @@
 
 ## Overview
 
-Runicorn v0.6.0 introduces an enhanced logging system that provides:
+Runicorn includes an enhanced logging system that provides:
 
 - **Console Capture**: Automatically capture `stdout`/`stderr` to log files
 - **Python Logging Integration**: Standard `logging.Handler` for seamless integration
@@ -220,7 +220,7 @@ metric_logger = MetricLogger(delimiter="  ")
 for epoch in range(10):
     for batch in metric_logger.log_every(dataloader, print_freq=10, header=f"Epoch {epoch}"):
         loss = model(batch)
-        
+
         # Metrics automatically logged to Runicorn
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]['lr'])
 
@@ -363,11 +363,11 @@ for epoch in range(100):
     for batch in metric_logger.log_every(train_loader, 50, header=f"Epoch {epoch}"):
         loss = train_step(batch)
         metric_logger.update(loss=loss)
-    
+
     # Validation
     val_loss, val_acc = validate(model, val_loader)
     logger.info(f"Epoch {epoch}: val_loss={val_loss:.4f}, val_acc={val_acc:.4f}")
-    
+
     # Log to Runicorn metrics
     run.log({"val_loss": val_loss, "val_acc": val_acc}, step=epoch)
 
@@ -475,8 +475,8 @@ run = runicorn.init(path="exp", capture_console=True, tqdm_mode="none")
 
 ---
 
-**Author**: Runicorn Development Team  
-**Version**: v0.6.0  
-**Last Updated**: 2025-01-XX
+**Author**: Runicorn Development Team
+**Version**: v0.7.1
+**Last Updated**: 2026-03-28
 
 **[Back to API Index](API_INDEX.md)**

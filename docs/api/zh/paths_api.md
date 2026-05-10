@@ -4,8 +4,8 @@
 
 # 路径层级 API
 
-**版本**: v0.6.0  
-**路由文件**: `projects.py`（导出为 `projects_router`）  
+**版本**: v0.7.1
+**路由文件**: `projects.py`（导出为 `projects_router`）
 **前缀**: `/api`
 
 灵活的基于路径的实验组织，支持树形导航、批量操作和导出。

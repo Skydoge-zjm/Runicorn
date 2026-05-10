@@ -10,6 +10,7 @@ from runicorn.security.path_validation import (
     create_safe_directory,
     sanitize_filename,
     validate_path,
+    validate_resolved_path_against_roots,
 )
 
 
@@ -90,6 +91,43 @@ class TestValidatePathSymlink:
 
         ok, resolved, err = validate_path("link/file.txt", tmp_path, allow_symlinks=True)
         assert ok is True
+
+
+class TestValidateResolvedPathAgainstRoots:
+    """validate_resolved_path_against_roots — resolved paths must stay within allowed roots."""
+
+    def test_allows_exact_file_match(self, tmp_path: Path):
+        target = tmp_path / "archive" / "outputs" / "file.txt"
+        target.parent.mkdir(parents=True)
+        target.write_text("ok", encoding="utf-8")
+
+        ok, err = validate_resolved_path_against_roots(target, [target])
+
+        assert ok is True
+        assert err is None
+
+    def test_allows_descendant_of_directory_root(self, tmp_path: Path):
+        root = tmp_path / "runs" / "exp"
+        root.mkdir(parents=True)
+        target = root / "media" / "plot.png"
+        target.parent.mkdir(parents=True)
+        target.write_text("ok", encoding="utf-8")
+
+        ok, err = validate_resolved_path_against_roots(target, [root])
+
+        assert ok is True
+        assert err is None
+
+    def test_rejects_path_outside_allowed_roots(self, tmp_path: Path):
+        allowed = tmp_path / "runs" / "exp"
+        allowed.mkdir(parents=True)
+        target = tmp_path / "runicorn.db"
+        target.write_text("db", encoding="utf-8")
+
+        ok, err = validate_resolved_path_against_roots(target, [allowed])
+
+        assert ok is False
+        assert err is not None
 
 
 # ---------------------------------------------------------------------------

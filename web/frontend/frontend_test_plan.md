@@ -1,7 +1,7 @@
 # Runicorn 前端测试体系建设方案
 ## 1. 现状分析
 **源码规模**: ~85 个源文件，分布在 utils(5)、hooks(8)、api(3)、components(~40)、pages(6)、contexts(2)、types(1)、locales(6)、styles(3)
-**现有测试**: 零。无测试框架、无测试文件、无 CI 测试脚本。
+**现有测试**: 已有 Vitest 单测/组件测试/页面集成测试，以及 `web/frontend/tests/smoke/` 下的 Playwright mocked browser smoke。
 **构建工具**: Vite 5 + TypeScript 5 + React 18，ESModule 模式。
 **依赖特征**: 重度依赖 Ant Design（UI）、ECharts（图表）、React Query（数据请求）、react-router-dom（路由）、i18next（国际化）、framer-motion（动画）、CodeMirror 6（代码编辑器）。
 ## 2. 测试框架选型
@@ -11,7 +11,7 @@
 **HTTP Mock**: msw (Mock Service Worker)（拦截 fetch 级别，不侵入 api.ts 代码）
 **覆盖率**: @vitest/coverage-v8（基于 V8 引擎，无需 istanbul 转换）
 **快照测试**: Vitest 内置
-**E2E（后续）**: Playwright（本阶段不实施，仅在计划中留出位置）
+**浏览器级 smoke**: Playwright（已落地为 mocked browser smoke，用于验证关键 UI 主流程；不等同于真实后端联调 E2E）
 ### 需要安装的依赖
 ```warp-runnable-command
 devDependencies:
@@ -333,7 +333,7 @@ web/frontend/
 ### 阶段二（后续迭代）
 * 组件覆盖扩展到所有非图表组件
 * 全局行覆盖率 ≥ 60%
-* 引入 Playwright E2E 覆盖核心用户流程
+* 在现有 mocked browser smoke 之外，再视需要补真实后端联调或更高层 E2E
 ## 8. 实施顺序
 **Step 1**: 基础设施搭建
 * 安装依赖
@@ -349,7 +349,7 @@ web/frontend/
 **Step 7**: 覆盖率报告审查，补充遗漏分支
 ## 9. CI 集成建议（参考）
 ```yaml
-# .github/workflows/frontend-test.yml
+# .github/workflows/ci.yml
 steps:
   - uses: actions/setup-node@v4
   - run: npm ci
@@ -358,8 +358,17 @@ steps:
     working-directory: web/frontend
   - run: npm run test:coverage
     working-directory: web/frontend
+  - run: npx playwright install --with-deps chromium
+    working-directory: web/frontend
+  - run: npm run test:smoke
+    working-directory: web/frontend
 ```
-设置 coverage 阈值检查，低于目标阈值时 CI 失败。
+说明：
+
+* `vitest` 负责单元、组件和页面集成测试。
+* `test:smoke` 是 mocked browser smoke，覆盖浏览器中的关键 UI 主流程。
+* `test:smoke` 依赖 Playwright + 本地 Vite dev server，但 API 仍由 mock 驱动，不代表真实 remote backend 端到端联调。
+* 设置 coverage 阈值时，应针对 `vitest` 报告，不要把 smoke 结果误解为更高层交付证明。
 ## 10. 测试编写规范
 **命名**: `describe('函数名/组件名', () => { it('should 行为描述', ...) })`
 **结构**: Arrange → Act → Assert，避免在一个 test 中验证多个不相关行为
@@ -368,17 +377,17 @@ steps:
 **Mock 最小化**: 只 mock 必要的外部依赖，不 mock 被测模块内部函数
 **不测实现细节**: Hook 测试验证返回值和副作用，不验证内部 state 变化。组件测试验证用户可见行为，不验证 DOM 结构
 ## 11. 实施进度与当前状态
-> 最后更新: 2026-02-26 — 阶段三完成
+> 最后更新: 2026-05-09 — smoke/CI 边界说明与当前状态校对完成
 
 ### 测试规模
 | 指标 | 阶段一 | 阶段二 | 阶段三（当前） |
 |------|--------|--------|----------------|
-| 测试文件 | 20 | 23 | **26** |
-| 测试用例 | 252 | 377 | **423** |
+| 测试文件 | 20 | 23 | **27** |
+| 测试用例 | 252 | 377 | **414** |
 | 运行耗时 | ~50s | ~60s | **~85s** |
 | 分支 | `test/frontend-tests` | 同左 | 同左 |
 
-### 测试文件清单（26 个）
+### 测试文件清单（27 个）
 **基础设施** (2):
 - `src/__tests__/setup.ts` — 全局 mock（matchMedia, ResizeObserver, IntersectionObserver, localStorage, URL, WebSocket）
 - `src/__mocks__/handlers.ts` + `server.ts` — msw 服务器和默认 API handlers
@@ -398,8 +407,15 @@ steps:
 **集成测试** (3):
 - `ExperimentPage.test.tsx` (3), `RunDetailPage.test.tsx` (15), `AssetsPage.test.tsx` (14)
 
-**其他** (2):
-- `i18n.test.ts` (4), `AddTagModal.test.tsx` (17)
+**其他** (3):
+- `i18n.test.ts` (4), `AddTagModal.test.tsx` (17), `RemoteViewerPage.test.tsx` (1)
+
+### 当前 CI / 交付面边界
+- `.github/workflows/ci.yml` 中的 frontend smoke job 运行 `npm run test:smoke`，覆盖 `web/frontend/tests/smoke/viewer.spec.ts` 与 `web/frontend/tests/smoke/remote.spec.ts` 这两条 mocked browser smoke。
+- 同一个 CI workflow 中的 Python job 继续运行默认 `pytest -q`，当前关键交付面 integration 用例至少包括：
+  - `tests/integration/test_viewer_remote_api.py`：当前 `/api/remote/*` 主路径、已保存连接和 remote viewer 启动链
+  - `tests/integration/test_config_migration.py`：历史 XOR 凭据向 Fernet `connections.json` 的迁移边界
+- 这些 Python integration 用例当前并未拆成独立 workflow/job，而是作为默认 pytest 集的一部分提供回归保护。
 
 ### 覆盖率达标情况
 | 区域 | 目标 | 实际 | 状态 |
@@ -427,4 +443,4 @@ steps:
 ### 剩余可做工作（优先级从高到低）
 1. **P1** DismissedAlertsManager 组件测试（小范围，~5 个用例）
 2. **P2** useRemoteSessions / useSavedConnections hooks 测试（等 Remote 功能迭代时顺带）
-3. **不推荐** 追求全局覆盖率数字、Playwright E2E（见 §11 后续迭代方向详细分析）
+3. **不推荐** 把 mocked smoke 继续膨胀成全量 E2E，也不推荐为覆盖率数字而牺牲测试可维护性

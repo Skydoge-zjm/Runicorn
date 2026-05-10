@@ -4,9 +4,9 @@
 
 # Complete API Index
 
-**Version**: v0.6.0  
-**Total Endpoints**: 35+ REST + Python Client  
-**Last Updated**: 2026-01-15
+**Version**: v0.7.1
+**Total Endpoints**: REST API + Python Client
+**Last Updated**: 2026-05-10
 
 ---
 
@@ -24,11 +24,11 @@
 
 **Quick Example**:
 ```python
-import runicorn.api as api
+import runicorn.client as client_mod
 
-with api.connect() as client:
-    experiments = client.list_experiments(project="vision")
-    metrics = client.get_metrics(experiments[0]["id"])
+with client_mod.connect() as client:
+    runs = client.list_runs_by_path(path="vision")
+    metrics = client.get_metrics(runs[0]["id"])
 ```
 
 ---
@@ -68,7 +68,8 @@ with api.connect() as client:
 
 ### Remote Viewer API (Remote Access) 🆕
 
-**v0.5.4**: VSCode Remote-style remote server access
+**Current entry point**: [remote_api.md](./remote_api.md)  
+**Historical note**: [ssh_api.md](./ssh_api.md)
 
 #### Connection Management
 
@@ -79,12 +80,24 @@ with api.connect() as client:
 | POST | `/api/remote/disconnect` | Disconnect session | [📖](./remote_api.md#post-apiremotedisconnect) |
 | GET | `/api/remote/status` | Remote status | [📖](./remote_api.md#get-apiremotestatus) |
 
+#### Host key and saved connections
+
+| Method | Endpoint | Description | Docs |
+|--------|----------|-------------|------|
+| POST | `/api/remote/known-hosts/accept` | Accept host key | [📖](./remote_api.md) |
+| GET | `/api/remote/known-hosts/list` | List known_hosts entries | [📖](./remote_api.md) |
+| POST | `/api/remote/known-hosts/remove` | Remove known_hosts entry | [📖](./remote_api.md) |
+| GET | `/api/remote/connections/saved` | Load masked saved connections | [📖](./remote_api.md) |
+| POST | `/api/remote/connections/saved` | Save the connection list | [📖](./remote_api.md) |
+
 #### Environment Detection
 
 | Method | Endpoint | Description | Docs |
 |--------|----------|-------------|------|
 | GET | `/api/remote/conda-envs` | List Python environments | [📖](./remote_api.md#get-apiremoteconda-envs) |
+| GET | `/api/remote/env-configs` | Batch-read environment version summaries | [📖](./remote_api.md) |
 | GET | `/api/remote/config` | Get remote config | [📖](./remote_api.md#get-apiremoteconfig) |
+| GET | `/api/remote/storage-candidates` | Detect candidate remote storage roots | [📖](./remote_api.md) |
 
 #### Remote Viewer Management
 
@@ -95,9 +108,9 @@ with api.connect() as client:
 | GET | `/api/remote/viewer/sessions` | List Viewer sessions | [📖](./remote_api.md#get-apiremoteviewersessions) |
 | GET | `/api/remote/viewer/status/{session_id}` | Get Viewer status by session_id | [📖](./remote_api.md#get-apiremoteviewerstatussession_id) |
 
-### Enhanced Logging API 🆕 (v0.6.0)
+### Enhanced Logging API (introduced in v0.6.0)
 
-**New**: Console capture and Python logging integration
+**Current scope**: Console capture and Python logging integration
 
 | Component | Description | Docs |
 |-----------|-------------|------|
@@ -106,9 +119,9 @@ with api.connect() as client:
 | `get_logging_handler()` | Python logging.Handler integration | [📖](./logging_api.md#logging-handler) |
 | `MetricLogger` | torchvision-compatible metric logger | [📖](./logging_api.md#metriclogger-compatibility) |
 
-### Path Hierarchy API 🆕 (v0.6.0)
+### Path Hierarchy API (introduced in v0.6.0)
 
-**New**: Flexible path-based experiment organization
+**Current scope**: Flexible path-based experiment organization
 
 | Method | Endpoint | Description | Docs |
 |--------|----------|-------------|------|
@@ -188,7 +201,8 @@ GET /api/runs
 GET /api/projects/{project}/names/{name}/runs
 
 # 3. Export data
-GET /api/export?format=json
+POST /api/runs/export
+GET /api/paths/export?path={path}&format=json
 ```
 
 ---
@@ -243,10 +257,10 @@ X-RateLimit-Reset: 15
 ### SSH Security
 
 - Never log credentials
-- Use SSH keys > passwords
-- Use SSH agent when possible
-- Connections are not persisted
-- Max 5 connection attempts per minute
+- Prefer SSH keys or SSH agent
+- Host-key validation failures return `409` and require explicit confirmation
+- The active remote route family is `/api/remote/*`
+- `/api/unified/*` and `/api/ssh/*` remain only as historical context
 
 ---
 
@@ -302,7 +316,7 @@ http --pretty=all GET http://127.0.0.1:23300/api/config
 import runicorn as rn
 
 # Create experiment
-run = rn.init(project="demo", name="exp1")
+run = rn.init(path="demo/exp1")
 
 # Log metrics
 run.log({"loss": 0.1, "accuracy": 0.95}, step=100)
@@ -345,8 +359,16 @@ See main [README.md](../../README.md) for full SDK documentation.
 
 ## 📝 API Changelog
 
-### v0.6.0 (Current) 🚀
-**Major New Features**
+### v0.7.1 (Current) 🚀
+**Current Release Highlights**
+- ✅ **Remote Viewer hardening**: saved connections, health monitoring, reconnect states, and OpenSSH password support
+- ✅ **Web UI productization**: cleaner navigation, ZIP import/export preview, unified recycle bin, and improved compare flow
+- ✅ **Logs & monitoring**: virtualized logs, stronger dark-mode consistency, and backend-collected GPU telemetry history
+- ✅ **Logging compatibility**: better support for ImageNet meters, TensorBoard, and tensorboardX
+- ✅ **Desktop workflow improvements**: native remote-session handling in the current desktop flow
+
+### v0.6.0
+**Major Foundations**
 - ✅ **Enhanced Logging API**: Console capture, Python logging handler, MetricLogger compatibility
 - ✅ **Assets System**: SHA256 content-addressed workspace snapshots with deduplication
 - ✅ **Path Hierarchy API**: Flexible path-based experiment organization with tree navigation
@@ -374,7 +396,7 @@ See main [README.md](../../README.md) for full SDK documentation.
 - ✅ Bug fixes for chart rendering
 
 ### v0.5.0
-- ✅ **Added Remote Viewer API** (12 endpoints)
+- ✅ **Added Remote Viewer API** (now evolved into the `/api/remote/*` route family)
 - ✅ Deprecated old SSH file sync API
 - ✅ SSH key and password authentication support
 - ✅ Automatic Python environment detection
@@ -391,9 +413,8 @@ See main [README.md](../../README.md) for full SDK documentation.
 - Metrics query
 - SSH mirror support
 
-### Future Versions
+### Possible Future Directions (Not Committed)
 
-**v0.7.0** (Planned):
 - Windows remote server support
 - GraphQL API support
 - Webhook notifications

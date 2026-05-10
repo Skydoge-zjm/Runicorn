@@ -1,10 +1,10 @@
 [CmdletBinding()]
 param(
-  [string]$PythonExe = "python",
+  [string]$PythonExe = "",
   [ValidateSet("nsis","msi")]
-  [string]$Bundles = "nsis",
+  [string]$Bundles = "",
   [switch]$SkipFrontend,
-  [switch]$Verbose
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,7 +14,7 @@ function Step($m) { Write-Host "==> $m" -ForegroundColor Cyan }
 function Ok($m)   { Write-Host "OK: $m" -ForegroundColor Green }
 function Warn($m) { Write-Warning $m }
 function RunCmd([string]$cmd, [string]$cwd) {
-  if ($Verbose) { Write-Host "[RUN] $cmd" -ForegroundColor DarkGray }
+  if ($PSBoundParameters.ContainsKey('Verbose')) { Write-Host "[RUN] $cmd" -ForegroundColor DarkGray }
   if ($cwd) { Push-Location $cwd }
   try {
     & powershell -NoLogo -NoProfile -Command $cmd
@@ -28,6 +28,14 @@ function RunCmd([string]$cmd, [string]$cwd) {
 
 # Paths
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $ScriptDir "build_config.ps1")
+$buildConfig = Get-RunicornBuildConfig $ScriptDir
+Show-RunicornBuildConfig "Effective desktop build config" $buildConfig
+$proxyBackup = Push-RunicornProxyEnv $buildConfig["common"]
+$EffectivePythonExe = if ($PythonExe) { $PythonExe } else { [string]$buildConfig["common"]["pythonExe"] }
+$EffectiveBundles = if ($Bundles) { $Bundles } else { [string]$buildConfig["release"]["bundles"] }
+$SkipFrontendBuild = $SkipFrontend.IsPresent -or [bool]$buildConfig["release"]["skipFrontend"]
+try {
 $RepoRoot    = Resolve-Path (Join-Path $ScriptDir "../..")
 $SrcTauriDir = Resolve-Path (Join-Path $ScriptDir "src-tauri")
 $SidecarDir  = Resolve-Path (Join-Path $ScriptDir "sidecar")
@@ -38,13 +46,28 @@ Step "src-tauri: $SrcTauriDir"
 Step "sidecar: $SidecarDir"
 Step "frontend: $FrontendDir"
 
+if ($DryRun) {
+  Write-RunicornDryRun ("PythonExe = {0}" -f $EffectivePythonExe)
+  Write-RunicornDryRun ("Bundles = {0}" -f $EffectiveBundles)
+  Write-RunicornDryRun ("SkipFrontendBuild = {0}" -f $SkipFrontendBuild)
+  Write-RunicornDryRun "Would terminate leftover desktop/sidecar processes"
+  if (-not $SkipFrontendBuild) {
+    Write-RunicornDryRun "Would run npm run build in web/frontend"
+  } else {
+    Write-RunicornDryRun "Would skip frontend build"
+  }
+  Write-RunicornDryRun ("Would invoke desktop/tauri/sidecar/build_sidecar.ps1 -PythonExe `"{0}`"" -f $EffectivePythonExe)
+  Write-RunicornDryRun ("Would run cargo tauri build --bundles {0} in desktop/tauri/src-tauri" -f $EffectiveBundles)
+  return
+}
+
 # Kill leftover processes
 Step "Terminate leftover processes"
 try { taskkill /F /IM runicorn-viewer*.exe 2>$null | Out-Null } catch {}
 try { taskkill /F /IM runicorn-desktop*.exe 2>$null | Out-Null } catch {}
 
 # Frontend build
-if (-not $SkipFrontend.IsPresent) {
+if (-not $SkipFrontendBuild) {
   Step "Frontend build (npm run build)"
   RunCmd "npm run build" $FrontendDir
 } else {
@@ -59,7 +82,7 @@ Step "Build sidecar (PyInstaller onefile)"
 $SidecarScript = Join-Path $SidecarDir "build_sidecar.ps1"
 if (-not (Test-Path $SidecarScript)) { throw "Sidecar script not found: $SidecarScript" }
 Push-Location $RepoRoot
-& $SidecarScript -PythonExe $PythonExe -UseLocal
+& $SidecarScript -PythonExe $EffectivePythonExe
 Pop-Location
 
 # Validate sidecar output
@@ -96,12 +119,12 @@ Ok "Icon: $IconIco"
 $env:RUNICORN_FRONTEND_DIST = (Resolve-Path $FrontendDist)
 
 # Build installer
-Step "Cargo tauri build ($Bundles)"
-RunCmd "cargo tauri build --bundles $Bundles" $SrcTauriDir
+Step "Cargo tauri build ($EffectiveBundles)"
+RunCmd "cargo tauri build --bundles $EffectiveBundles" $SrcTauriDir
 
 # Print output path
 $BundleDir = Join-Path $SrcTauriDir "target/release/bundle"
-if ($Bundles -eq 'nsis') {
+if ($EffectiveBundles -eq 'nsis') {
   $Installer = Get-ChildItem -Path (Join-Path $BundleDir 'nsis') -Filter '*_x64-setup.exe' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
   if ($Installer) { Ok ("Installer: " + $Installer.FullName) } else { Warn ("NSIS installer not found under " + (Join-Path $BundleDir 'nsis')) }
 } else {
@@ -110,3 +133,6 @@ if ($Bundles -eq 'nsis') {
 }
 
 Write-Host "Done." -ForegroundColor Green
+} finally {
+  Pop-RunicornProxyEnv $proxyBackup
+}

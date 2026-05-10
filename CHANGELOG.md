@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2026-05-10
+
+### Reliability & API Alignment
+
+- **FIXED**: Metrics identity handling so rapid writes of the same metric no longer risk overwriting earlier points under the legacy schema path
+- **IMPROVED**: Remote API and legacy path handling cleaned up to match the current unified Remote Viewer surface more closely
+- **IMPROVED**: Documentation updated to reflect the actual current remote session model, API routes, and desktop build flow
+
+### Security & Compatibility
+
+- **IMPROVED**: Legacy XOR credential migration boundary tightened to reduce accidental fallback risk while preserving compatibility reads
+- **IMPROVED**: Saved-credential and remote-connection behavior clarified and hardened around current security expectations
+
+### Test, CI, and Build Hardening
+
+- **IMPROVED**: Frontend test scaffolding and smoke coverage expanded for current loading, baseline, and remote workflows
+- **IMPROVED**: CI surface extended with layered desktop build configuration and stronger validation of the sidecar packaging path
+- **IMPROVED**: Desktop packaging workflow made more reproducible, with clearer build controls and bilingual build documentation
+
 ## [0.7.0] - 2026-03-15
 
 ### Remote Viewer & SSH

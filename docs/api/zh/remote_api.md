@@ -1,174 +1,75 @@
-# Remote Viewer API 参考文档
-
-> **版本**: v0.6.0  
-> **最后更新**: 2025-01-XX  
-> **Base URL**: `http://127.0.0.1:23300`
-
 [English](../en/remote_api.md) | [简体中文](remote_api.md)
 
 ---
 
-## 📖 目录
+# Remote Viewer API 参考文档
 
-- [概述](#概述)
-- [SSH 后端架构](#ssh-后端架构)
-- [Host Key 校验（HTTP 409）](#host-key-校验http-409)
-- [认证](#认证)
-- [连接管理](#连接管理)
-- [Known Hosts 管理](#known-hosts-管理)
-- [环境与配置](#环境与配置)
-- [Remote Viewer 管理](#remote-viewer-管理)
-- [远程文件系统](#远程文件系统)
-- [状态](#状态)
-- [已保存连接](#已保存连接)
-- [错误处理](#错误处理)
-
----
+> **版本**: v0.7.1  
+> **最后更新**: 2026-05-10  
+> **Base URL**: `http://127.0.0.1:23300`
 
 ## 概述
 
-Remote Viewer API 提供了通过 SSH 连接远程服务器并启动 Remote Viewer 的完整功能。采用 RESTful 设计，支持 JSON 格式的请求和响应。
+当前有效的远程接口统一位于 `/api/remote/*`。本文档只记录已在下列实现中核实过的接口：
 
-### 主要特性
+- `src/runicorn/viewer/api/remote/__init__.py`
+- `src/runicorn/viewer/api/remote/connections.py`
+- `src/runicorn/viewer/api/remote/sessions.py`
+- `src/runicorn/viewer/api/remote/viewer_routes.py`
+- `src/runicorn/viewer/api/remote/known_hosts.py`
+- `src/runicorn/viewer/api/remote/saved_connections.py`
 
-- 🔌 **SSH 连接管理**: 支持密钥和密码认证
-- 🐍 **环境自动检测**: 识别 Conda、Virtualenv 等 Python 环境
-- 🚀 **Viewer 生命周期**: 启动、监控、停止远程 Viewer
-- 💓 **健康监控**: 实时连接和 Viewer 状态检查
-- 🔒 **安全**: 所有通信通过 SSH 加密
-- 🔄 **多后端架构**: 自动回退链以获得最大兼容性 (v0.6.0)
+旧的 `/api/unified/*` 与 `/api/ssh/*` 不再是当前接口表面，请改看 [ssh_api.md](./ssh_api.md) 中的历史说明。
 
-### 工作流程
+## 当前接口总览
 
-```
-1. POST /api/remote/connect               # 建立 SSH 连接
-2. （可选）GET /api/remote/conda-envs     # 列出远端环境供 UI 选择
-3. POST /api/remote/viewer/start          # 启动 Remote Viewer + 建立 SSH 隧道
-4. GET /api/remote/viewer/status/{id}     # 查询某个会话状态
-5. POST /api/remote/disconnect            # 断开 SSH 连接
-```
+### 连接与会话
 
----
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/api/remote/connect` | 建立 SSH 连接 |
+| `GET` | `/api/remote/sessions` | 列出连接池中的活动连接 |
+| `POST` | `/api/remote/disconnect` | 移除指定连接 |
+| `GET` | `/api/remote/status` | 汇总连接与 viewer session 状态 |
 
-## SSH 后端架构
+### 环境与运行时探测
 
-> **v0.6.0 新增**: 多后端回退架构，提升兼容性和稳定性。
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/remote/conda-envs` | 列出远端 Python/Conda 环境 |
+| `GET` | `/api/remote/env-configs` | 批量读取环境的 Python / Runicorn 版本 |
+| `GET` | `/api/remote/config` | 读取指定环境的运行时建议配置 |
+| `GET` | `/api/remote/storage-candidates` | 探测远端存储候选目录 |
 
-### 设计概述
+### Host Key 管理
 
-Runicorn v0.6.0 引入了新的 SSH 后端架构，将**连接**和**隧道**关注点分离：
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/api/remote/known-hosts/accept` | 接受并写入 host key |
+| `GET` | `/api/remote/known-hosts/list` | 列出 Runicorn 管理的 `known_hosts` 条目 |
+| `POST` | `/api/remote/known-hosts/remove` | 删除指定 host key 条目 |
 
-| 层 | 实现 | 描述 |
-|---|------|------|
-| **连接** | Paramiko（始终） | SSH 连接、命令执行、SFTP |
-| **隧道** | AutoBackend | 本地端口转发，带回退链 |
+### Remote Viewer
 
-### AutoBackend 回退链
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `POST` | `/api/remote/viewer/start` | 启动远程 Viewer 并建立隧道 |
+| `POST` | `/api/remote/viewer/stop` | 停止指定 viewer session |
+| `GET` | `/api/remote/viewer/sessions` | 列出所有 viewer session |
+| `GET` | `/api/remote/viewer/status/{session_id}` | 获取单个 viewer session 状态 |
 
-`AutoBackend` 类自动选择最佳可用的隧道实现：
+### 已保存连接
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     AutoBackend                              │
-├─────────────────────────────────────────────────────────────┤
-│  1. OpenSSH 隧道（首选）                                     │
-│     └─ 使用系统 OpenSSH 客户端（ssh 命令）                   │
-│     └─ 要求: PATH 中有 ssh + ssh-keyscan                    │
-│     └─ 不支持密码认证                                        │
-│                                                              │
-│  2. AsyncSSH 隧道（回退）                                    │
-│     └─ 纯 Python 异步实现                                    │
-│     └─ 要求: asyncssh 包                                     │
-│     └─ 支持所有认证方式                                      │
-│                                                              │
-│  3. Paramiko 隧道（最终回退）                                │
-│     └─ 纯 Python 同步实现                                    │
-│     └─ 始终可用                                              │
-│     └─ 支持所有认证方式                                      │
-└─────────────────────────────────────────────────────────────┘
-```
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/remote/connections/saved` | 读取脱敏后的已保存连接 |
+| `POST` | `/api/remote/connections/saved` | 保存连接配置列表 |
 
-### 后端选择逻辑
+## SSH 后端与 host key 协议
 
-```python
-# 后端选择伪代码
-def create_tunnel(connection, local_port, remote_port):
-    # 首先尝试 OpenSSH（最佳性能，原生集成）
-    try:
-        return OpenSSHTunnel(...)
-    except (SSHNotFound, PasswordAuthRequired, HostKeyError):
-        pass  # 继续（HostKeyError 除外，会重新抛出）
-    
-    # 其次尝试 AsyncSSH（异步，性能良好）
-    try:
-        return AsyncSSHTunnel(...)
-    except (AsyncSSHNotAvailable, HostKeyError):
-        pass  # 继续（HostKeyError 除外，会重新抛出）
-    
-    # 最终回退到 Paramiko（始终可用）
-    return ParamikoTunnel(...)
-```
+Remote Viewer 的 SSH 隧道不是单一路径实现。当前代码会优先尝试 OpenSSH，随后回退到 AsyncSSH，再回退到 Paramiko。Host key 校验失败时，`connect` 与 `viewer/start` 都会返回统一的 `409 Conflict` 协议。
 
-### OpenSSH 后端详情
-
-当可用时，OpenSSH 提供最佳性能和原生操作系统集成：
-
-**要求**:
-- PATH 中有 `ssh` 命令（或通过 `RUNICORN_SSH_PATH` 设置）
-- PATH 中有 `ssh-keyscan` 命令（用于获取主机密钥）
-- SSH 密钥认证（不支持密码认证）
-
-**特性**:
-- 使用 `BatchMode=yes` 进行非交互操作
-- `ExitOnForwardFailure=yes` 确保可靠的隧道建立
-- `StrictHostKeyChecking=yes` 配合 Runicorn 管理的 known_hosts
-- `ServerAliveInterval=30` 保持连接活跃
-
-**命令示例**:
-```bash
-ssh -N -L 127.0.0.1:8080:localhost:23300 \
-    -p 22 \
-    -o ExitOnForwardFailure=yes \
-    -o BatchMode=yes \
-    -o StrictHostKeyChecking=yes \
-    -o UserKnownHostsFile=/path/to/runicorn/known_hosts \
-    -o ServerAliveInterval=30 \
-    -o ServerAliveCountMax=3 \
-    user@remote-server
-```
-
-### 环境变量
-
-| 变量 | 描述 | 默认值 |
-|------|------|--------|
-| `RUNICORN_SSH_PATH` | ssh 可执行文件路径 | 从 PATH 自动检测 |
-
-**示例**:
-```bash
-# 使用特定的 OpenSSH 安装
-export RUNICORN_SSH_PATH="/usr/local/bin/ssh"
-
-# 或在 Windows 上使用 Git Bash
-set RUNICORN_SSH_PATH=C:\Program Files\Git\usr\bin\ssh.exe
-```
-
-### 安全特性
-
-所有后端都强制执行严格的安全措施：
-
-1. **主机密钥验证**: 始终启用，使用 Runicorn 管理的 `known_hosts`
-2. **不自动接受**: 未知主机密钥触发 HTTP 409 以供用户确认
-3. **密钥变更检测**: 当主机密钥与已知值不同时发出警告
-4. **本地绑定**: 隧道仅绑定到 `127.0.0.1`（不暴露到网络）
-
----
-
-## Host Key 校验（HTTP 409）
-
-当 SSH Host Key 校验失败（unknown / changed）时，API 会返回：
-
-- HTTP 状态码：`409 Conflict`
-- 响应体（FastAPI 会包在 `detail` 内）：
+示例：
 
 ```json
 {
@@ -188,389 +89,368 @@ set RUNICORN_SSH_PATH=C:\Program Files\Git\usr\bin\ssh.exe
 }
 ```
 
-当 `reason == "changed"` 时，可能额外包含：
+当 `reason` 为 `changed` 时，payload 还可能包含 `expected_fingerprint_sha256` 和 `expected_public_key`。客户端应先调用 `POST /api/remote/known-hosts/accept`，再重试原请求。
 
-- `expected_fingerprint_sha256`
-- `expected_public_key`
+## 连接接口
 
-客户端应调用 `POST /api/remote/known-hosts/accept` 写入 Runicorn 管理的 `known_hosts`，然后重试原请求。
+### `POST /api/remote/connect`
 
----
+请求体支持两种模式：
 
-## 认证
+1. 直接提供连接字段：
+   - `host`
+   - `port`，默认 `22`
+   - `username`
+   - `password`
+   - `private_key`
+   - `private_key_path`
+   - `passphrase`
+   - `use_agent`
+2. 通过 `saved_server_id` 从已保存服务器条目解析缺省凭据
 
-Remote API 当前不需要额外的认证。所有请求通过本地 Viewer 实例发送。
+若在解析后仍缺少 `host` 或 `username`，接口返回 `400`。
 
-**注意**: SSH 连接本身需要认证（密钥或密码）。
+成功响应：
 
----
-
-## 连接管理
-
-### POST /api/remote/connect
-
-建立到远程服务器的 SSH 连接。
-
-#### 请求
-
-**URL**: `POST /api/remote/connect`
-
-**Headers**:
-```
-Content-Type: application/json
-```
-
-**Body Parameters**:
-
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `host` | string | ✅ | 远程服务器地址（域名或IP） |
-| `port` | integer | ❌ | SSH 端口（默认: 22） |
-| `username` | string | ✅ | SSH 用户名 |
-| `password` | string / null | ❌ | SSH 密码（可选） |
-| `private_key` | string / null | ❌ | 私钥内容（可选） |
-| `private_key_path` | string / null | ❌ | 私钥路径（可选） |
-| `passphrase` | string / null | ❌ | 私钥密码（可选） |
-| `use_agent` | boolean | ❌ | 使用 SSH Agent（默认: true） |
-
-#### 请求示例
-
-**cURL**:
-```bash
-curl -X POST http://localhost:23300/api/remote/connect \
-  -H "Content-Type: application/json" \
-  -d '{
-    "host": "gpu-server.com",
-    "port": 22,
-    "username": "mluser",
-    "password": null,
-    "private_key": null,
-    "private_key_path": "~/.ssh/id_rsa",
-    "passphrase": null,
-    "use_agent": true
-  }'
-```
-
-**Python**:
-```python
-import requests
-
-response = requests.post(
-    "http://localhost:23300/api/remote/connect",
-    json={
-        "host": "gpu-server.com",
-        "port": 22,
-        "username": "mluser",
-        "password": None,
-        "private_key": None,
-        "private_key_path": "~/.ssh/id_rsa",
-        "passphrase": None,
-        "use_agent": True,
-    }
-)
-
-result = response.json()
-connection_id = result["connection_id"]
-```
-
-**JavaScript**:
-```javascript
-const response = await fetch('http://localhost:23300/api/remote/connect', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    host: 'gpu-server.com',
-    port: 22,
-    username: 'mluser',
-    password: null,
-    private_key: null,
-    private_key_path: '~/.ssh/id_rsa',
-    passphrase: null,
-    use_agent: true
-  })
-});
-
-const result = await response.json();
-const connectionId = result.connection_id;
-```
-
-#### 响应
-
-**成功响应** (200 OK):
 ```json
 {
   "ok": true,
-  "connection_id": "mluser@gpu-server.com:22",
-  "host": "gpu-server.com",
+  "connection_id": "user@example.com:22",
+  "host": "example.com",
   "port": 22,
-  "username": "mluser",
+  "username": "user",
   "connected": true
 }
 ```
 
-**错误响应** (500/503/422):
-```json
-{
-  "detail": "Connection failed: <reason>"
-}
-```
+### `GET /api/remote/sessions`
 
-#### 状态码
+返回连接池中的活动连接列表：
 
-| 状态码 | 含义 |
-|--------|------|
-| 409 | Host key 需要用户确认（见上方 409 协议） |
-| 500 | 连接失败（`detail` 为错误信息） |
-| 503 | Remote 模块不可用 |
-| 422 | 参数校验失败（FastAPI / Pydantic） |
-
-#### 注意事项
-
-- 私钥路径支持 `~` 展开
-- 私钥内容应为完整的 PEM 格式
-- 连接建立后会自动保持心跳
-- 同一服务器可以建立多个连接
-
----
-
-### GET /api/remote/sessions
-
-获取所有活动的远程连接列表。
-
-#### 请求
-
-**URL**: `GET /api/remote/sessions`
-
-**Query Parameters**: 无
-
-#### 请求示例
-
-**cURL**:
-```bash
-curl http://localhost:23300/api/remote/sessions
-```
-
-**Python**:
-```python
-import requests
-
-response = requests.get("http://localhost:23300/api/remote/sessions")
-sessions = response.json()["sessions"]
-```
-
-**JavaScript**:
-```javascript
-const response = await fetch('http://localhost:23300/api/remote/sessions');
-const { sessions } = await response.json();
-```
-
-#### 响应
-
-**成功响应** (200 OK):
 ```json
 {
   "sessions": [
     {
-      "key": "mluser@gpu-server.com:22",
-      "host": "gpu-server.com",
+      "key": "user@example.com:22",
+      "host": "example.com",
       "port": 22,
-      "username": "mluser",
+      "username": "user",
       "connected": true
     }
   ]
 }
 ```
 
----
+### `POST /api/remote/disconnect`
 
-### POST /api/remote/disconnect
+请求体：
 
-断开指定的远程连接。
-
-#### 请求
-
-**URL**: `POST /api/remote/disconnect`
-
-**Body Parameters**:
-
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `host` | string | ✅ | 远程主机 |
-| `port` | integer | ❌ | SSH 端口（默认: 22） |
-| `username` | string | ✅ | SSH 用户名 |
-
-#### 请求示例
-
-**cURL**:
-```bash
-curl -X POST http://localhost:23300/api/remote/disconnect \
-  -H "Content-Type: application/json" \
-  -d '{"host": "gpu-server.com", "port": 22, "username": "mluser"}'
-```
-
-**Python**:
-```python
-import requests
-
-response = requests.post(
-    "http://localhost:23300/api/remote/disconnect",
-    json={"host": "gpu-server.com", "port": 22, "username": "mluser"}
-)
-```
-
-#### 响应
-
-**成功响应** (200 OK):
 ```json
 {
-  "ok": true,
-  "message": "Connection removed"
+  "host": "example.com",
+  "port": 22,
+  "username": "user"
 }
 ```
 
----
+成功时返回：
 
-## Known Hosts 管理
+```json
+{"ok": true, "message": "Connection removed"}
+```
 
-### POST /api/remote/known-hosts/accept
+未找到时返回：
 
-接受 host key 并写入 Runicorn 管理的 `known_hosts`。
+```json
+{"ok": false, "message": "Connection not found"}
+```
 
-**URL**: `POST /api/remote/known-hosts/accept`
+### `GET /api/remote/status`
 
-**Body Parameters**:
+返回整体 remote 运行状态：
 
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `host` | string | ✅ | 远程主机 |
-| `port` | integer | ✅ | SSH 端口 |
-| `key_type` | string | ✅ | 公钥类型（如 `ssh-ed25519`） |
-| `public_key` | string | ✅ | OpenSSH 公钥（`<type> <base64>`） |
-| `fingerprint_sha256` | string | ✅ | 与 409 返回一致的指纹 |
+```json
+{
+  "connections": [],
+  "viewer_sessions": [],
+  "connection_count": 0,
+  "viewer_session_count": 0
+}
+```
 
-**响应**:
+## 环境与配置接口
+
+### `GET /api/remote/conda-envs`
+
+查询参数：
+
+- `connection_id`
+
+成功时返回：
+
+```json
+{
+  "ok": true,
+  "envs": [
+    {
+      "name": "base",
+      "type": "conda",
+      "python_version": "3.11.9",
+      "path": "/opt/conda/bin/python",
+      "is_default": true
+    }
+  ]
+}
+```
+
+### `GET /api/remote/env-configs`
+
+查询参数：
+
+- `connection_id`
+
+成功时返回按环境名组织的摘要：
+
+```json
+{
+  "ok": true,
+  "configs": {
+    "base": {
+      "pythonVersion": "3.11.9",
+      "runicornVersion": "0.7.1"
+    }
+  }
+}
+```
+
+### `GET /api/remote/config`
+
+查询参数：
+
+- `connection_id`
+- `conda_env`，默认 `system`
+
+成功响应字段已经在代码中核实：
+
+```json
+{
+  "ok": true,
+  "condaEnv": "system",
+  "pythonVersion": "Python 3.11.9",
+  "runicornVersion": "0.7.1",
+  "defaultStorageRoot": "/home/user/runicorn_data",
+  "storageRootExists": true,
+  "suggestedRemotePort": 23300,
+  "connectionId": "user@example.com:22",
+  "homeDirectory": "/home/user"
+}
+```
+
+### `GET /api/remote/storage-candidates`
+
+查询参数：
+
+- `connection_id`
+- `conda_env`，默认 `system`
+- `scan_root`，可选
+- `max_depth`，代码中会被钳制到 `1..8`
+
+响应：
+
+```json
+{
+  "scan_root": null,
+  "max_depth": 3,
+  "candidates": []
+}
+```
+
+## Known Hosts 接口
+
+### `POST /api/remote/known-hosts/accept`
+
+请求体：
+
+```json
+{
+  "host": "example.com",
+  "port": 22,
+  "key_type": "ssh-ed25519",
+  "public_key": "ssh-ed25519 AAAA...",
+  "fingerprint_sha256": "SHA256:..."
+}
+```
+
+成功响应：
 
 ```json
 {"ok": true}
 ```
 
-### GET /api/remote/known-hosts/list
+### `GET /api/remote/known-hosts/list`
 
-列出 `known_hosts` 中的条目。
+成功响应：
 
-**URL**: `GET /api/remote/known-hosts/list`
+```json
+{
+  "entries": [
+    {
+      "host": "example.com",
+      "port": 22,
+      "known_hosts_host": "example.com",
+      "key_type": "ssh-ed25519",
+      "key_base64": "AAAA...",
+      "fingerprint_sha256": "SHA256:..."
+    }
+  ]
+}
+```
 
-### POST /api/remote/known-hosts/remove
+### `POST /api/remote/known-hosts/remove`
 
-删除 `known_hosts` 中的一个条目。
+请求体：
 
-**URL**: `POST /api/remote/known-hosts/remove`
+```json
+{
+  "host": "example.com",
+  "port": 22,
+  "key_type": "ssh-ed25519"
+}
+```
 
----
+成功响应：
 
-## 环境与配置
+```json
+{"ok": true, "changed": true}
+```
 
-### GET /api/remote/conda-envs
+## Remote Viewer 接口
 
-列出远端 Python 环境。
+### `POST /api/remote/viewer/start`
 
-**URL**: `GET /api/remote/conda-envs`
+请求体在连接字段之外还支持：
 
-**Query Parameters**:
+- `remote_root`
+- `local_port`
+- `remote_port`
+- `conda_env`
+- `saved_server_id`
 
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID（`user@host:port`） |
+成功响应：
 
-### GET /api/remote/config
+```json
+{
+  "ok": true,
+  "session": {
+    "sessionId": "abcd1234",
+    "host": "example.com",
+    "sshPort": 22,
+    "username": "user",
+    "localPort": 18080,
+    "remotePort": 23300,
+    "remoteRoot": "/data/runicorn",
+    "remotePid": 12345,
+    "status": "running",
+    "startedAt": 1760000000000,
+    "uptimeSeconds": 1.2,
+    "isActive": true,
+    "url": "http://localhost:18080"
+  },
+  "message": "Remote Viewer ready at http://localhost:18080"
+}
+```
 
-获取远端运行环境信息与建议配置。
+### `POST /api/remote/viewer/stop`
 
-**URL**: `GET /api/remote/config`
+请求体：
 
-**Query Parameters**:
+```json
+{"session_id": "abcd1234"}
+```
 
-| 参数 | 类型 | 必需 | 描述 |
-|------|------|------|------|
-| `connection_id` | string | ✅ | 连接ID（`user@host:port`） |
-| `conda_env` | string | ❌ | Conda 环境名（默认: `system`） |
+成功响应：
 
----
+```json
+{"ok": true, "message": "Session abcd1234 stopped"}
+```
 
-## Remote Viewer 管理
+### `GET /api/remote/viewer/sessions`
 
-### POST /api/remote/viewer/start
+返回值为 `session.to_dict()` 列表，字段与上面的 `session` 对象一致。
 
-启动 Remote Viewer 会话并建立 SSH 隧道。
+### `GET /api/remote/viewer/status/{session_id}`
 
-**URL**: `POST /api/remote/viewer/start`
+返回单个 `session.to_dict()`。当前会话状态枚举来自 `src/runicorn/remote/viewer/session.py`：
 
-### POST /api/remote/viewer/stop
+- `running`
+- `reconnecting`
+- `degraded`
+- `disconnected`
+- `stopped`
 
-停止一个 Remote Viewer 会话。
+## 已保存连接接口
 
-**URL**: `POST /api/remote/viewer/stop`
+### `GET /api/remote/connections/saved`
 
-### GET /api/remote/viewer/sessions
+返回脱敏后的连接配置，只保留 `kind` 为 `server` 或 `connection` 的条目。测试已覆盖：
 
-列出所有 Remote Viewer 会话。
+- 保存的 `password` / `passphrase` 不直接回显
+- 会补充 `hasSavedPassword` / `hasSavedPassphrase`
+- `private_key_path` 会规范化为 `privateKeyPath`
 
-**URL**: `GET /api/remote/viewer/sessions`
+响应示例：
 
-### GET /api/remote/viewer/status/{session_id}
+```json
+{
+  "ok": true,
+  "connections": [
+    {
+      "kind": "server",
+      "id": "srv_admin_example_22",
+      "host": "example.com",
+      "port": 22,
+      "username": "admin",
+      "authMethod": "password",
+      "hasSavedPassword": true,
+      "hasSavedPassphrase": false
+    }
+  ]
+}
+```
 
-查询某个会话状态。
+### `POST /api/remote/connections/saved`
 
-**URL**: `GET /api/remote/viewer/status/{session_id}`
+请求体为连接配置数组。成功响应：
 
----
-
-## 远程文件系统
-
-### GET /api/remote/fs/list
-
-通过 SFTP 列出远端目录。
-
-### GET /api/remote/fs/exists
-
-检查远端路径是否存在。
-
----
-
-## 状态
-
-### GET /api/remote/status
-
-获取 remote 总体状态（连接池 + viewer sessions）。
-
----
-
-## 已保存连接
-
-### GET /api/remote/connections/saved
-
-读取已保存的 SSH 连接配置。
-
-### POST /api/remote/connections/saved
-
-保存 SSH 连接配置。
-
----
+```json
+{"ok": true, "message": "Connections saved successfully"}
+```
 
 ## 错误处理
 
-Runicorn Viewer 使用 FastAPI 的标准错误响应：
+当前接口使用 FastAPI 标准错误体：
 
 ```json
-{"detail": "<message>"}
+{"detail": "message"}
 ```
 
-部分错误（如 host key 校验）会返回结构化的 `detail`（见 HTTP 409 协议）。
+已核实的常见状态码：
+
+- `400`: 参数不完整、格式非法、连接池或 manager 未初始化
+- `404`: 连接或 session 不存在
+- `409`: host key 需要用户确认
+- `500`: 远端命令、保存配置、viewer 启动等运行时失败
+- `503`: remote 模块不可用
+
+## 明确不在当前实现中的接口
+
+以下接口在本文档更新时未在 `src/runicorn/viewer/api/remote/` 中找到实现，因此不再作为当前参考保留：
+
+- `/api/remote/fs/list`
+- `/api/remote/fs/exists`
+
+如未来重新引入，应在实现落地后再补回主文档。
 
 ---
 
-**作者**: Runicorn Development Team  
-**版本**: v0.6.0  
-**最后更新**: 2025-01-XX
-
-**[返回 API 索引](API_INDEX.md)** | **[查看快速参考](QUICK_REFERENCE.md)**
+**[返回 API 索引](API_INDEX.md)** | **[SSH 历史说明](ssh_api.md)**

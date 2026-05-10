@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import Response, FileResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask

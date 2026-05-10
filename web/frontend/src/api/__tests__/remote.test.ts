@@ -32,6 +32,22 @@ describe('connectRemote', () => {
     )
     await expect(connectRemote(baseConfig)).rejects.toThrow(ApiError)
   })
+
+  it('forwards savedServerId for server-side credential lookup', async () => {
+    server.use(
+      http.post('/api/remote/connect', async ({ request }) => {
+        const body = await request.json() as any
+        return HttpResponse.json({
+          host: body.host,
+          status: 'connected',
+          saved_server_id: body.saved_server_id,
+        })
+      }),
+    )
+
+    const session = await connectRemote({ ...baseConfig, savedServerId: 'srv_1', password: undefined })
+    expect((session as any).saved_server_id).toBe('srv_1')
+  })
 })
 
 describe('listSSHSessions', () => {

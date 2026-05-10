@@ -2,7 +2,7 @@
   "info": {
     "name": "Runicorn API",
     "description": "Complete API collection for Runicorn experiment tracking platform",
-    "version": "0.5.4",
+    "version": "0.7.1",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -144,99 +144,64 @@
       ]
     },
     {
-      "name": "Artifacts API",
+      "name": "Run Assets API",
       "item": [
         {
-          "name": "List All Artifacts",
+          "name": "Get Run Assets",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/artifacts"
+            "url": "{{baseUrl}}/runs/{{run_id}}/assets"
           }
         },
         {
-          "name": "List Models Only",
+          "name": "Download Run Asset",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/artifacts?type=model"
+            "url": "{{baseUrl}}/runs/{{run_id}}/assets/download?path={{asset_path}}"
           }
         },
         {
-          "name": "List Artifact Versions",
+          "name": "Get Run Asset References",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/versions?type=model"
-          }
-        },
-        {
-          "name": "Get Artifact Detail",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/v3?type=model"
-          }
-        },
-        {
-          "name": "List Artifact Files",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/v3/files?type=model"
-          }
-        },
-        {
-          "name": "Get Lineage Graph",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/v3/lineage?type=model&max_depth=3"
-          }
-        },
-        {
-          "name": "Get Storage Stats",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/artifacts/stats"
-          }
-        },
-        {
-          "name": "Delete Artifact Version (Soft)",
-          "request": {
-            "method": "DELETE",
-            "url": "{{baseUrl}}/artifacts/{{artifact_name}}/v2?type=model&permanent=false"
+            "url": "{{baseUrl}}/runs/{{run_id}}/assets/refs"
           }
         }
       ]
     },
     {
-      "name": "V2 API (High Performance)",
+      "name": "SQLite-backed Runs API",
       "item": [
         {
-          "name": "List Experiments (Basic)",
+          "name": "List Runs",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/v2/experiments?page=1&per_page=50"
+            "url": "{{baseUrl}}/runs"
           }
         },
         {
-          "name": "List Experiments (Filtered)",
+          "name": "List Runs By Path",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/v2/experiments?project=image_classification&status=finished&best_metric_min=0.9&order_by=best_metric_value&order_desc=true&page=1&per_page=20"
+            "url": "{{baseUrl}}/paths/runs?path=image_classification&exact=false"
           }
         },
         {
-          "name": "Get Experiment Detail",
+          "name": "Get Run Detail",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/v2/experiments/{{run_id}}"
+            "url": "{{baseUrl}}/runs/{{run_id}}"
           }
         },
         {
-          "name": "Fast Metrics Query",
+          "name": "Metrics By Step",
           "request": {
             "method": "GET",
-            "url": "{{baseUrl}}/v2/experiments/{{run_id}}/metrics/fast?metric_names=loss,accuracy&downsample=100"
+            "url": "{{baseUrl}}/runs/{{run_id}}/metrics_step?downsample=100"
           }
         },
         {
-          "name": "Batch Delete",
+          "name": "Soft Delete Runs",
           "request": {
             "method": "POST",
             "header": [
@@ -247,9 +212,9 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"exp_ids\": [\"{{run_id}}\"],\n  \"reason\": \"cleanup\"\n}"
+              "raw": "{\n  \"run_ids\": [\"{{run_id}}\"]\n}"
             },
-            "url": "{{baseUrl}}/v2/experiments/batch-delete"
+            "url": "{{baseUrl}}/runs/soft-delete"
           }
         }
       ]
@@ -309,7 +274,7 @@
     },
     {
       "name": "Remote Viewer API",
-      "description": "VSCode Remote-style remote server access (v0.5.4)",
+      "description": "VSCode Remote-style remote server access",
       "item": [
         {
           "name": "Connection Management",
